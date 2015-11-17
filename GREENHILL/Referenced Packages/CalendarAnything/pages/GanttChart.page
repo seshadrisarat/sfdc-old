@@ -1,0 +1,1063 @@
+<apex:page sidebar="false" controller="SLCA2.CA_GanttChart_controller" >
+
+<apex:stylesheet value="{!URLFOR($Resource.SLCA2__CalendarAnything, 'popFrames/popFramesStyles.css')}" />
+<apex:stylesheet value="{!URLFOR($Resource.SLCA2__GanttDiagram, 'themes/smoothness/jquery-ui-1.8.16.custom.css')}" />
+<apex:stylesheet value="{!URLFOR($Resource.SLCA2__GanttDiagram, 'css/gv.css')}"/>
+<apex:stylesheet value="{!URLFOR($Resource.SLCA2__CalendarAnything, 'css/calendarControllerStyles.css')}"/>
+<apex:stylesheet value="{!URLFOR($Resource.SLCA2__CalendarAnything, 'css/changes.css')}"/>  
+
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__GanttDiagram, 'js/date-extensions.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__jQuery, 'jquery.min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__jQuery, 'jquery-ui.custom.min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__GanttDiagram, 'data.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__GanttDiagram, 'js/ca_gantt.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__GanttDiagram, 'js/ui-hover-controller.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__GanttDiagram, 'js/ds-loading-overlay-1.0.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__CalendarAnything, 'popFrames/popFramesScript.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__CalendarAnything, 'js/panels-ui-1.0.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__GanttDiagram, 'html2canvas/build/html2canvas.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__GanttDiagram, 'html2canvas/build/jquery.plugin.html2canvas.js')}"/>
+
+<!--<apex:includeScript value="{!URLFOR($Resource.jQuery, 'js/color-picker-1.0.js')}"/>
+<apex:stylesheet value="{!URLFOR($Resource.jQuery, 'css/color-picker-1.0.css')}"/>-->
+
+<style>
+	@media print {
+		/** {
+			display: none !important;
+		}*/
+		/*#gantt-container {
+			display: block !important;
+		}*/
+	}
+	.secondaryPalette {
+		background: none !important;
+		border: none !important;
+	}
+	.calendar-controller-container-top { 
+		margin-left: -10px;
+		padding-left: 20px;
+		max-width: 215px !important;
+	 }
+	 #HiddenOptionalPanel .calendar-controller-container-top { 
+		margin-left: 0px;
+		padding-left: 0px;
+	 }
+	.small_arrows {
+		margin-top: 5px;
+		margin-left: -10px;
+		float: left;
+		cursor: pointer;
+	}
+	.arrow_down {
+		width: 6px;
+		height: 5px;
+		background: url("{!URLFOR($Resource.SLCA2__CalendarAnything, 'img/arrows_small.png')}") right bottom no-repeat;
+	}
+	.arrow_show {
+		background: url("{!URLFOR($Resource.SLCA2__CalendarAnything, 'img/arrows_small.png')}") right top no-repeat;
+		width: 6px;
+		height: 6px;
+	}
+	.checkbox {
+		width: 11px;
+		height: 11px;
+		margin-right: 10px;
+		margin-top: 1px;
+		display: block;
+		clear: left;
+		float: left;
+		background: url("{!URLFOR($Resource.SLCA2__CalendarAnything, 'img/white_square.jpg')}") no-repeat;
+		border: solid 1px #DCDCDC;
+	}
+	.checkbox_checked {
+		/*background: url("{!URLFOR($Resource.SLCA2__CalendarAnything, 'img/checked.png')}") no-repeat;*/
+		background-image: none;
+	}
+	#three_dots {
+		padding-top: 58px;
+		padding-right: 5px;
+	}
+	.calendar-controller-item {
+		padding: 2px 0;
+		width: 190px !important;
+	}
+	.fc-button-edit span { 
+		background: url("{!URLFOR($Resource.SLCA2__jQuery, 'icons/create_edit_icons.png')}") 0px -33px no-repeat transparent !important;
+	}
+	.ui-icon-circle-triangle-w { 
+		background: url("{!URLFOR($Resource.SLCA2__CalendarAnything, 'img/arrows.png')}") no-repeat transparent !important;
+		height: 15px;
+		width: 11px;
+	}
+	.ui-icon-circle-triangle-e { 
+		background: url("{!URLFOR($Resource.SLCA2__CalendarAnything, 'img/arrows.png')}") 100% 0% no-repeat transparent !important;
+		height: 15px;
+		width: 11px;
+	}
+	.fc-header .ui-state-default, .fc-header .ui-state-hover { 
+		min-width: 0 !important;
+		padding-left: 10px;
+		padding-right: 10px;
+ 	}
+ 	#pop-up-hidden-block {
+ 		max-height: 300px;
+ 		overflow-x: hidden;
+		overflow-y: auto;
+ 	}
+ 	
+ 	
+ 	<apex:repeat value="{!AllCalendars}" var="calendar">
+ 	.gv-event.cid_{!calendar.Id} {background-color:{!JSENCODE(calendar.SLCA2__eventColor__c)}}
+ 	.eh-title-container.{!calendar.Id} {background-color:{!JSENCODE(calendar.SLCA2__eventColor__c)} !important}
+ 	</apex:repeat>
+</style>
+
+	<script>
+		var layoutRefresh;
+		
+		/** Cookies reader/writer */
+		function wcookie (name, value, options) {
+			try {
+				if (typeof value != 'undefined') { // name and value given, set cookie
+					options = options || {};
+					if (value === null) {
+						value = '';
+						options.expires = -1;
+					}
+					var expires = '';
+					if (options.expires && (typeof options.expires == 'number' || options.expires.toUTCString)) {
+						var date;
+						if (typeof options.expires == 'number') {
+							date = new Date();
+							date.setTime(date.getTime() + (options.expires * 24 * 60 * 60 * 1000));
+						} else {
+							date = options.expires;
+						}
+						expires = '; expires=' + date.toUTCString(); // use expires attribute, max-age is not supported by IE
+					}
+					var path = options.path ? '; path=' + (options.path) : '';
+					var domain = options.domain ? '; domain=' + (options.domain) : '';
+					var secure = options.secure ? '; secure' : '';
+					// ds ---- expiration date of cookies
+					date = new Date();
+					date.setTime(date.getTime() + (24 * 60 * 60 * 1000));
+					expires = '; expires=' + date.toUTCString();
+					document.cookie = [name, '=', encodeURIComponent(value), expires, path, domain, '; secure'].join('');
+					// ---- ds
+				} else { // only name given, get cookie
+					var cookieValue = '';
+					if (document.cookie && document.cookie != '') {
+						var cookies = document.cookie.split(';');
+						for (var i = 0; i < cookies.length; i++) {
+							var cookie = $.trim(cookies[i]);
+							// Does this cookie string begin with the name we want?
+							if (cookie.substring(0, name.length + 1) == (name + '=')) {
+								cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+								break;
+							}
+						}
+					}
+					return cookieValue;
+				}
+			} catch(err) {
+				alert("wcookie: " + err); 
+				return null;
+			}
+		}
+		
+		function getUrlParameter(p) {
+			var res = '';
+			var url = location.href.substr(location.href.indexOf('?') + 1);
+			url = decodeURIComponent(url);
+			/*url = url.replace(/\+/g,  " ")*/
+			var parts = url.split('&');
+			for (var i = 0; i < parts.length; i++) {
+				if (parts[i] != undefined) {
+					var param = parts[i].split('=');
+					if (param[0] == p) {
+						res = param[1];
+					}
+				}
+			}
+			return res;
+		}
+		
+		if (getUrlParameter('cid') != '') {
+			wcookie('Calendar_Cookie_{!userId}',getUrlParameter('cid'));
+		}
+		
+		var allCalendarIds;
+		var overlay;
+		
+		(function ($) {
+			
+			jQuery(function(){
+				
+				/** URL utils */
+				var urlParameters = [];
+				
+				function refreshUrlParametersArray() { // Parsing url params and store in 'urlParameters' array
+					var url = location.href.substr(location.href.indexOf('?') + 1);
+					url = decodeURIComponent(url);
+/*					url = url.replace(/\+/g,  " ");*/
+					var parts = url.split('&');
+					for (var i = 0; i < parts.length; i++) {
+						if (parts[i] != undefined) {
+							var param = parts[i].split('=');
+							if (param[1] != undefined) { // Only pairs that have a value
+								urlParameters.push({key:param[0],value:param[1]});
+							}
+						}
+					}
+				}
+				refreshUrlParametersArray();
+				
+				
+				/** Cookies refresh */
+				function refreshCookie (calendars) {
+					allCalendarIds = calendars;
+					var newCookieValue = calendars;
+					var cookieName = 'Calendar_Cookie_{!userId}';
+					
+					var expiresDate = new Date();
+			        expiresDate.setTime(expiresDate.getTime() + (1000 * 86400 * 365));
+			        wcookie(cookieName, newCookieValue, {
+			            expires: expiresDate.toGMTString(),
+			            path: '/',
+			            domain: document.domain,
+			            secure: false
+			        });
+			    }
+				
+				var mCount = 3;
+				var majUnits = 'month';
+				var minUnits = 'week';
+				readSettings();
+				
+				/** Read and apply settings cookies */
+				function readSettings() {
+					var settStr = wcookie('Gantt_Settings_Cookie_{!userId}');
+					
+					if (settStr != undefined && settStr != '') {
+						var settParts = settStr.split(';');
+						majUnits = settParts[0];
+						minUnits = settParts[1];
+						mCount = settParts[2];
+					}
+				}
+				
+				/** Write settings cookies */
+				function writeSettings() {
+					var settStr = '';
+					settStr += $('.gv-major-units-input').val() + ';';
+					settStr += $('.gv-minor-units-input').val() + ';';
+					settStr += $('.gv-month-input').val();
+					wcookie('Gantt_Settings_Cookie_{!userId}',settStr);
+				}
+				
+				var sWidth = $('#gantt-cell').width();
+				
+				var overlayCount = 0;
+				overlay = $('body').loadingOverlay({
+					animationEffect: 'drop'
+				});
+				
+				var gv = $('#gantt-container').ganttView({
+					width: sWidth,
+					border: false,
+					monthCount: mCount,
+					calendars: {!CompileJsonStringForCalendars},
+					majorUnits: majUnits,
+					minorUnits: minUnits,
+					onAfterRender: function (evt,data) {
+						//FramesController.AttachFramesToClass('gv-event', 'dblclick');
+						FramesController.AttachFramesToClass('gv-event', 'click');
+						var visibleCalendarsCount = jQuery('.calendar-controller-item-checkbox').length;
+						if (visibleCalendarsCount == 0) {
+							jQuery('.no-calendars-message').show();
+						} else {
+							jQuery('.no-calendars-message').hide();
+						}
+					},
+					onAfterNavigate: function (evt, data) {
+						readSettings();
+						gv.ganttView('setMajorUnits',majUnits);
+						gv.ganttView('setMinorUnits',minUnits);
+						fullDataRefresh();
+					}
+				});
+				
+				var fullDataRefresh = layoutRefresh = function () {
+					var allData = [];
+					gv.ganttView('recreateWidget');
+					var nCalendarsChecked = $('.checkbox_checked').size();
+					$('.checkbox_checked').each(function (index, elem) {
+						if (overlayCount == 0) {
+							overlay.loadingOverlay('show');
+						}
+						overlayCount ++;
+						var reqParams = {
+							cid: $(elem).attr('id'),
+							token: '{!token}',
+							event: 'getCalendarEvents',
+							start: Math.round(gv.ganttView('getStart').getTime() / 1000),
+							end: Math.round(gv.ganttView('getEnd').getTime() / 1000)
+						};
+						if (nCalendarsChecked == 1) {
+							for (var i=0; i < urlParameters.length; i++) {
+								if (urlParameters[i].key.substr(0,2) == 'pv') {
+									reqParams[urlParameters[i].key] = urlParameters[i].value;
+								}
+							}
+						}
+						
+						$.ajax({
+							url: '/apex/CA_AjaxResponces',
+							data: reqParams,
+							dataType: 'json',
+							success: function (data) {
+								if (data) {
+									for (var i=0; i<data.length; i++) {
+										allData.push(data[i]);
+									}
+									gv.ganttView('addData',data);
+								}
+								overlayCount --;
+								if (overlayCount == 0) {
+									overlay.loadingOverlay('hide');
+								}
+//                                $('.calendar-controller-items').height((jQuery('#gantt-container').height() < 400 ? 400 : (jQuery('#gantt-container').height() - 50)));
+								$('.calendar-controller-items').css('min-height', '400px');
+							}
+						});
+					});
+					
+				}
+				
+				/*function cleanUrl () {
+					var urlParams = location.href.substr(location.href.indexOf('?') + 1);
+					var pageUrl = location.href.substr(0,location.href.indexOf('?'));
+					urlParams = decodeURIComponent(urlParams);
+					var parts = urlParams.split('&');
+					var resParams = '';
+					
+					for (var i = 0; i < parts.length; i++) {
+						if (parts[i] != undefined && parts[i].substr(0,3) != 'cid' && parts[i].substr(0,2) != 'pv') {
+							resParams += '&' + parts[i];
+						}
+					}
+					resParams = '?' + resParams.substr(1);
+					console.log('url',pageUrl);
+					console.log('params',resParams);
+					history.pushState(null,null,pageUrl + resParams);
+				}*/
+				
+				$('.calendar-controller-item').live('click',function() {
+					//cleanUrl();
+					var spanbox = $(this).children(".calendar-controller-item-checkbox");
+					(spanbox.hasClass("checkbox_checked")) ? 
+					   spanbox.removeClass("checkbox_checked") : 
+					   spanbox.addClass("checkbox_checked");
+					var sCalendarId = spanbox.attr('id') ;
+					var idsStr = '';
+					var allData = [];
+					var isChecked = false;
+					var el = spanbox;
+					
+					var isSideBarFold = ($('#HiddenOptionalPanel').css('display') == 'block') ? true : false;
+					var nCalendarsChecked = $("#HiddenOptionalPanel .checkbox_checked").size() 
+					   + $("#left-panel-cell .checkbox_checked").size();
+					
+					if (isSideBarFold) {
+						$("#HiddenOptionalPanel .checkbox_checked").each(function(index, elem) {
+							if ($(elem).attr('id').replace('hideblock_', '') == $(el).attr('id').replace('hideblock_', '')) {
+								isChecked = true;
+							}
+							if (idsStr != '') {
+								idsStr += ',';
+							}
+							idsStr += $(elem).attr('id').replace('hideblock_', '');
+							$('#left-panel-cell #' + $(elem).attr('id')).addClass('checkbox_checked');
+						});
+					} else {
+						$("#left-panel-cell .checkbox_checked").each(function(index, elem) {
+							if ($(elem).attr('id') == $(el).attr('id')) {
+								isChecked = true;
+							}
+							if (idsStr != '') {
+								idsStr += ',';
+							}
+							idsStr += $(elem).attr('id');
+							$('#HiddenOptionalPanel #' + $(elem).attr('id')).addClass('checkbox_checked');
+						});
+					}
+					
+					//refreshCookie(idsStr);
+					wcookie('Calendar_Cookie_{!userId}',idsStr);
+					allCalendarIds = idsStr;
+					//rerenderCalendarsList();
+					
+					if (isChecked) 
+					{
+						if (overlayCount == 0) 
+						{
+							overlay.loadingOverlay('show');
+						}
+						overlayCount ++;
+						var stDate = gv.ganttView('getStart').getTime();
+						var reqParams = {
+							cid: $(el).attr('id').replace('hideblock_', ''),
+							token: '{!token}',
+							event: 'getCalendarEvents',
+							start: Math.round(stDate/1000),
+							end: Math.round(gv.ganttView('getEnd').getTime() / 1000)
+						};
+						//if (nCalendarsChecked == 1) {
+						if ($(el).attr('id').replace('hideblock_', '') == getUrlParameter('cid')) {
+							for (var i=0; i < urlParameters.length; i++) {
+								if (urlParameters[i].key.substr(0,2) == 'pv') {
+									reqParams[urlParameters[i].key] = urlParameters[i].value;
+								}
+							}
+						}
+						
+						$.ajax(
+						{
+							url: '/apex/CA_AjaxResponces',
+							data: reqParams,
+							dataType: 'json',
+							success: function (data) 
+							{
+								if (data) 
+								{
+									for (var i=0; i<data.length; i++) 
+									{
+										allData.push(data[i]);
+									}
+									gv.ganttView('addData',data);
+								}
+								overlayCount = 0;
+								overlay.loadingOverlay('hide');
+//                                $('.calendar-controller-items').height((jQuery('#gantt-container').height() < 400 ? 400 : (jQuery('#gantt-container').height() - 50)));
+								$('.calendar-controller-items').css('min-height', '400px');
+							},
+							error: function (data) 
+							{
+								overlayCount --;
+								if (overlayCount == 0) 
+								{
+									overlay.loadingOverlay('hide');
+								}
+								alert('Error occured when data loading');
+							}
+						});
+					} 
+					else 
+					{
+						overlay.loadingOverlay('show');
+						if (isSideBarFold) {
+							$('#HiddenOptionalPanel #' + $(el).attr('id')).removeClass('checkbox_checked');
+						} else {
+							$('#left-panel-cell #' + $(el).attr('id')).removeClass('checkbox_checked');
+						}
+//						$('.gv-groups').children('div.cid_' + sCalendarId).remove();
+//						$('.gv-calendars').children('div.cid_' + sCalendarId).remove();
+//						$('TBODY.gv-data-container-tbody.cid_' + sCalendarId).remove();
+						gv.ganttView('removeCalendar',$(el).attr('id').replace('hideblock_', ''));
+//						FramesController.AttachFramesToClass('gv-event', 'click');
+						overlay.loadingOverlay('hide');
+					}
+				});
+				
+				
+				
+				
+				function toggleLeftPanel() {
+					jQuery("[id*='left_panel_form']").toggle();
+					var currWidth = jQuery("#gantt-cell").attr('width');
+					
+					/*if (currWidth == '80%') {
+						currWidth = '100%';
+					} else {
+						currWidth = '80%';
+					}*/
+					
+					gv.ganttView('resize',400);
+					jQuery("#gantt-cell").attr('width',currWidth);
+					jQuery("#gantt-cell").width(currWidth);
+					jQuery(".hiddener_button").toggle();
+					jQuery("#left-panel-cell").toggle();
+					
+					sWidth = $('#gantt-cell').width();
+					gv.ganttView('resize',sWidth);
+				}
+				
+				jQuery(".hiddener_button").click(function(){
+					toggleLeftPanel();
+				});
+				
+				var sbParam = '{!isSideBar}';
+		        if (location.href.indexOf('sb=0') > -1 
+		            || (location.href.indexOf('cid=') > -1 && location.href.indexOf('sb=1') == -1)  
+		        ) {
+		           toggleLeftPanel();
+		           $("#HiddenOptionalPanel").css("display", "block");
+		        }
+                if (location.href.indexOf('sb=2') > -1){
+                    $('#three_dots, #left-panel-cell, #HiddenOptionalPanel').hide();
+                    $(window).trigger('resize');
+                }
+                				
+				//if (sbParam == 'false') {
+//					
+				//}
+				
+				//if (sbParam == 'false') {
+//					
+				//}
+				
+				/** Initialize checked calendars */
+				var i,ids, idsStr = wcookie('Calendar_Cookie_{!userId}');
+				if (idsStr) {
+					ids = wcookie('Calendar_Cookie_{!userId}').split(',');
+					for (i=0; i<ids.length; i++) {
+						//$('#' + ids[i]).attr("checked","checked");
+						$('#' + ids[i]).addClass("checkbox_checked");
+					}
+					fullDataRefresh();
+				}
+				$('.gv-major-units-input').live('change',function () {
+					gv.ganttView('options','majorUnits',majUnits);
+					writeSettings();
+				});
+				$('.gv-minor-units-input').live('change',function () {
+					gv.ganttView('options','minorUnits',minUnits);
+					writeSettings();
+				});
+				$('.gv-month-input').live('change',function () { writeSettings(); });
+				
+			});
+			
+			
+			/* -------------------- Snezhana Storoschuk start -------------------- */
+		
+		
+			// Pop-up menu from HiddenOptionalPanel
+	        $("#HiddenOptionalPanel .calendar-controller-container-top").live("click", function()
+	        {
+	            $("#pop-up-hidden-block").remove();
+            	var id_calendars = "calendarsListHolder";
+            	var typeOfCalendar = "calendars";
+	            
+	            var copy_block = $(".calendar-controller-items").html();
+	            var new_copy_block = '';	
+	            
+	            if (copy_block != '') {
+	            	new_copy_block = copy_block.replace(/ id="/img, ' id="hideblock_');
+            	}
+	            	
+	            if (new_copy_block == '') {
+	            	new_copy_block = "No " + typeOfCalendar + " are available for display.<br />Click Display Settings for more options.";
+	            } 
+	            
+	            var pop_up_block = '' + 
+	            '<div id="pop-up-hidden-block" rel="' + id_calendars + '">' + 
+	                '<div class="pop-up-hidden-top">' +
+	                	'<div class="pop-up-hidden-arrow"></div>' +  
+	                    new_copy_block + 
+	                '</div>' + 
+	                '<div class="pop-up-hidden-bottom"></div>' + 
+	            '</div>';
+	            
+	            $(this).after(pop_up_block);
+	        });
+	        
+	        $('#pop-up-hidden-block').live('hover', function(event) 
+	        {
+				if (event.type == 'mouseenter') {} 
+				else {
+					$("#pop-up-hidden-block").remove();
+				}
+			});		
+		
+		
+			// Alignment of three dots in the middle
+			/*var CurrentHeight = $(window).height();
+			$("#three_dots").height(CurrentHeight);
+			
+			var three_dots_top = Math.floor((CurrentHeight) / 2) - 18 + 43;
+			if (three_dots_top < 177) three_dots_top = 177;
+			$("#three_dots .hiddener_button").css("margin-top", three_dots_top);
+			
+			var my_calendar_top = Math.floor((CurrentHeight) / 2) - 104;
+			if (my_calendar_top < 45) my_calendar_top = 45;
+			$(".rotatedBlock").css("margin-top", my_calendar_top);*/
+
+		
+		
+			// Folding and unfolding calendars
+			$(".calendar-controller-container-top").live("click", function()
+			{
+				var arrows_small = $(this).children(".small_arrows");
+				if ((arrows_small.hasClass("arrow_show") || arrows_small.hasClass("arrow_hide")))
+				{
+					if (arrows_small.hasClass("arrow_show"))
+					{
+						arrows_small.addClass("arrow_hide").removeClass("arrow_show");
+						$(this).next(".calendar-controller-items").slideDown("fast");
+					}
+					else
+					{
+						arrows_small.addClass("arrow_show").removeClass("arrow_hide");
+						$(this).next(".calendar-controller-items").slideUp("fast");
+					}
+				}
+				else
+				{
+					arrows_small.addClass("arrow_show");
+					$(this).next(".calendar-controller-items").slideUp("fast");
+				}
+			});
+		
+			$(".calendar-controller-container-top").live("hover", function()
+			{
+				if (($(this).hasClass("top_show") || $(this).hasClass("top_hide")))
+				{
+					if ($(this).hasClass("top_show"))
+					{
+						$(this).addClass("top_hide").removeClass("top_show calendar_hover");
+					}
+					else
+					{
+						$(this).addClass("top_show calendar_hover").removeClass("top_hide");
+					}
+				}
+				else
+				{
+					$(this).addClass("top_show calendar_hover");
+				}
+			});
+				
+			
+			
+			
+			// The appearance of icons when you hover on the calendar
+			$(".calendar-controller-item").live("hover", function()
+			{
+				if ($(this).hasClass("cci_show") || $(this).hasClass("cci_hide"))
+				{
+					if ($(this).hasClass("cci_show"))
+					{
+						$(this).addClass("cci_hide").removeClass("cci_show");
+						
+						//$("#pop-up-block").remove();
+						if ($(".ds-advanced-color-selector-back").length == 0)
+						{
+							$(this).children(".arrow_items").css("display", "none");
+							$(this).removeClass("calendar_hover");
+							$("#pop-up-block").remove();
+						}
+					}
+					else
+					{
+						$(this).addClass("cci_show").removeClass("cci_hide");
+						$(".arrow_items").css("display", "none");
+						$(this).children(".arrow_items").css("display", "block");
+						$(this).addClass("calendar_hover");	
+					}
+				}
+				else
+				{
+					$(this).addClass("cci_show");
+					$(".arrow_items").css("display", "none");
+					$(this).children(".arrow_items").css("display", "block");
+					$(this).addClass("calendar_hover");
+				}
+				
+				if ($(this).children("#pop-up-block").length == 0)
+				{
+					if ($(".ds-advanced-color-selector-back").length > 0)
+					{
+						$(".ds-advanced-color-selector-back").remove();
+						$(this).children(".arrow_items").css("display", "none");
+						$(this).removeClass("calendar_hover");
+					}
+					$("#pop-up-block").remove();
+				}
+			});
+			
+
+
+			// Toggle for three dots to show additional panel
+			$("#hiddener_right").live("click", function()
+			{		  
+				if ($("#HiddenOptionalPanel").css("display") == "block")
+				{
+					$("#HiddenOptionalPanel").css("display", "none");
+					$("#pop-up-hidden-block").remove();
+				}
+				else
+				{
+					$("#HiddenOptionalPanel").css("display", "block");
+				}			
+			});
+			$("#hiddener_left").live("click", function()
+			{
+				if ($("#HiddenOptionalPanel").css("display") == "none")
+				{
+					$("#HiddenOptionalPanel").css("display", "block");
+			   	}
+			   	else
+				{
+					$("#HiddenOptionalPanel").css("display", "none");
+					$("#pop-up-hidden-block").remove();
+				}
+			});
+		
+		
+			/* -------------------- Snezhana Storoschuk finish -------------------- */
+			
+			var initialData = {!InitialData};
+			
+			$('#dlg_visible_open,#dlg-visible-open-link').live('click',function () {
+				var tempWrapper = $('<div>');
+				tempWrapper.html(getSelectorDialogHTML());
+				tempWrapper.appendTo(document);
+				
+				var nonSelectedCalendars = [];
+				var selectedCalendars = [];
+				for (var i = 0; i < initialData.NonSelectedCalendars.length; i ++) {
+					if (initialData.NonSelectedCalendars[i].calendarType == 'sf') {
+						nonSelectedCalendars.push(initialData.NonSelectedCalendars[i]);
+					}
+				}
+				for (var i = 0; i < initialData.SelectedCalendars.length; i ++) {
+					if (initialData.SelectedCalendars[i].calendarType == 'sf') {
+						selectedCalendars.push(initialData.SelectedCalendars[i]);
+					}
+				}
+				
+				tempWrapper.SortablePanels({
+					clean : true,
+					sort: false,
+					panel1 : 'list_of_all_calendars',
+					panel2 : 'list_of_visible_calendars',
+					connected_class : 'connectedVisbleCalendarsSortable', 
+					panel1_list : nonSelectedCalendars,
+					panel2_list : selectedCalendars
+				});
+				
+				tempWrapper.dialog({
+					bgiframe: true,
+					width: 530,
+					height: 430,
+					modal: true,
+					resizable: false,
+					buttons: {
+						'Save': function() {
+							var result = tempWrapper.SortablePanelsGetResult(
+								{ panel1 : 'list_of_all_calendars', panel2 : 'list_of_visible_calendars'}
+							); 
+							
+							saveDialogResult(result.panel2);
+							$(this).dialog('close');
+							
+							CA_GanttChart_controller.getInitialDataAgain(function(data) {
+								initialData = JSON.parse(data);
+								var initialDataSortPanel2 = new Array();
+								var initialDataPanel2 = initialData.SelectedCalendars;
+								var idsPanel2 = result.panel2.split('|');
+								
+								for (var i = 0; i < idsPanel2.length; i++) {
+									for (var j = 0; j < initialDataPanel2.length; j++) {
+										if (idsPanel2[i] == initialDataPanel2[j].id) {
+											initialDataSortPanel2[i] = initialDataPanel2[j];
+											continue;
+										}
+									}
+								}
+
+								initialData.SelectedCalendars = initialDataSortPanel2;
+								return false;
+							}, 
+								{escape: false}
+							);
+							
+							
+						}
+					}
+				});
+			});
+			
+			jQuery('#sort-list-btn').live('click',function () {
+				var items = $('#list_of_visible_calendars li');
+				var itemsCount = items.length;
+				for (var i=0; i < itemsCount; i++) {
+					items = $('#list_of_visible_calendars li');
+					for (var j=0; j < itemsCount - 1; j++) {
+						if (jQuery(items[j]).html().toLowerCase() > jQuery(items[j + 1]).html().toLowerCase()) {
+							jQuery(items[j + 1]).insertBefore(jQuery(items[j]));
+						}
+					}
+				}
+			});
+			
+			jQuery('#sort-available-list-btn').live('click',function () {
+				var items = $('#list_of_all_calendars li');
+				var itemsCount = items.length;
+				for (var i=0; i < itemsCount; i++) {
+					items = $('#list_of_all_calendars li');
+					for (var j=0; j < itemsCount - 1; j++) {
+						if (jQuery(items[j]).html().toLowerCase() > jQuery(items[j + 1]).html().toLowerCase()) {
+							jQuery(items[j + 1]).insertBefore(jQuery(items[j]));
+						}
+					}
+				}
+			});
+			
+			function saveDialogResult (selectedCals) {
+			
+				
+				var params = {};
+				
+				params['event'] = 'saveSelectedCalendars';
+				params['selectedids'] = selectedCals;
+				params['token'] = '{!token}';
+				
+				$.ajax({
+					url: '/apex/CA_EventHandler',
+					type: 'POST',
+					data: params,
+					dataType: 'json',
+					cache: false, 
+					error : function(XMLHttpRequest, textStatus, errorThrown){
+						alert('Error: [' + textStatus + '] ' + errorThrown);
+					},
+					success: function(data){
+						var status = data.status;
+						if(status == undefined || status == null || status.substring(0, 5).toLowerCase() == 'error') {
+							alert(data.status + ' error');
+						} else {
+							//alert('Calendars visibility was successfully saved to server');
+							rerenderCalendarsList();
+							
+							var cookies = wcookie('Calendar_Cookie_{!userId}').split(',');
+							
+							for (var check = 0; check < cookies.length; check++) {
+								$('#' + cookies[check]).addClass('checkbox_checked');
+							}
+							//layoutRefresh();
+							location.reload();
+						}
+						
+					}
+				});
+				
+			}
+			
+			function getSelectorDialogHTML() {
+				var dialogHTML = '<div id="dlg_visible_for_user" title="Select Calendar to Display" style="padding: 0px;">';
+				dialogHTML += '<table width="500" class="calendar-selector-text">';
+				dialogHTML += '<tr>';
+				dialogHTML += '<td align="left">';
+				dialogHTML += '<table style="height:100px;">';
+				dialogHTML += '<tr>';
+				dialogHTML += '<td>';
+				dialogHTML += '<div id="list_of_all_calendars">';
+				dialogHTML += '<h5 class="calendar-selector-heading">Available:</h5>';
+				dialogHTML += '<ul class="ui-state-highlight connectedVisbleCalendarsSortable"></ul>';
+				dialogHTML += '</div>';
+				dialogHTML += '</td>';
+				dialogHTML += '<td style="width:100px;">';
+				dialogHTML += '<div class="ui-button ui-widget ui-state-default ui-corner-all ui-button-text-only" id="sel_right_btn" style="width:100%; margin-bottom: 3px; padding: 0.3em 0;">';
+				dialogHTML += '<span class="ui-button-text">Select &gt;</span>';
+				dialogHTML += '</div>';
+				dialogHTML += '<div class="ui-button ui-widget ui-state-default ui-corner-all ui-button-text-only" id="sel_left_btn" style="width:100%; margin-bottom: 3px; padding: 0.3em 0;">';
+				dialogHTML += '<span class="ui-button-text">&lt;&nbsp;Don\'t&nbsp;Select</span>';
+				dialogHTML += '</div>';
+				dialogHTML += '</td>';
+				dialogHTML += '<td>';
+				dialogHTML += '<div id="list_of_visible_calendars">';
+				dialogHTML += '<h5 class="calendar-selector-heading">Selected:</h5>';
+				dialogHTML += '<ul class="ui-state-highlight connectedVisbleCalendarsSortable"></ul>';
+				dialogHTML += '</div>';
+				dialogHTML += '</td>';
+				dialogHTML += '</tr>';
+				dialogHTML += '<tr>';
+				dialogHTML += '<td>';
+				dialogHTML += '<div class="ui-button ui-widget ui-state-default ui-corner-all ui-button-text-only" id="sort-available-list-btn" style="width:100%; margin-bottom: 3px; padding: 0.3em 0;">';
+				dialogHTML += '<span class="ui-button-text">Sort</span>';
+				dialogHTML += '</div>';
+				dialogHTML += '</td>';
+				dialogHTML += '<td></td>';
+				dialogHTML += '<td>';
+				dialogHTML += '<div class="ui-button ui-widget ui-state-default ui-corner-all ui-button-text-only" id="sort-list-btn" style="width:100%; margin-bottom: 3px; padding: 0.3em 0;">';
+				dialogHTML += '<span class="ui-button-text">Sort</span>';
+				dialogHTML += '</div>';
+				dialogHTML += '</td>';
+				dialogHTML += '</tr>';
+				dialogHTML += '</table>';
+				dialogHTML += '<div id="dlg_visible_for_user_text" class="calendar-selector-text"> ';
+				dialogHTML += 'Help: Please select the calendars you\'d like to display on the My Calendars page. ';
+				dialogHTML += 'Please note, only calendars you have access to will display on the list provided below.';
+				dialogHTML += '</div>';
+				dialogHTML += '</td>';
+				dialogHTML += '</tr>';
+				dialogHTML += '</table>';
+				dialogHTML += '</div>';
+				return dialogHTML;
+			}
+			
+//			$('.calendar-controller-items').height((jQuery('#gantt-container').height() < 400 ? 400 : (jQuery('#gantt-container').height() - 50)));
+            $('.calendar-controller-items').css('min-height', '400px');
+		})(jQuery);
+		
+		jQuery(document).ready(function(){
+			jQuery(window).resize(function(){
+				jQuery('#gantt-container').ganttView("resize", jQuery(window).width() - 305);
+			});
+			
+			jQuery('.gv-content-cell').on('dblclick', '.gv-event', function(){
+			     var aUrl = jQuery(this).attr('id').split("_");
+			     window.open('/' + aUrl[0]); 
+			});
+			
+		});
+		
+		function recheckCalendars() {
+			setTimeout(function() {
+				var cookies;
+				//var idsStr = wcookie('Calendar_Cookie_{!userId}');
+				var idsStr = allCalendarIds;
+				if (idsStr){
+					cookies = idsStr.split(',');
+				
+					for (var check = 0; check < cookies.length; check++) {
+						jQuery('#' + cookies[check]).addClass('checkbox_checked');
+					}
+					
+					var visibleCalendarsCount = jQuery('.calendar-controller-item-checkbox').length;
+					if (visibleCalendarsCount == 0) {
+						jQuery('.no-calendars-message').show();
+					} else {
+						jQuery('.no-calendars-message').hide();
+					}
+				}
+				overlay.loadingOverlay('hide');
+//                $('.calendar-controller-items').height((jQuery('#gantt-container').height() < 400 ? 400 : (jQuery('#gantt-container').height() - 50)));
+				$('.calendar-controller-items').css('min-height', '400px');
+			},1000);
+		}
+		
+		/*var newWin = window.open('','printWindow','Toolbar=0,Location=0,Directories=0,Status=0,Menubar=0,Scrollbars=0,Resizable=0'); 
+		newWin.document.open();
+		newWin.document.write('<i>Press the right mouse button and select "Save image as..."  to save image to local store.</i>');
+		newWin.document.write('<img src="" />');
+		newWin.document.close();*/
+	</script>
+	
+	<table width="100%" id="markupContainer">
+		<tr>
+		
+			<td width="70px" valign="top">
+				<table id="HiddenOptionalPanel" cellspacing="0" cellpadding="0" border="0">
+					<tbody>
+						<tr>
+							<td id="standard_cls"><div class="calendar-controller-container-top"><div class="top_title"></div></div></td>
+						</tr>
+						<tr>
+							<td><div class="calendar-controller-container-top"><a href='/apex/calendarsList'><div class='wheel'></div></a></div></td>
+						</tr>
+						<tr>				
+							<td style="padding-top: 50px;"><div class="rotatedBlock"><h2>My&nbsp;Calendars</h2></div></td>
+						</tr>
+					</tbody>
+				</table>
+			</td>
+		
+			<apex:form id="left_panel_form">
+				<apex:actionFunction name="rerenderCalendarsList" rerender="leftApexPanel" oncomplete="recheckCalendars();" />
+				<td width="200" valign="top" id="left-panel-cell">
+					<apex:pageBlock title="My Calendars">
+					
+						<apex:facet name="header">
+							<div class="pbHeader" style="width: 229px">
+								<table cellspacing="0" cellpadding="0" border="0">
+									<tbody>
+										<tr>
+											<td class="pbTitle">
+												<a style="display: inlibe-block;" class="awheel" href='/apex/calendarsList'><div class='wheel'></div></a>
+												<h2 class="mainTitle">My&nbsp;Calendars</h2>
+											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</apex:facet>
+						
+						<div class="calendar-controller-container">
+						
+							<div class="ui-state-default calendar-controller-container-top">
+								<div class="small_arrows arrow_down"></div>
+								<div class="top_title">Standard Calendars</div>
+							</div>
+							<div class="calendar-controller-items" style="overflow: auto;">
+								<apex:outputPanel id="leftApexPanel">
+									<apex:repeat value="{!AllCalendars}" var="calendar">
+										<div class="calendar-controller-item cci_hide" id="{!calendar.Id}_container">
+											<span class="ca-calendar-checkbox checkbox calendar-controller-item-checkbox" id="{!calendar.Id}" style="background-color: {!JSENCODE(calendar.eventColor__c)};"></span>
+											<a href="#" title="{!calendar.Name}" id="{!calendar.Id}_title" class="calendar-controller-item-title" style="display: block">
+												{!IF(LEN(calendar.Name) > 20, LEFT(calendar.Name, 17) + '...', calendar.Name)}
+											</a>
+										</div>
+									</apex:repeat>
+								</apex:outputPanel>
+								<div class="no-calendars-message" style="display: none; padding-left: 10px;">
+								    No calendars are selected. Please <a id="dlg_visible_open" class="dlg_visible_open_lnk _lnk" style="text-decoration:underline">add an existing calendar</a> or <a href="/apex/calendarsList">create a new one</a>.
+								</div>
+							</div>
+						</div>
+						
+						<!-- <table width="100%" class="ca-calendars-list-container">
+							<apex:repeat value="{!AllCalendars}" var="calendar">
+								<tr>
+									<td>
+										<input type="checkbox" class="ca-calendar-checkbox" id="{!calendar.Id}" />
+										{!calendar.Name}
+										<div class="calendar-color-area" style="background-color:{!JSENCODE(calendar.eventColor__c)};"></div>
+									</td>
+								</tr>
+							</apex:repeat>
+						</table>-->
+						
+						<table>
+							<tr>
+								<td style="font-weight:bold;"></td>
+							</tr>
+							<tr>
+								<td>
+									<div class="gv-timepoints-panel" style="display:{!IF(timing,'block','none')};"></div>
+								</td>
+							</tr>
+						</table>
+						
+					</apex:pageBlock>
+				</td>
+			</apex:form>
+			
+			<td id="three_dots" width="20" align="center" valign="top">
+				<div class="hiddener_button" id="hiddener_left" title="Hide panel" style="display:{!IF(isSideBarStr == 'false','none','block')}" ></div>
+				<div class="hiddener_button" id="hiddener_right" title="Show panel" style="display:{!IF(isSideBarStr == 'true','none','block')}" ></div>
+			</td>
+					
+			<td width="100%" id="gantt-cell" valign="top" class="gv-td">
+				<div style="min-height:250px;">
+					<div id="gantt-container"></div>
+				</div>
+			</td>
+		</tr>
+	</table>
+
+<div id="print-preview"></div>
+</apex:page>

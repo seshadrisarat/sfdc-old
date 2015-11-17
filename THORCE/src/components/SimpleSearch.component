@@ -1,0 +1,140 @@
+<!-- 
+*       SimpleSearch is VF component used to render the simple name search UI.  This VF component is part of the M2M2 code base.
+*   
+*       Author  :   Wilson Ng
+*       Date    :   October 18, 2012
+*  
+-->
+<apex:component controller="M2M2_Controller" allowDML="true" >
+    <apex:attribute name="M2M2_Controller" description="The controller that is associated with the M2M2 page." type="M2M2_Controller" required="true" assignTo="{!controller}" />
+    <apex:includeScript value="{!URLFOR($Resource.jQueryTableSort, 'jquery.tablesorter.min.js')}" />
+    <style>
+    th.header {     
+        cursor: pointer; 
+        font-weight: bold; 
+        background-repeat: no-repeat; 
+        background-position: center left; 
+        padding-left: 20px; 
+        border-right: 1px solid #dad9c7; 
+        margin-left: -1px; 
+    }                   
+    </style>  
+
+    <apex:outputPanel id="entryPanel" >
+
+        <table class="search-criteria"><tr>
+            <td><apex:outputPanel rendered="{!NOT(controller.isCreateNewMode)}">{!$Label.M2M2_SearchLabel}</apex:outputPanel></td>
+            <td>
+                <apex:form id="simpleSearchForm" onsubmit="goSearch">
+                <apex:inputText id="simpleSearchText" styleClass="search-criteria-textbox" value="{!controller.searchTerm}" rendered="{!NOT(controller.isCreateNewMode)}"  />
+                <apex:actionFunction name="goSearch" action="{!controller.goSearch}" rerender="results" status="myStatus" oncomplete=""/>
+                <apex:commandButton action="{!controller.goSearch}" value="{!$Label.M2M2_SearchButton}" rendered="{!NOT(controller.isCreateNewMode)}" rerender="results" status="myStatus" oncomplete="rigInterface();" />
+                <apex:outputPanel >
+                    <apex:commandButton action="{!controller.createNewRecord}" value="{!$Label.M2M2_NewButton}" rendered="{!NOT(controller.isCreateNewMode)}" rerender="results" status="myStatus" immediate="true" />
+                    <apex:pageBlock rendered="{!controller.isCreateNewMode}" >
+                        <apex:pageBlockSection title="Create New" columns="1" collapsible="false"><!-- TODO - label -->
+                        <apex:repeat value="{!controller.createNewFieldLabelWrappers}" var="fld" id="createNewPanel" >
+                            <apex:inputField value="{!controller.createNewRec[fld.fieldPath]}" required="{!fld.isRequired}" rendered="{!fld.fieldPath<>'Id'}"/>
+                        </apex:repeat>
+                        </apex:pageBlockSection>
+                        <apex:commandButton value="Save" action="{!controller.createNewSave}" rerender="results" status="myStatus" />
+                        <apex:commandButton value="Save & New" action="{!controller.createNewSaveNew}" rerender="results" status="myStatus" />
+                        <apex:commandButton value="Close" immediate="true" action="{!controller.cancelCreateNew}" rerender="entryPanel, messages" status="myStatus" />
+                    </apex:pageBlock>
+                </apex:outputPanel>
+                </apex:form>
+            </td>
+        </tr><tr>
+            <td />
+            <td>
+                <div class="initial-message"><apex:outputPanel styleclass="initial-message-text" rendered="{!NOT(controller.isCreateNewMode)}">
+                    {!controller.searchInitialMsg}                  
+                </apex:outputPanel></div>
+            </td>
+        </tr></table>
+        
+    </apex:outputPanel>
+    
+    <apex:outputPanel id="searchPanel" >
+        <apex:form id="simpleSearchResultsForm" >
+        <apex:inputHidden id="actionIdsHidden" value="{!controller.actionIds}" />
+        <apex:pageBlock rendered="{!controller.searchPerformed}">
+            <apex:commandButton rendered="{!AND(controller.useM2M2, controller.searchResults.size>0)}" onclick="gatherCheckBoxes2('.searchSelectionBox', '{!$Component.simpleSearchResultsForm.actionIdsHidden}');" value="Add" action="{!controller.addNewRecords}" rerender="results" status="myStatus" />
+            <apex:pageBlockTable rendered="{!controller.searchResults.size>0}" value="{!controller.searchResults}" var="result" styleclass="tableSort">
+                <apex:column styleClass="myCheckbox actionColumn" headerClass="actionColumn">
+                    <apex:facet name="header">
+                        <input class="headerSearchSelectionBox" type="checkbox"/>
+                    </apex:facet>
+                    <input class="searchSelectionBox" type="checkbox" value="{!result.id}"/>
+                </apex:column>
+                
+                <apex:column headerValue="Name" rendered="{!controller.searchObjectName!='Property_Lease__c'}"><!-- NOTE: for property_lease__c object, don't display the name field -->
+                    <apex:outputLink id="lookupSearchName" value="/{!result['Id']}" 
+                                    onmouseover="LookupHoverDetail.getHover(this.id, '/{!result['Id']}/m?isAjaxRequest=1').show();" onmouseout="LookupHoverDetail.getHover(this.id).hide();" onfocus="LookupHoverDetail.getHover(this.id, '/{!result['Id']}/m?isAjaxRequest=1').show();" onblur="LookupHoverDetail.getHover(this.id).hide();">
+                        {!result['Name']}
+                    </apex:outputLink>
+                </apex:column>
+                <apex:repeat value="{!controller.searchFieldSet}" var="fld"> 
+                    <apex:column rendered="{!not( or(fld='Name', fld='Id') )}" value="{!result[fld]}" />
+                </apex:repeat>
+                
+            </apex:pageBlockTable>
+            <apex:outputPanel rendered="{!AND(controller.searchPerformed, controller.searchResults.size==0)}">
+                <div class="no-results">
+                    <span class="no-results-text">{!$Label.M2M2_NoResults}</span>
+                </div>
+            </apex:outputPanel>
+        </apex:pageBlock>
+        </apex:form>
+        
+        <script>
+            j$(document).ready(function() {
+              rigInterface();
+            });   
+            
+            function rigInterface()
+            {
+                changeLinksTarget();             
+            
+                j$(".tableSort").tablesorter({headers: {0: {sorter: false}}});
+    
+                j$("input").unbind("keypress.key13").bind("keypress.key13", function(event) {                   
+                    console.log('Specific Key Pressed' + event.which);                              
+                    if(event.which == 13)
+                     {
+                        event.preventDefault();
+                        var functionName = j$(this).closest("form").attr('onsubmit');
+                        if(functionName != null && window[functionName])
+                        {
+                            window[j$(this).closest("form").attr('onsubmit')].apply(null);
+                        }
+                        j$(this).focus();
+                        return false;             
+                    }
+                });  
+                
+                j$('.headerSearchSelectionBox').unbind();
+                j$('.headerSearchSelectionBox').change(function(){                  
+                    j$('.searchSelectionBox').prop('checked',this.checked); 
+                });
+                
+                
+                j$('.searchSelectionBox').change(function(){
+                    if(j$('.searchSelectionBox').length == j$('.searchSelectionBox:checked').length) 
+                    { 
+                        j$('.headerSearchSelectionBox').prop('checked', true); 
+                    } 
+                    else 
+                    { 
+                        j$('.headerSearchSelectionBox').prop('checked', false); 
+                    }              
+                });
+                
+
+            }  
+                           
+        </script>
+            
+    </apex:outputPanel>
+
+</apex:component>

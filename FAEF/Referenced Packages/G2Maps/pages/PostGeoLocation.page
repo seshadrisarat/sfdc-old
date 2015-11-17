@@ -1,0 +1,337 @@
+<apex:page cache="false" controller="g2maps.PostGeoLocationController" sidebar="{!NOT(Embedded)}" showHeader="{!NOT(Embedded)}" action="{!doImmediate}" standardStylesheets="false" title="G2Maps Post GeoLocation">
+    <!-- CloudTrigger G2Maps, Copyright 2011, CloudTrigger, Inc. -->
+    <meta content="width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;" name="viewport"/>
+
+    <style>
+        div.LatLon {
+            font-size: 8pt;
+            font-family: sans-serif;
+        }
+        
+        div.LatLon_GeoLocation {
+            width: 80%;
+            float: left;
+        }
+        
+        div.LatLon_Accuracy {
+            width: 20%;
+            float: right;
+        }
+        
+        div.LatLon_Location {
+            width: 100%;
+            clear: both;
+            font-weight: bold;
+        }
+        
+        div.LatLon_Unsupported {
+            width: 100%;
+            clear: both;
+            font-weight: bold;
+            text-align: center;
+        }
+
+    </style>
+
+<apex:outputPanel layout="none" rendered="{!OR(NOT(Embedded), CheckTimeBounds)}">
+    <apex:stylesheet value="https://js.arcgis.com/3.8/js/esri/css/esri.css"/>
+    <apex:stylesheet value="https://js.arcgis.com/3.8/js/dgrid/css/skins/tundra.css"/>    
+    <apex:includeScript value="https://js.arcgis.com/3.8/"/>
+    <script type="text/javascript">
+        dojo.require("esri.tasks.locator");
+        //var tmout = 0;
+        var lat;
+        var lon;
+        var accuracy;
+        var post = false;
+        var accurate = false;
+        var position = {};
+        var seconds;
+        var TimerID;
+        var TimerRunning = false;
+        var Default = true;
+ 
+ 
+        function initTimer() {
+            seconds = 1;
+            stopTimer();
+            startTimer();
+        }  
+        function stopTimer() {
+            if(TimerRunning) {
+                clearTimeout(TimerID);
+            }
+            TimerRunning = false;
+        }
+        function startTimer() {
+            //console.log("seconds: " + seconds);
+            TimerRunning = true;
+            TimerID = self.setTimeout("startTimer()",1000);
+            if(seconds === 0) {
+                stopTimer();
+                if(accurate && (position !== {})) {
+                    success(position);
+                }
+            } 
+            seconds--;
+        }
+          
+        require(['dojo', 'esri', 'esri/tasks/locator'], function(dojo, esri){        
+        function init() {
+            esri.config.defaults.io.proxyUrl = '{!JSENCODE(settings.URL_Proxy)}';
+            initTimer();
+            if (!navigator.geolocation) {
+                document.getElementById("NoGeoSupportBrowser").style.display = 'block';
+                document.getElementById("SearchingLocation").style.display = 'none';
+            }
+            else {
+                navigator.geolocation.getCurrentPosition(success, fail, {
+                    enableHighAccuracy: true,
+                    maximumAge: 0
+                });
+            }
+        }
+        init();
+        }); 
+        function tryAgain() {
+            Default = false;
+            seconds = {!NULLVALUE(settings.CheckIn_Delay, 1)};
+            if(seconds < 0) {
+                seconds = 1;
+            }
+            stopTimer();
+            startTimer();
+            document.getElementById("PermissionDenied").style.display = 'none';
+            document.getElementById("FailGeoLocation").style.display = 'none';
+            document.getElementById("InaccurateLocation").style.display = 'none';
+            document.getElementById("SearchingLocation").style.display = 'block';
+            locate();
+        }      
+        function locate() {
+            //console.log("locate");
+            if (!navigator.geolocation) {
+                document.getElementById("NoGeoSupportBrowser").style.display = 'block';
+                document.getElementById("SearchingLocation").style.display = 'none';
+            }           
+            else {
+                navigator.geolocation.getCurrentPosition(success, fail, {
+                    enableHighAccuracy: true,
+                    maximumAge: 0
+                });
+            }
+        }
+        function success(pos) {         
+            var max = {!NULLVALUE(settings.Override_Location.g2maps__Maximum_Accuracy__c, 32000)};
+            /*if (pos.coords.accuracy > max && tmout <= 5000) {
+                tmout += 500;
+                //setTimeout(window.location.reload(), tmout);
+                setTimeout("navigator.geolocation.getCurrentPosition(success,fail,{enableHighAccuracy:true});", tmout);
+            }*/
+            if (pos.coords.accuracy > max) {       
+                if(TimerRunning) {
+                    //console.log("Success: Acquired Inaccurate Location.");
+                    locate();
+                } else {
+                    if(post === false) {
+                        //console.log("Success: Acquired Inaccurate Location.");
+                        document.getElementById("InaccurateLocation").style.display = 'block';
+                        document.getElementById("FailGeoLocation").style.display = 'none';
+                        document.getElementById("SearchingLocation").style.display = 'none';
+                    }
+                }
+            }
+            else {
+                accurate = true;
+                position = pos;
+                if(TimerRunning && Default) {
+                    locate();
+                } else {                   
+                    if(post === false) {
+                        lat = pos.coords.latitude;
+                        lon = pos.coords.longitude;
+                        accuracy = pos.coords.accuracy;
+              
+                        var geocoder = new esri.tasks.Locator("{!JSENCODE(settings.URL_GeocodeTask)}");
+                
+                        var point = new esri.geometry.Point(lon, lat, new esri.SpatialReference({ wkid: 4326 }));
+                        
+                        document.getElementById("FailGeoLocation").style.display = 'none';
+                        document.getElementById("InaccurateLocation").style.display = 'none';
+                        document.getElementById("SearchingLocation").style.display = 'none';
+                        if (geocoder) {
+                            geocoder.locationToAddress(point, 1000, 
+                                    function (addressCandidate) {
+                                        LocationToAddressComplete(addressCandidate);
+                                    },
+                                    function (error) {
+                                        ErrorHandler(error);
+                                    }
+                            );
+                        }
+                        else {
+                            document.getElementById("Latitude").innerHTML = lat + ", " + lon;
+                            document.getElementById("Accuracy").innerHTML = accuracy;
+                            document.getElementById("LocationFound").style.display = 'block';
+                            if(post === false) {
+                                //console.log("posting...");
+                                post = true;
+                                stopTimer();
+                                JSdoPost(lat, lon, accuracy, "");
+                            }
+                        }
+                    }
+                }
+            }
+        }   
+        function fail(error) {   
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    if(TimerRunning) {
+                        stopTimer();
+                    } 
+                    document.getElementById("PermissionDenied").style.display = 'block';
+                    document.getElementById("FailGeoLocation").style.display = 'none';
+                    document.getElementById("InaccurateLocation").style.display = 'none';
+                    document.getElementById("SearchingLocation").style.display = 'none';
+                    console.log("Error: PERMISSION_DENIED");                  
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    if(TimerRunning) {
+                        locate();
+                    } else {
+                        document.getElementById("FailGeoLocation").style.display = 'block';
+                        document.getElementById("InaccurateLocation").style.display = 'none';
+                        document.getElementById("SearchingLocation").style.display = 'none';
+                        document.getElementById("PermissionDenied").style.display = 'none';
+                        console.log("Error: POSITION_UNAVAILABLE");
+                    }
+                    break;
+                case error.TIMEOUT:
+                    if(TimerRunning) {
+                        locate();
+                    } else {
+                        document.getElementById("FailGeoLocation").style.display = 'block';
+                        document.getElementById("InaccurateLocation").style.display = 'none';
+                        document.getElementById("SearchingLocation").style.display = 'none';
+                        document.getElementById("PermissionDenied").style.display = 'none';
+                        console.log("Error: TIMEOUT");
+                    }
+                    break;
+                case error.UNKNOWN_ERROR:
+                    if(TimerRunning) {
+                        locate();
+                    } else {
+                        document.getElementById("FailGeoLocation").style.display = 'block';
+                        document.getElementById("InaccurateLocation").style.display = 'none';
+                        document.getElementById("SearchingLocation").style.display = 'none';
+                        document.getElementById("PermissionDenied").style.display = 'none';
+                        console.log("Error: UNKNOWN_ERROR");
+                    }
+                    break;
+            } 
+        }
+        function noLocation() {
+            post = true;
+            stopTimer();
+            JSdoPost(null, null, null, "");
+        }       
+        function LocationToAddressComplete(candidate) {  
+            var displayLocation = '';
+            if(candidate) {
+                if(candidate.address.Admin1 && candidate.address.Admin2) {
+                    displayLocation = candidate.address.Admin1 + ", " + candidate.address.Admin2;
+                } else if(candidate.address.Admin2) {
+                    displayLocation = candidate.address.Admin2;
+                }
+            }
+            document.getElementById("Location").innerHTML = displayLocation;
+            document.getElementById("Latitude").innerHTML = lat + ", " + lon;
+            document.getElementById("Accuracy").innerHTML = accuracy;
+            document.getElementById("LocationFound").style.display = 'block';
+            if(post === false) {
+                //console.log("posting...");
+                post = true;         
+                stopTimer();
+                JSdoPost(lat, lon, accuracy, displayLocation); 
+            }           
+        }
+        function ErrorHandler(error) {
+            //console.log(error);
+            document.getElementById("Latitude").innerHTML = lat + ", " + lon;
+            document.getElementById("Accuracy").innerHTML = accuracy;
+            document.getElementById("LocationFound").style.display = 'block';
+            if(post === false) {
+                post = true;         
+                stopTimer();
+                JSdoPost(lat, lon, accuracy, ""); 
+            } 
+        }
+    </script>
+
+    <apex:form >
+        <apex:actionFunction action="{!doPost}" name="JSdoPost" rerender="GeoPanel" status="PostStatus">
+            <apex:param name="Latitude" assignTo="{!Latitude}" value="" />
+            <apex:param name="Longitude" assignTo="{!Longitude}" value="" />
+            <apex:param name="Accuracy" assignTo="{!Accuracy}" value="" />
+            <apex:param name="StringLocation" assignTo="{!StringLocation}" value="" />
+        </apex:actionFunction>
+    
+        <apex:outputPanel id="GeoPanel">
+            <div class="LatLon LatLon_Message">
+                <div id="NoGeoSupportBrowser" class="LatLon LatLon_Unsupported" style="display:none;">
+                    <apex:image value="{!URLFOR($Resource.g2maps__G2Maps,'resources/G2Logo.png')}"/><br/><br/>
+                    <b>Unable to acquire location.</b><br/>
+                    <b>Geolocation is not supported by this browser.</b><br/>
+                    <input type="button" id="Check In" name="Check In" onclick="noLocation()" value="Check In Anyway"/>
+                </div>
+                <div id="PermissionDenied" class="LatLon LatLon_Unsupported" style="display:none;">
+                    <apex:image value="{!URLFOR($Resource.g2maps__G2Maps,'resources/G2Logo.png')}"/><br/><br/>
+                    <b>User denied request for geolocation.</b><br/>
+                    <input type="button" id="Check In" name="Check In" onclick="noLocation()" value="Check In Anyway"/>
+                </div>
+                <div id="FailGeoLocation" class="LatLon LatLon_Unsupported" style="display:none;">
+                    <apex:image value="{!URLFOR($Resource.g2maps__G2Maps,'resources/G2Logo.png')}"/><br/><br/>
+                    <b>Unable to acquire location.</b><br/>
+                    <b>Please try again.</b><br/>
+                    <input type="button" id="Try Again" name="Try Again" onclick="tryAgain()" value="Try Again"/>
+                    <input type="button" id="Check In" name="Check In" onclick="noLocation()" value="Check In Anyway"/>
+                </div>
+                <div id="InaccurateLocation" class="LatLon LatLon_Unsupported" style="display:none;">
+                    <apex:image value="{!URLFOR($Resource.g2maps__G2Maps,'resources/G2Logo.png')}"/><br/><br/>
+                    <b>Acquired inaccurate location.</b><br/>
+                    <b>Please try again.</b><br/>
+                    <input type="button" id="Try Again" name="Try Again" onclick="tryAgain()" value="Try Again"/>
+                    <input type="button" id="Check In" name="Check In" onclick="noLocation()" value="Check In Anyway"/>
+                </div>
+                <div id="SearchingLocation" class="LatLon LatLon_Unsupported" style="display:block;">
+                    <apex:image value="{!URLFOR($Resource.g2maps__G2Maps,'resources/G2Logo.png')}"/><br/><br/>
+                    <b>Searching for current location...</b><br/>
+                    <apex:image value="{!URLFOR($Resource.g2maps__G2Maps,'resources/bar-loader.gif')}"/><br/>
+                </div>
+                <div id="LocationFound" class="LatLon" style="display:none;">
+                    <br/>
+                    <div id="Location" class="LatLon LatLon_Location"></div>                   
+                    <div id="Latitude" class="LatLon LatLon_GeoLocation"></div>                 
+                    <div id="Accuracy" class="LatLon LatLon_Accuracy"></div>
+                    
+                    <apex:outputPanel rendered="{!settings.Override_Chatter.g2maps__Chatter__c}"><div class="LatLon LatLon_Chatter">Chatter Enabled</div></apex:outputPanel>
+                    <apex:outputPanel rendered="{!settings.Override_Activity.g2maps__Activity__c}"><div class="LatLon LatLon_Activites">Activities Enabled</div></apex:outputPanel>
+                    <apex:outputPanel rendered="{!settings.Override_History.g2maps__History__c}"><div class="LatLon LatLon_Activites">History Enabled</div></apex:outputPanel>
+                    <br/><br/>
+                </div>                   
+                <apex:actionStatus startText="Updating location..." stopText="" id="PostStatus"/>
+            </div>
+        </apex:outputPanel>
+    </apex:form>
+</apex:outputPanel>
+<apex:outputPanel layout="none" rendered="{!NOT(OR(NOT(Embedded), CheckTimeBounds))}">
+    <apex:outputPanel id="GeoPanel">
+        <div class="LatLon LatLon_Message">
+            <apex:outputPanel layout="block" styleClass="LatLon LatLon_Unsupported">
+                <apex:image value="{!URLFOR($Resource.g2maps__G2Maps,'resources/G2Logo.png')}"/> 
+            </apex:outputPanel>
+        </div>
+    </apex:outputPanel>
+</apex:outputPanel>
+
+</apex:page>

@@ -1,0 +1,646 @@
+<apex:page controller="TimeTracker" id="thePage" tabStyle="Employee_Profile__c">
+<apex:sectionheader title="Timesheet - {!CurEmployeeNew.name}" rendered="{!NOT(ShareRenderer)}" /> 
+<apex:form id="af">
+
+	<!-- Temporary button to clean up TimeSheet_Summary__c & Time_Tracker__c databases to duplicates -->
+	<apex:commandButton value="Clear Duplicates" action="{!clearDuplicates}" rendered="False"/>
+	<!-- ------------------------------------------------------------------------------------------- -->
+
+	<!-- Temporary button to clean up TimeSheet_Summary__c from 'NEW' timeSheets                     -->
+	<apex:commandButton value="Clear 'NEW' timesheets" action="{!clearNewTimesheets}" rendered="False"/>
+	<!-- ------------------------------------------------------------------------------------------- -->
+
+    <apex:stylesheet value="{!URLFOR($Resource.dirs_img_css, '/css/tracker.main.css')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.dirs_img_css, '/css/jquery.kiketable.colsizable.css')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.dirs_img_css, '/css/ui-lightness/jquery-ui-1.7.2.custom.css')}"/>
+
+    <apex:includeScript value="{!URLFOR($Resource.dir_js, '/js/jquery-1.3.2.min.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.dir_js, '/js/jquery-ui-1.7.2.custom.min.js')}"/>
+    <!--<apex:includeScript value="{!URLFOR($Resource.dir_js, '/js/jquery.tracker.build.min.js')}"/>-->
+    <apex:includeScript value="{!$Resource.jquery_tracker_buildO}"/>
+    <apex:includeScript value="{!$Resource.jquery_tracker_build}"/>
+    <style>
+        th.header { 
+            text-align:left;
+            background-image: url({!URLFOR($Resource.dirs_img_css, '/img/bg.gif')});
+            cursor: pointer; 
+            font-weight: bold; 
+            background-repeat: no-repeat; 
+            background-position:right center ; 
+            padding-left: 7px;
+            margin-left: -1px;
+            margin-right:20px;
+        }       
+
+        th.headerSortUp {
+            background-image: url({!URLFOR($Resource.dirs_img_css, '/img/asc.gif')});
+            background-color: #e5e6e8;
+        }
+        
+        th.headerSortDown {
+            background-image: url({!URLFOR($Resource.dirs_img_css, '/img/desc.gif')});
+            background-color: #e5e6e8;
+        }
+
+        td.no_bor_l_r { border-left-color:#FCFCFC  !important; border-right-color:#FCFCFC  !important; }
+        td.no_bor_l{border-left-color:#FCFCFC  !important;}
+        td.no_bor_r{border-right-color:#FCFCFC  !important;}
+        
+        .leftTd {
+            text-align : left ! important;
+        }
+		.rightTd {
+            text-align : right ! important;
+        }
+        .centerTd {
+            text-align : center ! important;
+        }
+        
+        .lastTDcell2
+        {
+        	padding-left: 169px ! important;
+        }        
+        
+        div.ui-datepicker{
+            font-size:11px;
+        }
+        .borderOb{border-left:#CC0000 3px solid;  padding-left:2px;}
+        
+        table.kiketable-colsizable
+        {
+        	border-spacing: 0px;
+        }
+        
+    </style>
+
+<apex:repeat value="{!TBEmployeeFormPanel}" id="PremmmAddForm2" var="precfadd2" rows="1">
+    <apex:pageBlock title="Employee">
+    <script>function requiredFields(false){return true;}</script>
+    <table>
+    <tr>
+        <td style="padding:10px 10px 0 0 "><b>Employee: </b></td>
+        <td ><apex:inputField value="{!SelWeekDateTTForEmpl.Employee__c}"/></td>
+        <td style="padding:10px 0 0 10px"><apex:commandButton action="{!selectEmployee}" value="Submit"/></td>
+    </tr>
+    </table>
+    </apex:pageBlock>
+</apex:repeat> 
+
+<apex:outputPanel id="PremmmAddForm">
+
+<apex:outputPanel rendered="{!ShareRenderer}">
+	<div class="bPageBlock apexDefaultPageBlock secondaryPalette">
+	<div class="pbHeader">
+	<table cellspacing="0" cellpadding="0" border="0">
+	<tbody><tr><td class="pbTitle"><h2 class="mainTitle">Insufficient privileges</h2></td><td>&nbsp;</td></tr></tbody>
+	</table>
+	</div>
+	<div class="pbBody" style="padding:10px;">Insufficient privileges to view the content of the page.</div>
+	<div class="pbFooter secondaryPalette"><div class="bg"></div></div>
+	</div>
+</apex:outputPanel>
+
+	<apex:repeat value="{!TBWeekFormPanel}" var="precfadd" rows="1" rendered="{!NOT(ShareRenderer)}">
+	    <apex:pageBlock title="Week">
+	            <apex:pageBlockSection columns="2">
+	                <apex:pageBlockSectionItem >
+	                    <!-- <apex:outputLabel >Select Project:</apex:outputLabel>-->
+	                    <apex:selectList size="1" value="{!SelProjItem}" title="Select Project">
+	                        <apex:selectOptions value="{!WeekDatesOpts}"></apex:selectOptions>
+	                        <apex:actionSupport action="{!selProject}" event="onchange"/>
+	                    </apex:selectList>
+	                </apex:pageBlockSectionItem>
+	                 <apex:pageBlockSectionItem >
+	                <apex:repeat value="{!TBFormAddPanel}" id="mmmAddForm" var="cfadd" rows="1">
+	                <apex:outputLabel ><b>Please enter Date for New Week: </b> </apex:outputLabel>
+	                <apex:inputField value="{!SelWeekDateTT.Week_Start_Date__c}"/> 
+	                <script>function requiredFields(false){return true;}</script>
+	                <apex:commandButton action="{!createNewWeek}" value="Create" rerender="trackerContainer" status="MCSub"/>
+	                </apex:repeat>  
+	                </apex:pageBlockSectionItem>
+	            </apex:pageBlockSection>
+	    </apex:pageBlock>
+	</apex:repeat>  
+</apex:outputPanel>
+
+    <apex:outputPanel id="trackerContainer" >
+    	<apex:inputHidden value="{!jsonContent}" id="jsonContainer" />
+    	<script> var objContainer = document.getElementById("{!$Component.jsonContainer}");</script>
+    	<apex:inputHidden value="{!jsonContent2}" id="jsonContainer2" />
+    	<script> var objContainer2 = document.getElementById("{!$Component.jsonContainer2}");</script>
+	<div id="topError" align="center" style="color:red;font-weight: bold !important;">{!ErrorMsg}</div> 
+	
+			<apex:actionstatus id="MCSub" startText="Processing...">
+                <apex:facet name="start">
+                    <div id="salesforceSource_blurybackground" style="position:absolute; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.6;filter:alpha(opacity=60)"></div>
+                    <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 80%; display: ''; ">
+                        <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+                        <table align="center" valign="top" style="width: 100%; height: 30%">
+                        <tr align="center" valign="top" style="width: 100%; height: 30%">
+                            <td valign="top"><img class="waitingImage" src="/img/loading.gif"/><span class="waitingDescription">Processing......</span></td>
+                        </tr>
+                        </table>
+                        </div>
+                    </div>
+                    <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; "/>
+                    <script>document.getElementById('ManageMembersViewport_loading').height = window.innerHeight * (3/4);</script>
+                    
+                    
+                </apex:facet>
+                <apex:facet name="stop"></apex:facet>
+			</apex:actionstatus>
+    <apex:repeat value="{!TBListPanel}" id="mmm" var="cfadd" rows="1">
+    
+        <apex:actionFunction name="apexSaveJson" action="{!saveJson}" />
+        <apex:actionFunction name="apexSubmitJson" action="{!submitJson}" />
+<apex:pageBlock id="afpb" title="Chosen Week">
+    <apex:pageBlockButtons >
+   <!-- <apex:commandButton value="Save" onclick="saveJson3()" action="{!saveJson}" disabled="{!NOT(rightAllShare)}"/>-->
+    <apex:outputText rendered="{!if(NOT(rightAllShare),true,false)}">
+		<input type="button" value="Save" class="btnDisabled" disabled="disabled"/>
+    </apex:outputText>
+    <apex:outputText rendered="{!if(NOT(rightAllShare),false,true)}">
+    	<input class="btn" type="button" value="Save" onclick="saveJson3()" />
+    </apex:outputText>
+	<apex:outputText rendered="{!if(IsSubmited || NOT(rightAllShare),true,false)}">
+		<input type="button" value="New" class="btnDisabled" disabled="disabled"/>
+	    <input type="button" value="Delete" class="btnDisabled" disabled="disabled"/>
+		<input type="button" value="Cancel" class="btnDisabled" disabled="disabled" />
+		<input type="button" value="Submit" class="btnDisabled" disabled="disabled"/>
+    </apex:outputText>       
+	<apex:outputText rendered="{!if(IsSubmited || NOT(rightAllShare),false,true)}">
+		<input class="btn" type="button" onclick="addRows2();" value="New"/>
+		<input class="btn" type="button" value="Delete" onclick="deleteRows2(0);" />
+
+		<input class="btn" type="button" value="Cancel" onclick="location.href='/{!curEmployeeID}'"  />
+		<input class="btn" type="button" value="Submit" onclick="requiredFields(true);" />
+
+	</apex:outputText>
+<script>
+function theCommandLinkSubmit()
+{
+	$(document.getElementById('{!$Component.theCommandLinkSubmit}')).click();
+} 
+</script>
+	</apex:pageBlockButtons>
+
+                    <div id="div-space" style="width:980px;"></div>
+                    <div id="div-space-2" style="width:980px;"></div>
+                    <div style="padding:2px 0;width:980px;">
+                    <table cellpadding="0" cellspacing="0" class="kiketable-colsizable" style="background-color: white;">
+                    <colgroup>
+                    <col style="width: 200px;"/>
+                    <col style="width: 212px;"/>
+                    <col style="width: 80px;"/>
+                    <col style="width: 62px;"/>
+                    <col style="width: 130px;"/>
+                    <col style="width: 375px;"/>
+                    </colgroup>
+                    <thead>
+                    <tr >
+                        <td width="200" class="header kiketable-th"><b>Total</b></td>
+                        <td width="212"></td>
+                        <td width="80"></td>
+                        <td width="62"><div id="divTotPlace" align="right"></div></td>
+                        <td width="130"></td>
+                        <td width="375"></td>
+                    </tr>
+                    </thead>
+                    </table>
+                    </div>
+                    <!-- <apex:inputTextarea value="{!UserMsg}"/>-->
+              
+                <apex:pageMessages id="error"/>
+          
+<table cellspacing="0" cellpadding="0" border="0" class="detailList">
+<tr>
+	<td class="labelCol first ">
+		<label>
+			<span id="Overall-_help" class="helpButton">
+                    <b >Overall Capacity:</b>
+                    <img title="" class="helpOrb" alt="" src="/s.gif"/>
+                    <script type="text/javascript">sfdcPage.setHelp('Overall', '"20% availability" indicates that you have limited time to work on additional projects.');</script>
+            </span>
+		</label>
+	</td>
+    <td class="data2Col  first ">
+    <script>
+function requiredField1()
+{
+	document.getElementById('selectSuffix_errdiv').className = '';
+	document.getElementById('selectSuffix_err').innerHTML = '';
+	if(document.getElementById('{!$Component.selectSuffix}').value == '')
+	{
+		document.getElementById('selectSuffix_err').innerHTML = '<div class="errorMsg"><strong>Error:</strong> You must enter a value</div>';
+		document.getElementById('selectSuffix_errdiv').className = 'requiredInput';
+		return false;
+	}
+	return true;
+} 
+</script>
+		<div id="selectSuffix_errdiv" style="margin-left:10px;padding-left:3px;">
+        <apex:selectList id="selectSuffix" size="1" multiselect="false" value="{!OverallCapacity}">
+			<apex:selectOptions value="{!Capacity}"/>
+		</apex:selectList>
+            <div class="requiredBlock"></div>
+            <div id="selectSuffix_err"></div> 
+       	</div>
+    </td>
+</tr>
+<tr>
+	<td class="labelCol first ">
+		<label >
+			<span id="Comments-_help" class="helpButton">
+                    <b>Additional Comments:</b>
+                    <img title="" class="helpOrb" alt="" src="/s.gif"/>
+                    <script type="text/javascript">sfdcPage.setHelp('Comments', 'Special requests, staffing conflicts, upcoming time off, etc.');</script>
+             </span>
+		</label>
+	</td>
+	<td class="data2Col  first ">
+	<script>
+function requiredField2()
+{
+	document.getElementById('userMsg_errdiv').className = '';
+	document.getElementById('userMsg_err').innerHTML = '';
+	if(document.getElementById('{!$Component.userMsg}').value == '')
+	{
+		document.getElementById('userMsg_err').innerHTML = '<div class="errorMsg"><strong>Error:</strong> You must enter a value</div>';
+		document.getElementById('userMsg_errdiv').className = 'requiredInput';
+		return false;
+	}
+	return true;
+} 
+</script>
+			<div id="userMsg_errdiv" style="margin-left:10px;padding-left:3px;">	
+                    <apex:inputTextarea id="userMsg" value="{!UserMsg}" style="width:500px; height:90px"/>
+            	<div class="requiredBlock"></div>
+            	 <div id="userMsg_err"></div> 
+            </div>       
+	</td>
+</tr>
+</table>
+
+        </apex:pageBlock>
+        <apex:inputHidden value="{!curEmployeeID}"/>
+
+                
+        <script>
+            var jsonTable;
+            var jsonTable2;
+            $(document).ready(
+                function ()
+                {
+                    $.getJSON('/apex/timeTrackerJSON?tssid={!SelProjItem}&empid={!curEmployeeID}',{},function (data, textStatus) {
+                        jsonTable = $.drawTable({
+                            json : data,
+                            debug : false,
+                            divPath : "#div-space",
+                            sortHeaders : {
+                            		"4":{"sorter": "digit"},
+                            		"5":{"sorter": "text"}
+                            },
+                            classes : {
+                                "header" : ["","","","","{sorter: 'digit'}","","",""],
+                                "table" : [
+                                    "",
+                                    "",
+                                    "",
+                                    "",
+                                    "rightTd",
+                                    "",
+                                    "",
+                                ],
+                                "footer" : []
+                            },
+                            styles : {
+                                colsWidth : [115,100,150,165,62,157,310]
+                            }
+                        });  
+                        
+                    });
+
+                    
+					if($.browser.msie && navigator.appVersion.indexOf("7.0")!=-1)
+                    {
+	                    $.getJSON('/apex/timeTrackerJSON2?tssid={!SelProjItem}&empid={!curEmployeeID}',{},function (data, textStatus) {
+	                        jsonTable2 = $.drawTableNew({
+	                            debug : false,                            
+	                            json : data,
+	                            divPath : "#div-space-2",
+	                            sortHeaders : {
+                            		"3":{"sorter": "digit"},
+                            		"4":{"sorter": "text"}
+                            	},
+	                            classes : {
+	                                "header" : [
+	                                    "",
+	                                    "",
+	                                    "",
+	                                    "{sorter: 'digit'}",
+	                                    "lastTDcell2"
+	                                ],
+	                                "table" : [
+	                                    "centerTd",
+	                                    "",
+	                                    "",
+	                                    "rightTd",
+	                                    "lastTDcell2"
+	                                ],
+	                                "footer" : []
+	                            },
+	                            styles : {
+	                                colsWidth :  [30,300,165,70,480]
+	                            }
+	                        }, "1");  
+	                       
+	                        showTotal('divTotPlace');           
+	                    });
+	                }
+                    else
+                    {
+	                    $.getJSON('/apex/timeTrackerJSON2?tssid={!SelProjItem}&empid={!curEmployeeID}',{},function (data, textStatus) {
+	                        jsonTable2 = $.drawTableNew({
+	                            debug : false,                            
+	                            json : data,
+	                            divPath : "#div-space-2",
+	                            sortHeaders : {
+                            		"3":{"sorter": "digit"},
+                            		"4":{"sorter": "text"}
+                            	},
+	                            classes : {
+	                                "header" : ["","","","{sorter: 'digit'}",""],
+	                                "table" : [
+	                                    "centerTd",
+	                                    "",
+	                                    "",
+	                                    "rightTd",
+	                                    ""
+	                                ],
+	                                "footer" : []
+	                            },
+	                            styles : {
+	                                colsWidth :[30,325,170,62,472]
+	                            }
+	                        }, "1");  
+	                         showTotal('divTotPlace');    
+	                    });
+	                }
+
+                }       
+            );
+
+            function showJson2()
+            {
+                $('#json-textarea').html($.toJSON(jsonTable.model));
+                $('#json-textarea2').html($.toJSON(jsonTable2.model));
+            }
+var addRowInd3=1;            
+function addRows2()
+{
+
+	try	{
+			jsonTable2.model.rows.push('new_'+addRowInd3);
+			jsonTable2.model.table.push(clone(jsonTable2.params.json.newRow));
+			addRowInd3++;
+			jsonTable2.refreshTable();
+			var $controls = $(".inputClass,.selectClass");
+			$controls.focus(function(event) {
+  					var r = $("*[validator]").validator(true);
+			});
+	}catch(Exception){}
+	return false;
+}
+var sendValues2 = 0;
+var loads2 = 0;
+function saveJson3(isSubmit)
+{
+	var r = $("*[validator]").validator();
+    if(r == true)
+    {
+		try{
+		
+			var quantity = 5;
+			var itetation = 0;
+			document.getElementById('thePage:saveJsonForm:OverallCapacity').value = document.getElementById('thePage:af:mmm:0:afpb:selectSuffix').value;
+			document.getElementById('thePage:saveJsonForm:UserMsg').value = document.getElementById('thePage:af:mmm:0:afpb:userMsg').value;
+			
+			var strJSON = '';
+			//Saving process for Deal Projects
+			var obj_rows1 = jsonTable.model.table.length;
+			var strJSON1_obj = document.getElementById('thePage:saveJsonForm:strJSON1');
+			var objBtn1;
+			if(isSubmit)
+			{
+				objBtn1 = document.getElementById('thePage:saveJsonForm:submitJson1_save_btn');
+				loads2 = 2;
+			} else 
+			{	
+				objBtn1 = document.getElementById('thePage:saveJsonForm:saveJson1_save_btn');
+				loads2 = 1;
+			}
+			while(itetation <= obj_rows1) 
+			{
+					var ret_rows = [];
+					var ret = [];
+					for (var i = itetation; i < itetation + quantity; i++) 
+					{
+						var rowid = $.toJSON(jsonTable.model.rows[i]);
+						if(rowid != 'undefined')
+						{
+							ret_rows.push(rowid);
+							ret.push($.toJSON(jsonTable.model.table[i]));
+						}
+					}
+					strJSON = 
+					"{" + 
+						'"rows" : [' + ret_rows.join(", ") + "], "+
+						'"table" : [' + ret.join(", ") + "]"+
+					"}";
+					strJSON1_obj.value = strJSON;
+					$(objBtn1).click();
+					itetation =  itetation + quantity;
+					sendValues2++;
+			}
+			//Saving process for Non-Deal Projects
+			var obj_rows2 = jsonTable2.model.table.length;
+			var strJSON2_obj = document.getElementById('thePage:saveJsonForm:strJSON2');
+			var objBtn2;
+			if(isSubmit)objBtn2 = document.getElementById('thePage:saveJsonForm:submitJson2_save_btn');
+			else objBtn2 = document.getElementById('thePage:saveJsonForm:saveJson2_save_btn');
+			if(jsonTable2.model.delList != null)
+			{
+					strJSON2_obj.value = "{" + '"delList" : ' + $.toJSON(jsonTable2.model.delList) + "}";
+					$(objBtn2).click();
+					sendValues2++;
+			}
+			itetation = 0;
+			while(itetation <= obj_rows2) 
+			{
+					var ret_rows = [];
+					var ret = [];
+					for (var i = itetation; i < itetation + quantity; i++) 
+					{
+						var rowid = $.toJSON(jsonTable2.model.rows[i]);
+						if(rowid != 'undefined')
+						{
+							ret_rows.push(rowid);
+							ret.push($.toJSON(jsonTable2.model.table[i]));
+						}
+					}
+					strJSON = 
+					"{" + 
+						'"rows" : [' + ret_rows.join(", ") + "], "+
+						'"table" : [' + ret.join(", ") + "]"+
+					"}";
+					strJSON2_obj.value = strJSON;
+					//alert(strJSON);
+					$(objBtn2).click();
+					itetation =  itetation + quantity;
+					sendValues2++;
+			}
+			loading();
+			return true;
+		}catch(Exception){}
+   } else return false;
+}
+function requiredFields(isSubmit)
+{
+	var test1 = requiredField1();
+	var test2 = requiredField2();
+	var topError = document.getElementById('topError');
+	topError.innerHTML = '';
+	var r = $("*[validator]").validator();
+	if(test1 && test2 && r == true)	
+	{
+		saveJson3(isSubmit);
+		//theCommandLinkSubmit();
+	}
+	else 
+	{
+		topError.innerHTML = 'Error: Invalid Data. <br>Review all error messages below to correct your data.';
+	}
+}
+function candelete()
+{
+	return true;
+}
+function deleteRows2(index)
+{
+		try	{
+			list = new Array;
+            $("table tbody tr", jsonTable2.divPath).each(function (tRix) {
+                    if ($("td:eq(" + index + ") input", this).attr("checked") &&  typeof jsonTable2.model.rows[$(this).attr("row_index")] != "undefined" ) list.push(jsonTable2.model.rows[$(this).attr("row_index")])
+             });
+             var candel = true;
+             if(candelete() == false) 
+             {
+             	$.each(list, function () { 
+                    if(this.substring(0,3) != "new") 
+                    {
+                    	alert('Insufficient privileges. Please contact the Help Desk'); 
+                    	candel = false;
+                    	return false;
+                    }
+              	});
+             }
+             if(candel == true) 
+             {
+             	$.each(list, function () { 
+                    if ($.inArray(this, jsonTable2.model.delList >= 0)) 
+					{
+						if(this.substring(0,3) != "new") jsonTable2.model.delList.push(''+this);
+						jsonTable2.delRow(this);
+					}
+              	});
+              	jsonTable2.refreshTable();
+             }
+             
+		}catch(Exception){}
+		return false;
+}
+function returnValues2(url1,url2)
+{
+	//alert(sendValues2);
+	if(sendValues2 > 0 && loads2 > 0)sendValues2--;
+	if(sendValues2 == 0 && loads2 > 0) 
+	{
+		if(loads2 == 1) location.href = url1;
+		if(loads2 == 2) location.href = url2;
+	}
+}
+
+function showTotal(elID)
+{
+	$.ajax({'url': '/apex/TimeTrackerTotal?empId={!curEmployeeID}&tssid={!SelProjItem}',
+				'type': 'GET',
+				'dataType': 'json',
+				'success': function (data) {
+				var totVal = data['total'];					
+				obj = document.getElementById(elID);
+				obj.innerHTML = totVal;
+			}
+		});
+	//alert(obj.id);
+} 
+/*
+function checkselectJson2O(obj)
+{
+	var $td = $(obj).parent();
+	var $tr = $td.parent();
+	var tdIndex = $td.attr('cell_index');
+	var trIndex = $tr.attr('row_index');
+	try	{	
+	var tmp = $('#tr'+trIndex+'_td'+tdIndex+'errrordiv');
+	tmp.html('');
+	var err = 0;
+	if ($this.attr('class') == 'selectClass' && jsonTable2.model.fields[tdIndex].validator != null && jsonTable2.model.fields[tdIndex].validator.message3 != null)
+	{
+		$.each(jsonTable2.model.table, function (rowIndex, rowValue) 
+		{
+			if (obj.value == jsonTable2.model.table[rowIndex][tdIndex].value && rowIndex != trIndex) err = 3;
+		});
+		
+		if(err > 0)	
+		{	
+			tmp.html(jsonTable2.model.fields[tdIndex].validator.message3);
+			return false;
+		}
+		return true;
+	}
+	//alert(tmp.html());
+	}catch(Exception){}
+	return false;
+}
+*/
+            </script>
+<apex:includeScript value="{!$Resource.jquery_tracker_functions}"/> 
+<!--      
+                        <a href="/apex/trackerJSON?pid={!SelProjItem}" target="_blank">/apex/trackerJSON?pid={!SelProjItem}</a>
+                       
+                        <input type="button" onclick="showJson2();" value="Show JSON"/><br />
+                        <textarea id="json-textarea" cols="100" rows="15"></textarea>
+                        <textarea id="json-textarea2" cols="100" rows="15"></textarea>
+-->
+</apex:repeat>                        
+    </apex:outputPanel>
+
+</apex:form>
+<div  style="display:none;"> 
+<apex:form id="saveJsonForm">
+<apex:commandButton value="Save" action="{!saveJson}" id="saveJson1_save_btn" rerender="showstate"/>
+<apex:commandButton value="Submit" action="{!submitJson}" id="submitJson1_save_btn" rerender="showstate"/>
+<apex:inputHidden value="{!jsonContent}" id="strJSON1"/>
+<apex:commandButton value="Save" action="{!saveJson}" id="saveJson2_save_btn" rerender="showstate"/>
+<apex:commandButton value="Submit" action="{!submitJson}" id="submitJson2_save_btn" rerender="showstate"/>
+<apex:inputHidden value="{!jsonContent2}" id="strJSON2"/>
+<apex:inputHidden value="{!OverallCapacity}" id="OverallCapacity"/>
+<apex:inputHidden value="{!UserMsg}" id="UserMsg"/>
+<apex:outputPanel id="showstate">
+<script>
+returnValues2('/apex/TimeTracker?empId={!curEmployeeID}&tssid={!SelProjItem}','/{!curEmployeeID}');
+</script>
+</apex:outputPanel>
+</apex:form>
+</div>
+</apex:page>

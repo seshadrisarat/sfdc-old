@@ -1,0 +1,777 @@
+<apex:page controller="i.CtlAdmin" tabStyle="i__Email__c" sidebar="false" title="Emails: Admin" rendered="{!renderOK}">
+<apex:stylesheet value="{!$Resource.i__aastyles}"/>
+<apex:stylesheet value="{!$Resource.i__container}"/>
+<apex:includeScript value="{!$Resource.i__prototype}"/>
+<apex:includeScript value="{!$Resource.i__effects}"/>
+<apex:includeScript value="{!$Resource.i__yahoo_dom_event}"/>
+<apex:includeScript value="{!$Resource.i__animation_min}"/>
+<apex:includeScript value="{!$Resource.i__container_min}"/>
+
+<apex:outputText value="{!aaTabSet}" escape="false"/>
+<apex:form rendered="{!isAdmin}">
+
+<apex:outputText rendered="{!hasMessages}"><div id="errDiv" class="aaErrorArea" ><div><apex:messages /></div></div></apex:outputText>
+
+<!-- demo remove -->
+<apex:actionFunction immediate="true" rerender="DemoStatus" name="ajaxDemoRemove" action="{!demoRemove}" onbeforedomupdate="myhide('demo_actions_status');"/>
+<!-- demo refresh cycle -->
+<apex:actionFunction immediate="true"                       name="ajaxDemoRefresh"   action="{!demoRemove}"    oncomplete="ajaxDemoLoadAddrs();"/> <!-- no rerender = don't show "sample data removed" msg -->
+<apex:actionFunction immediate="true" rerender="DemoStatus" name="ajaxDemoLoadAddrs" action="{!demoLoadAddrs}" oncomplete="ajaxDemoLoad1();"/>
+<apex:actionFunction immediate="true" rerender="DemoStatus" name="ajaxDemoLoad1"     action="{!demoLoad1}"     oncomplete="ajaxDemoLoad2();"/>
+<apex:actionFunction immediate="true" rerender="DemoStatus" name="ajaxDemoLoad2"     action="{!demoLoad2}"     oncomplete="ajaxDemoLoad3();"/>
+<apex:actionFunction immediate="true" rerender="DemoStatus" name="ajaxDemoLoad3"     action="{!demoLoad3}"     oncomplete="ajaxDemoLoad4();"/>
+<apex:actionFunction immediate="true" rerender="DemoStatus" name="ajaxDemoLoad4"     action="{!demoLoad4}"     oncomplete="ajaxDemoLoad5();"/>
+<apex:actionFunction immediate="true" rerender="DemoStatus" name="ajaxDemoLoad5"     action="{!demoLoad5}"     oncomplete="ajaxDemoFinalize();"/>
+<apex:actionFunction immediate="true" rerender="DemoStatus" name="ajaxDemoFinalize"  action="{!demoFinalize}"  onbeforedomupdate="myhide('demo_actions_status');"/>
+
+<!-- batch job launchers. --> 
+<apex:actionFunction immediate="true" name="ajaxRecalcEmailSharing"     action="{!recalcEmailSharing}"    onbeforedomupdate="hideWaitPanel();" oncomplete="alert('Email sharing recalculation launched in the background.\n\nThis can take a long time if there are many emails in the system.\nYou can check the status of the jobs on the Setup > Administration Setup > Monitoring > Apex Jobs page.');"/>
+<apex:actionFunction immediate="true" name="ajaxLaunchBatchCopyToTask"  action="{!launchBatchCopyToTask}" onbeforedomupdate="hideWaitPanel();" oncomplete="alert('Email copy-to-Activity launched in the background.\n\nThis can take a long time if there are many emails in the system.\nYou can check the status of the job on the Setup > Administration Setup > Monitoring > Apex Jobs page.');"/>
+<apex:actionFunction immediate="true" name="ajaxLaunchDecryptAll"       action="{!launchDecryptAll}"      onbeforedomupdate="hideWaitPanel();" oncomplete="alert('Decryption launched in the background.\n\nThis can take a long time if there are many emails in the system.\nYou can check the status of the job on the Setup > Administration Setup > Monitoring > Apex Jobs page.');"/>
+
+<script type="text/javascript">
+var ihance_cached_onload = window.onload; window.onload = function() { ihance_onload(); if (ihance_cached_onload != null) ihance_cached_onload(); }
+
+function ihance_onload() {
+	$$('span.addrlist').each(function(i) { i.innerHTML = link_addrs(i.innerHTML); });
+	handleErrors($('errDiv'));
+	$$('body')[0].addClassName('yui-skin-sam');
+	}
+
+function handleErrors(errDiv) {
+	if (errDiv == null) return;
+	if (errDiv.innerHTML.indexOf('Email-to-Case') >= 0) {
+		$('Mail2CaseAddrs_note').style.fontWeight = 'bold';
+		$('Mail2CaseAddrs_note').style.backgroundColor = 'orange';
+		new Effect.Highlight($('{!$Component.Mail2CaseAddrs}'), {startcolor:"#FF0000", duration:2.0});
+		}
+	}
+
+function link_addrs(addrlist) {
+	var ret = '';
+	$A(addrlist.split(/\s/)).each(function(addr) { if (ret) ret += '; '; ret += '<a href="mailto:' + addr + '">' + addr + '</a>'; });
+	return ret;
+	}
+
+function verifyCfg() {
+	// note that, b/c of the tabset, only some elements are even rendered
+	// so using $$() is the best way to get what we want (and !$Component references are DOM-sibling-dependent)
+	// we use to verify regexp's in javascript, but AAConfig validation provides a better error experience
+	var dmnfields = $$('#isp_domains_edit textarea', '#internal_domains_edit textarea');
+	var bad;
+
+	bad = dmnfields.find(function(f) {
+		if (/@/.test(f.value)) { alert("Bad domain value ('@' sign not allowed)"); return true; }
+		if (/ /.test(f.value)) { alert("Bad domain value (no spaces allowed)"); return true; }
+		return false;
+		});
+	if (bad) {
+		new Effect.Highlight(bad, {startcolor:"#FF0000", duration:1.0});
+		return false;
+		}
+
+	return true;
+	}
+
+/* Visibility Toggles */
+function myhide(e) {
+	e = $(e);
+  e.style.visibility = 'hidden';
+  e.style.display = 'none';
+  }
+function myshow(e,disp) {
+	e = $(e);
+	if (disp == null) disp = '';
+  e.style.display = disp;
+  e.style.visibility = 'visible';
+  }
+
+function edit_mode(uid) {
+	myhide(uid + '_view');
+	myshow(uid + '_edit');
+	}
+function view_mode(uid) {
+	myhide(uid + '_edit');
+	myshow(uid + '_view');
+	}
+
+function layoutArgs() {
+	var SID = '{!sessionId}';
+	var SRV = 'https://' + window.location.hostname + '/services/Soap/u/14.0/';
+	return 'mob=1&sid=' + encodeURIComponent(SID) + '&srv=' + encodeURIComponent(SRV); // note 'mob'ile arg
+	}
+function start_layout_edit() {
+	if ($('layoutframe').src == '') $('layoutframe').src = 'https://www.ihance.com/aav2/layouteditor.aspx?' + layoutArgs();
+	}
+
+//-------------------------------------------------------------------------------
+// modal 'Launching...' popup
+// copied from aaPending; should be extracted into static resource
+//-------------------------------------------------------------------------------
+var waitPanel;
+function showWaitPanel(msg) {
+	if (!waitPanel) waitPanel = newWaitPanel();
+	if (!msg) msg = 'Launching...';
+	$('waitPanelHeaderText').innerHTML = msg;
+	waitPanel.show();
+	}
+function hideWaitPanel() {
+	if (waitPanel != null) waitPanel.hide();
+	}
+
+function newWaitPanel() {
+	var ret = new YAHOO.widget.Panel("waitPanelDiv",  {
+		 width:"240px"
+		,fixedcenter: true
+		,underlay:"matte"
+	  ,draggable:false 
+	  ,zindex:4
+	  ,modal:true
+	  ,visible:false
+		,effect:{effect:YAHOO.widget.ContainerEffect.FADE, duration:0.25}
+		});
+	ret.render($$('body')[0]); // render to body prevents IE bug wherein panel is below mask
+	return ret;
+	}
+</script>
+
+<apex:tabPanel switchType="server" selectedTab="tabUsers" headerAlignment="right" tabClass="adminTab" inactiveTabClass="adminTabInactive">
+<apex:tab style="font-size:12px;" label="Users" name="tabUsers">
+
+	<apex:pageBlock title="User Preferences">
+	<apex:pageBlockButtons ><apex:commandButton action="{!saveAllUserPrefs}" value="Save" style="margin:2px;"/></apex:pageBlockButtons>
+
+	<p style="margin-bottom:8px;">
+	Note that <a href="{!iHanceCfgUrl}" target="mailcfg">email forwarding</a> must be enabled for these settings to take effect.
+	</p>
+	
+	<apex:outputText escape="false" value="{!pager.pagerLinks}"/>
+	
+	<apex:pageBlockTable value="{!pager.proxydata}" var="each" cellPadding="4">
+	<apex:column style="vertical-align:top;white-space:nowrap;">
+		<apex:facet name="header">User</apex:facet>
+		{!each.User_r_Name}
+	</apex:column>
+	<apex:column style="vertical-align:top;white-space:nowrap;">
+		<apex:facet name="header">Settings</apex:facet>
+			<div style="margin-top:-2px;">
+				<apex:inputCheckbox style="margin-bottom: -2px;" value="{!each.UseAA}"/>
+				Use Absolute Automation
+			</div>
+	</apex:column>
+	<apex:column style="vertical-align:top;white-space:nowrap;">
+		<div style="margin-top:-2px;">
+			<apex:inputCheckbox style="margin-bottom: -2px;" value="{!each.SaveAttachments}"/>
+			Save Attachments
+		</div>
+	</apex:column>
+	<apex:column style="vertical-align:top;white-space:nowrap;">
+		<div style="margin-top:-2px;">
+			<apex:inputCheckbox style="margin-bottom: -2px;" value="{!each.AutoCreateContacts}"/>
+			Auto-create Contacts *
+		</div>
+	</apex:column>
+	<apex:column style="vertical-align:top;white-space:nowrap;">
+		<apex:facet name="header">Permissions</apex:facet>
+		<div style="margin-top:-2px;">
+			<apex:inputCheckbox style="margin-bottom: -2px;" value="{!each.IsAdmin}"/>
+			Email Administrator
+		</div>
+	</apex:column>
+	<apex:column style="vertical-align:top;white-space:nowrap;">
+		<apex:facet name="header">Email Addresses</apex:facet>
+		<div id="{!each.User}_view">
+			<span class="addrlist">{!each.EmailAddrs}</span>
+			<span class="case">[<a href="#" onclick="edit_mode('{!each.User}');return false;">Edit</a>]</span>
+		</div>
+		<div id="{!each.User}_edit" style="display:none;visibility:hidden;">
+			<apex:inputTextArea value="{!each.EmailAddrs}" rows="5" style="width:250px;height:50px;margin-bottom:4px;overflow:auto;"/>
+		</div>
+	</apex:column>
+	</apex:pageBlockTable>
+	
+	<apex:outputText escape="false" value="{!pager.resizeLinks}"/>
+	
+	<br/>
+	
+	<span class="comment helptext">* Auto-create Contacts when there is one Suggested Account; this will also be applied retroactively in a background process.</span>
+	
+	<br/>
+	<apex:outputText rendered="{!isEmailSharingModelPrivate}">
+	<br/>
+	<span class="comment">Changing users' email address settings will change the emails they can view.  Recalculation of view permissions happens automatically in a background process.</span>
+	</apex:outputText>
+
+	</apex:pageBlock>
+
+</apex:tab>	
+	
+	
+<apex:tab style="font-size:12px;" label="Email-to-Case" name="tabCases">
+	<apex:pageBlock title="Email-to-Case Settings">
+	<apex:pageBlockButtons ><apex:commandButton action="{!saveAAConfig}" id="saveConfig" value="Save" style="margin:2px;" onclick="return verifyCfg();"/></apex:pageBlockButtons>
+	
+	<table class="list" border="0" cellpadding="4" cellspacing="10" width="100%">
+	<tbody>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Email-to-Case Addresses
+		<div class="smalltext">
+		Inbound emails to these addresses will automatically create a new Case.
+		<br/>
+		<br/>Enter your support/helpdesk email addresses here (one per line).
+		<p id="Mail2CaseAddrs_note">Note these addresses must match an active User's "Email Addresses" setting.</p>
+		</div>	
+	</th>
+	<td><apex:inputTextArea id="Mail2CaseAddrs" value="{!aaconfig.Mail2CaseAddrs}" cols="65" rows="5" style="overflow:auto;"/></td>
+	</tr>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Internal Email-to-Case (helpdesk)
+		<div class="smalltext">
+		Should internal email to your Email-to-Case addresses create cases?
+		<br/>This is useful for internal helpdesk.  If you don't have this box checked, internal mail to mail-to-case addresses is discarded.
+		</div>	
+	</th>
+	<td><apex:inputCheckbox id="AllowInternalMail2Case" value="{!aaconfig.AllowInternalMail2Case}"/> Enable internal email-to-case</td>
+	</tr>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Linking emails to existing Cases
+		<div class="smalltext">
+		Enable <a target="dowork" href="/_ui/support/organization/EmailToCaseSettings/d">Salesforce Email-to-Case</a> to
+		add unique "Thread Ids" to emails sent from Cases.
+		<br/>You do <b>not</b> need to install Salesforce's java agent - just enable the feature [ <a target="showme" href="{!$Resource.email_to_case}">show me</a> ].
+		<br/>
+		<br/>iHance automatically recognizes Thread Ids and links emails to the right Case.
+		</div>	
+	</th>
+	<td>
+		<div id="case_pattern_view">
+			<div class="smalltext">
+				<br/>iHance also supports using Case Numbers in Subject lines.
+				<br/>Please contact <a href="mailto:support@ihance.com">support@ihance.com</a> to configure this.
+				<br/>[ <a href="#" onclick="edit_mode('case_pattern');return false;">Edit</a> ]
+			</div>
+		</div>
+		<div id="case_pattern_edit" style="display:none;visibility:hidden;">
+			<apex:inputTextArea id="CasePatterns" value="{!aaconfig.CasePatterns}" cols="65" rows="5" style="overflow:auto;"/>
+		</div>	
+	</td>
+	</tr>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Email-to-Case Options
+		<div class="smalltext">
+		These options apply when a new Case is created by Email-to-Case.
+		</div>	
+	</th>
+	<td>
+		<apex:inputCheckbox value="{!aaconfig.NewCase_useDefaultAssignmentRule}"/> Use the default Case Assignment Rule, if any
+		<br/>
+		<apex:inputCheckbox value="{!aaconfig.NewCase_triggerAutoResponseEmail}"/> Send the Auto-Response Email, if any
+		<br/>
+		<apex:inputCheckbox value="{!aaconfig.NewCase_triggerUserEmail}"/> Send the User Email, if any
+	</td>
+	</tr>
+	</tbody>
+	</table>
+	</apex:pageBlock>
+</apex:tab>
+
+
+<apex:tab style="font-size:12px;" label="Email-to-Activity" name="tabActivities">
+	<apex:pageBlock title="Copying Emails to Activities">
+	<apex:pageBlockButtons ><apex:commandButton action="{!saveAAConfig}" id="saveConfig" value="Save" style="margin:2px;" onclick="return verifyCfg();"/></apex:pageBlockButtons>
+	<div style="margin:10px;">
+	<p><b>Note</b>:  This feature should only be used if you require an Activity-based copy of all Email.</p>
+	<p>Prior to enabling this feature, please consult with <a href="mailto:support@ihance.com">iHance Support</a> as our default "Email" object is the preferred method for storing email.</p>
+	<br/>
+	<p><b>Email-to-Activity</b> automatically creates Activity objects from your Emails.  Due to Salesforce limitations, Activities can only link to a single Contact or Lead.  Therefore a single Email can result in multiple Activities.  For example, if you email two Contacts in the same Account, separate Activities will be created for each Contact and the Account's "Activity History" will show <i>two</i> Activities.</p>
+	<p>There are two scenarios that call for this feature:</p>
+<ol style="margin-left:0;margin-bottom:18px;">
+	<li>You need Emails as Activities for Reporting or Workflow reasons.
+		<br/>In this case, you should keep your original Email objects as the main copy.
+		<br/><br/><i>Recommended settings:</i>
+		<br/>Email Lifespan: 0 (this means emails are never deleted)
+		<br/>Copy Attachments to Activities: <b>off</b>
+		<br/>Launch a batch copy for old email: <b>no</b>
+		<br/>Activity page layout: add the "View source email" custom link and "Linked email has attachments?" field.
+	</li>
+	<li style="margin-top:18px;">You use Activities for everything outside of iHance's "Emails" tab / pending area
+		<br/>In this case, you only use iHance's "Email" object for the Pending page and do not need to keep Email object after that.
+		<br/><br/><i>Recommended settings:</i>
+		<br/>Email Lifespan: set this equal to your Pending Lifespan (typically 1 month)
+		<br/>Copy Attachments to Activities: <b>on</b>
+		<br/>Launch a batch copy for old email: <b>yes</b>
+		<br/>Activity page layout: unchanged
+	</li>
+</ol>
+	</div>
+	<table class="list" border="0" cellpadding="4" cellspacing="10" width="100%">
+	<tbody>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Copy Emails to Activities
+		<div class="smalltext">
+		When checked, Emails are copied to Activity objects as they are logged.
+		<br/>
+		In addition, when new Contacts/Leads are created or updated with new email addresses, the system
+		will copy as many existing Emails as possible into new Activities for those Contacts/Leads.
+		</div>	
+	</th>
+	<td class="nowrap"><apex:inputCheckbox value="{!aaconfig.CopyEmailsToTasks}"/> Copy emails to activities</td>
+	</tr>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Copy Attachments to Email Activities
+		<div class="smalltext">
+		When checked, Emails that are copied to Activities also copy their Attachments to the Activities.
+		<br/>
+		Enabling this option can cause your file storage usage to increase, as each Activity created needs its own copy of the Attachments.
+		</div>	
+	</th>
+	<td class="nowrap"><apex:inputCheckbox value="{!aaconfig.CopyAttachmentsToTasks}"/> Copy attachments to activities</td>
+	</tr>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Email Lifespan
+		<div class="smalltext">
+		Set the Email Lifespan to 0 (the default) to prevent non-Pending emails from being auto-deleted at all.
+		</div>
+	</th>
+	<td class="nowrap">
+		<table>
+			<tr><td>Email Lifespan:</td><td><apex:inputText id="EmailLifespan" value="{!aaconfig.EmailLifespan}" style="margin:0px 4px;width:24px;"/> months</td></tr>
+			<tr><td>Pending Lifespan:</td><td><div class="pre box"><apex:outputText id="PendingLifespan2" value="{!FLOOR(aaconfig.PendingLifespan)}"/> months</div></td></tr>
+		</table>
+	</td>
+	</tr>
+	</tbody>
+	</table>
+
+	<table class="list" border="0" cellpadding="4" cellspacing="10" width="100%" style="margin-top:16px;">
+	<tbody>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Start batch copy
+		<div class="smalltext">
+		This will copy <b>all</b> existing emails to Activities.
+		<br/>
+		You do not have to enable "Copy Emails to Activities" above for this to work; however the "Copy Attachments" setting will be honored during the batch copy.
+		<br/>
+		<br/>
+		Note: emails that have already been copied to Activities will <b>not</b> be copied again, so you don't need to worry about creating duplicates.
+		</div>	
+	</th>
+	<td class="nowrap"><a href="#" onclick="showWaitPanel(); ajaxLaunchBatchCopyToTask(); return false;">Launch Batch Copy</a></td>
+	</tr>
+	</tbody>
+	</table>
+	</apex:pageBlock>
+</apex:tab>
+
+
+<apex:tab style="font-size:12px;" label="Advanced" name="tabAdvanced">
+
+	<apex:pageBlock title="Advanced Settings">
+	<apex:pageBlockButtons ><apex:commandButton action="{!saveAAConfig}" id="saveConfig" value="Save" style="margin:2px;" onclick="return verifyCfg();"/></apex:pageBlockButtons>
+	
+	<table class="list" border="0" cellpadding="4" cellspacing="10" width="100%">
+	<tbody>
+
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		API Access
+		<div class="smalltext">
+		You granted API access to iHance as part of initial setup; if you need to you can provide us with a fresh grant.
+		</div>	
+	</th>
+	<td><div class="smalltext"><a target="_new" href="/services/oauth2/authorize?response_type=code&client_id=3MVG9VmVOCGHKYBT4dfRBZNk1Fw0xYLzsW7e9i8DH.F7Oq2qIAeiJIgg1dIU54.7YpCstl1rtu3r7LBedjdyJ&redirect_uri=https://www.ihance.com/aav2/oauthcallback/">Regrant access</a></div></td>
+	</tr>
+
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Page Layout Editor
+		<div class="smalltext">
+		Automatically insert Absolute Automation "Emails" lists into your existing Page Layouts.
+		<br/><br/>
+		<i>Supported in Enterprise &amp; Unlimited Editions only</i>.
+		</div>	
+	</th>
+	<td>
+		<div id="layouteditor_view">
+			<div class="smalltext">
+				<br/>[ <a href="#" onclick="start_layout_edit();edit_mode('layouteditor');return false;">Click here to edit Page Layouts</a> ]
+			</div>
+		</div>
+		<div id="layouteditor_edit" style="display:none;visibility:hidden;">
+			<div class="smalltext">
+				<br/>[ <a href="#" onclick="view_mode('layouteditor');return false;">Click here to hide Page Layouts</a> ]
+			</div>
+			<br/>
+			<iframe id="layoutframe" style="height:620px;width:700px;border: 1px #999 solid;" frameborder="0"></iframe>
+		</div>	
+	</td>
+	</tr>
+	
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Email client configuration instructions
+		<div class="smalltext">
+		Plugins &amp; instructions for configuring your mail environment to use Absolute Automation
+		</div>	
+	</th>
+	<td><div class="smalltext"><a href="{!iHanceCfgUrl}" target="mailcfg">{!iHanceCfgUrl}</a></div></td>
+	</tr>
+
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Attachment Filtering
+		<div class="smalltext">
+		Filter out attachments by extension or image size.  These settings apply to all users who have "Save Attachments" enabled.
+		<br/><br/>
+		Note these filters are independent - if you have both enabled, an attachment can be filtered by either rule.
+		<br/>
+		For example, if you have an 8KB threshold for images but also have "gif" in your extension list, then no gifs will be logged regardless of size.
+		</div>	
+	</th>
+	<td>
+		Filter out attached images less than <apex:inputText size="20" maxlength="255" value="{!aaconfig.AttMinImgSize}" style="margin:0px 4px;width:24px;"/> kilobytes in size
+		<br/><span class="smalltext">Leave blank to keep images regardless of size</span>
+		<br/><br/>
+		<i>-- and --</i>
+		<br/><br/>
+		Filter out attachments with these extensions: <apex:inputText size="20" maxlength="255" value="{!aaconfig.AttSkipExts}"/>
+		<br/><span class="smalltext">Separate multiple extensions with commas, for example "jpg, gif"; leave blank to accept all extensions</span>
+		<br/><br/><br/>
+		<apex:inputCheckbox value="{!aaconfig.AttKeepAllForCases}"/> Do not apply filters (keep all attachments) for Emails linked to Cases
+	</td>
+	</tr>
+
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Enable Custom Pages
+		<div class="smalltext">
+		Check this box to make your custom Pending page live; uncheck it to revert to the default Pending page.
+		<br/>
+		<i>Only applies if iHance has created a custom page for your organization.</i>
+		</div>
+	</th>
+	<td><apex:inputCheckbox id="CheckCustomPages" value="{!aaconfig.CheckCustomPages}" style="margin:0px 4px;width:24px;"/> Enable custom pages</td>
+	</tr>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Opportunity Emails List
+		<div class="smalltext">
+		The Opportunity Emails list shows emails for all Contacts in the Opportunity, unless you designate their Role should be omitted.
+		<br/><br/>
+		In addition, any Email directly linked to the Opportunity will be displayed (this is a manual process from the Email "Edit" page).
+		</div>
+	</th>
+	<td>
+		Omit these Roles from the Emails list (separated by commas):
+		<br/>
+		<apex:inputText size="20" maxlength="255" id="SkippableOppContactRoles" value="{!aaconfig.SkippableOppContactRoles}" style="margin:0px 4px;width:300px;"/>
+	</td>
+	</tr>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Email Lifespan
+		<div class="smalltext">
+		Automatically delete logged emails after this many months.  Set to 0 to prevent auto-deletion.
+		<br/>Keep this at 0 unless you're sure you want to auto-delete old emails.
+		</div>
+	</th>
+	<td>
+		<apex:inputText id="EmailLifespan" value="{!aaconfig.EmailLifespan}" style="margin:0px 4px;width:24px;"/> months
+		<br/>
+		<apex:inputCheckbox id="KeepLinkedEmailsPastLifespan" value="{!KeepLinkedEmailsPastLifespan}"/>Don't delete old emails if they are hard-linked to Cases or Opportunities.
+	</td>
+	</tr>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Pending Lifespan
+		<div class="smalltext">
+		Delete pending (unlogged) emails after this many months.
+		<br/>Set this to 0 to prevent pending emails from logging at all (in which case only emails to existing Contacts/Leads will be logged).
+		</div>
+	</th>
+	<td><apex:inputText id="PendingLifespan" value="{!aaconfig.PendingLifespan}" style="margin:0px 4px;width:24px;"/> months</td>
+	</tr>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		SysLog Lifespan
+		<div class="smalltext">
+		Delete system log entries after this many days.
+		<br/>Set this to 0 to prevent the system log being written to at all.
+		</div>
+	</th>
+	<td><apex:inputText id="AALogLifespan" value="{!aaconfig.AALogLifespan}" style="margin:0px 4px;width:24px;"/> days</td>
+	</tr>
+
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Email encryption
+		<div class="smalltext">
+		Pending emails are encrypted to keep them out of global search.
+		<br/><br/>
+		By default, emails linked to Contacts, Leads, Cases, and Opportunities are decrypted to allow search.
+		<br/>
+		You can choose to keep these encrypted instead; this will render emails unsearchable.
+		<br/><br/>
+		If you are going to export data for import data into another org, you should first <a href="#" onclick="showWaitPanel(); ajaxLaunchDecryptAll(); return false;">decrypt all emails</a>
+		<br/>
+		</div>
+	</th>
+	<td><apex:inputCheckbox id="EncryptLinkedMsgs__c" value="{!aaconfig.EncryptLinkedMsgs}"/>Encrypt linked emails</td>
+	</tr>
+
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Ignoring emails based on content
+		<div class="smalltext">
+		You can specify words or phrases that, if found in an email, will cause the email to not be logged.
+		<br/>
+		<br/>You can enter multiple expressions, each on their own line.  Do not enclose phrases in quotes - just give them each their own line.  You can choose to have expressions interpreted as "regular expressions" (advanced).
+		<br/>
+		<br/>
+		To filter by addresses, the sender and recipient addresses are combined
+		into a flat comma-separated list of addresses (sender first, then
+		recipients, all lowercase). The filter expressions you specify here are
+		then matched against that address list.  This From/To/CC filter can be used
+		in situations where other address-based filtering methods (the Internal
+		Domains list or individual Users' "Ignore" lists) are too broad or too
+		narrow.
+		<br/>
+		<br/>
+		Taking this email as an example:
+<pre class="box" style="margin-left:20px;width:60em;">
+From: "iHance Support" &lt;support@ihance.com&gt;
+To: "Bob Jones" &lt;bob@example.com&gt;, &lt;alice@example.com&gt;
+Cc: &lt;TOM@example.com&gt;
+Subject: Skipping Confidential email
+
+Hi Bob &amp; Alice,
+
+You can prevent emails from logging based on keywords found in their subject or body,
+as well as their From/To/Cc headers.  This can be useful when contemplating a merger.
+</pre>
+
+		For this email, "From/To/Cc" rules would be evaluated against this format:
+<pre class="box" style="margin-left:20px;width:60em;">
+from:support@ihance.com,to:bob@example.com,to:alice@example.com,cc:tom@example.com
+</pre>
+
+		<br/>
+		The above email would be skipped if <b>ANY</b> of the following rules were in place:
+
+		<table style="margin:25px;">
+		<tbody>
+		<tr>
+			<td>Filter type</td>
+			<td>Filter expression</td>
+			<td>Regular expression?</td>
+		</tr>
+		<tr>
+			<th>Body</th>
+			<td><pre>merger</pre></td>
+			<td><input type="checkbox" disabled="disabled"/></td>
+		</tr>
+		<tr>
+			<th>Subject</th>
+			<td><pre>confidential</pre></td>
+			<td><input type="checkbox" disabled="disabled"/></td>
+		</tr>
+		<tr>
+			<th>From/To/Cc</th>
+			<td><pre>cc:tom@example.com</pre></td>
+			<td><input type="checkbox" disabled="disabled"/></td>
+		</tr>
+		<tr>
+			<th>From/To/Cc</th>
+			<td><pre>@ihance\.com.*tom@example\.com</pre></td>
+			<td><input type="checkbox" disabled="disabled" checked="checked"/></td>
+		</tr>
+		</tbody>
+		</table>
+
+		</div>
+	</th>
+	<td style="vertical-align:top;">
+		<div class="skip_expressions">
+			<h3>Skip emails whose <b>body</b> contains:</h3>
+			<br/>
+			<apex:inputTextArea id="SkipBody" value="{!aaconfig.SkipBody}" cols="65" rows="5" style="overflow:auto;white-space:nowrap;"/>
+			<br/>
+			<apex:inputCheckbox id="SkipBodyRE" value="{!aaconfig.SkipBodyRE}"/>Regular expressions (advanced)
+		</div>
+		<div class="skip_expressions">
+			<h3>Skip emails whose <b>subject</b> contains:</h3>
+			<br/>
+			<apex:inputTextArea id="SkipSubj" value="{!aaconfig.SkipSubj}" cols="65" rows="5" style="overflow:auto;white-space:nowrap;"/>
+			<br/>
+			<apex:inputCheckbox id="SkipSubjRE" value="{!aaconfig.SkipSubjRE}"/>Regular expressions (advanced)
+		</div>
+		<div class="skip_expressions">
+			<h3>Skip emails whose <b>From/To/Cc list</b> contains:</h3>
+			<br/>
+			<apex:inputTextArea id="SkipHdrs" value="{!aaconfig.SkipHdrs}" cols="65" rows="5" style="overflow:auto;white-space:nowrap;"/>
+			<br/>
+			<apex:inputCheckbox id="SkipHdrsRE" value="{!aaconfig.SkipHdrsRE}"/>Regular expressions (advanced)
+		</div>
+	</td>
+	</tr>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Ignored email domains
+		<div class="smalltext">
+		Emails from Users to these domains, and vice-versa, will be ignored.
+		<br/>This is a safeguard to prevent internal emails from being logged.
+		<br/>Enter all email domains from which you send business email (one per line).
+		<br/>You can also enter any other domain that always want to ignore.
+		</div>
+	</th>
+	<td><div id="internal_domains_edit"><apex:inputTextArea id="InternalDomains" value="{!aaconfig.InternalDomains}" cols="65" rows="5" style="overflow:auto;"/></div></td>
+	</tr>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		ISP Domains
+		<div class="smalltext">
+		Accounts will not be suggested for email addresses in these domains.
+		<br/>Enter ISP email domains here (one per line).
+		</div>	
+	</th>
+	<td><div id="isp_domains_edit"><apex:inputTextArea id="ISPDomains" value="{!aaconfig.ISPDomains}" cols="65" rows="5" style="overflow:auto;"/></div></td>
+	</tr>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Lead creation options
+		<div class="smalltext">
+		These options apply when creating new Leads from the Pending page
+		</div>	
+	</th>
+	<td>
+		<apex:inputCheckbox value="{!aaconfig.NewLead_useDefaultAssignmentRule}"/> Use the default Lead Assignment Rule, if any
+		<br/>
+		<apex:inputCheckbox value="{!aaconfig.NewLead_triggerAutoResponseEmail}"/> Send the Auto-Response Email, if any
+		<br/>
+		<apex:inputCheckbox value="{!aaconfig.NewLead_triggerUserEmail}"/> Send the User Email, if any
+	</td>
+	</tr>
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Allow portal user access
+		<div class="smalltext">
+		Allow portal users to view Absolute Automation Email pages and page snippets
+		<br/>If unchecked, Absolute Automation pages and snippets will be blank for portal users.
+		</div>
+	</th>
+	<td>
+		<apex:inputCheckbox id="AllowPortalAccess" value="{!aaconfig.AllowPortalAccess}"/> Allow portal user access
+	</td>
+	</tr>
+	
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Demo Data
+		<div class="smalltext">
+		Load sample data into a trial or DE org.
+		<div id="demo_data_view" style="display:inline;padding-left:10px;">
+			[ <a href="#" onclick="edit_mode('demo_data');return false;">Show Options</a> ]
+		</div>
+		</div>	
+	</th>
+	<td>
+		<div id="demo_data_edit" style="display:none;visibility:hidden;">
+			<div id="demo_actions">
+				<a href="#" onclick="javascript:myhide('demo_actions');myshow('demo_actions_status','block'); ajaxDemoRefresh(); return false;">Load/Refresh Sample Data</a>
+				&nbsp;&nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp;&nbsp;
+				<a href="#" onclick="javascript:myhide('demo_actions');myshow('demo_actions_status','block'); ajaxDemoRemove(); return false;">Remove Sample Data</a>
+			</div>
+			<div id="demo_actions_status" class="saveStatus" style="float:left;margin-right:10px;">
+				Working ...
+			</div>
+			<apex:outputPanel id="DemoStatus" layout="inline"><apex:outputText value="{!demoStatus}"/></apex:outputPanel>
+		</div>
+	</td>
+	</tr>
+	
+	<apex:outputText rendered="{!isEmailSharingModelPrivate}">
+	<tr class="dataRow">
+	<th style="vertical-align:top;">
+		Email Sharing Recalculation
+		<div class="smalltext">
+		Advanced Feature
+		<div id="sharing_recalc_view" style="display:inline;padding-left:10px;">
+			[ <a href="#" onclick="edit_mode('sharing_recalc');return false;">Show Options</a> ]
+		</div>
+		</div>	
+	</th>
+	<td>
+		<div id="sharing_recalc_edit" style="display:none;visibility:hidden;">
+			<!-- note that email sharing recalc should happen when enabled, but having the manual ability is still useful -->
+			<a href="#" onclick="showWaitPanel(); ajaxRecalcEmailSharing(); return false;">Launch sharing recalculation</a>
+			<div style="margin-top:10px;">
+				Manually launch sharing recalculation if:
+					<ul>
+						<li class="aaBullet" style="margin-left:-3em;">You've just changed to the "Private" sharing model, or</li>
+						<li class="aaBullet" style="margin-left:-3em;">You have de-activated and re-activated Users who use Absolute Automation</li>
+					</ul>
+			</div>
+		</div>
+	</td>
+	</tr>
+	</apex:outputText>
+	
+	<tr class="dataRow">
+	<td style="vertical-align:top;" colspan="2">
+		<h2>Absolute Automation Uninstall</h2>
+		<div id="uninstall_directions_view" style="padding:10px;">
+		<a href="#" onclick="edit_mode('uninstall_directions');return false;">Show uninstall directions</a>
+		</div>	
+		<div id="uninstall_directions_edit" style="display:none;visibility:hidden;padding:10px;">
+			<div class="uninstallWarning"><div>
+			<b>Note:</b> This process will <b>delete</b> all emails that have logged via Absolute Automation.
+			<p>If you want to keep your emails, but wish to stop paying to log <i>new</i> emails, do only the following:</p>
+			<ol>
+				<li>Stop forwarding email to your AA addresses.</li>
+				<li>Uncheck "Use Absolute Automation" for all your users (on the <a href="/apex/i__aaadmin" target="dowork" title="Go to the Admin tab (new window)">Admin tab</a>).</li>
+			</ol>
+			<p>This will discontinue your invoices and disables the "Emails" tab for your users.</p>
+			<p>Existing emails will remain visible throughout the rest of Salesforce (Accounts, Contacts, Leads, Cases, etc).</p>
+			</div></div>
+			
+			<b>To completely uninstall Absolute Automation and all its data</b>:
+			<ol>
+				<li style="padding:5px;">Remove the <b>Emails</b> section from page layouts.
+					<ul>
+						<li style="padding:5px;"><b>Enterprise</b> and <b>Unlimited</b> Edition:  <a href="#" onclick="start_layout_edit();edit_mode('layouteditor');return false;">Open the Page Layout editor</a> (above), uncheck all boxes, and click "Update".</li>
+						<li style="padding:5px;"><b>Professional Edition</b>: remove the "Emails" section from the page layouts for 
+											<a target="dowork" href="/ui/setup/layout/PageLayouts?type=Account"     title="Go to Account Page Layouts (new window)"><b>Accounts</b></a>,
+											<a target="dowork" href="/ui/setup/layout/PageLayouts?type=Contact"     title="Go to Contact Page Layouts (new window)"><b>Contacts</b></a>,
+											<a target="dowork" href="/ui/setup/layout/PageLayouts?type=Lead"        title="Go to Lead Page Layouts (new window)"><b>Leads</b></a>, and 
+											<a target="dowork" href="/ui/setup/layout/PageLayouts?type=Opportunity" title="Go to Opportunity Page Layouts (new window)"><b>Opportunities</b></a>.
+								</li>
+					</ul>
+				</li>
+				<li style="padding:5px;">Go to <a target="dowork" href="/0A3?setupid=ImportedPackage" title="Go to Installed Packages"><b>Setup &gt; App Setup / View installed packages</b></a> and uninstall Absolute Automation.</li>
+			</ol>
+		</div>
+	</td>
+	</tr>
+	</tbody>
+	</table>
+	</apex:pageBlock>
+
+</apex:tab>
+</apex:tabPanel>
+
+
+
+
+</apex:form>
+
+<!-- the "Launching..." div -->
+<div id="waitPanelDiv" style="visibility:hidden;"><div class="hd" id="waitPanelHeader"><span id="waitPanelHeaderText">Launching...</span></div></div>
+</apex:page>

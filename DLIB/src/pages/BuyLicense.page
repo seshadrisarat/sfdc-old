@@ -1,0 +1,332 @@
+<apex:page controller="LicenseManager_controller" showheader="false" sidebar="false" cache="false" standardStylesheets="true">
+<apex:stylesheet value="{!URLFOR($Resource.licenseManager, 'css/styles.css')}" />
+<link rel="stylesheet" type="text/css" href="https://checkout.stripe.com/v3/checkout/button.css" />
+
+<apex:includeScript value="{!URLFOR($Resource.licenseManager, 'js/jquery-1.6.1.min.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.licenseManager, 'js/jquery-ui-1.8.11.custom.min.js')}" />
+<apex:includeScript value="https://checkout.stripe.com/v2/checkout.js" />
+<apex:includeScript value="{!URLFOR($Resource.licenseManager, 'js/scripts.js')}" />
+<script>
+var handler;
+
+$(function(){
+    handler = StripeCheckout.configure({
+        key: '{!StripePublishableKey}',
+        billingAddress: true,
+        shippingAddress: true,
+        token: function( token, args ) {
+            // Use the token to create the charge with a server-side script.
+            createCharge( JSON.stringify( token ) );
+            //console.log( token );
+        }
+    });
+});
+
+function openStripeWindow( licenseFullName, desc, amnt ) {
+    if ( amnt > 0 ) {
+        if ( handler != null ) {
+            handler.open({
+              image: 'http://stripe.com/img/documentation/checkout/marketplace.png',
+              name: licenseFullName,
+              description: desc,
+              amount: amnt
+            });
+        } else {
+            console.log( 'EXCEPTION: handler is null' );
+        }
+    }
+}
+</script>
+
+<apex:outputpanel id="thePanel">
+    <div class="page">
+        <div style="margin-left:10px;"><apex:image value="{!URLFOR($Resource.silverlinepkb)}" /></div>
+        <div class="mainHeader">Subscription Renewal &amp; Purchase</div>
+        
+        <apex:outputpanel id="messagesPanelError">
+            <apex:PageMessages rendered="{!sOrganizationId == null || sOrganizationId == '' || packageversion == null}" />
+        </apex:outputpanel>
+        
+        <apex:form id="theForm" rendered="{!packageversion != null}">
+            <div class="sectionHeader">Select a Product</div>
+            
+            <apex:outputpanel id="messagesPanel">
+                <apex:PageMessages />
+            </apex:outputpanel>
+            
+            <div class="sectionContent">
+                <table class="productTable">
+                    <tr>
+                        <td><apex:outputLabel value="Product Name" for="ProductList" /></td>
+                        <td class="productInfo">
+                            <apex:selectList id="ProductList" value="{!packageversion}" multiselect="false" size="1" onchange="lockButton();init_page();">
+                                <apex:selectOptions value="{!items}" />
+                            </apex:selectList>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><apex:outputLabel value="Product Version" for="ProductVersion"/></td>
+                        <td class="productInfo">
+                            <apex:outputText id="ProductVersion" styleClass="productVersion" value="{!PackageVersionName}" />
+                        </td>
+                    </tr>
+                </table>
+                <apex:outputLabel id="mostRecentVersionLabel" style="margin-left: 10px; margin-bottom: 10px;" styleClass="descriptionText" rendered="{!IF(UpgradeLink != '' && UpgradeLink != null, true, false)}">
+                    The most recent version of this product is '{!UpgradeVersion}'. Click&nbsp;<apex:outputLink target="_blank" styleClass="link" value="{!UpgradeLink}">here</apex:outputLink> to install.
+                </apex:outputLabel>
+            </div>
+            
+            <apex:outputPanel rendered="{!IF(license.sfLma__Expiration_Date__c != 'Does not expire' && license.sfLma__Seats__c != -1, true, false)}">
+                <div class="sectionContent">
+                    <apex:outputLabel styleClass="descriptionText">
+                        <apex:outputtext id="licenseinfo" value="You currently have {0} {1} licenses that {!IF(license.sfLma__Expiration__c <= TODAY(), 'have expired', 'will expire')} {2,date,MM/dd/yyyy}." rendered="{!license.sfLma__License_Status__c != 'Trial'}">
+                            <apex:param value="{!license.sfLma__Licensed_Seats__c}" />
+                            <apex:param value="{!license.sfLma__License_Status__c}" />
+                            <apex:param value="{!license.sfLma__Expiration__c}" />
+                        </apex:outputtext>
+                        <apex:outputtext id="triallicenseinfo" value="Your trial license expire{!IF(license.sfLma__Expiration__c <= TODAY(), 'd', 's')} on {0,date,MM/dd/yyyy}." rendered="{!license.sfLma__License_Status__c == 'Trial'}">
+                            <apex:param value="{!license.sfLma__Expiration__c}" />
+                        </apex:outputtext>
+                    </apex:outputLabel>
+                </div>
+                <br />
+                
+                <div class="sectionHeader">Purchase Licenses</div>
+                <div class="sectionContent">
+                    <apex:outputLabel styleClass="descriptionText">
+                        Single user licenses are&nbsp;
+                        <apex:outputText value="${0,number,0}">
+                            <apex:param value="{!OneLicenseCost}" />
+                        </apex:outputText>
+                        per year. Volume discounts will be automatically applied.
+                    </apex:outputLabel><br />
+                    <br/>
+                    
+                    <apex:outputLabel styleClass="descriptionText">
+                        You can purchase additional licenses at any time. Licenses purchased during the current subscription period
+                        will share the same expiration date as current licenses and will be prorated appropriately.
+                    </apex:outputLabel><br />
+                    <br />
+                    
+                    <apex:inputText id="newlic" value="{!newlicenses}" maxlength="3" required="false" size="3" onkeypress="return onlyNumbers(event);" onkeyup="inputHandler();">
+                        <apex:actionSupport event="onkeypress" rerender="messagesPanel" />
+                    </apex:inputText>
+                    <apex:outputLabel styleClass="fieldName" value=" Enter the number of new licenses to purchase" for="newlic" /><br />
+                    <apex:outputLabel styleClass="descriptionText">If you’re renewing your subscription but not adding any new licenses, just leave this box blank.</apex:outputLabel>
+                    <br />
+                    
+                    <apex:outputLabel styleClass="descriptionText" rendered="{!DaysLeft > 0 && license.sfLma__License_Status__c == 'Active'}">
+                        <br />
+                        There are
+                        <apex:outputText value=" {0,number,###} ">
+                            <apex:param value="{!DaysLeft}" />
+                        </apex:outputText>
+                        days left in this subscription period. At this total license volume, the prorated price per license is
+                        <apex:outputText value=" ${0,number,##0.00}">
+                            <apex:param value="{!PricePerLicense}" />
+                        </apex:outputText>
+                        <br /><br />
+                    </apex:outputLabel>
+                    <br />
+                    
+                    <table class="info-table">
+                        <tr>
+                            <td><apex:outputLabel value="Prorated New License Charges:" for="proratedNewLicenseCharges" /></td>
+                            <td>
+                                <apex:outputText id="proratedNewLicenseCharges" value="${0,number,##,##0.00}">
+                                    <apex:param value="{!ProratedNewLicenseCharges}" />
+                                </apex:outputText>&nbsp;
+                                <apex:outputLabel styleClass="descriptionText" value="plus applicable sales tax" for="proratedNewLicenseCharges"></apex:outputLabel>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <br />
+                
+                <div class="sectionHeader">Renew Your Subscription</div>
+                <div class="sectionContent">
+                    <apex:outputLabel styleClass="descriptionText">
+                        You can place an order to renew your subscription at any time using this form.<br />
+                        <br />
+                        Subscription renewals will be charged when placing the order and the new one year
+                        subscription period will begin after the previous subscription expires:
+                    </apex:outputLabel><br />
+                    <br />
+                    
+                    <table class="info-table">
+                        <tr>
+                            <td><apex:outputLabel value="Current Subscription Expiration Date:" for="expirationDate" /></td>
+                            <td>
+                                <apex:outputText styleClass="marked" id="expirationDate" value="{0,date,MM/dd/yyyy}">
+                                    <apex:param value="{!license.sfLma__Expiration__c}"/>
+                                </apex:outputText>
+                            </td>
+                        </tr>
+                        
+                        <apex:outputPanel layout="none" rendered="{! OR( bIsRenewal, ( OR( renewaldisabled, license.sfLma__Expiration__c < TODAY() ) && newlicenses > 0 ) ) }">
+                            <tr>
+                                <td><apex:outputLabel value="New Subscription Start Date:" for="startdate" /></td>
+                                <td>
+                                    <apex:outputtext id="startdate" value="{0,date,MM/dd/yyyy}">
+                                        <apex:param value="{!NewSubscriptionStartDate}"/>
+                                    </apex:outputtext>
+                                </td>
+                            </tr>
+                        </apex:outputPanel>
+                        
+                        <apex:outputPanel layout="none" rendered="{! OR( bIsRenewal, ( OR( renewaldisabled, license.sfLma__Expiration__c < TODAY() ) && newlicenses > 0 ) ) }">
+                            <tr>
+                                <td><apex:outputLabel value="New Subscription Expiration Date:" for="expdate"/></td>
+                                <td>
+                                    <apex:outputtext id="expdate" value="{0,date,MM/dd/yyyy}">
+                                        <apex:param value="{!ExpirationDate}"/>
+                                    </apex:outputtext>
+                                </td>
+                            </tr>
+                        </apex:outputPanel>
+                        
+                        <apex:outputPanel layout="none" rendered="{! bIsRenewal }">
+                            <tr>
+                                <td><apex:outputLabel value="Total Users in New Subscription:" for="totalseats" /></td>
+                                <td>
+                                    <apex:outputtext id="totalseats" value="{!totallicenses}" />
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><apex:outputLabel value="Per User Annual License Fee:" for="userannual" /></td>
+                                <td>
+                                    <apex:outputText id="userannual" value="${0,number,###}">
+                                        <apex:param value="{!yearlycost}" /> 
+                                    </apex:outputText>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><apex:outputLabel value="Total New Subscription Cost:" for="totalcost" /></td>
+                                <td>
+                                    <apex:outputText id="totalcost" value="${0,number,##,##0.00}">
+                                        <apex:param value="{!NewSubscriptionCharges}" />
+                                    </apex:outputText>&nbsp;
+                                    <apex:outputLabel styleClass="descriptionText" value="plus applicable sales tax" for="totalcost"></apex:outputLabel>
+                                </td>
+                            </tr>
+                        </apex:outputPanel>
+                    </table>
+                    <br />
+                    <apex:inputcheckbox id="renew" value="{!bIsRenewal}" disabled="{!renewaldisabled}" styleClass="checkBoxVerticalAlignCorrection" onchange="lockButton();init_page();" />
+                    <apex:outputLabel id="renewLabel" value=" Check this box to renew your subscription" for="renew" styleClass="fieldName checkBoxVerticalAlignCorrection" /><br />
+                    <apex:outputLabel styleClass="descriptionText" for="renewLabel" rendered="{!renewaldisabled}">
+                        If you’re adding new licenses but don’t need to renew your subscription right now, just leave this box blank.
+                    </apex:outputLabel>
+                    <apex:outputLabel styleClass="descriptionText" for="renewLabel" rendered="{!renewaldisabled && !bIsRenewal}">
+                        If you are purchasing new licenses for the first time, you won't able to select this box, but your new subscription period will be shown.
+                    </apex:outputLabel>
+                    <apex:outputLabel styleClass="descriptionText" for="renewLabel" rendered="{!renewaldisabled && bIsRenewal}">
+                        If your license was already expired, you won't able to deselect this box. If you want to reduce the number of licenses,&nbsp;
+                        <apex:outputLink value="http://silverlinecrm.com/Contact" target="_blank" styleClass="link">contact us</apex:outputLink>.
+                    </apex:outputLabel>
+                </div>
+                <br />
+                
+                <div class="sectionHeader">Order Summary</div>
+                <div class="sectionContent">
+                    <apex:outputLabel styleClass="descriptionText">
+                        Please review your order and then proceed to Google Checkout:
+                    </apex:outputLabel><br />
+                    <br />
+                    
+                    <table class="info-table summaryTable">
+                        <tr>
+                            <td>
+                                Prorated New License Charges:
+                                <br />
+                                <apex:outputLabel styleClass="descriptionText" rendered="{!ProratedNewLicenseCharges > 0}">
+                                    <apex:outputText value="{0,number,###} ">
+                                        <apex:param value="{!newLicenses}" />
+                                    </apex:outputText>
+                                    users – expires<!-- {!IF(license.sfLma__Expiration__c <= TODAY(), 'd', 's')} -->
+                                    <apex:outputText value=" {0,date,MM/dd/yyyy}">
+                                        <apex:param value="{!ProratedNewLicensesDescriptionDate}" />
+                                    </apex:outputText>
+                                </apex:outputLabel>
+                            </td>
+                            <td>
+                                <apex:outputText id="proratedNewLicenseCharges2" value="${0,number,##,##0.00}">
+                                    <apex:param value="{!ProratedNewLicenseCharges}" />
+                                </apex:outputText>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                New Subscription Charges:
+                                <br />
+                                <apex:outputLabel styleClass="descriptionText" rendered="{!NewSubscriptionCharges > 0}">
+                                    <apex:outputText value="{0,number,###} ">
+                                        <apex:param value="{!totallicenses}" />
+                                    </apex:outputText>
+                                    users – 
+                                    <apex:outputText value=" {0,date,MM/dd/yyyy} ">
+                                        <apex:param value="{!NewSubscriptionDescriptionDateFrom}" />
+                                    </apex:outputText>
+                                    <!-- <apex:param value="{!IF(renew, NewSubscriptionStartDate, TODAY())}" /> -->
+                                    to
+                                    <apex:outputText value=" {0,date,MM/dd/yyyy} ">
+                                        <apex:param value="{!ExpirationDate}" />
+                                    </apex:outputText>
+                                </apex:outputLabel>
+                            </td>
+                            <td>
+                                <apex:outputText id="newSubscriptionCharges" value="${0,number,##,##0.00}">
+                                    <apex:param value="{!NewSubscriptionCharges}" />
+                                </apex:outputText>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                Total:
+                            </td>
+                            <td>
+                                <apex:outputText id="total" value="${0,number,##,##0.00}">
+                                    <apex:param value="{!totalprice}" />
+                                </apex:outputText>&nbsp;
+                                <apex:outputLabel styleClass="descriptionText" value="plus applicable sales tax" for="total"></apex:outputLabel>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <br />
+                <div class="footerSeparator"></div>
+                <br />
+                
+            </apex:outputPanel>
+            
+            <button id="stripe-button" type="button" class="stripe-button-el" disabled="{!totalprice<=0}" onclick="openStripeWindow('{!licenseFullName}','{!description}',{!totalprice*100});">
+                <span style="display: block; min-height: 30px;">Pay with Card</span>
+            </button>
+            
+            <apex:actionFunction name="init_page" rerender="thePanel" oncomplete="unlockButton( {!totalprice} );" />
+            <apex:actionFunction name="createCharge" action="{!createCharge}" rerender="thePanel" status="submit_status">
+                <apex:param name="token" value="" />
+            </apex:actionFunction>
+        </apex:form>
+    </div>
+</apex:outputpanel>
+
+<script type="text/javascript">window.onload = init_page;</script>
+
+<apex:actionstatus id="submit_status" startText="Submitting...">
+    <apex:facet name="start">
+        <div id="salesforceSource_blurybackground" style="position:absolute; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: #000000; opacity:0.6;filter:alpha(opacity=60)"></div>
+        <div id="status_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; vertical-align: top;">
+            <div style="width: 144px;vertical-align: top;" class="waitingHolder">
+            <table align="center" valign="top" style="width: 100%; height: 50%">
+            <tr align="center" valign="top" style="width: 100%; height: 50%">
+                <td valign="top"><img class="waitingImage" src="{!URLFOR($Resource.licenseManager, 'css/loading.gif')}"/></td>
+            </tr>
+            </table>
+            </div>
+        </div>
+    </apex:facet>
+</apex:actionstatus>
+
+</apex:page>

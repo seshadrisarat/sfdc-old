@@ -1,0 +1,648 @@
+<apex:page controller="SL_ctrl_CandidateSrch" showHeader="false" sidebar="false" applyBodyTag="false" docType="html-5.0" standardStylesheets="false">
+
+    <head>
+        <meta http-equiv="X-UA-Compatible" content="IE=edge"></meta>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"></meta>
+        <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"/>
+        <apex:stylesheet value="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.4.0/css/bootstrap-datepicker3.standalone.css"/>
+        <apex:includeScript value="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.4.0/js/bootstrap-datepicker.js"/>
+        <apex:stylesheet value="{!URLFOR($Resource.sl_bootstrap,'sl_bootstrap_css.css')}" />
+        <apex:stylesheet value="{!URLFOR($Resource.sl_bootstrap,'bootstrap-select.min.css')}" />
+        <apex:stylesheet value="{!URLFOR($Resource.sl_bootstrap,'typeahead.css')}" />
+        <apex:stylesheet value="{!URLFOR($Resource.sl_bs_table,'bootstrap-table.min.css')}" />
+        <apex:stylesheet value="{!URLFOR($Resource.sl_spinner,'ladda-themeless.min.css')}" />
+        <apex:includeScript value="{!URLFOR($Resource.sl_bootstrap,'typeahead.min.js')}"/>
+    </head>
+
+    <body>
+      
+        <div class="container" style="margin-top:10px;">
+             <div class="row">
+	             <div class='span3'>
+	                <label for="searchtype">Search Type</label>
+	                <select class="span3" id="searchtype" value="{!strSearchType}" onChange="showHideDiv(this.value);">
+	                   <apex:repeat value="{!ChoiceOptions}" var="choice">
+	                       <option>{!choice}</option>
+	                   </apex:repeat>
+	                </select>
+	            </div>
+            </div>
+            <br/>
+            <br/>
+            <br/>
+            <br/>
+            <apex:form id="searchForm">
+                <div id="customSearch">
+                <fieldset>
+                    <div class="row">
+                        <legend class="col-sm-7 col-sm-offset-2">Candidate Search</legend>
+                    </div>
+                    <div class='row'>
+                        <apex:repeat value="{!fltrRes}" var="f">
+                            <apex:outputPanel layout="none" rendered="{!IF(f.fldType=='string',true,false)}">
+                                <div class='col-md-4 col-lg-4'>
+                                    <div class='form-group'>
+                                        <label for="{!f.apiName}">{!f.labelName}</label>
+                                        <input type="text" id="{!f.apiName}" class="form-control input-sm" fldType="{!f.fldType}" labelName = "{!f.labelName}"/>
+                                    </div>
+                                </div>
+                            </apex:outputPanel>
+                            <apex:outputPanel layout="none" rendered="{!IF(f.fldType=='reference',true,false)}">
+                                <div class='col-md-4 col-lg-4'>
+                                    <div class='form-group'>
+                                        <label for="{!f.apiName}">{!f.labelName}</label>
+                                        <input type="text" id="{!f.apiName}" class="typeahead form-control input-sm" lkupObj="{!f.lkupObj}" fldType="{!f.fldType}" labelName = "{!f.labelName}"/>
+                                        <script>
+                                        	var sfLkupIds;
+                                        	$('[Id^="{!f.apiName}"]').typeahead(
+										    {
+										        hint: true,
+										        highlight: true,
+										        minLength: 1
+										    },
+										    {
+										        displayKey: 'rName',										        
+										        source: function(query, process, apr) {
+										            var matches = [];
+										            SL_ctrl_CandidateSrch.typeAheadFunc(query,'{!f.lkupObj}',
+										            function(r,e)
+										            {
+										                sfLkupIds = null;
+										                sfLkupIds = r;
+										                //$(this).attr()               
+										                return apr(r);
+										            });
+										        }
+										    });
+                                        </script>
+                                    </div>
+                                </div>
+                            </apex:outputPanel>
+                            <apex:outputPanel layout="none" rendered="{!IF(f.fldType=='picklist',true,false)}">
+                                <div class='col-md-4 col-lg-4'>
+                                    <div class='form-group'>
+                                        <label for="{!f.apiName}">{!f.labelName}</label>
+                                        <select class="form-control input-sm" id="{!f.apiName}" fldType="{!f.fldType}" labelName = "{!f.labelName}">
+                                            <option value="(all)">(all)</option>
+                                            <apex:repeat value="{!f.plValues}" var="o">
+                                                <option>{!o}</option>
+                                            </apex:repeat>
+                                        </select>
+                                    </div>
+                                </div>
+                            </apex:outputPanel>
+                            <apex:outputPanel layout="none" rendered="{!IF(f.fldType=='date' || f.fldType=='datetime',true,false)}">
+                                <div class='col-md-2 col-lg-2'>
+                                    <div class='form-group'>
+                                        <label for="{!f.apiName}_From">{!f.labelName}(From)</label>
+                                        <input type="text" class="form-control" id="{!f.apiName}_From" fldType="{!f.fldType}" labelName = "{!f.labelName}"/>
+                                        <script>
+                                  
+                                            $('[id*={!f.apiName}_From]').datepicker({
+                                                     format: "mm/dd/yyyy",
+                                                     autoclose: true,
+                                                     daysOfWeekDisabled : '[0]'
+                                                 })
+                                                 .on('changeDate',function(ev){
+                                                 var StartDate = '{!f.apiName}_From';
+                                                 var EndDate = '{!f.apiName}_To';
+                                                 if(document.getElementById(StartDate).value!=null && document.getElementById(EndDate).value!=null && document.getElementById(StartDate).value!='' && document.getElementById(EndDate).value!='')
+                                                 {                   
+                                                     var StartDateValue = document.getElementById(StartDate).value;
+                                                     var EndDateValue = document.getElementById(EndDate).value;
+                                                     
+                                                     
+                                                     var dtStartDate = new Date(StartDateValue);
+                                                     var dtEndDate = new Date(EndDateValue);
+                                                     if(dtStartDate > dtEndDate)
+                                                     {
+                                                         alert('Please select valid date: From Date cannot be greater than To Date');
+                                                         document.getElementById(StartDate).value = '';
+                                                     }
+                                                 }
+                                                 return false;       
+                                                 });
+                                         </script>
+                                    </div>
+                                </div>
+                                <div class='col-md-2 col-lg-2'>
+                                    <div class='form-group'>
+                                        <label for="{!f.apiName}_To">{!f.labelName}(To)</label>
+                                        <input type="text" class="form-control" id="{!f.apiName}_To" fldType="{!f.fldType}" labelName = "{!f.labelName}"/>
+                                        <script>
+                                           
+                                            $('[id*={!f.apiName}_To]').datepicker({
+                                                     format: "mm/dd/yyyy",
+                                                     autoclose: true,
+                                                     daysOfWeekDisabled : '[0]'
+                                                 })
+                                                 .on('changeDate',function(ev){
+                                                 var StartDate = '{!f.apiName}_From';
+                                                 var EndDate = '{!f.apiName}_To';
+                                                 if(document.getElementById(StartDate).value!=null && document.getElementById(EndDate).value!=null && document.getElementById(StartDate).value!='' && document.getElementById(EndDate).value!='')
+                                                 {                   
+                                                     var StartDateValue = document.getElementById(StartDate).value;
+                                                     var EndDateValue = document.getElementById(EndDate).value;
+                                                     
+                                                     
+                                                     var dtStartDate = new Date(StartDateValue);
+                                                     var dtEndDate = new Date(EndDateValue);
+                                                     if(dtStartDate > dtEndDate)
+                                                     {
+                                                         alert('Please select valid date: From Date cannot be greater than To Date');
+                                                         document.getElementById(EndDate).value = '';
+                                                     }
+                                                 }
+                                                 return false;       
+                                                 });
+                                         </script>
+                                    </div>
+                                </div>
+                            </apex:outputPanel>
+                            
+                            <apex:outputPanel layout="none" rendered="{!IF(f.fldType=='number',true,false)}">
+                                <div class='col-md-2 col-lg-2'>
+                                    <div class='form-group'>
+                                        <label for="{!f.apiName}_Low">{!f.labelName}(Low)</label>
+                                        <input type="text" class="form-control" id="{!f.apiName}_Low" fldType="{!f.fldType}" name="number" labelName = "{!f.labelName}"/>&nbsp;<span id="{!f.apiName}_Lowerrmsg"></span>
+                                        <script>
+                                            $('#{!f.apiName}_Low').keypress(function (e) {
+                                                        if (e.which != 8 && e.which != 0 && (event.which != 46 || $('#{!f.apiName}_Low').val().indexOf('.') != -1) && (e.which < 48 || e.which > 57)) {
+                                                                        //display error message
+                                                                        $('#{!f.apiName}_Lowerrmsg').html("Digits Only").show().fadeOut("slow");
+                                                                               return false;
+                                                                    }
+                                                                    })                          
+                                                                    
+                                                                    .on('blur',function(e){
+                                                                        if($('#{!f.apiName}_Low').val()!=null && $('#{!f.apiName}_High').val()!=null)
+                                                                        {
+                                                                            var lowValue = parseFloat($('#{!f.apiName}_Low').val());
+                                                                            var highValue = parseFloat($('#{!f.apiName}_High').val());
+                                                                            if(highValue < lowValue)
+                                                                            {
+                                                                                 $('#{!f.apiName}_Lowerrmsg').html("High Limit should be greater than Low limit").show();                                                                                       
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                $('#{!f.apiName}_Higherrmsg').html("").show();
+                                                                                $('#{!f.apiName}_Lowerrmsg').html("").show();
+                                                                            }
+                                                                            return false;
+                                                                        }
+                                                                    }                                                    
+                                                        );
+                                        </script>
+                                    </div>
+                                </div>
+                                <div class='col-md-2 col-lg-2'>
+                                    <div class='form-group'>
+                                        <label for="{!f.apiName}_High">{!f.labelName}(High)</label>
+                                        <input type="text" class="form-control" id="{!f.apiName}_High" fldType="{!f.fldType}" labelName = "{!f.labelName}"/>&nbsp;<span id="{!f.apiName}_Higherrmsg"></span>
+                                        <script>
+                                            $('#{!f.apiName}_High').keypress(function (e) {
+                                                        if (e.which != 8 && e.which != 0 && (event.which != 46 || $('#{!f.apiName}_High').val().indexOf('.') != -1) && (e.which < 48 || e.which > 57)) {
+                                                                        //display error message
+                                                                        $('#{!f.apiName}_Higherrmsg').html("Digits Only").show().fadeOut("slow");
+                                                                               return false;
+                                                                    }
+                                                                    })
+                                                                    .on('blur',function(e){
+                                                                        if($('#{!f.apiName}_Low').val()!=null && $('#{!f.apiName}_High').val()!=null)
+                                                                        {
+                                                                            var lowValue = parseFloat($('#{!f.apiName}_Low').val());
+                                                                            var highValue = parseFloat($('#{!f.apiName}_High').val());
+                                                                            if(highValue < lowValue)
+                                                                            {
+                                                                                 $('#{!f.apiName}_Higherrmsg').html("High Limit should be greater than Low limit").show();
+                                                                                        
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                $('#{!f.apiName}_Higherrmsg').html("").show();
+                                                                                $('#{!f.apiName}_Lowerrmsg').html("").show();
+                                                                            }
+                                                                            return false;
+                                                                        }
+                                                                    }                                                    
+                                                        );
+                                        </script>
+                                    </div>
+                                </div>
+                            </apex:outputPanel>
+                            
+                            <apex:outputPanel layout="none" rendered="{!IF(f.fldType=='multipicklist',true,false)}">
+                                <div class='col-md-4 col-lg-4'>
+                                    <div class='form-group'>
+                                        <label for="{!f.apiName}">{!f.labelName}</label>
+                                        <select multiple="multiple" data-live-search="true" onchange="setPicklistValue('{!f.apiName}');" class="form-control input-sm" id="{!f.apiName}" fldType="{!f.fldType}" labelName = "{!f.labelName}">
+                                            <option value="(all)" selected="selected">(all)</option>
+                                            <apex:repeat value="{!f.plValues}" var="o">
+                                                <option>{!o}</option>
+                                            </apex:repeat>
+                                        </select>
+                                    </div>
+                                </div>
+                            </apex:outputPanel>
+                            <apex:outputPanel layout="none" rendered="{!IF(f.fldType=='boolean',true,false)}">
+                                <div class='col-md-4 col-lg-4'>
+                                    <div class='form-group'>
+                                        <label for="{!f.apiName}">{!f.labelName}</label>
+                                        <input type="checkbox" class="checkbox" id="{!f.apiName}" fldType="{!f.fldType}" labelName = "{!f.labelName}"/>                                        
+                                    </div>
+                                </div>
+                            </apex:outputPanel>
+                        </apex:repeat>
+                    </div>
+                    <div class='row'>
+                    </div>
+                </fieldset>
+                <label for="Vetted__c">Vetted</label>
+                <input type="checkbox" id="Vetted__c" fldType="boolean"/>
+                <button type="button" data-style="expand-left" onclick="querySF('New');" id="srchbtn" class="btn btn-primary ladda-button">
+                    <span class="ladda-label">Search</span>
+                </button>
+                <button type="button" id="" class="btn btn-default" onclick="resetValues();">Reset</button>
+                </div>
+                <apex:outputPanel id="existingSearchPanel">
+                     <div id="exisitingSearch" style="display:none;">
+                            <div class="row">
+	                            <div class='span3'>
+	                                <label for="existingSearchName">Select Search Name</label>
+	                                <select id="existingSearchName" onChange="querySF('Previous');" data-live-search="true" class="span3">
+	                                    <option value="">None</option>
+	                                </select> 
+	                                                                 
+	                            </div>
+                            </div>
+                   	 </div>
+                </apex:outputPanel>
+            </apex:form>
+        </div>
+        <br/>
+        <br/>
+        <table id="table">
+            <caption><b>Results</b></caption>
+            <thead>
+                <tr>
+                    <apex:repeat value="{!resFlds}" var="r">
+                        <th data-field="{!r.apiName}" data-sortable="true">{!r.labelName}</th>
+                    </apex:repeat>
+                    <th data-field="Id" data-visible="false">SF ID</th>
+                </tr>
+            </thead>
+        </table>
+        <button type="button" class="btn btn-primary ladda-button" onclick="downloadCSV();" id="expRes" style="display:none;margin-left:10px;" data-style="expand-left">
+            <span class="ladda-label">Export Results</span>
+        </button>
+        <button class="btn btn-default" onclick="returnToHome();" id="homeBtn" style="margin-left:10px;">Return to Home.</button>
+    </body>
+
+    <script type="text/javascript" src="{!URLFOR($Resource.sl_bootstrap,'sl_jq_213.js')}"></script>
+    <script type="text/javascript" src="{!URLFOR($Resource.sl_bootstrap,'sl_blockui.js')}"></script>
+    <script type="text/javascript" src="{!URLFOR($Resource.sl_bootstrap,'sl_bootstrap_js.js')}"></script>
+    <script type="text/javascript" src="{!URLFOR($Resource.sl_bootstrap,'bootstrap-select.min.js')}"></script>
+    <script type="text/javascript" src="{!URLFOR($Resource.sl_bootstrap,'papaparse.min.js')}"></script>
+    <script type="text/javascript" src="{!URLFOR($Resource.sl_bootstrap,'filesaver.min.js')}"></script>
+<!--     <script type="text/javascript" src="{!URLFOR($Resource.sl_bootstrap,'typeahead.min.js')}"></script> -->
+    <script type="text/javascript" src="{!URLFOR($Resource.sl_bs_table,'bootstrap-table.min.js')}"></script>
+    <script src="{!URLFOR($Resource.sl_spinner,'spin.min.js')}"></script>
+    <script src="{!URLFOR($Resource.sl_spinner,'ladda.min.js')}"></script>
+
+    <script type="text/javascript">
+    var ua=navigator.userAgent; 
+if((ua.indexOf('Salesforce')!=-1)&&(ua.indexOf('iPhone')!=-1||ua.indexOf('iPad')!=-1)&&(ua.indexOf('OS/8')!=-1||ua.indexOf('OS 8')!=-1)&&(ua.indexOf('Safari')==-1)){ 
+function IOS_SCROLL_BOOTSTRAP() { 
+var children = Array.prototype.slice.call(document.body.children), 
+placeholder = document.createElement('section'), 
+fragment = document.createDocumentFragment(), 
+styles, 
+width, 
+height; 
+children.forEach(function(c){fragment.appendChild(c);}); 
+placeholder.appendChild(fragment); 
+styles = [ 
+'width:100%;', 
+'height:', (window.screen.height - 42), 'px;', 
+'position: absolute; overflow: auto; -webkit-overflow-scrolling: touch' 
+].join(''); 
+placeholder.style.cssText = styles; 
+document.body.appendChild(placeholder); 
+} 
+window.addEventListener('load', function (e) { 
+IOS_SCROLL_BOOTSTRAP(); 
+}); 
+}
+    
+    $('select').selectpicker();
+    Ladda.bind('#srchbtn');
+    var srchbtnEl = document.querySelector('#srchbtn');
+    var l = Ladda.create(srchbtnEl);
+    var allResults;
+    var isMobile;
+	var today = new Date();
+	var searchName = '';
+    if (typeof(sforce) != "undefined") {
+        isMobile = true;
+    }else
+    {
+        isMobile = false;
+    }
+
+    if(isMobile)
+    {
+        $('#expRes').hide();
+        $('#homeBtn').hide();
+    }else
+    {
+        //$('#expRes').show();
+        $('#homeBtn').show();
+    }
+    
+
+    $(function() {
+        $('#table').bootstrapTable({
+            pagination: true,
+            onClickRow: function(r, e) {
+                if ((typeof sforce != 'undefined') && (sforce != null)) {
+                    sforce.one.navigateToSObject(r.Id, "DETAIL");
+                } else {
+                    window.location.href = '/' + r.Id;
+                }
+
+            }
+        });
+    });
+
+    function returnToHome() {
+        if ((typeof sforce != 'undefined') && (sforce != null)) {
+            sforce.one.navigateToFeed('{!$User.Id}', "NEWS");
+        } else {
+            window.location.href = '/home/home.jsp';
+        }
+    }
+    
+    function setPicklistValue(picklistName)
+    {
+        var listItems = $('#'+picklistName).next("div").find("div").find("ul").find("li");
+        var commaseparatedString = '';
+        var isAllSelected = false;
+        var picklistSelectedOptions = $('#'+picklistName).val();
+        if(picklistSelectedOptions!=null)
+        {
+            if(picklistSelectedOptions.indexOf('(all)')!=-1)
+            {
+            	for(var i = 0; i < listItems.length; i++)
+            	{
+            		var textValue = (listItems[i].childNodes[0].childNodes[0].textContent);
+            		if(listItems[i].className == 'selected')
+            		{
+            			if(textValue!='(all)')
+            				commaseparatedString = commaseparatedString == '' ? commaseparatedString.concat(textValue) : commaseparatedString.concat(', ',textValue);
+            		}
+            	}
+            	
+            	if(commaseparatedString!='')
+            		listItems[0].className = '';
+            }
+            else
+            {
+            	for(var i = 0; i < listItems.length; i++)
+            	{
+            		var textValue = (listItems[i].childNodes[0].childNodes[0].textContent);
+            		if(listItems[i].className == 'selected')
+            		{
+            			if(textValue!='(all)')
+            				listItems[i].className = '';
+            		}
+            	}
+            }
+        }
+        else
+        {
+            listItems[0].className = 'selected';
+        }
+        
+        var pickVal = $('#'+picklistName).next("div").find("span")[0];
+        if(commaseparatedString != '')
+        {
+            pickVal.innerHTML = commaseparatedString;
+            $('#'+picklistName).next('div').find('button').attr('title',commaseparatedString);
+        }
+        else
+        {
+            pickVal.innerHTML = '(all)';
+            $('#'+picklistName).next('div').find('button').attr('title','(all)');
+            $('#'+picklistName).val($('#' + picklistName + ' option:first').val());
+            listItems[0].setAttribute('class', 'selected');
+        }
+    }
+
+    function downloadCSV() {
+        var results = JSON.stringify(allResults);
+        SL_ctrl_CandidateSrch.substituteFieldLabels(results,function(r,e){
+        var serializedData = JSON.parse(r);
+        searchName = searchName.length > 180 ? searchName.substring(0, 179).trim() : searchName.substring(0,searchName.length-2).trim();
+        var fileName = searchName+'.csv';
+        saveAs(new Blob([Papa.unparse(serializedData)], {
+            type: "text/csv;charset=utf-8"
+        }), fileName);
+        },{
+               escape:false
+          })
+    }
+    
+    function resetValues() {
+        $.each($('.form-control'),
+            function(i, v) {
+                myEl = $(v);
+                if (myEl.is('select')) 
+                {
+                    var firstValue = myEl.next("div").find("span")[0];
+                    firstValue.innerHTML = '(all)';
+                    var listItems = myEl.next("div").find("div").find("ul").find("li");
+                    for(var i = 0; i < listItems.length; i++)
+                    {
+                        listItems[i].className = i==0 ? 'selected' : '';
+                    }
+                    myEl.val($('#' + myEl.attr('id') + ' option:first').val());
+                    $('#' + myEl.attr('id') + ' option:first').prop('selected',true);
+                    myEl.next('div').find('button').attr('title','(all)');
+                } 
+                else if(myEl.is(':checkbox'))
+                {
+                    myEl.attr('checked', false);
+                }
+                else
+                {
+                    myEl.val('');
+                }
+            });
+		
+		
+		$.each($('.checkbox'),
+            function(i, v) {
+        	myEl = $(v);
+        	if(myEl.is(':checkbox'))
+            {
+                myEl.attr('checked', false);
+            }
+        });
+		$('#Vetted__c').attr('checked',false);
+        l.stop();
+    }
+    
+    function querySF(searchtype) {
+        var qFltrObjArry = [];
+        var attachmentId = '';
+        var appendedFieldValues= today.getMonth()+'-'+today.getDate()+'-'+today.getFullYear()+' - '+'{!$User.LastName}'+' | ';
+        if(searchtype == 'New')
+        {
+            $.each($('.form-control'),
+                function(i, v) {
+                    myEl = $(v);
+                    
+                    var qFltrObj = {};
+                    if(myEl.attr('fldType') != undefined)
+                    {
+                        if (myEl.is('select')) {
+                            if((myEl.next("div").find("span")[0]).innerHTML == '(all)')
+                            	myEl.val('(all)');
+                            	
+                            if (myEl.val() == '(all)') {
+                                qFltrObj['apiName'] = v.id;
+                                qFltrObj['fltVal'] = "";
+                                qFltrObj['fldType'] = myEl.attr('fldType');
+                            } else {
+                                qFltrObj['apiName'] = v.id;
+                                var fieldValue = myEl.val()!=null ? myEl.val().toString().replace('(all),','').trim() : myEl.val();
+                                qFltrObj['fltVal'] = fieldValue;
+                                appendedFieldValues+=fieldValue+' | ';
+                                qFltrObj['fldType'] = myEl.attr('fldType');
+                            }
+                        } 
+                        else
+                        {
+                            qFltrObj['apiName'] = v.id;
+                            qFltrObj['fltVal'] = myEl.val();
+                            if(myEl.val()!='' && myEl.val()!=null)
+                            	appendedFieldValues+=myEl.val()+' | ';
+                            qFltrObj['fldType'] = myEl.attr('fldType');
+                        }
+                        
+        
+                        qFltrObjArry.push(qFltrObj);
+                    }
+                });
+                
+                $.each($('.checkbox'),
+                	function(i,v) {
+                		myEl = $(v);
+                		var qFltrObj = {};
+                		if(myEl.is(':checkbox'))
+                        {
+                            qFltrObj['apiName'] = v.id;
+                            qFltrObj['fltVal'] = myEl.is(':checked') ? 'true' : 'false';
+                            if(myEl.is(':checked'))
+                            	appendedFieldValues+=myEl.attr('labelName')+' | ';
+                            qFltrObj['fldType'] = myEl.attr('fldType');
+                        }
+                        qFltrObjArry.push(qFltrObj);
+                	}
+                );
+                
+            var chkBox = $('#Vetted__c');
+    		searchName = appendedFieldValues;
+            if(chkBox.is(':checked'))
+            {
+            	appendedFieldValues+= $("label[for='Vetted__c']").text();
+                qFltrObjArry.push({apiName:chkBox.attr('id'),fltVal:chkBox.is(':checked'),fldType:chkBox.attr('fldType')});
+            }
+        }
+        else
+        {
+            attachmentId = $('#existingSearchName').val();
+            searchName = ($('#existingSearchName').next("div").find("span")[0]).textContent;
+            $('#existingSearchName').next('div').find('button').attr('title',searchName);
+            document.getElementById('exisitingSearch').getElementsByTagName('button')[0].className += ' disabled';
+        }
+        var qFltrStr = JSON.stringify(qFltrObjArry);
+        if(qFltrStr == '[]')
+        {
+            $.blockUI();
+        }
+        SL_ctrl_CandidateSrch.queryCandidates(qFltrStr,attachmentId,
+            function(r, e) {
+                var myR = JSON.parse(r);
+                allResults = myR;
+                console.log(myR);
+                console.log(searchName);
+                if(myR.length > 0 && !isMobile)
+                {
+                    $('#expRes').show();
+                }else
+                {
+                    $('#expRes').hide();
+                }
+                $('#table').bootstrapTable('load', myR);
+                $('#table').bootstrapTable('selectPage', 1);
+                l.stop();
+                document.getElementById('exisitingSearch').getElementsByTagName('button')[0].className = 'btn dropdown-toggle btn-default';+
+                $.unblockUI();
+            },{escape:false});
+
+
+    }
+    
+    function showHideDiv(searchType)
+    {
+        if(searchType == 'New Search')
+        {
+            $('#table').bootstrapTable('load', []);
+            $('#table').bootstrapTable('selectPage', 1);
+            l.stop();
+            $('#customSearch').show();
+            var picklist = document.getElementById('existingSearchName');
+            picklist.options.length = 0;
+            var firstOption = document.createElement('option');
+            firstOption.value = '';
+            firstOption.text = 'None';
+            $('#existingSearchName').append(firstOption);
+            $('#exisitingSearch').hide();
+           
+            resetValues();
+        }
+        else
+        {
+            document.getElementById('exisitingSearch').getElementsByTagName('button')[0].style.width = '1000px';
+            $('#table').bootstrapTable('load', []);
+            $('#table').bootstrapTable('selectPage', 1);
+            l.stop();
+            $('#customSearch').hide();
+            $('#exisitingSearch').show();
+            document.getElementById('exisitingSearch').getElementsByTagName('button')[0].className += ' disabled';
+            SL_ctrl_CandidateSrch.getSearchCriteria(function(r,e){
+                var results = JSON.parse(r);
+                var picklist = document.getElementById('existingSearchName');
+                picklist.options.length = 0;
+                var firstOption = document.createElement('option');
+                firstOption.value = '';
+                firstOption.text = 'None';
+                $('#existingSearchName').append(firstOption);
+                for(var i=0;i < results.length; i++)
+                {
+                    var result = results[i];
+                    var optionValue = document.createElement('option');
+                    optionValue.value = result['attachmentId'];
+                    optionValue.text = result['strSearchName'];
+                    $('#existingSearchName').append(optionValue);
+                }
+                $('#existingSearchName').selectpicker('refresh');
+                document.getElementById('exisitingSearch').getElementsByTagName('button')[0].className = 'btn dropdown-toggle btn-default';
+            },{escape:false});
+            
+            $('#existingSearchName').next('div').find('div').css({'width':1000});
+        }
+    }    
+    </script>
+</apex:page>

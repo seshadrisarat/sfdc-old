@@ -1,0 +1,647 @@
+<apex:page standardController="Account" extensions="DSE.DS_HierarchyEditController">
+    <script src="/soap/ajax/15.0/connection.js" type="text/javascript"></script>
+    <script src="/soap/ajax/15.0/apex.js" type="text/javascript"></script>
+    
+    <!-- Required for jstree -->
+    <apex:includeScript value="{!URLFOR($Resource.DSE__DS_Hierarchy_Resources, 'jquery.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.DSE__DS_Hierarchy_Resources, 'jquery.jstree.js')}" />
+    
+    <!-- Required to block div during loading  -->
+    <apex:includeScript value="{!URLFOR($Resource.DSE__DS_Hierarchy_Resources, 'jquery.blockUI.js')}" />
+
+    <apex:actionStatus id="searchingStatus" onstart="blockDiv('#searchForNodeDiv');" onstop="unblockDiv('#searchForNodeDiv');"/>
+    <apex:actionStatus id="revertingStatus" onstart="blockDiv('#jsTreeDivMain');" onstop="unblockDiv('#jsTreeDivMain');"/>
+    <apex:actionStatus id="addingNodeStatus" onstart="blockDiv('div.searchResultPanelDivClass');blockDiv('#jsTreeDivMain');" onstop="unblockDiv('div.searchResultPanelDivClass');unblockDiv('#jsTreeDivMain');"/>
+    <apex:actionStatus id="cloneNodeStatus" onstart="blockDiv('div.searchResultPanelDivClass');blockDiv('#jsTreeDivMain');" onstop="unblockDiv('div.searchResultPanelDivClass');unblockDiv('#jsTreeDivMain');"/>
+    <apex:actionStatus id="movingNodeStatus" onstart="blockDiv('#jsTreeDivMain');" onstop="unblockDiv('#jsTreeDivMain');"/>
+    <apex:actionStatus id="removingNodeStatus" onstart="blockDiv('#jsTreeDivMain');" onstop="unblockDiv('#jsTreeDivMain');"/>
+
+    <apex:actionStatus id="pagingNodeStatus" onstart="blockDiv('#jsTreeDivMain');" onstop="unblockDiv('#jsTreeDivMain');"/>
+    
+    <script type="text/javascript">
+        
+        function blockDiv(divId) {
+            $(divId).block({ 
+                message: '<br/><apex:image value="/img/loading.gif"/> {!$Label.DS_Message_LoadingResults}', 
+                css: { height: '50px', width: '20%' },
+                overlayCSS: { opacity: .2 }
+            });
+        }
+        
+        function unblockDiv(divId) {
+            $(divId).unblock();
+        }
+    
+    </script>
+    
+    <script type="text/javascript">
+    
+		var g_treeObj;
+//		var g_centralNodeId = '{!centralNodeId}'; // id of node at center of view.
+		var g_centralNodeId = '{!beanId}'; // id of node at center of view.
+		var g_centralNodeBeanId = '{!beanId}'; // bean id of node at center of view.
+		var g_parentNodeObj;
+		var g_operation;
+		var g_nodeToMove;
+		var g_nodeToMoveId;
+		var g_rightClickedNode;
+		
+		var g_parentTitle;
+		var loadedChildrenJSON;
+		var isErrorState = false;
+        var hierarchyString = '{!hierarchyAsJson}';
+        
+        var loadTree=false;
+        var operationName;
+        // This function gets called only once when page is first loaded.
+        $(function() {
+            loadHierarchy('{!hierarchyAsJson}');
+            loadTree=true;
+        });
+
+// jstree configuration - START		        
+        $.jstree._themes = '{!URLFOR($Resource.DS_Hierarchy_Resources, '')}/themes/';
+        
+        function JsTreeConfig() {
+            this.core = { animation: 100, open_parents: true };
+            this.json_data = { data: '' };
+            this.plugins = [ "themes", "types", "json_data", "ui", "contextmenu", "crrm"];
+            this.crrm = {
+                    "move" : {
+                        "check_move"      : function (m) {
+                                                // Moving node to root level is not allowed
+                                                if(m.np.attr('id')=='dsTree') {
+                                                    return false;
+                                                }
+                                                return true;
+                                            }
+                          }
+            };
+            
+            
+            this.ui = {
+                            "select_limit" : 1,
+                            "select_multiple_modifier" : "alt",
+                            "selected_parent_close" : false,
+                            "select_prev_on_delete" : false
+                };
+            
+            this.types = { "types" : {
+                             "rootNode" : {
+                                "icon" : {
+                                "image" : "{!URLFOR($Resource.DS_Hierarchy_Resources, '/img/base.gif')}"
+                                }
+                             },
+                             "parentNode" : {
+                                "icon" : {
+                                    "image" : "{!URLFOR($Resource.DS_Hierarchy_Resources, '/img/folder.gif')}"
+                                }
+                             },
+                             "childNode" : {
+                                "icon" : {
+                                    "image" : "{!URLFOR($Resource.DS_Hierarchy_Resources, '/img/nolines_minus.gif')}"
+                                }
+                             },
+                             "selectedNode" : {
+                                "icon" : {
+                                    "image" : "{!URLFOR($Resource.DS_Hierarchy_Resources, '/img/star.gif')}"
+                                }
+                             }
+                          }
+            };
+            
+            this.contextmenu = {
+                "select_node" : false,
+                "items" : function ($node) {
+                              return {
+                                       "loadNodesPrev" : {
+                                            "label"             : "{!$Label.DS_Hierarchy_Scout_See_Prev_Children}",
+                                            "action"            : function (obj) {
+                                                                      loadPrevNodes(obj);
+                                            },
+                                            "_disabled"         : $node.attr('beanid')!= g_centralNodeBeanId
+                                        },
+                                        "loadNodesNext" : {
+                                            "label"             : "{!$Label.DS_Hierarchy_Scout_See_Next_Children}",
+                                            "action"            : function (obj) {
+                                                                      loadNextNodes(obj);
+                                            },
+                                            "_disabled"         : $node.attr('beanid')!= g_centralNodeBeanId
+                                        },
+                                        "goToPage" : {
+                                            "label"             : "{!$Label.DS_Hierarchy_Scout_Goto_Page}",
+                                            "action"            : function (obj) {
+    						                                         var goToPage=prompt("{!$Label.DS_Hierarchy_Scout_Goto_Page_Prompt}","1");
+    						                                         if(goToPage) {
+                                                                     	loadPage(obj, goToPage);
+                                                                     }
+                                            },
+                                            "_disabled"         : $node.attr('beanid')!= g_centralNodeBeanId
+                                        },
+                                        "orderAsc" : {
+                                            "label"             : "{!$Label.DS_Hierarchy_Scout_Order_Ascending}",
+                                            "separator_before"  : true,
+                                            "action"            : function (obj) {
+                                                                      orderNodes(obj, true);
+                                            },
+                                            "_disabled"         : $node.attr('beanid')!= g_centralNodeBeanId
+                                        },
+                                        "orderDesc" : {
+                                            "label"             : "{!$Label.DS_Hierarchy_Scout_Order_Descending}",
+                                            "action"            : function (obj) {
+                                                                      orderNodes(obj, false);
+                                            },
+                                            "_disabled"         : $node.attr('beanid')!= g_centralNodeBeanId
+                                        },
+                                        "cut" : {
+                                            "label"             : "{!$Label.DS_Hierarchy_Scout_Select_Node_For_Move}",
+                                            "action"            : function (obj) {
+                                            						  g_nodeToMove = obj;
+                                            						  g_nodeToMoveId = obj.attr('id');
+                                                                      selectForMove(obj.attr('beanid'));
+                                            },
+                                                                  // Root node may not be moved
+                                            "_disabled"         : $node.parent()[0].parentNode.id=='dsTree',
+                                        },
+                                        "paste" : {
+                                            "label"             : "{!$Label.DS_Hierarchy_Scout_Mode_Node_To_Here}",
+                                            "action"            : function (obj) {
+                                            						  g_rightClickedNode = obj;
+                                            						  g_operation = 'MOVE';
+                                                                      moveNode(obj.attr('beanid'));
+                                            },
+                                                                  // Node cannot be moved under itself
+                                            "_disabled"         : !g_nodeToMove, // TODO and $node.beanid != g_sourceBeanId;
+                                        },
+                                        "remove" : {
+                                            "label"             : "{!$Label.DS_Hierarchy_Scout_MenuItem_Remove}",
+                                            "action"            : function (obj) {
+                                            						  g_operation = 'REMOVE';
+                                                                      removeNode(obj.attr('beanid'));
+                                                                      this.remove(obj);
+                                            },
+                                                                  // Root node may not be deleted
+                                            "_disabled"         : $node.parent()[0].parentNode.id=='dsTree',
+                                        },
+                                        "goToAccountPage" : {
+                                            "label"             : "{!$Label.DS_Hierarchy_Scout_Goto_Account_Page}",
+                                            "separator_before"  : true,
+                                            "action"            : function (obj) {
+                                            						  redirectToUrl(getNodeHref(obj));
+                                            },
+                                            "_disabled"         : !getNodeHref($node) || getNodeHref($node)=='#'
+                                        }
+                                };
+                }
+        };
+        }
+// jstree configuration - END		        
+
+
+        function loadHierarchy(hierarchyString) {
+            var config = new JsTreeConfig();
+            var hierarchyData = [];
+            hierarchyData.push(JSON.parse(hierarchyString));
+            config.json_data.data = hierarchyData;
+            $("#dsTree").jstree(config).bind("select_node.jstree", function (e, data) {
+              	goToSelectedNode(e, data);
+            }).bind("loaded.jstree", function (event, data) {
+       			// you get two params - event & data - check the core docs for a detailed description
+           		$(this).jstree("open_all");
+        		g_treeObj = $.jstree._reference("#dsTree");
+           		$.jstree._reference("#dsTree").select_node('#' + g_centralNodeId);
+	        }); 
+        }
+
+
+        function getNodeHref(obj) {
+            //var href = data.rslt.obj.children("a").attr("href");
+            //var href = obj.children("a").attr("href");
+			//alert('href='+href);
+            return obj.children("a").attr("href");
+        }
+		function loadPrevNodes(obj) {
+			g_parentNodeObj = obj;
+			loadPrevChildrenJson(obj.attr('beanid'));
+		}
+
+		function loadNextNodes(obj) {
+			g_parentNodeObj = obj;
+			loadNextChildrenJson(obj.attr('beanid'));
+		}
+
+		function loadPage(obj, pageNum) {
+			g_parentNodeObj = obj;
+			loadChildrenPageJson(obj.attr('beanid'), pageNum);
+		}
+
+        function orderNodes(obj, sortAsc) {
+        	g_parentNodeObj = obj;
+        	if(sortAsc) {
+        		orderChildNodes(obj.attr('beanid'), 'ASC');
+        	} else {
+        		orderChildNodes(obj.attr('beanid'), 'DESC');
+        	}
+        }
+        
+        function getCentralNode() {
+       		return $.jstree._reference("#dsTree")._get_node('#'+g_centralNodeId);
+        }
+
+        function redirectToUrl(url) {
+        	if(!url || url=='#') return;
+        	try {
+        		window.top.location.href = url;
+        		return;
+        	} catch(err) {
+        		try {
+        			window.location.assign(url);
+        			return;
+        		} catch (err) {
+        			//alert('unable to redirect to ' + url);
+        		}
+        	}
+		}
+        
+        function goToSelectedNode(e, data) {
+			var clickedObj = data.rslt.obj;
+			var clickedObjId = clickedObj.attr('id');
+			if(g_centralNodeId!=clickedObjId) {
+			    g_centralNodeId = clickedObjId
+    	        g_centralNodeBeanId = clickedObj.attr('beanid');
+        	    rerenderTree(g_centralNodeBeanId);
+        	    //$.jstree._reference("#dsTree").select_node('#' + g_centralNodeId);
+        	}
+        }
+            
+        function addNodeToTree(treeObj, parentNodeObj, nodeJSON){
+            treeObj.clean_node(parentNodeObj);
+            treeObj.create_node(parentNodeObj, "inside", nodeJSON);
+       	}
+        
+        function lockTree() {
+        	if(!isErrorState) {
+        		$.jstree._reference("#dsTree").lock();
+        	}
+        }
+
+		function removeChildren() {
+			if(g_treeObj) {
+				var childArray = g_treeObj._get_children(g_parentNodeObj);
+				if(childArray) {
+					for(i=0; i<childArray.length; i++) {
+						g_treeObj.remove(childArray[i]);
+					}
+				}
+			}
+		}
+			
+		function openLoadedNode() {
+			if(g_parentNodeObj && g_parentNodeObj.length) {
+           		g_treeObj.open_node(g_parentNodeObj, false, false);
+           	}
+		}
+			
+// Functions to support interaction with search results - START
+
+        var g_selectedRecordBeanId = '';
+        function setSelectedResultBeanId(beanId) {
+            g_selectedRecordBeanId = beanId;
+        }
+        
+        function toggleCloneButton(hType) {
+            if((hType=='{!JSENCODE(hierarchyType)}') || ('ADD' == operationName) || ('CLONE' == operationName)) {
+                // Disable the clone button; cloning bean of same hierarchy type is not allowed.
+                $("input.dsCloneButtonClass").removeClass("btn").addClass("btnDisabled").attr("disabled", "disabled");
+            } else {
+                // Enable the clone button
+                $("input.dsCloneButtonClass").addClass("btn").removeClass("btnDisabled").removeAttr("disabled");
+            }
+        }
+        
+        function toggleButtons(hType) {
+         	if(('ADD' == operationName) || ('CLONE' == operationName)) {
+                // Disable the Add button
+                $("input.dsAddButtonClass, input.dsCloneButtonClass").removeClass("btn").addClass("btnDisabled").attr("disabled", "disabled");
+            } else {
+                // Enable the Add button
+                $("input.dsAddButtonClass, input.dsCloneButtonClass").addClass("btn").removeClass("btnDisabled").removeAttr("disabled");
+            } 
+         	toggleCloneButton(hType);     
+        }
+// Functions to support interaction with search results - END
+
+    </script>
+
+    <apex:outputPanel id="dummyRerenderPanel"/>
+    
+    <apex:outputPanel id="dsTreeRerenderPanel">
+        <script type="text/javascript">
+            if(loadTree) loadHierarchy('{!hierarchyAsJson}');
+			g_centralNodeId='{!centralNodeId}';
+        </script>
+    </apex:outputPanel>
+
+<apex:form >
+    <div id="jsTreeDivMain">
+        <apex:pageBlock mode="view">
+            <apex:pageBlockButtons >
+                   	<apex:commandButton value="{!$Label.dse__DS_ButtonSave}" action="{!saveHierarchy}" id="saveHierarchyBtn" rerender="dsTreeRerenderPanel,errorPanel,nodeToMoveLabelPanel,toggleButtonHidden" status="revertingStatus"/> 
+                    <apex:commandButton value="{!$Label.dse__DS_ButtonSaveAndClose}" action="{!saveHierarchyAndClose}" id="saveHierarchyAndCloseBtn"/>
+                    <apex:commandButton value="{!$Label.dse__DS_ButtonRevertChanges}" action="{!revert}" id="revertHierarchyBtn" rerender="dsTreeRerenderPanel,errorPanel,nodeToMoveLabelPanel,toggleButtonHidden" status="revertingStatus"/>
+                    <apex:commandButton value="{!$Label.dse__DS_ButtonCancel}" action="{!goToPreviousPage}"/>
+            </apex:pageBlockButtons>
+            
+            <apex:outputPanel id="errorPanel">
+                <apex:pageMessages id="errorMessages"/>
+            </apex:outputPanel>
+
+            <table style="width: 100%">
+                <tr>
+                    <td style="width: 30%; vertical-align: middle">
+                        <b>{!hierarchyType}</b>
+                    </td>
+                </tr>
+            </table>
+ 			
+ 			<apex:outputPanel id="nodeToMoveLabelPanel">
+	 			<apex:outputPanel id="nodeToMoveLabelSubPanel" rendered="{!NOT(nodeToMoveLabel=='')}">
+ 					<div id="nodeToMoveDiv">Node to move: {!nodeToMoveLabel}</div>
+ 					<apex:outputPanel id="nodeToMoveLabelDebugPanel" rendered="{!debugMode}">
+	 					<div id="operationNameDiv">Operation name: {!operationName}</div>
+ 						<div id="sourceBeanIdDiv">Source Bean Id: {!sourceBeanId}</div>
+	 					<div id="movedNodeAsJson">Source Bean Json: {!movedNodeAsJson}</div>
+	 					<div id="targetBeanIdDiv">Target Bean Id: {!targetBeanId}</div>
+ 					</apex:outputPanel>
+ 				</apex:outputPanel>
+ 			</apex:outputPanel>
+
+            <div id="dsTree"></div>
+        
+            <apex:outputPanel id="dsTreeRerenderPanel">
+                <script type="text/javascript">
+                	//alert('treeLoaded='+loadTree);
+                	//alert('hJson=' + '{!hierarchyAsJson}');
+       	            if(loadTree) loadHierarchy('{!hierarchyAsJson}');
+       	            //alert('treeLoadedpost='+loadTree);
+                </script>
+            </apex:outputPanel>
+        
+        </apex:pageBlock>
+    </div>
+</apex:form>
+
+ 	<apex:outputPanel id="loadChildrenNode">
+        <script type="text/javascript">
+		    //alert('inside loadChildrenNode=' + '{!loadedChildrenJSON}');
+        	
+        	removeChildren();
+            loadedChildrenJSON = '{!loadedChildrenJSON}';
+            g_parentTitle = '{!pagedLabelEscaped}';
+            
+            if(loadedChildrenJSON) {
+	            var loadedChildrenObj = eval('(' + loadedChildrenJSON + ')');
+	            //alert('loadedChildrenObj='+loadedChildrenObj);
+				if(loadedChildrenJSON && loadedChildrenObj) {
+					for(i=(loadedChildrenObj.children.length)-1; i>=0; i--) {
+						//alert('inside loop...'+i+'-'+loadedChildrenObj.children[i]);
+						if(loadedChildrenObj.children[i]) {
+           					addNodeToTree(g_treeObj, g_parentNodeObj, loadedChildrenObj.children[i]);
+        	   			}
+	           		}
+    	        }
+    	        g_treeObj.rename_node(g_parentNodeObj, g_parentTitle);
+    	    }
+			
+			openLoadedNode();
+        </script>
+    </apex:outputPanel>
+
+
+
+    <apex:outputPanel id="hiddenAddedNode">
+        <script type="text/javascript">
+            var addedNodeAsJsonString = '{!addedNodeAsJson}';
+            isErrorState = {!isErrorState};
+            if (isErrorState==false && addedNodeAsJsonString.length > 0) {
+                var addedNode = JSON.parse(addedNodeAsJsonString);
+                addNodeToTree($.jstree._reference("#dsTree"), getCentralNode(), addedNode);
+            }
+        </script>
+    </apex:outputPanel>
+
+    <apex:outputPanel id="hiddenMovedNode">
+        <script type="text/javascript">
+            var movedNodeAsJsonString = '{!movedNodeAsJson}';
+            isErrorState = {!isErrorState};
+            if (isErrorState==false && movedNodeAsJsonString.length > 0) {
+                var movedNode = JSON.parse(movedNodeAsJsonString);
+                g_nodeToMove = $.jstree._reference('#dsTree')._get_node('#' + g_nodeToMoveId);
+				try {
+	                $.jstree._reference("#dsTree").remove(g_nodeToMove);
+				} catch(err) {
+					// remove sometimes throws clk.each is not a function.
+					// continue processing.
+				}
+                addNodeToTree($.jstree._reference("#dsTree"), g_rightClickedNode, movedNode);
+                $.jstree._reference("#dsTree").open_node(g_rightClickedNode);
+            }
+        </script>
+    </apex:outputPanel>
+    
+    <apex:outputPanel id="toggleButtonHidden">
+        <script type="text/javascript">
+            operationName = '{!operationName}';
+        </script>
+    </apex:outputPanel>
+
+    <apex:form >
+        <apex:actionFunction name="rerenderTree" action="{!dummyCall}" rerender="dsTreeRerenderPanel" status="pagingNodeStatus">
+            <apex:param name="beanId" assignTo="{!beanId}" value="" />
+		</apex:actionFunction>
+        <apex:actionFunction name="loadPrevChildrenJson" action="{!loadPrevChildrenJson}" rerender="loadChildrenNode" status="pagingNodeStatus">
+            <apex:param name="selectedId" assignTo="{!selectedId}" value="" />
+		</apex:actionFunction>
+        <apex:actionFunction name="loadNextChildrenJson" action="{!loadNextChildrenJson}" rerender="loadChildrenNode" status="pagingNodeStatus">
+            <apex:param name="selectedId" assignTo="{!selectedId}" value="" />
+        </apex:actionFunction>
+        <apex:actionFunction name="loadChildrenPageJson" action="{!loadChildrenPageJson}" rerender="loadChildrenNode" status="pagingNodeStatus">
+            <apex:param name="selectedId" assignTo="{!selectedId}" value="" />
+            <apex:param name="goToPage" assignTo="{!goToPageNumber}" value="" />
+        </apex:actionFunction>
+        <apex:actionFunction name="orderChildNodes" action="{!loadChildrenJson}" rerender="loadChildrenNode" status="pagingNodeStatus">
+            <apex:param name="selectedId" assignTo="{!selectedId}" value="" />
+            <apex:param name="sortOrder" assignTo="{!sortOrder}" value="" />
+        </apex:actionFunction>
+        
+        <apex:actionFunction name="addNode" action="{!addNode}" rerender="nodeToMoveLabelPanel,hiddenAddedNode,errorPanel,toggleButtonHidden" status="addingNodeStatus" oncomplete="lockTree();">
+            <apex:param name="sourceBeanId" assignTo="{!objectId}" value="" />
+            <apex:param name="targetBeanId" assignTo="{!targetBeanId}" value="" />
+            <apex:param name="operationName" assignTo="{!operationName}" value="ADD" />
+        </apex:actionFunction>
+        <apex:actionFunction name="dsCloneNode" action="{!cloneNode}" rerender="nodeToMoveLabelPanel,hiddenAddedNode,errorPanel,toggleButtonHidden" status="addingNodeStatus" oncomplete="lockTree();">
+            <apex:param name="sourceBeanId" assignTo="{!objectId}" value="" />
+            <apex:param name="targetBeanId" assignTo="{!targetBeanId}" value="" />
+            <apex:param name="operationName" assignTo="{!operationName}" value="CLONE" />
+        </apex:actionFunction>
+        <apex:actionFunction name="selectForMove" action="{!selectForMove}" rerender="nodeToMoveLabelPanel,errorPanel" status="movingNodeStatus">
+            <apex:param name="sourceBeanId" assignTo="{!sourceBeanId}" value="" />
+        </apex:actionFunction>
+        <apex:actionFunction name="moveNode" action="{!moveNode}" rerender="nodeToMoveLabelPanel,hiddenMovedNode,errorPanel" status="movingNodeStatus" oncomplete="lockTree();">
+            <apex:param name="targetBeanId" assignTo="{!targetBeanId}" value="" />
+            <apex:param name="operationName" assignTo="{!operationName}" value="MOVE" />
+        </apex:actionFunction>
+        <apex:actionFunction name="removeNode" action="{!removeNode}" rerender="nodeToMoveLabelPanel,errorPanel" status="removingNodeStatus" oncomplete="lockTree();">
+            <apex:param name="sourceBeanId" assignTo="{!objectId}" value="" />
+            <apex:param name="operationName" assignTo="{!operationName}" value="REMOVE" />
+        </apex:actionFunction>
+    </apex:form>
+
+    <div id="searchForNodeDiv">
+        <apex:outputPanel id="searchForNodePanel">
+            <apex:form id="accountScoutForm">
+                <apex:pageBlock id="inputBlock" title="{!$Label.dse__DS_TextAccountScout_PB2_Title}">
+                    <apex:pageBlockButtons >
+                        <apex:commandButton id="searchButton" value="{!$Label.dse__DS_ButtonSearchInPool}" action="{!runSearch}" immediate="false" oncomplete="g_selectedRecordBeanId='';" rerender="searchResultPanel, searchPageMessages" status="searchingStatus"/>
+                    </apex:pageBlockButtons>
+            
+                    <apex:pageMessages id="searchPageMessages" /> <!-- shows search result count -->
+            
+                    <!-- Search Criteria Inputs -->
+                    <apex:pageBlockSection id="inputSection" title="{!$Label.dse__DS_TextAccountScout_PB2_Section1}" collapsible="true" columns="1" rendered="{!NOT(lib.isPersonAccount)}">
+                        <apex:pageBlockSectionItem id="searchScopeItem">
+                            <apex:outputLabel value="{!$Label.dse__DS_Hierarchy_Scout_Search_Within_Hierarchy_Label}" />
+                            <apex:selectList value="{!searchWithinHierarchyMode}" multiselect="false" size="1">
+                                <apex:actionSupport event="onchange" action="{!dummyCall}" reRender="searchForNodePanel" status="searchingStatus"/>
+                                <apex:selectOptions value="{!searchWithinHierarchyModeOptions}" />
+                            </apex:selectList>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem id="searchHierarchyModeItem" rendered="{!NOT(searchWithinHierarchyMode=='Yes')}">
+                            <apex:outputLabel value="{!$Label.dse__DS_Label_SearchMode} " />
+                            <apex:selectList value="{!lib.searchMode}" multiselect="false" size="1">
+                                <apex:selectOptions value="{!lib.searchModes}" />
+                            </apex:selectList>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem id="searchModeItem" rendered="{!(searchWithinHierarchyMode=='Yes')}">
+                            <apex:outputLabel value="{!$Label.dse__DS_Label_SearchMode} " />
+                            <apex:selectList value="{!searchHierarchyMode}" multiselect="false" size="1">
+								<apex:selectOptions value="{!searchHierarchyModes}" />
+							</apex:selectList>
+                        </apex:pageBlockSectionItem>
+                        <apex:repeat value="{!$ObjectType.Account.FieldSets.DSE__DS_HierarchyEditSearchFields}" var="f">
+                            <apex:inputField value="{!lib.acct[f]}" required="{!AND(f.required,lib.showRequiredFields)}"/>
+                        </apex:repeat>
+                    </apex:pageBlockSection>
+
+                </apex:pageBlock>
+            </apex:form>
+        </apex:outputPanel>
+    </div>
+
+    <div id="searchResultPanelDiv">
+        <apex:form >
+            <apex:outputPanel id="searchResultPanel">
+
+                <div class="searchResultPanelDivClass">
+
+		        <apex:pageBlock title="Search Results" rendered="{!showResults}">
+                        <apex:pageBlockButtons >
+                        	<apex:outputPanel id="buttonPanel1" rendered="{!(searchWithinHierarchyMode=='Yes')}">
+	                            <input class="btn" type="button" value="{!$Label.DS_Hierarchy_Scout_Button_View_Node}" id="viewNodeBtnAccount" onclick="rerenderTree(g_selectedRecordBeanId);"/>
+                            </apex:outputPanel>
+                        	<apex:outputPanel id="buttonPanel2" rendered="{!NOT(searchWithinHierarchyMode=='Yes')}">
+                	            <input class="btn dsAddButtonClass" type="button" value="{!$Label.DS_Hierarchy_Scout_Button_Add_Node}" id="addNodeBtnAccount" onclick="addNode(g_selectedRecordBeanId, getCentralNode().attr('beanid'), 'ADD');"/>
+                       	        <input class="btn dsCloneButtonClass" type="button" value="{!$Label.DS_Hierarchy_Scout_Button_Clone_Node}" id="cloneBtnAccount" onclick="dsCloneNode(g_selectedRecordBeanId, getCentralNode().attr('beanid'), 'CLONE');"/>
+                            </apex:outputPanel>
+                        </apex:pageBlockButtons>
+            
+                <apex:pageBlockSection title="{!accountHType}" collapsible="true" columns="1" rendered="{!showAccountResults}">
+        
+                <div class="searchResultPanelDivClassTemp">
+                
+                        <apex:pageBlockTable value="{!accountResults}" var="r">          
+               
+                            <apex:column > <!-- Radio Button -->
+                                <apex:outputPanel rendered="{!r.selected}">
+                                    <input type="radio" name="recordSelector" onclick="setSelectedResultBeanId('{!r.bean.ID}');toggleButtons('{!JSENCODE(accountHType)}');"></input>
+                                </apex:outputPanel>
+                                <apex:outputPanel rendered="{!NOT(r.selected)}">
+                                       <span style="padding-left:10px"/>
+                                </apex:outputPanel>
+                            </apex:column>
+            
+                        <!-- For debugging only   
+                            <apex:column headerValue="Bean Id">
+                                <apex:outputText value="{!r.bean.ID}"></apex:outputText>
+                            </apex:column>
+                        -->
+               
+                            <apex:repeat value="{!$ObjectType.DSE__DS_Bean__c.FieldSets.DSE__DS_HierarchyEditSearchResultsFields}" var="f" >
+                                <apex:column value="{!r.bean[f]}" />
+                            </apex:repeat>
+                    
+                            <apex:column headerValue="{!$Label.dse__DS_TextAccountScout_TableColumnDetaillink}" >
+                                <apex:outputLink value="#" onclick="window.open('{!r.dmLink}','beansWindow','width=1000,height=800,scrollbars=yes,resizable=yes')" >
+                                    {!$Label.dse__DS_TextAccountScout_TableColumnDetaillink}
+                                </apex:outputLink>
+                            </apex:column>
+                    
+                            <apex:column headerValue="{!$Label.dse__DS_TextAccountScout_TableColumnScore}" rendered="{!lib.showScore}">
+                                <apex:outputText value="{!r.totalScore}"/>
+                            </apex:column>
+                        </apex:pageBlockTable>
+                        
+                </div>
+                
+                </apex:pageBlockSection>                    
+                    
+      
+                <apex:repeat value="{!otherResults}" var="or" >
+
+                    <apex:pageBlockSection title="{!or.hType}" columns="1" collapsible="true">
+
+                    <div class="searchResultPanelDivClassTemp">
+                            <apex:pageBlockTable value="{!or.results}" var="r">
+                        
+                                <apex:column > <!-- Radio Button -->
+                                    <apex:outputPanel rendered="{!r.selected}">
+                                        <input type="radio" name="recordSelector" onclick="setSelectedResultBeanId('{!r.bean.ID}');toggleButtons('{!JSENCODE(or.hType)}');"></input>
+                                    </apex:outputPanel>
+                                    <apex:outputPanel rendered="{!NOT(r.selected)}">
+                                        <span style="padding-left:10px"/>
+                                    </apex:outputPanel>
+                                </apex:column>
+
+                            <!-- For debugging only   
+                                <apex:column headerValue="Bean Id">
+                                    <apex:outputText value="{!r.bean.ID}"></apex:outputText>
+                                </apex:column>
+                            -->
+
+                                <apex:repeat value="{!$ObjectType.DSE__DS_Bean__c.FieldSets.DSE__DS_HierarchyEditSearchResultsFields}" var="f" >
+                                    <apex:column value="{!r.bean[f]}" />
+                                </apex:repeat>
+                    
+                                <apex:column headerValue="{!$Label.dse__DS_TextAccountScout_TableColumnDetaillink}" >
+                                    <apex:outputLink value="#" onclick="window.open('{!r.dmLink}','beansWindow','width=1000,height=800,scrollbars=yes,resizable=yes')" >
+                                        {!$Label.dse__DS_TextAccountScout_TableColumnDetaillink}
+                                    </apex:outputLink>
+                                </apex:column>
+                        
+                                <apex:column headerValue="{!$Label.dse__DS_TextAccountScout_TableColumnScore}" rendered="{!lib.showScore}">
+                                    <apex:outputText value="{!r.totalScore}"/>
+                                </apex:column>
+                            </apex:pageBlockTable>
+            
+                    </div>
+                </apex:pageBlockSection>
+                </apex:repeat>
+
+                </apex:pageBlock>
+			</div>
+            </apex:outputPanel>
+
+        </apex:form>
+    </div>
+
+</apex:page>

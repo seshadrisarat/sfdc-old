@@ -1,0 +1,583 @@
+<apex:page sidebar="false" setup="true" controller="Loop.aboutLoop" id="aPage" title="About LOOP Document Services" showHeader="true" tabStyle="DDP_Admin__tab" action="{!onload}">
+    <link class="user" href="/sCSS/32.0/sprites/1412030084000/Theme3/default/gc/forceComHomepage.css" rel="stylesheet" type="text/css" />
+    <style type="text/css">
+        div.pbBody div.innerDiv div { margin-top: 12px; }
+        div.left {
+            float: left;
+            width: 20em;
+        }
+        
+        .msg {
+            font-weight: bold;
+        }
+        #authRptFrame, #authSandFrame {
+            height: 1.3em;
+            width: 100%;
+        }
+        .bPageBlock .pbTitle {
+            width: 50%;
+        }
+        fieldset li {
+            margin-bottom: 1em;
+        }
+        fieldset ul {
+            margin: 0;
+        }
+        .resultMsg {
+            font-family: Arial, Helvetica, sans-serif;
+            font-weight: bold;
+            margin: 0;
+            color: #333333;
+        }
+        span.pbSubExtra { display: none; }
+        span.newFlag { vertical-align: middle; }
+        .editPage .btn {
+            margin-top: 4px;
+        }
+        .authorizeReports .btn {
+            margin-right: 10px;
+        }
+        
+        table.fullwidth { width: 100%; display: block; }
+        td.halfwidth { width: 50%; }
+        ul.contact { white-space: nowrap; }
+        ul.contact li { padding: 1px 0; }
+        
+        a.bluebtn, input.bluebtn {
+            background: linear-gradient(to bottom, #008cd1 0%,#01a5f8 100%);
+            padding: 4px 10px;
+            border: 1px solid #008dd4;
+            border-radius: 3px;
+            color: #fff;
+            font-weight: bold;
+            text-decoration: none;
+            vertical-align: middle;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        a.bluebtn:hover { color: #fff; }
+        input.bluebtn { margin-right: 3px; }
+        
+        input.bluebtn:hover { text-decoration: underline; }
+        
+        input.bluebtn.btnDisabled {
+            border: 1px solid #c4c4c4;
+            background: #e8e8e9 url('/img/alohaSkin/btn_sprite.png') repeat-x right top;
+            color: #909090;
+            cursor: default;
+        }
+        input.bluebtn.btnDisabled:hover { text-decoration: none; }
+        
+        table.setupItems input.bluebtn { width: 170px; }
+        
+        table.setupItems td.left { padding-right: 10px; }
+        
+        td.selectCell select { min-width: 100px; }
+        
+        div.firstrow { height: 250px }
+        
+        div.secondrow { height: 680px }
+        
+        table.setupItems > tbody > tr > td {
+            padding: 5px 0;
+            border-bottom: 1px solid #DEDEDE;
+        }
+        table.setupItems > tbody > tr.first > td, table.setupItems > tbody > tr.last > td {
+            border: none;
+        }
+        
+        span.statusContainer span.status { vertical-align: sub; }
+        
+        img.sectionImage {
+            height: 84px;
+            width: 84px;
+        }
+        
+        .gs-links .gsbutton, .gs-links .gsbutton:visited {
+            border: none;
+        }
+    </style>
+    <script src="{!URLFOR($Resource.Scripts, 'jquery-1.9.1.min.js')}"></script>
+    <script src="{!URLFOR($Resource.Scripts, 'jquery.drawloop.js')}"></script>
+    <script src="{!URLFOR($Resource.Scripts, 'json2.min.js')}"></script>
+    <script type="text/javascript" src="/soap/ajax/25.0/connection.js"></script>
+    <script type="text/javascript">
+        $(function() {
+            if ("{!JSENCODE($Request.sfdc.tabName)}" == "")
+                $("#AppBodyHeader").css('display', 'none');
+            else {
+                jQuery('li.zen-active,li.phm.active').removeClass('zen-active primaryPalette active');
+                jQuery('li[id="{!JSENCODE($Request.sfdc.tabName)}_Tab"]').addClass('zen-active primaryPalette active');
+            }
+            $('.hidden').hide();
+            
+            jQuery('input.bluebtn').removeClass('btn');
+            
+            setDisabled('div.authorizeReports .bluebtn', true);
+            $.authorize({
+                accessToken: '{!JSENCODE(sessionId)}',
+                userId: '{!$User.Id}',
+                sandbox: {!isSandbox},
+                //promptLogin: true,
+                promptConsent: true,
+                verifySuccess: function(data) {
+                    setDisabled('div.authorizeReports .bluebtn', false);
+                },
+                verifyError: function(data) {
+                    var msg;
+                    if (!data.Response) {
+                        msg = 'An unexpected response was received attempting to verify authorization.';
+                    } else if (data.Response.toLowerCase() == 'error') {
+                        msg = data.Error;
+                    }
+                    setAuthFlowMessage(msg);
+                },
+                authFlowComplete: function(result) {
+                    if (result.status == 'success') {
+                        setAuthFlowMessage('');
+                        $('div.authorizeReports .bluebtn').click();
+                    } else {
+                        setAuthFlowMessage('You need to authorize LOOP Document Services to run LOOP Reports / Mass LOOP Plus.');
+                    }
+                }
+            });
+            $.notifie({
+                allowCompatibilityView: false,
+                requiredVersion: 8,
+                containerSelector: '#ieMsgs',
+                compatibilityViewMessage: '{!JSENCODE($Label.IE_Compatibility_View_Warning)}',
+                versionMessage: '{!JSENCODE($Label.IE_Higher_Version_Required)}'
+            });
+        });
+    </script>
+    <script type="text/javascript">
+        function setFocusOnLoad() {
+            // do nothing. We don't want to focus on the first available element here.
+        }
+        
+        var num = 1;
+        function getIp(cb, p) {
+            appendScript('https://apps.drawloop.com/IP.aspx?callback='+cb+'&process='+p);
+        }
+        function appendScript(str) {
+            var ss = document.createElement('script');
+            ss.setAttribute('type', 'text/javascript');
+            ss.src = str;
+            $(function() {
+                $("body").append(ss);
+            });
+        }
+        function displayIp(result) {
+            $("#iprange").text(result);
+        }
+        function authorizeip(result) {
+            window.top.location="/05G/e?Description=LOOP+Document+Services&" + result + "&retURL={!JSENCODE(URLENCODE($Page.aboutloop))}%3Fsfdc.tabName={!JSENCODE($Request.sfdc.tabName)}&saveURL={!JSENCODE(URLENCODE($Page.aboutloop))}%3Fsfdc.tabName={!JSENCODE($Request.sfdc.tabName)}";
+        }
+        function authorizeLogin() {
+            if ($.authorize('getStatus').requiresAuthorization) {
+                $.authorize('launchAuthorizationFlow');
+                return false;
+            }
+            setAuthFlowMessage('');
+            return true;
+        }
+        
+        function func(result) {
+            $(".hidden").hide();
+            $("#"+result).show();
+            $("input").removeAttr("disabled");
+        }
+        
+        function rep(result) {
+            $(".hidden").hide();
+            $("#rep"+result).show();
+            $("input").removeAttr("disabled");
+        }
+        function modSubs() {
+            $("#next").val('/ddps/149/1?no=true&dsa={!dsAccount}&dse={!dsEnvironment}');
+            $("#auto").val('false');
+            $("#authRptForm").removeAttr('target').submit();
+            return false;
+        }
+        function handleSearchEnter(event) {
+            if (event.keyCode == 13) {
+                $('[id$=":searchBtn"]').click();
+                return false;
+            }
+        }
+        function setFocusOnLoad() {
+            // do nothing. We don't want to focus on the first available element here.
+        }
+        function setDisabled(selector, disabled) {
+            if (disabled) {
+                $(selector).addClass('btnDisabled').attr('disabled', true);
+            } else {
+                $(selector).removeClass('btnDisabled').removeAttr('disabled');
+            }
+        };
+        function setAuthFlowMessage(msg) {
+            var $msg = $('.authFlowResponse');
+            if (!$msg.length) $msg = $('[id$=":reportResPanel"]').append($('<span class="authFlowResponse resultMsg" />'));
+            $msg.text(msg);
+            if (msg) $msg.show();
+            else $msg.hide();
+        };
+    </script>
+    <apex:sectionHeader title="LOOP Document Services from Drawloop Technologies" help="http://support.drawloop.com/lds/" />
+    <div id="ieMsgs" />
+    <apex:form id="aForm">
+        
+        <table class="fullwidth">
+            <tbody>
+                <tr>
+                    <td class="halfwidth">
+                        <div class="pageBlock" id="getting-started-block">
+                            <div class="top-line">
+                                <div class="panelHeader"><h2>Support</h2></div>
+                            </div>
+                            <div class="panelContent firstrow">
+                                <table class="gs-links">
+                                    <tbody>
+                                        <tr>
+                                            <td>
+                                                <img src="{!URLFOR($Resource.Styles, 'images/ddp.png')}" class="sectionImage" />
+                                            </td>
+                                            <td class="gs-middle">
+                                                <div class="steps-header">Build Your First DDP</div>
+                                                <div class="steps-text">Create a basic DDP in minutes. Our online support site offers text and video training.</div>
+                                                <a class="gsbutton" href="http://support.drawloop.com/lds/" target="_blank">Support Site</a>
+                                            </td>
+                                            <td class="gs-icons">
+                                                <div class="steps-header-hilite">Contact Us</div>
+                                                <ul class="gs-learn-more contact">
+                                                    <li>Email: <a href="mailto:loopsupport@drawloop.com">loopsupport@drawloop.com</a></li>
+                                                    <li>Support Hours: M-F, 6am - 5pm PT</li>
+                                                    <li>Phone (US): 949.242.0455 opt 2</li>
+                                                    <li>Phone (UK): +44 203 318 3234 opt 2</li>
+                                                    <li>Phone (AU): +61 28 417 2058 opt 2</li>
+                                                    <li>Extended hours available on request</li>
+                                                </ul>
+                                            </td>
+                                        </tr>
+                                        <tr><td></td><td colspan="2">
+                                            <div class="steps-header">Need help?</div>
+                                            <div class="steps-text">
+                                                Support engineers are available by email or phone.<br />
+                                                You may need to provide your Org Id to support: {!$Organization.Id}.
+                                            </div>
+                                            <div style="width: 250px;">
+                                                <a class="bluebtn" href="mailto:loopsupport@drawloop.com?subject=SUPPORT REQUEST&body={!URLENCODE(caseBody)}" target="_blank">Log a Case</a>
+                                                <a class="bluebtn" href="/partnerbt/grantLoginAccess.apexp" target="_blank">Grant Login Access</a>
+                                            </div>
+                                        </td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="halfwidth">
+                        <div class="pageBlock" id="getting-started-block">
+                            <div class="top-line">
+                                <div class="panelHeader"><h2>Subscription</h2></div>
+                            </div>
+                            <div class="panelContent firstrow">
+                                <table class="gs-links">
+                                    <tbody>
+                                        <tr>
+                                            <td>
+                                                <img src="{!URLFOR($Resource.Styles, 'images/subscriptions.png')}" class="sectionImage" />
+                                            </td>
+                                            <td class="gs-middle">
+                                                <div class="steps-header">Manage Your Subscription</div>
+                                                <div class="steps-text">
+                                                    By default, your install comes with the Standard edition. Use the modify button below to upgrade to the Business edition or add on Report Scheduling.
+                                                    Note: upgrades and add-ons have additional charges. See our
+                                                    <a href="http://www.drawloop.com/products/pricing/loop-document-services/" target="_blank">pricing page</a> for more information.
+                                                </div>
+                                                <div style="width: 475px;">
+                                                    <apex:commandButton styleClass="bluebtn" value="Modify Subscription Services" action="{!modifySubscriptions}" />
+                                                    <apex:commandButton styleClass="bluebtn" value="Subscribe / Add On" action="{!subscribe}" />
+                                                    <apex:commandButton styleClass="bluebtn" value="Request Proposal / Quote" action="{!requestQuote}" />
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>&nbsp;</td>
+                                            <td class="gs-middle">
+                                                <div class="steps-header" style="padding-top: 20px;">Your Current Subscription</div>
+                                                <apex:outputPanel id="subscriptionPanel" styleclass="steps-text">
+                                                    Service Level: {!ldsLevel}
+                                                    <apex:actionStatus stopText="" id="serviceLevelStatus">
+                                                           <apex:facet name="start">
+                                                               <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                                           </apex:facet>
+                                                       </apex:actionStatus>
+                                                    <br />
+                                                    Add-Ons: {!addOns}
+                                                </apex:outputPanel>
+                                                <apex:pageMessages id="subscriptionMessages" />
+                                                <apex:actionFunction name="loadSubscription" action="{!loadSubscription}" status="serviceLevelStatus" rerender="subscriptionMessages,subscriptionPanel">
+                                                       <apex:param name="serverUrl" assignTo="{!serverUrl}" value="{!$Api.Partner_Server_URL_300}" />
+                                                </apex:actionFunction>
+                                                <script>setTimeout(loadSubscription, 500);</script>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="halfwidth">
+                        <div class="pageBlock" id="getting-started-block">
+                            <div class="top-line">
+                                <div class="panelHeader"><h2>Setup</h2></div>
+                            </div>
+                            <div class="panelContent secondrow">
+                                <table class="gs-links setupItems">
+                                    <tbody>
+                                        <tr class="first">
+                                            <td>
+                                                <img src="{!URLFOR($Resource.Styles, 'images/setup.png')}" class="sectionImage" />
+                                            </td>
+                                            <td class="gs-middle">
+                                                <div class="steps-header">Configure and Deploy LOOP Document Services</div>
+                                                <div class="steps-text">Use the options below to configure and deploy LOOP to enable DDPs for your users.</div>
+                                            </td>
+                                        </tr>
+                                        <apex:outputPanel rendered="{!NOT(isProductionOrg)}">
+                                            <tr>
+                                                <td colspan="2" class="left">
+                                                    If this is a sandbox organization and users are unable to run DDPs, you may need to click this button to enable this sandbox. (Did this accidentally? Click&nbsp;
+                                                    <apex:commandLink value="here" action="{!notSandbox}" rerender="sbResPanel" status="sandboxStatus" />.)
+                                                </td>
+                                                <td>
+                                                    <div style="width: 200px;">
+                                                        <apex:commandButton styleClass="bluebtn" value="Authorize Sandbox Account" action="{!authorizeSandbox}" rerender="sbResPanel" status="sandboxStatus" />
+                                                        <apex:actionStatus stopText="" id="sandboxStatus">
+                                                            <apex:facet name="start">
+                                                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                                            </apex:facet>
+                                                        </apex:actionStatus>
+                                                    </div>
+                                                    <apex:outputPanel id="sbResPanel" styleClass="resultMsg" layout="block">
+                                                        {!sandboxResult}
+                                                    </apex:outputPanel>
+                                                </td>
+                                            </tr>
+                                        </apex:outputPanel>
+                                        <tr>
+                                            <td colspan="2" class="left">
+                                                Use the links below to add the standard LOOP buttons to your page layouts:
+                                                <table><tbody>
+                                                    <tr>
+                                                        <td><a href="/ui/setup/layout/PageLayouts?type=Lead&setupid=LeadLayouts" target="_top">Lead Page Layouts</a></td>
+                                                        <td><a href="/ui/setup/layout/PageLayouts?type=Account&setupid=AccountLayouts" target="_top">Account Page Layouts</a></td>
+                                                        <td><a href="/ui/setup/layout/PageLayouts?type=Contract&setupid=ContractLayouts" target="_top">Contract Page Layouts</a></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td><a href="/ui/setup/layout/PageLayouts?type=Contact&setupid=ContactLayouts" target="_top">Contact Page Layouts</a></td>
+                                                        <td><a href="/ui/setup/layout/PageLayouts?type=Opportunity&setupid=OpportunityLayouts" target="_top">Opportunity Page Layouts</a></td>
+                                                        <td><a href="/ui/setup/layout/PageLayouts?type=Case&setupid=CaseLayouts" target="_top">Case Page Layouts</a></td>
+                                                    </tr>
+                                                </tbody></table>
+                                            </td>
+                                            <td>&nbsp;</td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="2" class="left">
+                                                To create your own custom DDP button / link / tab, use our point-and-click deployment wizard.
+                                            </td>
+                                            <td>
+                                                <apex:commandButton styleClass="bluebtn" action="{!ddpButtonWizard}" value="DDP Deployment Wizard" />
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="2" class="left">
+                                                If your organization runs automated DDPs (Mass, Apex, Outbound Messages), you can view the status of the job queue here.
+                                            </td>
+                                            <td>
+                                                <apex:commandButton styleClass="bluebtn" action="{!URLFOR($Page.JobQueueStatus)}" value="Job Queue" />
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="2" class="left">
+                                                To migrate DDPs (using the <a href="http://support.drawloop.com/lds#!/lds/getting-started/migrate-ddps#Documentation" target="_blank">DDP Migration Tool</a>)
+                                                to this org without using a security token, authorize the Drawloop IP range: <span style="display: inline;" id="iprange"></span>.
+                                            </td>
+                                            <td>
+                                                <apex:commandButton styleClass="bluebtn" value="Authorize IP Ranges" onclick="getIp('authorizeip', 'url'); return false;" />
+                                                <script>getIp('displayIp', 'string');</script>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="2" class="left">
+                                                To use Report Scheduling (scheduled DDPs) or Mass DDPs, you will need to authorize LOOP Services. This button will authorize LOOP Services to run as your user.
+                                                If you wish to authorize this as a different user, you can <a href="{!authorizeLoginUrl}">click here</a> to login and authorize as that user.
+                                            </td>
+                                            <td>
+                                                <div style="width: 200px;" class="authorizeReports">
+                                                    <apex:commandButton styleClass="bluebtn" value="Authorize LOOP Services" action="{!authorizeReports}" rerender="msg,reportResPanel" onclick="if (!authorizeLogin()) return false;" status="loopReportsStatus" />
+                                                    <apex:actionStatus stopText="" id="loopReportsStatus">
+                                                        <apex:facet name="start">
+                                                            <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                                        </apex:facet>
+                                                    </apex:actionStatus>
+                                                </div>
+                                                <apex:outputPanel id="reportResPanel" styleClass="resultMsg" layout="block">
+                                                    {!loopReportsResult}
+                                                </apex:outputPanel>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="2" class="left">
+                                                The Mass via Reports feature allows users to run a DDP in mass for records in a Salesforce report instead of from a list view.
+                                                To use this feature, click this button to enable the LOOP Visualforce domain as a Remote Site.
+                                            </td>
+                                            <td>
+                                                <apex:commandButton styleClass="bluebtn" value="Configure Mass via Reports" action="{!addSfForLoopRemoteSite}" />
+                                            </td>
+                                        </tr>
+                                        <tr class="last">
+                                            <td colspan="2" class="left">
+                                                LOOP Document Services supports Salesforce authorization and authentication via
+                                                <a href="http://www.drawloop.com/blog/2013/11/26/connected-apps-what-enterprise-orgs-want/" target="_blank">Connected Apps</a>.
+                                                Connected Apps add additional levels of control, allowing administrators explicit control over who can use the application,
+                                                and various security policies to be enforced by the application.
+                                            </td>
+                                            <td>
+                                                <apex:outputPanel id="connectedAppPanel">
+                                                    <div style="width: 200px;">
+                                                        <apex:commandButton styleClass="bluebtn" value="{!IF(connectedAppEnabled, 'Disable', 'Enable')} Connected App" action="{!toggleConnectedApp}" rerender="msg,connectedAppPanel" status="connectedAppStatus" />
+                                                        <apex:actionStatus stopText="" id="connectedAppStatus">
+                                                            <apex:facet name="start">
+                                                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                                            </apex:facet>
+                                                        </apex:actionStatus>
+                                                    </div>
+                                                    <apex:outputText value="{!toggleConnectedAppMessage}" />
+                                                </apex:outputPanel>
+                                            </td>
+                                        </tr>
+                                        <tr class="last">
+                                            <td colspan="2" class="left">
+                                                <apex:pageMessages id="msg" />
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="halfwidth">
+                        <div class="pageBlock" id="getting-started-block">
+                            <div class="top-line">
+                                <div class="panelHeader"><h2>Testing</h2></div>
+                            </div>
+                            <div class="panelContent secondrow">
+                                <table class="gs-links">
+                                    <tbody>
+                                        <tr>
+                                            <td>
+                                                <img src="{!URLFOR($Resource.Styles, 'images/users.png')}" class="sectionImage" />
+                                            </td>
+                                            <td class="gs-middle">
+                                                <div class="steps-header">Enable Test Users</div>
+                                                <div class="steps-text">
+                                                    This section determines which users can use the Run Test button when the
+                                                    <a href="http://support.drawloop.com/lds#!/lds/ddp-help/test-ddps-on-preview#Documentation" target="_blank">DDP preview service</a>
+                                                    is available.
+                                                </div>
+                                                <apex:outputLabel value="Search:" for="searchFilter" />
+                                                <apex:outputPanel >
+                                                    <apex:inputText value="{!searchFilter}" id="searchFilter" onkeypress="return handleSearchEnter(event);" style="margin: 0 5px;" />
+                                                    <apex:commandButton id="searchBtn" value="Find" action="{!resetUserList}" status="secSearchStatus" rerender="pageMessages,duel" />
+                                                    <apex:actionStatus stopText="" id="secSearchStatus" styleClass="nowrap">
+                                                        <apex:facet name="start">
+                                                            <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                                        </apex:facet>
+                                                    </apex:actionStatus>
+                                                </apex:outputPanel>
+                                                <apex:outputPanel id="duel" styleClass="duelingListBox">
+                                                    <apex:outputText id="resultsErrMsg" styleClass="errorMsg" value="{!resultsErrMsg}" />
+                                                    <table class="layout">
+                                                        <tr>
+                                                            <td class="selectCell">
+                                                                <div class="selectTitle">
+                                                                    <apex:outputLabel value="Available Users" for="secIds" styleClass="selectTitle" />
+                                                                </div>
+                                                                <apex:selectList size="14" multiselect="true" id="secIds" value="{!selectedAvailableIds}">
+                                                                    <apex:selectOptions value="{!availableUsers}" />
+                                                                </apex:selectList>
+                                                                <script type="text/javascript">
+                                                                    jQuery(function() {
+                                                                        var errMsg = '{!resultsErrMsg}';
+                                                                        if (errMsg) jQuery('[id$=":resultsErrMsg"]').text(errMsg);
+                                                                    });
+                                                                </script>
+                                                            </td>
+                                                            <td class="buttonCell">
+                                                                <div class="text">
+                                                                    Add
+                                                                    <apex:actionStatus startText=". . ." stopText="" id="addStatus" styleClass="nowrap">
+                                                                        <apex:facet name="start">
+                                                                            <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                                                        </apex:facet>
+                                                                    </apex:actionStatus>
+                                                                </div>
+                                                                <div class="text">
+                                                                    <apex:commandLink action="{!addTestingUser}" status="addStatus" rerender="pageMessages,duel">
+                                                                        <apex:image title="Add" styleClass="rightArrowIcon" alt="Add" value="/s.gif" />
+                                                                    </apex:commandLink>
+                                                                </div>
+                                                                <div class="text">
+                                                                    <apex:commandLink action="{!removeTestingUser}" status="remStatus" rerender="pageMessages,duel">
+                                                                        <apex:image title="Remove" styleClass="leftArrowIcon" alt="Remove" value="/s.gif" />
+                                                                    </apex:commandLink>
+                                                                </div>
+                                                                <div class="duelingText">
+                                                                    Remove
+                                                                    <apex:actionStatus startText=". . ." stopText="" id="remStatus" styleClass="nowrap">
+                                                                        <apex:facet name="start">
+                                                                            <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                                                        </apex:facet>
+                                                                    </apex:actionStatus>
+                                                                </div>
+                                                            </td>
+                                                            <td class="selectCell">
+                                                                <div class="selectTitle">
+                                                                    <apex:outputLabel value="DDP Testers" for="selectedSecIds" styleClass="selectTitle" />
+                                                                </div>
+                                                                <apex:selectList size="14" multiselect="true" id="selectedSecIds" value="{!selectedSelectedIds}">
+                                                                    <apex:selectOptions value="{!selectedUsers}" />
+                                                                    <apex:actionSupport event="ondblclick" onsubmit="if (event.target.nodeName=='OPTION') window.open('/'+event.target.value); return false;" />
+                                                                </apex:selectList>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </apex:outputPanel>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="2"><apex:pageMessages id="pageMessages" /></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </apex:form>
+    
+    <apex:outputPanel id="authRptPanel">
+        <form method="POST" id="authRptForm" style="height: 0;" action="{!actionUrl}">
+            <input type="hidden" name="sessionid" value="{!sessionId}" />
+            <input type="hidden" name="location" value="{!$Api.Partner_Server_URL_300}" />
+            <input type="hidden" name="auto" value="true" id="auto" />
+            <input type="hidden" name="next" value="" id="next" />
+        </form>
+    </apex:outputPanel>
+</apex:page>

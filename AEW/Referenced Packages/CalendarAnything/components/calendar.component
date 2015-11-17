@@ -1,0 +1,249 @@
+<apex:component controller="SLCA2.CalendarAnything_pageController"
+    access="global"
+    >
+
+<apex:attribute name="calendar"
+    access="global"  
+    type="string"
+    default="" 
+    description="list of calendars ID to load / turn splitted by commma"
+    required="false" />    
+    
+<apex:attribute name="enabled"
+    access="global"  
+    type="string"
+    default="" 
+    description="list of calendars ID to turn on splitted by commma"
+    required="false" />
+
+<apex:attribute name="createable"
+    access="global"  
+    type="string"
+    default="" 
+    description="list of calendars ID/friendly name to be visible in QuickCreation dialogue; splitted by commma"
+    required="false" />
+
+<apex:attribute name="namespace"
+    access="global"  
+    type="string"
+    default="" 
+    description="package namespace "
+    required="false" />
+        
+<apex:attribute name="settings"
+    access="global"  
+    type="string"
+    default="[]" 
+    description="JSON format visual settings"
+    required="false" />    
+
+<apex:attribute name="userAdditionalSettings"
+    access="global"  
+    type="string"
+    default="{}" 
+    description="JSON format user settings"
+    required="false" />    
+
+<apex:attribute name="view"
+    access="global"
+    default=""  
+    type="string" 
+    description="Startup mode"
+    required="false" />    
+    
+<apex:attribute name="date"
+    access="global"
+    default=""  
+    type="string" 
+    description="Start date"
+    required="false" />    
+
+<apex:attribute name="filter"
+    access="global"
+    default="{}"  
+    type="string" 
+    description="Filter in JSON format"
+    required="false" />    
+
+<apex:attribute name="urlparams"
+    access="global"
+    default=""  
+    type="string" 
+    description="Parameters as URL"
+    required="false" /> 
+    
+<apex:attribute name="css"
+    access="global"
+    default=""  
+    type="string" 
+    description="Alternative CSS"
+    required="false" />   
+      
+<apex:attribute name="readonly"
+    access="global"
+    default="false"  
+    type="string" 
+    description="Readonly"
+    required="false" />
+    
+<apex:attribute name="func"
+    access="global"
+    default="{}"  
+    type="string" 
+    description="Functions / JS Object"
+    required="false" />
+<!--<apex:includeScript value="{!URLFOR($Resource.ca3, 'plugin/jquery-1.8.0.min.js')}"/>-->
+   
+l
+<!--<apex:includeScript value="{!URLFOR($Resource.ca3, 'jq-calendar-anything.js')}"/> 
+<apex:stylesheet value="{!URLFOR($Resource.ca3, 'jq-calendar-anything.css')}"/>-->
+<apex:outputPanel rendered="{!css!=''}" >
+<apex:stylesheet value="{!css}"/>
+</apex:outputPanel>
+
+
+<!-- <div style="position:relative;left:0;right:0;min-height:500px;"> -->
+<div id="calendar" class="CA_ajax_loading"></div>        
+<!-- </div> -->
+<apex:outputPanel rendered="{!namespace != ''}" >
+<script>
+    var sRealUrl = document.location.href;
+    if ((sRealUrl.indexOf('//c.na') == -1  && sRealUrl.indexOf('//c.cs') == -1)
+        && sRealUrl.indexOf('.salesforce.com') > 0
+    ) {
+        sRealUrl = sRealUrl
+            .replace('//na', '//c.na')
+            .replace('//cs', '//c.cs')
+            .replace('.salesforce.com', '.visual.force.com');
+    }
+    var sNameSpaceDomainUrl = sRealUrl
+        .replace('//c.na', '//{!namespace}.na')
+        .replace('//c.cs', '//{!namespace}.cs');
+    var aNameSpaceDomainUrl = sNameSpaceDomainUrl.split('/'),
+        sFinalUrl =  '//' + aNameSpaceDomainUrl[2];
+    if (aNameSpaceDomainUrl[3] != undefined && aNameSpaceDomainUrl[3] !== 'servlet' && aNameSpaceDomainUrl[3] !== 'apex') {
+        var aGetSplit = aNameSpaceDomainUrl[3].split('?');
+        if (aGetSplit[0] != '') {
+            sFinalUrl += '/' + aGetSplit[0]; 
+        } 
+        
+    }
+      
+     
+    sFinalUrl = sFinalUrl.replace('--c', '--{!namespace}');
+    var sApexPageNS = '';
+    if ('{!urlparams}'.indexOf('site=') >= 0) {
+        sApexPageNS =  '{!namespace}__';
+    } else if (sFinalUrl.indexOf('visual.force.com') >= 0){
+        var aParts = aNameSpaceDomainUrl[2].split('.');
+        if (aParts.length == 5) {
+            aParts[0] = '{!namespace}';
+            sFinalUrl = '//' + aParts.join('.');  
+        }
+    }
+
+    
+</script>
+</apex:outputPanel>
+
+<apex:outputPanel rendered="{!namespace == ''}" >        
+<script>
+
+if (typeof(sFinalUrl) == 'undefined') {
+    var sFinalUrl = '',
+        sApexPageNS = '';
+}
+</script>
+</apex:outputPanel>
+<script>
+
+
+(function() {
+    var fStartCA = function(oJQ){
+        var oUserSettings = {!userSettings},
+            oUserAdditionalSettings = {!userAdditionalSettings};
+        if (!oJQ.isEmptyObject(oUserAdditionalSettings)) {
+            oJQ.each(oUserAdditionalSettings, function(sIdx, sVal){
+                oUserSettings[sIdx] = sVal;
+            });
+        } 
+
+        oJQ("#calendar").calendarAnything({
+            "serverUrl" : {
+                "default"   : sFinalUrl + "/apex/" + sApexPageNS + "CA_AjaxResponces",
+                "event"     : sFinalUrl + "/apex/" + sApexPageNS + "CA_EventHandler"
+            },
+            staticUrl       : "{!URLFOR($Resource.SLCA2__ca3)}".split('\?')[0],
+            calendarId      : '{!JSENCODE(calendar)}',
+            userSettings    : oUserSettings,
+            format  : {!sFormatedLocale},
+            enabled : '{!JSENCODE(enabled)}'.replace(/'/g, '"'),
+            createable  : '{!createable}',
+            view    : "{!view}",
+            SA      : {!bUserAdmin},
+            date    : "{!date}",
+            filter  : {!filter},
+            visible : {!settings},
+            func    : {!func},
+            session : "{!sSessionId}",
+            incomeHref  : "{!urlparams}",
+            nameSpace   : '{!IF(namespace != '' ,  namespace + '__' , '')}',
+            readonly    : {!readonly},
+            uname       : '{!JSENCODE($User.FirstName)} {!JSENCODE($User.LastName)}',
+            controller : (
+                typeof(CalendarAnything_pageController) != 'undefined' 
+                    ? CalendarAnything_pageController 
+                    : (typeof(SLCA2.CalendarAnything_pageController) != 'undefined' ? SLCA2.CalendarAnything_pageController : null) 
+                ),
+            debug   : false,
+            lazy    : true
+        });
+        
+        oJQ('head').append('<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=0" />');
+        oJQ(window).trigger('resize.CA');
+    };
+    var aPaths = [];
+    function initJQScript(sUrl, fFunc) {
+        if (aPaths[sUrl] != undefined) {
+            return fFunc();
+        }
+        aPaths[sUrl] = true;
+        var oScript = document.createElement('script'),
+            oHead = document.getElementsByTagName('head')[0],
+            bDone = false;
+        oScript.src = sUrl;
+        oScript.onload = oScript.onreadystatechange = function() {
+            if (!bDone && (!this.readyState || this.readyState == 'loaded' || this.readyState == 'complete')) {
+                bDone = true;
+                fFunc();
+                oScript.onload = oScript.onreadystatechange = null;
+                oHead.removeChild(oScript);
+            };
+        };
+        oHead.appendChild(oScript);
+
+    };
+    if (typeof(jQuery) == 'undefined') {
+        initJQScript('{!URLFOR($Resource.SLCA2__ca3, 'plugin/jquery-1.8.0.min.js')}', function() {
+            var oJQ = jQuery.noConflict();
+            if (typeof jQuery=='undefined') {
+                alert('Could not find jQuery library');
+            } else {
+                initJQScript('{!URLFOR($Resource.SLCA2__ca3, 'jq-calendar-anything.js')}', function() {
+                    fStartCA(oJQ);
+                });
+            }
+        });
+    } else { 
+        jQuery(document).ready(function(){
+            initJQScript('{!URLFOR($Resource.SLCA2__ca3, 'jq-calendar-anything.js')}', function() {
+                fStartCA(jQuery);
+            });
+    //        fStartCA(jQuery);
+        });
+    };
+
+})();
+</script>
+
+</apex:component>

@@ -1,0 +1,256 @@
+<apex:page standardController="Account" extensions="echosign_dev1.AccountAgreementActionController">
+	<style type="text/css">
+    	#hor-zebra
+		{
+			font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;
+			font-size: 12px;
+			margin: 45px;
+			width: 480px;
+			text-align: left;
+			border-collapse: collapse;
+		}
+		
+		#hor-zebra th
+		{
+			font-size: 14px;
+			font-weight: normal;
+			padding: 10px 8px;
+			color: #039;
+		}
+
+		#hor-zebra td
+		{
+			padding: 8px;
+			color: #669;
+		}
+		
+		#hor-zebra .odd
+		{
+			background: #e8edff; 
+		}
+	</style>
+	
+	<div>
+		<apex:outputPanel id="topPanel">
+		<apex:form >
+			<script type='text/javascript' src='/canvas/sdk/js/publisher.js'/>
+
+			<script>
+				function refreshFeed() {
+					Sfdc.canvas.publisher.publish({name : 'publisher.refresh', payload : {feed: true}}); 
+				}
+	
+				function showSpinner() {
+    				document.getElementById('{!$Component.agreementPanel}').style.display = 'none';
+    				document.getElementById('{!$Component.agreementActionsPanel}').style.display = 'none';
+    				document.getElementById('{!$Component.loadingSpinnerSection}').style.display = 'block';
+    			}
+        
+    			function hideSpinner() {
+    				document.getElementById('{!$Component.loadingSpinnerSection}').style.display = 'none';
+    				document.getElementById('{!$Component.agreementPanel}').style.display = 'block';
+    				document.getElementById('{!$Component.agreementActionsPanel}').style.display = 'block';
+    			}
+			</script>
+	
+			<apex:actionFunction action="{!onSave}" name="onSave" rerender="agreementPanel" oncomplete="hideSpinner(); refreshFeed();"/> 
+			<apex:actionFunction action="{!onSend}" name="onSend" rerender="agreementPanel" oncomplete="hideSpinner(); refreshFeed();"/>
+			
+			<apex:outputpanel id="loadingSpinnerSection" style="display: none; height: 300px;">
+				<div class="waitingSearchDiv" style="width: 100%; height: 100%; display: ; opacity:.5;"></div>
+    			<img src="{!$Resource.LoadingSpinner}" style="width: 40px; height: 40px; padding-left: 220px; padding-top: 220px;" />
+			</apex:outputpanel>
+
+			<apex:outputPanel id="agreementPanel" rendered="{!isPanelShown}">
+				<apex:pageMessages id="messages" />
+
+				<apex:outputPanel rendered="{! templateOptions.size > 2 }">
+					<apex:outputPanel id="agreementTemplateLabelPanel" layout="block">
+						<label style="font-weight: bold; height: 30px; line-height: 30px;" for="agreementTemplateInput">Template</label>
+					</apex:outputPanel>
+					<apex:outputPanel id="agreementTemplateInputPanel" layout="block">
+						<apex:selectList id="agreementTemplateInput" value="{!selectedAgreementTemplateId}" size="1" style="width: 40%; height: 25px; border-radius: 3px; background: #fbfbfb;" >
+    						<apex:selectOptions value="{!templateOptions}"/>
+    						<apex:actionSupport event="onchange" action="{!onTemplateChange}" rerender="agreementPanel,messages" onsubmit="showSpinner();" oncomplete="hideSpinner();"/>
+    					</apex:selectList>
+					</apex:outputPanel>
+				</apex:outputPanel>
+
+				<apex:outputPanel id="agreementNameLabelPanel" layout="block">
+					<label style="font-weight: bold; height: 30px; line-height: 30px;" for="agreementNameInput"><!-- <apex:outputPanel style="color: rgb(255, 0, 0); font-weight: bold;">*</apex:outputPanel>&nbsp; -->Agreement Name</label>
+				</apex:outputPanel>
+				<apex:outputPanel id="agreementNameInputPanel" layout="block">
+					<apex:inputField id="agreementNameInput" value="{!agreement.Name}" style="width: 95%; height: 25px; border-radius: 3px;">
+					</apex:inputField>
+				</apex:outputPanel>
+
+				<apex:outputPanel id="agreementMessageLabelPanel" layout="block" style="padding-top: 5px;">
+					<label style="font-weight: bold; height: 30px; line-height: 30px;" for="agreementMessageInput">Message</label>
+				</apex:outputPanel>
+				<apex:outputPanel id="agreementMessageInputPanel" layout="block">
+					<apex:inputField id="agreementMessageInput" value="{!agreement.echosign_dev1__Message__c}" style="resize: none; border-style: inset; border-width: 2px; width: 95%; height: 75px; border-radius: 3px;" />
+				</apex:outputPanel>
+
+				<apex:outputPanel id="agreementAccountLabelPanel" layout="block" style="padding-top: 5px;">
+					<label style="font-weight: bold; height: 30px; line-height: 30px;" for="agreementAccountInput">Account</label>
+				</apex:outputPanel>
+				<apex:outputPanel id="agreementAccountInputPanel" layout="block">
+					<apex:inputText id="agreementAccountInput" value="{!account.Name}" disabled="true" style="width: 95%; height: 25px; border-radius: 3px; background: #fbfbfb;" />
+				</apex:outputPanel>
+				
+				<apex:outputPanel id="agreementRecipientSummaryPanel" layout="block" style="padding-top: 5px;">
+					<apex:outputPanel layout="block">
+						<label style="font-weight: bold; height: 30px; line-height: 30px;" for="agreementRecipientInput">Recipients</label>
+						<apex:actionStatus id="editRecipientStatus">
+                    		<apex:facet name="start">
+                        		<div class="waitingSearchDiv" style="width: 100%; height: 100%; display: ; opacity:.5;"></div>
+                            	<img src="{!$Resource.Loading}" style="width:20px;height:20px" />
+                       		</apex:facet>
+                    	</apex:actionStatus>
+					</apex:outputPanel>
+	
+					<apex:outputPanel id="agreementRecipientsSummarySection" layout="block">
+						<apex:inputText value="{!recipientsLabel}" disabled="true" style="margin-bottom: 10px; width: 95%; height: 25px; border-radius: 3px; background: #fbfbfb;" />
+						<apex:commandLink status="editRecipientStatus" style="color: rgb(0, 112, 255); text-decoration: none; font-size: 14px;" id="editRecipientsLink" action="{!onEditRecipients}" value="Add/Edit Recipients" rerender="topPanel,agreementRecipientPanel"/>
+					</apex:outputPanel>
+				</apex:outputPanel>
+
+				<apex:outputPanel id="agreementDocumentsPanel" layout="block" style="padding-top: 5px;">
+					<apex:outputPanel layout="block">
+						<label style="font-weight: bold; height: 30px; line-height: 30px;" for="agreementDocumentInput">Documents</label>
+					</apex:outputPanel>
+					
+					<apex:outputPanel id="attachmentSummaryPanel" style="white-space: pre-line;" layout="block" title="{!attachmentsSummaryTooltip}">
+						<table>
+                			<tbody>
+                    			<tr>
+                    				<td>  
+										<apex:image style="vertical-align: middle;" value="{!$Resource.echosign_dev1__DocumentLargeIcon}" />
+                            		</td>
+                            		<td>
+                            			<b>{! attachmentWrappers.size } files attached</b><br/><br/>
+                            			<apex:commandLink style="color: rgb(0, 112, 255); text-decoration: none; font-size: 14px;" id="editAttachmentsLink" action="{!onEditAttachments}" value="Add/Edit Files" rerender="topPanel,agreementAttachmentPanel"/>
+                            		</td>
+                       			</tr>
+                			</tbody>
+        				</table>
+        			</apex:outputPanel>
+				</apex:outputPanel>
+				
+			</apex:outputPanel>
+			
+			<apex:outputPanel id="agreementActionsPanel" layout="block" rendered="{!isPanelShown}" style="padding-top: 10px;">
+				<apex:commandButton rerender="topPanel,messages,agreementPanel,sendConfirmationPanel" value="Send" action="{!onSend}" oncomplete="if( {!isError} ) { return false; } hideSpinner(); refreshFeed(); if( !{!isSendConfirmationShown} ) { window.parent.location.href = '/{! agreementId }?onloadAction=Send'; }" onclick="showSpinner();" style="border: 1px solid rgb(108, 128, 73); color: #fff; background-color: #8ab529; background-image: -webkit-linear-gradient(top,#8AB529 0,#87AC31 100%); background-image: -moz-linear-gradient(top,#8AB529 0,#87AC31 100%); background-image: -ms-linear-gradient(top,#8AB529 0,#87AC31 100%); filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#8AB529', endColorstr='#87AC31',GradientType=0 ); bottom: 0px; right: 2px; padding: 7px 12px 7px 12px; font-size: 15px;" id="sendAgreementButton"/>	
+				<apex:commandLink oncomplete="hideSpinner(); refreshFeed(); if( (typeof sforce != 'undefined') && (sforce != null) ) { sforce.one.navigateToSObject('{! agreementId }'); } else { window.parent.location.href = '/{! agreementId }'; }" rerender="topPanel" style="color: rgb(0, 112, 255); padding-bottom: 10px; text-decoration: none; font-size: 14px; bottom: 0px; margin-left: 10px; left: 2px;" onclick="showSpinner();" value="View Full Form" action="{!onSave}" id="saveAgreementButton" />
+			</apex:outputpanel>
+			
+		</apex:form><br />
+		
+		</apex:outputpanel>
+	</div>
+		
+	<apex:outputPanel id="contentPanel">
+		<apex:outputPanel rendered="{!isContentShown}">
+			<c:ContentSelector chatterControllerValue="{!thisController}" isShowHeaderValue="false"/> 
+      	</apex:outputpanel>
+	</apex:outputPanel>
+	
+	<apex:outputPanel id="agreementRecipientPanel">
+		<apex:outputPanel layout="block" style="padding-top: 5px;" rendered="{!isRecipientEditShown}">
+			<apex:form >
+				<apex:outputPanel layout="block">
+					<label style="font-weight: bold; height: 30px; line-height: 30px;" for="agreementRecipientInput">Recipients</label>
+				</apex:outputPanel>
+				<apex:outputPanel id="agreementRecipientsSection" layout="block">
+					<table width="100%" style="margin-bottom: 5px;" class="list" id="recipientsTable">
+            			<thead class="dr-table-thead">
+                			<tr class="headerRow">
+                    			<th style="width: 90px;" class="headerRow">Role</th>
+                        		<th style="width: 90px;" class="headerRow">Type</th>
+                        		<th class="headerRow">Recipient</th>
+                  			</tr>
+              			</thead>
+        			</table>
+					<apex:repeat value="{!recipients}" var="recipient" id="agreementRecipientsItems">
+						<apex:inputField id="recipientRole" value="{!recipient.echosign_dev1__Recipient_Role__c}" style="vertical-align: middle; width: 20%; height: 30px; border-radius: 3px; background: #fbfbfb;" /> 
+						<apex:selectList id="recipientType" value="{!recipient.echosign_dev1__Recipient_Type__c}" size="1" style="vertical-align: middle; margin-left: 5px; width: 20%; height: 30px; border-radius: 3px; background: #fbfbfb;" >
+            				<apex:selectOptions value="{!recipientTypes}"/>
+            				<apex:actionSupport event="onchange" rerender="agreementRecipientPanel" />
+            			</apex:selectList>
+            			<apex:outputPanel rendered="{! recipient.Recipient_Type__c = 'Contact' }">
+            				<apex:inputField value="{!recipient.echosign_dev1__Contact__c}" rendered="{! recipient.Recipient_Type__c = 'Contact' }" style="margin-left: 5px; width: 45%; height: 25px; border-radius: 3px; background: #fbfbfb;" />
+						</apex:outputPanel>
+						<apex:outputPanel rendered="{! recipient.Recipient_Type__c = 'Lead' }">
+							<apex:inputField value="{!recipient.echosign_dev1__Lead__c}" style="margin-left: 5px; width: 45%; height: 25px; border-radius: 3px; background: #fbfbfb;" />
+						</apex:outputPanel>
+						<apex:outputPanel rendered="{! recipient.Recipient_Type__c = 'User' }">
+							<apex:inputField value="{!recipient.echosign_dev1__User__c}" style="margin-left: 5px; width: 45%; height: 25px; border-radius: 3px; background: #fbfbfb;" />
+						</apex:outputPanel>
+						<apex:outputPanel rendered="{! recipient.Recipient_Type__c = 'Email' }">
+							<apex:inputField value="{!recipient.echosign_dev1__Email_Address__c}" style="margin-left: 5px; width: 45%; height: 25px; border-radius: 3px; background: #fbfbfb;" />
+						</apex:outputPanel>	
+						<apex:commandButton id="recipientDelete" action="{!onDeleteRecipient}" rerender="agreementRecipientsSection" image="{!$Resource.echosign_dev1__ActionDelete}" style="IF(recipient.Recipient_Type__c <> 'Email', 0, 29) }px; vertical-align: middle; background: transparent; border-width: 0px;">
+							<apex:param value="{! recipient.Order_Number__c - 1 }" name="selectedRecipientIndex" assignTo="{!selectedRecipientIndex}" />
+						</apex:commandButton>
+					</apex:repeat>
+				</apex:outputPanel>
+				<apex:outputPanel layout="block" style="padding-top: 5px;">
+					<apex:image style="vertical-align: middle;" id="addRecipient" title="Add Recipient" value="{!$Resource.echosign_dev1__PlusGreenCircle}" rendered="{! isShowAddRecipient }">
+                    	<apex:actionSupport event="onclick" action="{!onAddRecipient}" rerender="agreementRecipientPanel,theMessages"/>
+                   	</apex:image>
+                    &nbsp;
+                    <apex:commandlink value="Add Recipient" 
+                    	action="{!onAddRecipient}" 
+                        rerender="agreementRecipientPanel,theMessages" 
+                        style="color: rgb(0, 112, 255); text-decoration: none; font-size: 14px;"
+                        rendered="{! isShowAddRecipient }" />
+				</apex:outputPanel>
+				<apex:outputPanel layout="block" style="padding-top: 10px;">
+					<apex:commandButton rerender="agreementRecipientPanel,topPanel,theMessages" value="Back" action="{!onSaveRecipients}" style="border: 1px solid rgb(108, 128, 73); color: #fff; background-color: #8ab529; background-image: -webkit-linear-gradient(top,#8AB529 0,#87AC31 100%); background-image: -moz-linear-gradient(top,#8AB529 0,#87AC31 100%); background-image: -ms-linear-gradient(top,#8AB529 0,#87AC31 100%); filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#8AB529', endColorstr='#87AC31',GradientType=0 ); margin-top: 30px; bottom: 0px; right: 2px; padding: 7px 12px 7px 12px; font-size: 15px;" />
+				</apex:outputPanel>
+			</apex:form>
+		</apex:outputPanel>
+	</apex:outputPanel>	
+
+	<apex:outputPanel id="agreementAttachmentPanel">
+		<apex:outputPanel layout="block" style="padding-top: 5px;" rendered="{!isAttachmentEditShown}">
+			<apex:form >
+					<table width="100%" style="margin-bottom: 20px;" class="list" id="recipientsTable">
+            			<thead class="dr-table-thead">
+                			<tr class="headerRow">
+                    			<th style="background-color: lightgray;" class="headerRow">Action</th>
+                        		<th style="width: 85%; background-color: lightgray;" class="headerRow">Title</th>
+                  			</tr>
+              			</thead>
+                		<tbody>
+                			<apex:repeat value="{!attachmentWrappers}" var="attachmentWrapper">
+                    			<tr class="odd">
+                    				<td class="dataCell">  
+                            			<apex:commandButton action="{!onDeleteAttachment}" image="{!$Resource.echosign_dev1__ActionDelete}" rerender="agreementAttachmentPanel" style="vertical-align: middle; background: transparent; border-width: 0px;">
+                                			<apex:param name="selectedAttachmentIndex" value="{!attachmentWrapper.index}" assignTo="{!selectedAttachmentIndex}"/>
+                               			</apex:commandButton>
+                            		</td>
+                            		<td style="vertical-align: middle; font-size: 14px;" class="dataCell">
+                            			{!attachmentWrapper.title}
+                            		</td>
+                       			</tr>
+                    		</apex:repeat>
+                		</tbody>
+        			</table>
+        			<apex:outputPanel rendered="{!isShowAddAttachment}">
+        				<apex:commandLink style="color: rgb(0, 112, 255); text-decoration: none; font-size: 14px;" id="uploadContentLinkDetail" action="{!onUploadContent}" value="Select from CRM Content or Files" rerender="topPanel,agreementAttachmentPanel,contentPanel"/>&nbsp;<apex:outputPanel style="font-size: 14px;"></apex:outputPanel>
+        			</apex:outputPanel>
+        			<apex:outputPanel layout="block" style="padding-top: 10px;">
+							<apex:commandButton rerender="agreementAttachmentPanel,topPanel,theMessages" value="Back" action="{!onSaveAttachments}" style="border: 1px solid rgb(108, 128, 73); color: #fff; background-color: #8ab529; background-image: -webkit-linear-gradient(top,#8AB529 0,#87AC31 100%); background-image: -moz-linear-gradient(top,#8AB529 0,#87AC31 100%); background-image: -ms-linear-gradient(top,#8AB529 0,#87AC31 100%); filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#8AB529', endColorstr='#87AC31',GradientType=0 ); margin-top: 30px; bottom: 0px; right: 2px; padding: 7px 12px 7px 12px; font-size: 15px;" />
+					</apex:outputPanel>
+        	</apex:form>
+		</apex:outputPanel>
+	</apex:outputPanel>
+	
+	<apex:outputPanel id="sendConfirmationPanel">
+		<apex:outputPanel rendered="{!isSendConfirmationShown}">
+			<apex:pageMessages />
+      	</apex:outputpanel>
+	</apex:outputPanel>
+ 
+</apex:page>

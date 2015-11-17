@@ -1,0 +1,326 @@
+<apex:page standardController="Company_List__c" extensions="kjo_TaskReportController" id="tasksummaryreportpage">
+
+<apex:stylesheet value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery-ui-1.10.0.custom/css/warburg-pincus/jquery-ui-1.10.0.custom.min.css')}" />
+<apex:stylesheet value="{!URLFOR($Resource.kjo_js_libs, 'libs/bootstrap/css/bootstrap.min.css')}"/>
+
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery-ui-1.10.0.custom/js/jquery-1.9.0.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery-ui-1.10.0.custom/js/jquery-ui-1.10.0.custom.min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery.formatcurrency/jquery.formatCurrency-1.4.0.min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery.autonumeric/autoNumeric.js')}"/>
+
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/bootstrap/js/bootstrap.min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery.tablesorter/jquery.tablesorter.js')}"/>
+
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/backbone/underscore-min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/handlebars/handlebars-1.0.rc.1.js')}"/>
+
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/tinymce/jscripts/tiny_mce/tiny_mce.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/tinymce/jscripts/tiny_mce/jquery.tinymce.js')}"/>
+
+<style type="text/css"> 
+body {
+	line-height: normal !important;
+}    
+    
+h2{
+	font-size: 12px !important;
+    font-weight: 700 !important;
+    line-height: normal !important;
+}    
+.zen .zen-tabMenu a {
+	font-size: 1.0em !important;
+}    
+.mruText {
+	font-size: 12px !important;
+    color: #333435 !important;
+} 
+.sidebarModule {
+    font-size: 12px !important;
+}
+.sidebarModuleHeader .brandPrimaryFgr {
+    margin-top: 0px !important;
+    margin-bottom: 0px !important;
+}   
+    .mruItem a {
+	color: #333435 !important;
+} 
+    
+span#tsidLabel {
+ 	font-size: .85em !important;   
+}    
+.menuButtonLabel {
+	font-size : .75em !important;    
+}
+span#createNewLabel {
+ 	font-size: 1em !important;   
+}  
+.popover {
+    max-width: 800px;
+    width: auto;
+}
+
+.mypopover-class {
+    white-space: pre-line;
+    font-family : monospace;
+}
+
+.financials {
+    font-family : monospace;
+    border-style: none;
+    border-width: 0px;
+}
+
+.financials-title {
+    font-weight : bold;
+    font-size: smaller;
+    border-width: 0px;
+}
+
+.financials-data {
+    text-align : right;
+    font-family : monospace;
+    border-width: 0px;
+}
+
+</style>
+
+<script>
+    Handlebars.registerHelper('date', function(context, block) {
+        if (context) {
+            var attrs = block.hash;
+            var format = (attrs && attrs.format) || "m/d/y";
+            var _d = new Date(context);
+            return jQuery.datepicker.formatDate(format, _d);
+        }
+        return "";
+    });
+
+    Handlebars.registerHelper('money', function(context, block) {
+        if (context) {
+            var millions = (block && block.hash && block.hash.millions) || false;
+            var _value = millions ? (context / 1000000.0).toFixed(2) : context;
+            return _value.toString().replace(/(\d)(?=(\d\d\d)+(?!\d))/g, "$1,");
+        }
+        return "";
+    });
+    
+    Handlebars.registerHelper('selected', function(val1, val2) {
+        return val1 == val2 ? ' selected' : '';
+    });    
+
+    Handlebars.registerHelper('listlist', function(context, block) {
+        if (context) {
+            var attrs = block.hash;
+            _value = _.map(context, function(listinfo) {
+                return "<a href='/"+ listinfo.m_Id + "'>" + listinfo.m_Name + "</a>";
+            });
+            return new Handlebars.SafeString(_value.join("<br/>"));
+        }
+        return "";
+    });
+    
+    /*
+    
+        ID m_Id;
+        String m_CompanyCurrency;
+        String m_CurrencyIsoCode;
+        Decimal m_BookValue;  
+        Decimal m_CAPEX;
+        Decimal m_EBITDA;
+        Decimal m_EnterpriseValue; 
+        Decimal m_MarketCap;
+        Decimal m_NetIncome; 
+        Decimal m_Revenues;
+        String m_PeriodType;
+        Date m_PeriodEnded;
+    */
+        
+    Handlebars.registerHelper('financiallist', function(context, block) {
+        if (context) {
+            var attrs = block.hash;
+            var headings = [{name:'Type', frmt:'text'}, {name:'Date', frmt:'date'}, {name:'Revenue', frmt:'money'}, {name:'EBITDA', frmt:'money'}, {name:'Net Income', frmt:'money'}];
+            _value = _.map(context, function(fi) {
+                var _z = _.zip(headings, [fi.m_PeriodType, fi.m_PeriodEnded, fi.m_Revenues, fi.m_EBITDA, fi.m_NetIncome]);
+                var _section = _.map(_z, function(h) {
+                    if ( h[0].frmt == 'money' ) {
+                        h[1] = Handlebars.helpers.money.call(this, h[1], {hash:{millions:true}});
+                    } else if ( h[0].frmt == 'date' ) {
+                        h[1] = Handlebars.helpers.date.call(this, h[1], {hash:null});
+                    }
+                    return "<tr><td class='financials-title'>" + h[0].name + "</td><td class='text-right financials-data'>" + h[1] + "</td></tr>";
+                });
+                return _section.join('');
+            });
+            return new Handlebars.SafeString("<table class='financials'>" + _value.join('') + "</table>");
+        }
+        return "";
+    });
+    
+    var TZ_offset = (60000 * (new Date()).getTimezoneOffset());
+    
+    function convertUTCToLocalFinance(fin_record) {
+        fin_record.Period_Ended__c += TZ_offset;
+    }
+    
+</script>
+
+<script id="summary-report-template" type="text/x-handlebars-template">
+    <div>
+        <table id='report-table' class='table table-striped table-bordered table-hover table-condensed tablesorter'>
+        <thead>
+        <tr>
+        <th>Company / Contact</th>
+        <th>Call Date</th>
+        <th>Caller</th>
+        <th>Subject</th>
+		<th>Classification</th>
+        <!-- <th>Call Type</th> -->
+        <th>Next Call Date</th>
+        <th>Next Caller</th>
+        <th>Next Subject</th>
+ 		<th>Next Classification</th>
+        <!-- <th>Next Call Type</th> -->
+        <th>Category<br/>Call Lists (<i class='icon-tags'></i>)<br/>Financials (<i class='icon-star'></i>)</th>
+        </tr>
+        </thead>
+        <tbody>
+        {{#each records}}
+        <tr>
+            <td>
+				{{#if m_CompanyId}}
+					<a target='_blank' href='/{{m_CompanyId}}'>{{{m_CompanyName}}}</a>
+				{{/if}}
+
+				{{#if m_ContactId}}
+					<a target='_blank' href='/{{m_ContactId}}'>{{{m_ContactName}}}</a>
+				{{/if}}				
+               
+                {{#if m_DealId}}
+                    <a class='deal-link' target='_blank' href='/{{m_DealId}}' data-html='true' data-toggle='tooltip' title='There are tasks associated with a deal <b><u>{{m_DealName}}</u></b> linked to this company.'>
+                        <i class='icon-asterisk'></i>
+                    </a>
+                {{/if}}
+                {{#if m_CompanyDescription}}
+                    <a href="#" class='description-link' data-trigger='hover' data-placement='right' data-toggle='popover' data-html='true' data-content='{{m_CompanyDescription}}'>
+                        <i class='icon-comment'></i>
+                    </a>
+                {{/if}}
+            </td>
+            <td>{{date m_ActivityDate}}</td>
+            <td>{{m_ActivityOwnerName}}</td>
+            <td>
+                {{#if m_Subject}}
+                    <a href='/{{m_Id}}'>{{m_Subject}}</a> 
+                    <p/>
+                    {{#if m_IsClosed}}
+                        <a href='#' class='task-tooltip' data-toggle='tooltip' title='Task is complete.'><i class='icon-ok'></i></a>
+                    {{else}}
+                        <a href='#' class='task-tooltip' data-toggle='tooltip' title='Task is open.'><i class='icon-time'></i></a>
+                    {{/if}}
+                {{/if}}
+                {{#if m_Description}}
+                    <a href="#" class='description-link' data-trigger='hover' data-placement='bottom' data-toggle='popover' data-html='true' data-content="{{{m_Description}}}"><i class='icon-comment'></i></a>
+                {{/if}}
+            </td>
+			<td>{{m_Classification}} 
+				{{#if m_OtherContacts}}
+					<a href="#" data-delay='{"hide":"800"}' class='description-link' data-trigger='hover' data-placement='left' data-toggle='popover' data-html='true' data-content="{{{listlist m_OtherContacts}}}">
+						<i class='ui-icon ui-icon-person'></i>
+					</a>
+				{{/if}}
+			</td>
+            <!-- <td>{{m_Type}}</td> -->
+            <td>{{date m_NextActivityDate}}</td>
+            <td>{{m_NextActivityOwnerName}}</td>
+            <td>
+                {{#if m_FollowUpSubject}}
+                    <a href='/{{m_FollowUpId}}'>{{m_FollowUpSubject}}</a> 
+                    <p/>
+                    {{#if m_FollowUpIsClosed}}
+                        <a href='#' class='task-tooltip' data-toggle='tooltip' title='Task is complete.'><i class='icon-ok'></i></a>
+                    {{else}}
+                        <a href='#' class='task-tooltip' data-toggle='tooltip' title='Task is open.'><i class='icon-time'></i></a>
+                    {{/if}}
+                {{/if}}
+                {{#if m_FollowupDescription}}
+                    <a href="#" class='description-link' data-trigger='hover' data-placement='bottom' data-toggle='popover' data-html='true' data-content="{{{m_FollowupDescription}}}"><i class='icon-comment'></i></a>
+                {{/if}}
+            </td>
+			<td>{{m_FollowUpClassification}} 
+		    	{{#if m_OtherFollowupContacts}}
+					<a href="#" data-delay='{"hide":"800"}' class='description-link' data-trigger='hover' data-placement='left' data-toggle='popover' data-html='true' data-content="{{{listlist m_OtherFollowupContacts}}}">
+						<i class='ui-icon ui-icon-person'></i>
+					</a>
+				{{/if}}
+			</td>
+            <!-- <td>{{m_FollowUpType}}</td> -->
+            <td>
+                {{m_CompanyCategory}}
+                {{#if m_OtherLists}}
+                    <a href="#" data-delay='{"hide":"800"}' class='description-link' data-trigger='hover' data-placement='left' data-toggle='popover' data-html='true' data-content="{{{listlist m_OtherLists}}}">
+                        <i class='icon-tags'></i>
+                    </a>
+                {{/if}}
+                {{#if m_Financials}}
+                    <a href="#" class='financial-link' data-trigger='hover' data-placement='left' data-toggle='popover' data-html='true' data-content="{{{financiallist m_Financials}}}">
+                        <i class='icon-star'></i>
+                    </a>                    
+                {{/if}}
+            </td>
+        </tr>
+        {{/each}}
+        </tbody>
+        </table>
+    </div>
+</script>
+
+<div id='summary-results-table'>
+</div>
+
+<script>
+
+var $jq = jQuery.noConflict();
+
+$jq(document).ready(function() {
+    function getListReportWithPromise(list_id) {
+        var p = $jq.Deferred( function(dfd) {
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.kjo_TaskReportController.getTaskSummaryInformation}',
+                list_id,
+                function( result, event) {
+                    if ( event.status ) {
+                        dfd.resolveWith( p, [{"result":result, "event":event }]);
+                    } else {
+                        dfd.rejectWith( p, [{"result":result, "event":event }]);
+                    }
+                }
+            );
+        });
+        return p.promise();
+    }
+    
+    var promise_summary_report = getListReportWithPromise('{!Id}');
+    
+   $jq.when(
+        promise_summary_report
+    ).then (
+        function(results) {
+            var table_template = Handlebars.compile($jq("#summary-report-template").html());
+            $jq('#summary-results-table').html(table_template({records:results.result}));
+            $jq('.deal-link').tooltip();
+            $jq('.task-tooltip').tooltip();
+            $jq('.description-link').popover(
+                {template: '<div class="popover"><div class="arrow"></div><div class="popover-inner mypopover-class"><div class="popover-content"><p></p></div></div></div>'}
+            );
+            $jq('.financial-link').popover(
+                {template: '<div class="popover"><div class="arrow"></div><div class="popover-inner mypopover-class"><div class="popover-content"><p></p></div></div></div>'}
+            );
+            $jq('#report-table').tablesorter();
+        }
+    );
+    
+});
+
+</script>
+
+</apex:page>

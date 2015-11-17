@@ -1,0 +1,88 @@
+<apex:page showHeader="false" sidebar="false">
+
+    <!-- Google Maps -->
+    <script type='text/javascript' src='https://maps.googleapis.com/maps/api/js?client=gme-cloudbiltinc1'></script>
+
+    <!-- JS -->
+    <script type='text/javascript'>
+
+        function p(name) {    //get query string param value by name
+            name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
+            var regex = new RegExp("[\\?&]" + name + "=([^&#]*)");
+            var results = regex.exec(location.search);
+            return results == null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
+        }
+
+        var doGeo = function (request) {
+        	if (!request && requests.length == 0) {
+        		setTimeout(doGeo, 3000);
+        		return;
+        	}
+
+            var request = request || requests.splice(0, 1)[0];
+            var geocoder = new google.maps.Geocoder();
+            geocoder.geocode({ address: request.address }, function (response, status) {
+                if (status == google.maps.GeocoderStatus.OK) {
+                    var result = response[0];
+                    var resultMap = {};
+                    for (var i = 0; i < result.address_components.length; i++) {
+                        var component = result.address_components[i];
+                        for (var j = 0; j < component.types.length; j++) {
+                            resultMap[component.types[j]] = component['short_name'];
+                        }
+                    }
+
+                    //basic response data
+                    var responseData = {
+                        IsBadAddress        : false,
+                        Label               : result.geometry.location_type,
+                        Relevance           : parent.MA.Geocoding.confidenceMap[result.geometry.location_type] || 0,
+                        Latitude            : result.geometry.location.lat(),
+                        Longitude           : result.geometry.location.lng(),
+                        FormattedAddress    : result.formatted_address,
+                        HouseNumber         : resultMap['street_number'] || '',
+                        Street              : resultMap['route'] || '',
+                        City                : resultMap['locality'] || '',
+                        County              : resultMap['administrative_area_level_2'] || '',
+                        State               : resultMap['administrative_area_level_1'] || '',
+                        PostalCode          : resultMap['postal_code'] || '',
+                        District            : resultMap['neighborhood'] || '',
+                        Country             : resultMap['country'] || ''
+                    };
+
+                    //complete street address (house number + route)
+                    var completeStreetAddress = '';
+                    if (resultMap['street_number']) {
+                        completeStreetAddress += resultMap['street_number'] + ' ';
+                    }
+                    if (resultMap['route']) {
+                        completeStreetAddress += resultMap['route'];
+                    }
+                    responseData['CompleteStreetAddress'] = completeStreetAddress;
+
+                    //fire the callback
+                    request.result = responseData;
+                    request.callback(request);
+
+                    //move to next record
+                    doGeo();
+                }
+                else if (status == google.maps.GeocoderStatus.OVER_QUERY_LIMIT) {
+                    setTimeout(function () { doGeo(request); }, 500);
+                }
+                else {
+                    request.result = { IsBadAddress: true };
+                    request.callback(request);
+                    doGeo();
+                }
+            });
+        };
+
+        var requests;
+        window.onload = function () {
+            requests = parent.MA.Geocoding.threads[p('index')].requests;
+            doGeo();
+        };
+    </script>
+
+</apex:page>

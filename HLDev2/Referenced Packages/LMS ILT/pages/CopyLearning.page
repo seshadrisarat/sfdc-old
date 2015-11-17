@@ -1,0 +1,310 @@
+<apex:page standardController="lmsilt__Learning__c" extensions="lmsilt.CopyLearningExt" recordSetVar="Import Learnings" tabStyle="lmsilt__Learning__c">
+	<apex:includeScript value="{!URLFOR($Resource.lmsilt__jquery, 'jquery-1.7.min.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.lmscons__jquery152min)}" />
+	<apex:includeScript value="{!URLFOR($Resource.lmsilt__LMSSearch, 'js/jquery.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.lmsilt__LMSSearch, 'js/lightbox.js')}"/>
+	<apex:stylesheet value="{!URLFOR($Resource.lmsilt__LMSSearch, 'css/search-catalog.css')}"/>
+	<apex:stylesheet value="{!URLFOR($Resource.lmsilt__LMSSearch, 'css/lms-lightbox.css')}"/>
+
+
+	<apex:outputPanel id="pageMessages">
+		<apex:pageMessages />
+	</apex:outputPanel>
+
+	<apex:outputPanel rendered="{!NOt(exRecords)}">
+		<a href="#" onClick="history.go(-1); return false">{!$Label.Back}</a>
+	</apex:outputPanel>
+
+	<apex:outputPanel id="Results">
+
+		<apex:form id="LearningItemsForm" rendered="true">
+
+			<apex:actionfunction name="previousCall" action="{!previous}" status="busyStatus" />
+			<apex:actionfunction name="nextCall" action="{!next}" status="busyStatus" />
+			<apex:actionFunction name="changePagesize" action="{!changePagesize}" rerender="Results" status="sortStatus"/>
+			<apex:actionfunction name="doSearch" action="{!searchByKey}" oncomplete="init_page()" status="loadStatus" reRender="opPrevNextup, opPrevNext, pageblocksectionId, pageMessages" />
+
+			<!-- Enhanced Action Status -->
+			<apex:actionStatus id="loadStatus">
+			<apex:facet name="start">
+				<c:EnhancedActionStatus BackColor="#efefef" borderColor="#336699"
+								borderSize="1" height="50px" width="120px" ImageUrl="/img/loading.gif"
+								Message="{!$Label.Loading}" messageStyle="color:darkred;font-size:11pt;font-weight:bold;"/>
+			</apex:facet>
+			</apex:actionStatus>
+
+			<apex:actionStatus id="sortStatus">
+				<apex:facet name="start">
+					<c:EnhancedActionStatus BackColor="#efefef" borderColor="#336699"
+											borderSize="3" height="50px" width="120px" ImageUrl="/img/loading.gif"
+											Message="{!$Label.Loading}" messageStyle="color:darkred;font-size:11pt;font-weight:bold;"/>
+				</apex:facet>
+				<apex:facet name="stop">
+				</apex:facet>
+			</apex:actionStatus>
+
+			<apex:actionStatus startText=""  id="busyStatus"
+					onStart="document.body.style.cursor = 'wait';return true;"
+					onStop="document.body.style.cursor = 'default';return true;" >
+			</apex:actionStatus>
+
+
+			<apex:pageBlock mode="edit" title="{!$Label.CopyLearningPage_Copy_Learnings}" id="pageblocksectionId" rendered="{!exRecords}">
+
+				<apex:pageBlockButtons >
+					<apex:commandButton action="{!Copy}" value="{!$Label.CopyLearningPage_Import}"/>
+					<apex:commandButton action="{!cancel}" value="{!$Label.Cancel}"/>
+				</apex:pageBlockButtons>
+
+
+				<apex:outputPanel id="opPrevNextup">
+					<table width="100%" id="tablePrevNextup" >
+						<tr >
+							<td width="50%" align="left" >
+
+									<span id="bySearchKeyWord" >
+										Search:&nbsp;<apex:inputText id="SearchKeyWord" value="{!searchKeyWord}" maxlength="200" style="width:200px;font-size:8pt" onkeypress="return handleKeyPress(event)"></apex:inputText>
+										&nbsp;
+										<apex:commandButton value="{!$Label.Search}" action="{!searchByKey}" id="go" oncomplete="init_page()" status="busyStatus" reRender="Results, pageMessages"/>
+									</span>
+
+							</td>
+							<td width="50%" align="right" >
+
+								<font style="font-size:8.5pt">
+								<apex:image url="/img/search_prevarrow.gif" styleClass="prevArrow" rendered="{!(hasPrevious)}" alt="{!$Label.Pagination_Previous}" title="{!$Label.Pagination_Previous}" />
+								<apex:image url="/img/search_prevarrow_disabled.gif" styleClass="prevArrow" rendered="{!NOT(hasPrevious)}" alt="{!$Label.Pagination_Previous}" title="{!$Label.Pagination_Previous}" />
+								<apex:outputlink onclick="javascript: return fillCurrentPage('prev');" disabled="{!NOT(hasPrevious)}" title="{!$Label.Pagination_Previous}" style="color:{!If(hasPrevious,'#000000','#999999')}" >{!$Label.Previous_Page}</apex:outputlink>&nbsp;&nbsp;({!PageStartIndex}-{!PageStopIndex})&nbsp;&nbsp;<apex:outputlink onclick="javascript:return fillCurrentPage('next');" disabled="{!NOT(hasNext)}" title="{!$Label.Pagination_Next}" style="color:{!If(hasNext,'#000000','#999999')}">{!$Label.Next_Page} </apex:outputlink>
+								<apex:image url="/img/search_nextarrow_disabled.gif" styleClass="nextArrow" rendered="{!NOT(hasNext)}" alt="{!$Label.Pagination_Next}" title="{!$Label.Pagination_Next}"/>
+								<apex:image url="/img/search_nextarrow.gif" styleClass="nextArrow" rendered="{!(hasNext)}" alt="{!$Label.Pagination_Next}" title="{!$Label.Pagination_Next}"/>
+								</font>
+
+							</td>
+						</tr>
+					</table>
+				</apex:outputpanel>
+
+
+				<apex:dataTable width="100%" value="{!Objects}" var="m" id="AllObjects" cellspacing="0" cellpadding="0" border="0" styleClass="list" rowClasses="dataRow even, dataRow odd" headerClass="headerRow" onrowmouseout="if (window.hiOff){hiOff(this);}" onrowmouseover="if (window.hiOn){hiOn(this);}">
+
+					<apex:column width="10">
+						<apex:facet name="header" >
+							<apex:outputPanel >
+								<apex:inputCheckbox id="selectall" selected="false" onclick="jQuery('[id*=LearningItemsForm]').find(':checkbox').attr('checked', jQuery(this).attr('checked'))" />
+								{!$Label.Select_All}
+							</apex:outputPanel>
+						</apex:facet>
+						<apex:inputCheckbox selected="false" value="{!m.checked}"/>
+					</apex:column>
+
+					<apex:column >
+						<apex:facet name="header">
+							<apex:commandLink value="{!$ObjectType.lmsilt__Activity__c.fields.Name.label}" action="{!doSort}" oncomplete="init_page()" rerender="Results" status="loadStatus">
+								<apex:image url="/img/sort_desc_arrow.gif" rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(sortOrderSaved=='desc',true,false),IF(sortField=='Name',true,false))}" width="21" height="12" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}"/>
+								<apex:image url="/img/sort_asc_arrow.gif"  rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(sortOrderSaved!='desc',true,false),IF(sortField=='Name',true,false))}" width="21" height="12" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}"/>
+								<apex:image url="/s.gif" rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(sortOrderSaved=='desc',true,false),IF(sortField=='Name',true,false))}" styleClass="sortDesc" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}" />
+								<apex:image url="/s.gif"  rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(sortOrderSaved!='desc',true,false),IF(sortField=='Name',true,false))}" styleClass="sortAsc" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}" />
+								<apex:param name="sortField" value="Name" assignTo="{!sortField}"/>
+							</apex:commandLink>
+						</apex:facet>
+						<apex:OutputLink value="Javascript:showEdit('{!m.sO['Id']}');">{!m.sO['Name']}</apex:OutputLink>
+					</apex:column>
+
+					<apex:column >
+						<apex:facet name="header">
+							<apex:commandLink value="{!$ObjectType.lmsilt__Activity__c.fields.lmsilt__Development_Plan__c.label}" action="{!doSort}" oncomplete="init_page()" rerender="Results" status="loadStatus">
+								<apex:image url="/img/sort_desc_arrow.gif" rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(sortOrderSaved=='desc',true,false),IF(sortField=='Development_Plan__r.Name',true,false))}" width="21" height="12" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}"/>
+								<apex:image url="/img/sort_asc_arrow.gif"  rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(sortOrderSaved!='desc',true,false),IF(sortField=='Development_Plan__r.Name',true,false))}" width="21" height="12" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}"/>
+								<apex:image url="/s.gif" rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(sortOrderSaved=='desc',true,false),IF(sortField=='Development_Plan__r.Name',true,false))}" styleClass="sortDesc" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}" />
+								<apex:image url="/s.gif"  rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(sortOrderSaved!='desc',true,false),IF(sortField=='Development_Plan__r.Name',true,false))}" styleClass="sortAsc" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}" />
+								<apex:param name="sortField" value="Development_Plan__r.Name" assignTo="{!sortField}"/>
+							</apex:commandLink>
+						</apex:facet>
+						<apex:OutputField value="{!m.sO['Development_Plan__c']}" />
+					</apex:column>
+
+					<apex:column >
+						<apex:facet name="header">
+							<apex:commandLink value="{!$ObjectType.lmsilt__Activity__c.fields.CreatedById.label}" action="{!doSort}" oncomplete="init_page()" rerender="Results" status="loadStatus">
+								<apex:image url="/img/sort_desc_arrow.gif" rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(sortOrderSaved=='desc',true,false),IF(sortField=='CreatedById',true,false))}" width="21" height="12" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}"/>
+								<apex:image url="/img/sort_asc_arrow.gif"  rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(sortOrderSaved!='desc',true,false),IF(sortField=='CreatedById',true,false))}" width="21" height="12" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}"/>
+								<apex:image url="/s.gif" rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(sortOrderSaved=='desc',true,false),IF(sortField=='CreatedById',true,false))}" styleClass="sortDesc" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}" />
+								<apex:image url="/s.gif"  rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(sortOrderSaved!='desc',true,false),IF(sortField=='CreatedById',true,false))}" styleClass="sortAsc" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}" />
+								<apex:param name="sortField" value="CreatedById" assignTo="{!sortField}"/>
+							</apex:commandLink>
+						</apex:facet>
+						<apex:OutputField value="{!m.sO['CreatedById']}" />
+					</apex:column>
+
+					<apex:column >
+						<apex:facet name="header">
+							<apex:commandLink value="{!$ObjectType.lmsilt__Activity__c.fields.LastModifiedDate.label}" action="{!doSort}" oncomplete="init_page()" rerender="Results" status="loadStatus">
+								<apex:image url="/img/sort_desc_arrow.gif" rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(sortOrderSaved=='desc',true,false),IF(sortField=='LastModifiedDate',true,false))}" width="21" height="12" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}"/>
+								<apex:image url="/img/sort_asc_arrow.gif"  rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(sortOrderSaved!='desc',true,false),IF(sortField=='LastModifiedDate',true,false))}" width="21" height="12" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}"/>
+								<apex:image url="/s.gif" rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(sortOrderSaved=='desc',true,false),IF(sortField=='LastModifiedDate',true,false))}" styleClass="sortDesc" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}" />
+								<apex:image url="/s.gif"  rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(sortOrderSaved!='desc',true,false),IF(sortField=='LastModifiedDate',true,false))}" styleClass="sortAsc" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}" />
+								<apex:param name="sortField" value="LastModifiedDate" assignTo="{!sortField}"/>
+							</apex:commandLink>
+						</apex:facet>
+						<apex:OutputField value="{!m.sO['LastModifiedDate']}" />
+					</apex:column>
+
+					<apex:column >
+						<apex:facet name="header">
+							<apex:commandLink value="{!$ObjectType.lmsilt__Activity__c.fields.LastModifiedById.label}" action="{!doSort}" oncomplete="init_page()" rerender="Results" status="loadStatus">
+								<apex:image url="/img/sort_desc_arrow.gif" rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(sortOrderSaved=='desc',true,false),IF(sortField=='LastModifiedById',true,false))}" width="21" height="12" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}"/>
+								<apex:image url="/img/sort_asc_arrow.gif"  rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(sortOrderSaved!='desc',true,false),IF(sortField=='LastModifiedById',true,false))}" width="21" height="12" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}"/>
+								<apex:image url="/s.gif" rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(sortOrderSaved=='desc',true,false),IF(sortField=='LastModifiedById',true,false))}" styleClass="sortDesc" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}" />
+								<apex:image url="/s.gif"  rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(sortOrderSaved!='desc',true,false),IF(sortField=='LastModifiedById',true,false))}" styleClass="sortAsc" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}" />
+								<apex:param name="sortField" value="LastModifiedById" assignTo="{!sortField}"/>
+							</apex:commandLink>
+						</apex:facet>
+						<apex:OutputField value="{!m.sO['LastModifiedById']}" />
+					</apex:column>
+
+				</apex:dataTable>
+
+
+				<apex:outputPanel id="opPrevNext">
+					<table width="100%" id="tablePrevNext" >
+						<tr >
+							<td width="100%" align="right" >
+								<font style="font-size:8.5pt">
+								<apex:image url="/img/search_prevarrow.gif" styleClass="prevArrow" rendered="{!(hasPrevious)}" alt="{!$Label.Pagination_Previous}" title="{!$Label.Pagination_Previous}" />
+								<apex:image url="/img/search_prevarrow_disabled.gif" styleClass="prevArrow" rendered="{!NOT(hasPrevious)}" alt="{!$Label.Pagination_Previous}" title="{!$Label.Pagination_Previous}" />
+								<apex:outputlink onclick="javascript: return fillCurrentPage('prev');" disabled="{!NOT(hasPrevious)}" title="{!$Label.Pagination_Previous}" style="color:{!If(hasPrevious,'#000000','#999999')}" >{!$Label.Previous_Page}</apex:outputlink>&nbsp;&nbsp;({!PageStartIndex}-{!PageStopIndex})&nbsp;&nbsp;<apex:outputlink onclick="javascript:return fillCurrentPage('next');" disabled="{!NOT(hasNext)}" title="{!$Label.Pagination_Next}" style="color:{!If(hasNext,'#000000','#999999')}">{!$Label.Next_Page}</apex:outputlink>
+								<apex:image url="/img/search_nextarrow_disabled.gif" styleClass="nextArrow" rendered="{!NOT(hasNext)}" alt="{!$Label.Pagination_Next}" title="{!$Label.Pagination_Next}"/>
+								<apex:image url="/img/search_nextarrow.gif" styleClass="nextArrow" rendered="{!(hasNext)}" alt="{!$Label.Pagination_Next}" title="{!$Label.Pagination_Next}"/>
+								</font>
+							</td>
+						</tr>
+					</table>
+				</apex:outputpanel>
+
+			</apex:pageBlock>
+		</apex:form>
+
+		<!-- light box -->
+		<div id="lay2" class="b-overlay"></div>
+		<div id="box2" class="b-lightbox">
+			<apex:outputpanel id="lightboxes" layout="block">
+				<div class="b-title-bar">
+					<div class="b-title">{!$ObjectType.lmsilt__Learning__c.LabelPlural}</div>
+					<div class="b-close-btn"><a href="javascript:CloseLB()">{!$Label.Close}</a></div>
+				</div>
+				<apex:outputpanel layout="block" styleclass="b-content">
+					<apex:outputpanel layout="block">
+						<div id="popup_content"></div>
+					</apex:outputpanel>
+				</apex:outputpanel>
+			</apex:outputPanel>
+		</div>
+	</apex:outputPanel>
+
+
+
+	<script type="text/javascript">
+		var overlay2;
+		var lightbox2;
+		jQuery.noConflict();
+		InitPage();
+
+		function InitPage() {
+
+		jQuery(document).ready(function(){
+			overlay2 = jQuery("div[id=lay2]");
+			lightbox2 = jQuery("div[id=box2]");
+			});
+		}
+
+		jQuery(document).ready(function() {
+			overlay2 = jQuery("div[id=lay2]");
+			lightbox2 = jQuery("div[id=box2]");
+
+			jQuery.fn.center = function(parent) {
+				if (parent) {
+					parent = this.parent();
+				}
+				else {
+					parent = window;
+				}
+
+				this.css({
+					"position": "absolute",
+					"top": ((($(parent).height() - this.outerHeight()) / 3) + $(parent).scrollTop() + "px")
+					//,"left": ((($(parent).width() - this.outerWidth())) / 1.5 + $(parent).scrollLeft() + "px")
+				});
+
+				return this;
+			}
+		});
+
+		function showEdit(objId) {
+			jQuery('#popup_content').html('<iframe id="learningsFrame" name="learningsFrame" resizable="0" scrollbar="0" frameborder="0" height="350" src="{!$Page.LearningsPopup}?&objId='+objId+'" width="100%"></iframe>');
+			Lightbox2();
+		}
+
+		function init_page() {
+			InitPage();
+		}
+
+		function CloseLB() {
+			lightbox2.fadeOut('fast');
+			overlay2.fadeOut('fast');
+		}
+
+		function Lightbox2() {
+			lightbox2.fadeIn('fast');
+			overlay2
+				.height( 1000 )
+				.css('opacity','0.6')
+				.fadeIn('fast');
+			jQuery("div[id=box2]").center();
+			return false;
+		}
+
+		var intSelectedItemsCount = 0;
+
+		function fillCurrentPage(btnClicked) {
+
+			var blnProceed = true;
+			if(intSelectedItemsCount!=0) {
+				if (confirm('Test'))
+					blnProceed = true;
+				else
+					blnProceed = false;
+			}
+
+			if (blnProceed) {
+				intSelectedItemsCount = 0;
+				if(btnClicked == 'prev' )
+				{
+					previousCall();
+					return false;
+				}
+				else if (btnClicked == 'next' )
+				{
+					nextCall();
+					return false;
+				}
+				else {
+					changepagesize();
+				}
+			}
+			return false;
+		}
+
+		window.onkeypress = handleKeyPress;
+
+		function handleKeyPress(e){
+			var eventInstance = window.event ? event : e;
+			var keyCode = eventInstance.charCode ? eventInstance.charCode : eventInstance.keyCode;
+			if (keyCode == 13){
+				doSearch();
+				return false;
+			}
+		}
+
+	</script>
+
+</apex:page>

@@ -1,0 +1,182 @@
+<apex:page id="page" standardController="RT1__ReadyTalkMeeting__c"
+    extensions="RT1.MeetingController" tabStyle="Readytalk__tab"
+    action="{!initDetail}">
+    <apex:form >
+        <apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__LeadOwnerId__c}" />
+        <apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__Passcode__c}" />
+        <apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__MeetingID__c}" />
+        <apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__MeetingURL__c}" />
+        <apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__LastSyncStarted__c}" />
+        <apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__TollFreeNumber__c}" />
+        <apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__EncodedMeetingID__c}" />
+    </apex:form>
+
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" />
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js" />
+    <apex:stylesheet value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/redmond/jquery-ui.css" />
+    <script type="text/javascript">
+var urlOfMeeting = 'https://core.readytalk.com/interface/applet.jsp?an={!JSENCODE(RT1__ReadyTalkMeeting__c.RT1__TollFreeNumber__c)}&ac={!JSENCODE(RT1__ReadyTalkMeeting__c.RT1__AccessCode__c)}&pc={!JSENCODE(SettingsModel.PassCode)}&host=readytalk&ev={!JSENCODE(RT1__ReadyTalkMeeting__c.RT1__EncodedMeetingID__c)}';
+</script>
+    <apex:outputText rendered="{! NOT(CanUpdate)}">
+        <script type="text/javascript">
+$(function() {
+    $('input[name="addmeetingmembers"], input[name="invitemeetingmembers"]').hide();
+});
+</script>
+    </apex:outputText>
+        <apex:outputPanel rendered="{!noGlobalSettingsFlag}">
+        <apex:pageBlock >
+                No settings have been established for ReadyTalk Meeting. Please ask your administrator to vist the "Global Settings" subtab under the ReadyTalk application. <a
+                href="{!URLFOR($Page.ReadytalkTab)}">&#171; Go back</a>
+        </apex:pageBlock>
+    </apex:outputPanel>
+    <apex:outputPanel rendered="{!NOT(noGlobalSettingsFlag)}">
+    <apex:form id="form">
+        <apex:sectionHeader title="ReadyTalk Meeting" subtitle="{!RT1__ReadyTalkMeeting__c.Name}" />
+        <div class="breadcrumb">
+            <apex:outputLink value="{!URLFOR($Page.RT1__ReadytalkTab)}?tabOverride=meetings">« Back to Meetings</apex:outputLink>
+        </div>
+        <apex:pageMessages />
+        <apex:pageBlock id="pageBlock">
+            <apex:pageBlockButtons >
+                <apex:commandButton value=" Edit " action="{!edit}" />
+                <apex:commandButton value=" Delete " action="{!del}"
+                    onclick="return confirmDeleteCustom();" rendered="{!CanDelete}" />
+                <apex:commandButton value=" Sync with ReadyTalk " action="{!sync}" />
+                <apex:outputPanel rendered="{!(RT1__ReadyTalkMeeting__c.RT1__CCMeetingStatus__c != 'Closed' && RT1__ReadyTalkMeeting__c.RT1__CCMeetingStatus__c != 'Cancelled' && RT1__ReadyTalkMeeting__c.RT1__CCMeetingStatus__c != 'Draft' && RT1__ReadyTalkMeeting__c.RT1__EncodedMeetingID__c != '')}">
+                    <input type="button" class="btn" value="Start Meeting"
+                        onclick=" javascript:window.open(urlOfMeeting,'_blank'); " />
+                </apex:outputPanel>
+            </apex:pageBlockButtons>
+            <apex:pageBlockSection id="informationSection" title="Information">
+                <apex:outputField value="{!RT1__ReadyTalkMeeting__c.Name}" />
+                <apex:pageBlockSectionItem > &nbsp; </apex:pageBlockSectionItem>
+                <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__Campaign__c}" />
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Access Code" />
+                    <apex:outputPanel >
+                        <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__AccessCode__c}" />
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__AllowOthersToInvite__c}" />
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Meeting Type" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__Meeting_Type__c}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Automatically Create New Leads" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__CreateNewLeads__c}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem id="leadAssignmentSectionItem">
+                    <apex:outputLabel value="Lead Assignment" />
+                    <apex:outputPanel id="leadAssignmentPanel">
+                    {!RT1__ReadyTalkMeeting__c.RT1__LeadAssignmentBehavior__c}
+                </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel >Lead Source</apex:outputLabel>
+                {!RT1__ReadyTalkMeeting__c.RT1__LeadSource__c}
+            </apex:pageBlockSectionItem>
+                <apex:outputField value="{!RT1__ReadyTalkMeeting__c.LastModifiedDate}" />
+                <apex:outputField value="{!RT1__ReadyTalkMeeting__c.LastModifiedById}" />
+                <apex:outputField value="{!RT1__ReadyTalkMeeting__c.OwnerId}" />
+                <apex:repeat value="{!$ObjectType.RT1__ReadyTalkMeeting__c.FieldSets.RT1__CustomerFields}" var="f">
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c[f]}" />
+                </apex:repeat>
+            </apex:pageBlockSection>
+            <apex:pageBlockSection id="addtitionalInformationSection"
+                title="Meeting Details">
+                <apex:outputField value="{!RT1__ReadyTalkMeeting__c.Name}" />
+                <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__MeetingTimeNative__c}" />
+                <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__HostName__c}" />
+                <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__Duration__c}" />
+                <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__RegistrationURL__c}" />
+                <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__MeetingType__c}" />
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="View Meeting Details" />
+                    <apex:commandLink value="View" action="{!viewMeetingDetails}" />
+                </apex:pageBlockSectionItem>
+                <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__CCMeetingStatus__c}" />
+            </apex:pageBlockSection>
+            <apex:pageBlockSection title="Meeting Member Summary">
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="New" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__NewMeetingMembers__c}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Pending" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__PendingMeetingMembers__c}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Invited" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__InvitedMeetingMembers__c}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Declined" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__DeclinedMeetingMembers__c}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Confirmed" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__ConfirmedMeetingMembers__c}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Email Failure: Opt-Out" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__OptOutMeetingMembers__c}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Attended" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__AttendedMeetingMembers__c}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Email Failure: Address Error" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__BadEmailMeetingMembers__c}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Unmatched Registrants" />
+                    <apex:outputPanel layout="none">
+                        <apex:outputText rendered="{!RT1__ReadyTalkMeeting__c.RT1__UnmatchedRegistrants__c = 0}" value="{0}">
+                            <apex:param value="{!RT1__ReadyTalkMeeting__c.RT1__UnmatchedRegistrants__c}" />
+                        </apex:outputText>
+                        <apex:outputText rendered="{!RT1__ReadyTalkMeeting__c.RT1__UnmatchedRegistrants__c <> 0}"
+                            style="color: red;" value="{0,number,integer}">
+                            <apex:param value="{!RT1__ReadyTalkMeeting__c.RT1__UnmatchedRegistrants__c}" />
+                        </apex:outputText>
+                        <apex:commandLink action="{!manageRegistrations}"
+                            value="Manage Registrations"
+                            style="font-size: 90%; color: #999; margin-left: 10px" />
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+    </apex:form>
+    <apex:relatedList list="ReadyTalk_Meeting_Members__r" />
+    <apex:pageBlock title="Related Cases" rendered="{!meetingCases.size > 0}">
+        <div>
+        <table class="list " id="" border="0" cellpadding="0" cellspacing="0">
+                  <colgroup span="1"></colgroup>        
+          <thead class="rich-table-thead">            
+            <tr class="headerRow ">
+              <th class="headerRow " scope="col" colspan="1" id="">
+                <div id="">Case Subject</div>
+              </th>
+            </tr>  
+          </thead>
+          <tbody>
+          <apex:repeat value="{!meetingCases}" var="meetingCase">
+             <tr class="dataRow" onmouseover="if (window.hiOn){hiOn(this);} " onmouseout="if (window.hiOff){hiOff(this);} " onblur="if (window.hiOff){hiOff(this);}" onfocus="if (window.hiOn){hiOn(this);}">
+                <td class="actionColumn" id="" colspan="1" style="cursor: pointer;">
+                    <a href="/{!meetingCase.Case__c}">{!meetingCase.Case__r.Subject}</a>
+                </td>
+            </tr>
+          </apex:repeat>
+          </tbody>  
+          </table> 
+          </div>                    
+    </apex:pageBlock>
+    <script type="text/JavaScript">
+    function confirmDeleteCustom() {
+        return confirm("Are you sure you want to delete this meeting? This will not cancel the meeting in Conference Center.");
+    }
+    </script>
+</apex:outputPanel>
+</apex:page>

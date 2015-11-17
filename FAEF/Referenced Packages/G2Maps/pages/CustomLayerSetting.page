@@ -1,0 +1,350 @@
+<apex:page extensions="g2maps.CustomLayerSettingCtrl" title="G2Maps Custom Layer - {!LayerName}" standardController="g2maps__MapLayer__c">
+    <!-- CloudTrigger G2Maps, Copyright 2011, CloudTrigger, Inc. -->
+    <apex:includeScript value="{!URLFOR($Resource.g2maps__G2Maps, 'resources/jscolor/jscolor.js')}" />
+    <script>
+        function reBind() {// for Clusters Fill Color
+            jscolor.bind();
+        }
+    </script>
+    <apex:form >
+        <apex:pageBlock title="Custom Layer Setting" id="entireBlock">
+            <apex:pageMessages id="errorAlert" />
+            <apex:pageBlockButtons >
+                <apex:commandButton action="{!save}" value=" Save " />
+                <apex:commandButton action="{!cancel}" value=" Back " />
+                <apex:commandButton action="{!delete}" value=" Delete "/>
+                <apex:commandButton action="{!redirectToClone}" value=" Clone " rendered="{!bEditMode}"/>
+                <apex:commandButton action="{!redirectToSharing}" value=" Sharing " rendered="{!isSharing}"/>
+            </apex:pageBlockButtons>
+            
+            <apex:pageBlockSection columns="2" title="Layer Information">
+                <apex:inputField value="{!objLayer.Name}" id="strName" required="true"/>
+                <apex:inputField value="{!objLayer.g2maps__Category__c}" />
+                
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Type" for="LayerType" />
+                    <apex:outputPanel >
+                        <apex:outputPanel rendered="{!NOT(bEditMode)}">
+                            <div class="requiredInput">
+                            <div class="requiredBlock"></div>
+                            <apex:selectList id="LayerType" value="{!objLayer.g2maps__Type__c}"
+                                multiselect="false" size="1">
+                                <apex:actionSupport event="onchange" action="{!loadOption}" reRender="entireBlock"/>
+                                <apex:selectOption itemValue="--None--" itemLabel="--None--" />
+                                <apex:selectOption itemValue="Object" itemLabel="Object" />
+                                <apex:selectOption itemValue="ArcGIS" itemLabel="ArcGIS Service" />
+                                <apex:selectOption itemValue="BaseMap" itemLabel="BaseMap" />
+                                <apex:selectOption itemValue="BaseMapAddOn" itemLabel="BaseMap AddOn" />
+                            </apex:selectList></div>
+                        </apex:outputPanel>
+                        <apex:outputLabel id="sObjectType" value="{!objLayer.g2maps__Type__c}" rendered="{!bEditMode}" />
+                    </apex:outputPanel>
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem > 
+                    <apex:outputLabel value="Default (Salesforce)" for="checkDefault" />
+                    <apex:inputCheckbox value="{!objLayer.g2maps__Default__c}" id="checkDefault" />
+                </apex:PageBlockSectionItem>    
+                
+                <apex:PageBlockSectionItem rendered="{!bObject}">
+                    <apex:outputLabel value="Object" for="ObjectType" />
+                    <apex:outputPanel >
+                        <apex:outputPanel rendered="{!NOT(bEditMode)}">
+                            <div class="requiredInput">
+                            <div class="requiredBlock"></div>
+                            <apex:selectList id="ObjectType" value="{!objLayer.g2maps__Object__c}" multiselect="false" size="1">
+                                <apex:actionSupport event="onchange" action="{!loadOption}" reRender="entireBlock"/>
+                                <apex:selectOptions Value="{!AvailableObjects}" />
+                            </apex:selectList></div>
+                        </apex:outputPanel>
+                        <apex:outputLabel id="sObjectType" value="{!objLayer.g2maps__Object__c}" rendered="{!bEditMode}"/>
+                    </apex:outputPanel>
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Hide in Salesforce" for="checkGeoCodeOnly" />
+                    <apex:inputCheckbox value="{!objLayer.g2maps__Hide_Salesforce__c}" id="checkGeoCodeOnly" />
+                </apex:PageBlockSectionItem>
+                
+                 <apex:PageBlockSectionItem rendered="{!bObject}">
+                    <apex:outputLabel value="Name Field" for="ObjectFieldName" />
+                    <apex:selectList id="ObjectFieldName" value="{!objLayer.g2maps__Field_Name__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableStringFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Default (Mobile)" for="checkDefaultMobile" />
+                    <apex:inputCheckbox value="{!objLayer.g2maps__Default_Mobile__c}" id="checkDefaultMobile" />
+                </apex:PageBlockSectionItem>  
+                
+                <apex:PageBlockSectionItem rendered="{!bObject}">
+                    <apex:outputLabel value="Show Layer Name in Popups" for="showLayerNameInPopups" />
+                    <apex:inputCheckbox value="{!objLayer.g2maps__InfoWindow_ShowLayerName__c}" id="showLayerNameInPopups" />
+                </apex:PageBlockSectionItem> 
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Hide on Mobile" for="checkHideMobile" />
+                    <apex:inputCheckbox value="{!objLayer.g2maps__Hide_Mobile__c}" id="checkHideMobile" />
+                </apex:PageBlockSectionItem>
+                
+            </apex:pageBlockSection>
+
+            <apex:pageBlockSection columns="2" rendered="{!AND(bItemSelected, bObject)}" title="Location Fields">
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Latitude Field" for="ObjectFieldLat" />
+                    <apex:selectList id="ObjectFieldLat" value="{!objLayer.g2maps__Field_Latitude__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableNumericFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="GeoCode Status Field" for="GeoCodeStatus" />
+                    <apex:selectList id="GeoCodeStatus" value="{!objLayer.g2maps__Field_Status__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableStringFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Longitude Field" for="ObjectFieldLong" />
+                    <apex:selectList id="ObjectFieldLong" value="{!objLayer.g2maps__Field_Longitude__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableNumericFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Polygon Field" for="ObjectFieldPolygon" />
+                    <apex:selectList id="ObjectFieldPolygon" value="{!objLayer.g2maps__Field_Polygon__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableStringFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+            </apex:pageBlockSection>
+            
+            <apex:pageBlockSection columns="2" rendered="{!AND(bItemSelected, bObject)}" title="Address Fields">
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Street Field" for="ObjectField0" />
+                    <apex:selectList id="ObjectField0" value="{!objLayer.g2maps__Field_Street__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableStringFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="City Field" for="ObjectFields" />
+                    <apex:selectList id="ObjectFields" value="{!objLayer.g2maps__Field_City__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableStringFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="State Field" for="ObjectField1" />
+                    <apex:selectList id="ObjectField1" value="{!objLayer.g2maps__Field_State__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableStringFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Postal Code Field" for="ObjectField3" />
+                    <apex:selectList id="ObjectField3" value="{!objLayer.g2maps__Field_PostalCode__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableStringFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Country Field" for="ObjectField2" />
+                    <apex:selectList id="ObjectField2" value="{!objLayer.g2maps__Field_Country__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableStringFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+            </apex:pageBlockSection>
+            
+            <apex:pageBlockSection columns="2" rendered="{!AND(bItemSelected, bObject)}" title="Routing and Temporal Rendering">
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Start Time Field" for="StartField" />
+                    <apex:selectList id="StartField" value="{!objLayer.g2maps__Field_StartTime__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableDateTimeFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="End Time Field" for="EndField" />
+                    <apex:selectList id="EndField" value="{!objLayer.g2maps__Field_EndTime__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableDateTimeFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Duration (minutes) Field" for="DurationField" />
+                    <apex:selectList id="DurationField" value="{!objLayer.g2maps__Field_Duration__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableNumericFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                <apex:inputField value="{!objLayer.g2maps__Field_Duration_Default__c}" />
+                
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Time Interval Unit" for="TimeIntervalUnit" />
+                    <apex:selectList id="TimeIntervalUnit" value="{!objLayer.g2maps__Renderer_TimeInterval_Unit__c}" multiselect="false" size="1">
+                        <apex:selectOption itemValue="" itemLabel="No time renderer" />
+                        <apex:selectOption itemValue="UNIT_MILLISECONDS" itemLabel="Milliseconds" />
+                        <apex:selectOption itemValue="UNIT_SECONDS" itemLabel="Seconds" />
+                        <apex:selectOption itemValue="UNIT_MINUTES" itemLabel="Minutes" />
+                        <apex:selectOption itemValue="UNIT_HOURS" itemLabel="Hours" />
+                        <apex:selectOption itemValue="UNIT_DAYS" itemLabel="Days" />
+                        <apex:selectOption itemValue="UNIT_WEEKS" itemLabel="Weeks" />
+                        <apex:selectOption itemValue="UNIT_MONTHS" itemLabel="Months" />
+                        <apex:selectOption itemValue="UNIT_YEARS" itemLabel="Years" />
+                        <apex:selectOption itemValue="UNIT_DECADES" itemLabel="Decades" />
+                        <apex:selectOption itemValue="UNIT_CENTURIES" itemLabel="Centuries" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                <apex:inputField value="{!objLayer.g2maps__Renderer_TimeInterval__c}" id="timeInterval" />
+                
+            </apex:pageBlockSection>
+            
+            <apex:pageBlockSection title="Check In" columns="2" rendered="{!bObject}">
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Check In Date" for="field_checkin" />
+                    <apex:selectList id="field_checkin" value="{!objLayer.g2maps__Field_Checkin__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableDateTimeFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Check Out Date" for="field_checkout" />
+                    <apex:selectList id="field_checkout" value="{!objLayer.g2maps__Field_Checkout__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableDateTimeFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Check In Latitude" for="field_checkin_latitude" />
+                    <apex:selectList id="field_checkin_latitude" value="{!objLayer.g2maps__Field_Checkin_Latitude__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableNumericFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Check Out Latitude" for="field_checkout_latitude" />
+                    <apex:selectList id="field_checkout_latitude" value="{!objLayer.g2maps__Field_Checkout_Latitude__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableNumericFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Check In Longitude" for="field_checkin_longitude" />
+                    <apex:selectList id="field_checkin_longitude" value="{!objLayer.g2maps__Field_Checkin_Longitude__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableNumericFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Check Out Longitude" for="field_checkout_longitude" />
+                    <apex:selectList id="field_checkout_longitude" value="{!objLayer.g2maps__Field_Checkout_Longitude__c}" multiselect="false" size="1">
+                        <apex:selectOptions Value="{!AvailableNumericFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                
+                <apex:inputField value="{!objLayer.g2maps__Checkin_Activity__c}"/>
+                <apex:inputField value="{!objLayer.g2maps__Checkin_Chatter__c}"/>
+                <apex:inputField value="{!objLayer.g2maps__Checkin_Fields__c}"/>
+                
+            </apex:pageBlockSection>
+            
+            <apex:pageBlockSection columns="2" rendered="{!AND(bItemSelected, bOther)}" title="Endpoint Settings">
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Layer Type" for="sLayerType" />
+                    <apex:outputPanel >
+                        <div class="requiredInput">
+                        <div class="requiredBlock"></div>
+                        <apex:selectList id="sLayerType" value="{!objLayer.g2maps__LayerType__c}" multiselect="false" size="1">
+                            <apex:selectOption itemValue="ArcGISTiledMapServiceLayer" itemLabel="Tiled Map Service" />
+                            <apex:selectOption itemValue="ArcGISDynamicMapServiceLayer" itemLabel="Dynamic Map Service" />
+                            <apex:selectOption itemValue="ArcGISImageServiceLayer" itemLabel="Image Service" />
+                            <apex:selectOption itemValue="FeatureLayer" itemLabel="Feature Layer" />
+                            <apex:selectOption itemValue="WMSLayer" itemLabel="WMS Layer" />
+                            <apex:selectOption itemValue="WMTSLayer" itemLabel="WMTS Layer" />
+                        </apex:selectList></div>
+                    </apex:outputPanel>
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Endpoint" for="Endpoint" />
+                    <apex:outputPanel >
+                        <div class="requiredInput">
+                            <div class="requiredBlock"></div>
+                            <apex:inputText value="{!objLayer.g2maps__Endpoint__c}" id="Endpoint" />
+                        </div>
+                    </apex:outputPanel>
+                </apex:PageBlockSectionItem>
+                
+                <apex:PageBlockSectionItem rendered="{!IsNull(objLayer.g2maps__Endpoint__c)}"/>
+                <apex:PageBlockSectionItem rendered="{!NOT(IsNull(objLayer.g2maps__Endpoint__c))}">
+                    <apex:outputLabel value="Layer Definition"/>
+                    <apex:outputLink value="{!objLayer.g2maps__Endpoint__c}">{!objLayer.Name}</apex:outputLink>
+                </apex:PageBlockSectionItem>
+            </apex:pageBlockSection>
+            
+            <apex:pageBlockSection columns="2" title="Appearance">
+                <apex:PageBlockSectionItem rendered="{!AND(bItemSelected, bOther)}">
+                    <apex:outputLabel value="Drawing Settings" for="Renderer" />
+                    <apex:outputPanel >Drawing settings are not required for ArcGIS layers</apex:outputPanel>                    
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem rendered="{!AND(bEditMode, bItemSelected, bObject)}">
+                    <apex:outputLabel value="Drawing Settings" for="Renderer" />
+                    <apex:outputPanel ><a href="/apex/CustomLayerRenderer?id={!URLEncode(objLayer.Id)}&retURL={!URLEncode($CurrentPage.URL)}">Click here to edit the drawing settings for this layer</a></apex:outputPanel>                    
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem rendered="{!AND(NOT(bEditMode),bItemSelected, bObject)}">
+                    <apex:outputLabel value="Drawing Settings" for="Renderer" />
+                    <apex:outputPanel >Save this layer before editing drawing settings</apex:outputPanel>                  
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Opacity" for="Opacity1" />
+                    <apex:outputPanel >
+                        <div class="requiredInput">
+                        <div class="requiredBlock"></div>
+                        <apex:inputText value="{!objLayer.g2maps__Opacity__c}" id="Opacity1" /></div>
+                    </apex:outputPanel>
+                </apex:PageBlockSectionItem>
+                
+                <apex:inputField value="{!objLayer.g2maps__Display_Order__c}" id="displayorder" />
+                <apex:inputField value="{!objLayer.g2maps__Sort_Order__c}" id="sortorder" />
+                
+                <apex:PageBlockSectionItem rendered="{!AND(bItemSelected, bObject)}">
+                    <apex:outputLabel value="Minimum Scale" for="MinimumScale" />
+                    <apex:inputText value="{!objLayer.g2maps__Scale_Min__c}" id="MinimumScale" />
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem rendered="{!AND(bItemSelected, bObject)}">
+                    <apex:outputLabel value="Maximum Scale" for="MaxScale" />
+                    <apex:inputText value="{!objLayer.g2maps__Scale_Max__c}" id="MaxScale" />
+                </apex:PageBlockSectionItem>
+                
+                <apex:PageBlockSectionItem rendered="{!AND(bItemSelected, bObject)}"> 
+                    <apex:outputLabel value="Enable Clustering" for="enableClustering" />
+                    <apex:inputCheckbox value="{!objLayer.g2maps__Enable_Cluster__c}" id="enableClustering">
+                    </apex:inputCheckbox>
+                </apex:PageBlockSectionItem>
+                <apex:pageBlockSectionItem id="layerClusterFillColorBlock" rendered="{!AND(bItemSelected, bObject)}">
+                    <apex:outputLabel value="Clusters Fill Color" for="defaultClusterColor"/>
+                    <apex:outputPanel >
+                        <apex:inputText value="{!objLayer.g2maps__Clusters_FillColor__c}" id="defaultClusterColor" styleClass="color" onFocus="reBind();"/>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:PageBlockSectionItem rendered="{!AND(bItemSelected)}">
+                    <apex:outputLabel value="Window Text" for="InfoWindow" />
+                    <apex:inputTextArea value="{!objLayer.g2maps__InfoWindow__c}" id="InfoWindow"  style="width: 100%; height: 100px;"/>
+                </apex:PageBlockSectionItem>
+                
+            </apex:pageBlockSection>
+            <apex:pageBlockSection columns="2" rendered="{!AND(bItemSelected, bObject)}" title="Filter">
+                <apex:inputField value="{!objLayer.g2maps__Filter_User__c}"/>
+                <apex:PageBlockSectionItem />
+                
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Filter Fields" for="FilterFields" />
+                    <apex:selectList value="{!FieldsList}" multiselect="true" size="6" id="FilterFields">
+                        <apex:selectOptions value="{!AvailableFields}" />
+                    </apex:selectList>
+                </apex:PageBlockSectionItem>
+                <apex:PageBlockSectionItem >
+                    <apex:outputLabel value="Default Filter" for="defaultFilter" />
+                    <apex:inputTextArea value="{!objLayer.g2maps__Filter__c}" id="defaultFilter"  style="width: 100%; height: 100px;"/>
+                </apex:PageBlockSectionItem>
+            </apex:pageBlockSection>
+            
+            <apex:pageBlockSection columns="1" rendered="{!AND(bItemSelected, bOther)}" title="Endpoint Information">
+                <apex:PageBlockSectionItem >
+                    <apex:outputPanel >
+                        <apex:outputLink value="http://www.arcgis.com/" style="float: left; layout: inline; padding: 10px;"><apex:image value="http://www.arcgis.com/home/images/esri-94GlobeLogo_4C.png"/></apex:outputLink>
+                        <p>CloudTrigger G2Maps can import any public or private layer hosted by an ArcGIS server. If you want to host your own data layer, to display internal territories or complex calculations, simply select the Layer Type and past an endpoint into the field above. It is strongly recommended that you use an SSL secured (https) endpoint if one is available.</p>
+                        <p>If you do not have access to an ArcGIS server you can contract with CloudTrigger to host a custom layer for you, or you can select from a <a href="http://www.arcgis.com/">large gallery</a> of public layers from Esri, Esri Partners, and other ArcGIS users.</p> 
+                    </apex:outputPanel>
+                </apex:PageBlockSectionItem>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+    </apex:form>
+</apex:page>

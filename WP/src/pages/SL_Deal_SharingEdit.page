@@ -1,0 +1,185 @@
+<apex:page Controller="SL_ctrl_Deal_SharingEdit" tabStyle="Deal__c"  standardStylesheets="true"  action="{!checkSession}">
+<head>
+	<apex:includeScript value="{!URLFOR($Resource.jquery_js)}"/>
+	<script type="text/javascript">	
+	$(document).ready(function(){
+	
+      jQuery(document).delegate('#findName','keypress', function(evt)
+      {
+           if(evt.keyCode == 13) {
+               evt.stopPropagation();
+               evt.cancelBubble = true;
+               doSearch();
+               return false;
+           } 
+      });
+	
+		$('#add_sl_button').click(function() {
+			$('select.select1 option:selected').each(function(sIdx, el) {
+			      
+				if($('select.select2 option').length==1 && el.value!='0') 
+				    $("select.select2 option[value='0']").remove();
+				    
+             if(el.value!='0' && $('input[type="hidden"][name$="someHidden"]').val().indexOf(el.value)<0)
+					$(this).appendTo('select.select2');
+					
+             if($('select.select1 option').length==0) 
+               $("select.select1").append( $('<option value="0">--None--</option>'));
+			});
+			
+		    var sTemp = '';
+            $('select.select2 option').each(function(sIdx, el) {
+			  if(el.value != '0')            
+               	sTemp += (sTemp != '' ? ',' : '') + el.value;
+         	});
+			$('input[type="hidden"][name$="someHidden"]').val(sTemp);
+           
+		});
+		$('#remove_sl_button').click(function() {
+			$('select.select2 option:selected').each(function(sIdx, el) {
+             if($('select.select1 option').length==1 && el.value!='0') 
+                  $("select.select1 option[value='0']").remove();
+                  
+			    if(el.value !='0')
+					$(this).appendTo('select.select1');
+				if($('select.select2 option').length==0) 
+					$("select.select2").append( $('<option value="0">--None--</option>'));
+			});
+			
+	        var sTemp = '';
+            $('select.select2 option').each(function(sIdx, el) {
+			  if(el.value != '0')            
+               	sTemp += (sTemp != '' ? ',' : '') + el.value;
+         	});
+			$('input[type="hidden"][name$="someHidden"]').val(sTemp);
+         	
+		});
+		
+	});
+	
+	function confirmSharing() {
+	    var isNew = '{!edit_style}';
+	    if(isNew.length>0)
+	      return true;
+	    if($('input[type="hidden"][name$="someHidden"]').val().length < 15) {  
+	        alert("Please select a user prior to clicking the Save button.");
+           return false;
+       }    
+	    if (confirm("Are you sure that you want to grant access to the selected deal?\n\nNote: You confirm that you have a valid business purpose for this action. The Compliance Group will be notified of this change.")) {
+        	return true;
+    	} else {
+           window.location.href = '/{!DealId}';
+	        return false;
+	    }
+	}
+	
+      function doSearch() {
+           var sTemp = '';
+            $('select.select2 option').each(function(sIdx, el) {
+               if(el.value != '0')            
+                  sTemp += (sTemp != '' ? ',' : '') + el.value;
+            });
+            $('input[type="hidden"][name$="someHidden"]').val(sTemp);
+
+            searchServer(
+               document.getElementById("findName").value
+               ,$('input[type="hidden"][name$="someHidden"]').val()
+            );
+      }
+	
+	</script>
+	
+</head>
+   {!Deal_Name}
+   <br/>
+   <h2 class="pageDescription">New Sharing</h2>
+   <br/>
+   <br/>
+   You can share this deal and its related data with other individual users outside of your group.
+   <br/>
+   <br/>
+
+   <apex:message />
+
+<apex:form id="Searching_Form">
+      <apex:actionFunction name="searchServer" action="{!runSearch}" rerender="init_users">
+          <apex:param name="findUserName" value="" />
+          <apex:param name="dontFindUserIds" value="" />
+      </apex:actionFunction>
+</apex:form>
+
+<apex:form id="Sharing_Form">
+    <apex:pageBlock title="New Sharing" id="results">
+    
+    <apex:inputHidden value="{!sHidden}" id="someHidden" />
+         <apex:pageBlockButtons >
+            <apex:commandButton action="{!saveDealShare}" value="Save" onclick="return confirmSharing();" id="theButtonSave" />
+            <apex:commandButton action="{!cancelDealShare}" value="Cancel" id="theButtonCancel" />
+         </apex:pageBlockButtons>
+
+    <table style="border:0">
+    
+      <tr style="{!edit_style}">
+      <td colspan="3" style="text-align:center">
+      	<b>Search Users:</b>
+      	<input type="text" id="findName"/>
+      	<input type="button" value="Find" onclick="doSearch();"/>
+      </td>
+      </tr>
+    
+      <tr style="{!edit_style}">
+      <td align="center">
+      <b>Available</b>
+      </td>
+      <td>
+      </td>
+      <td align="center">
+      <b>Share With</b>
+      </td>
+      </tr>
+      
+      <tr style="{!edit_style}">
+      <td>
+
+      <apex:selectList styleClass="select1"  size="14" value="{!users}" multiselect="true" id="init_users">
+         <apex:selectOptions value="{!items}"/>
+      </apex:selectList>
+      </td>
+
+      <td style="vertical-align: middle;text-align:center">
+          Add<br/>
+          
+          <a id="add_sl_button" href="javascript:"><img title="Add" class="rightArrowIcon" alt="Add" src="/s.gif"/></a>
+          <br/>
+          <a id="remove_sl_button" href="javascript:"><img title="Remove" class="leftArrowIcon" alt="Remove" src="/s.gif"/></a>
+          <br/>
+         Remove
+      </td>
+
+      <td>
+      <select class="select2" size="14" multiple="multiple">
+         <option value="0">--None--</option>
+      </select>
+      </td>
+
+      </tr>
+      
+      <tr>
+      <td colspan="3" style="text-align:center">
+      <br/>
+          <b>Access Level</b>&nbsp;
+          <apex:selectList id="accesslevel_id" size="1" value="{!accesslevel}">
+             <apex:selectOption itemValue="Read" itemLabel="Read Only"/>
+             <apex:selectOption itemValue="Edit" itemLabel="Read/Write" />
+          </apex:selectList>
+      </td>
+      </tr>
+      
+    </table>
+
+    </apex:pageBlock>
+    
+    
+</apex:form>
+
+</apex:page>

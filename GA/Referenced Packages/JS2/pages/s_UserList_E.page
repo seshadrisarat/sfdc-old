@@ -1,0 +1,132 @@
+<apex:page showHeader="false" sidebar="false" controller="ts2.TFieldOption">
+	<script src="/soap/ajax/26.0/connection.js"></script>
+	<script src="/soap/ajax/26.0/apex.js"></script>
+
+	<apex:includeScript value="{!URLFOR($Resource.ts2__PreSalesRes, 'res/js/jquery.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__PreSalesRes, 'res/js/jqueryUI.js')}" />
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__PreSalesRes, 'res/css/jqueryuicss.css')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__PreSalesRes, 'res/js/sendSMSJS.js')}" />
+
+<body style="overflow-x:hidden; overflow-y:hidden;">
+	<!--the div below is used to create a window that sends SMS -->
+	<div id="contentWrapper"></div>
+</body>
+
+<script>
+	if ("{!candidatePhone}" == "") {
+		alert("Mobile number missing! Please check the mobile field used in button code.");
+		window.close();
+	}
+	else {
+		sforce.connection.sessionId = '{!$Api.Session_ID}';
+
+		document.getElementById('contentWrapper').innerHTML = "<div style='width:2000px;height:4000px;display:block;position:absolute;top:0;z-index:50101;left:0;background-color:white;'></div>";
+		var candidateId = '{!candidateId}';
+
+		var recordType = 'Contact';
+		var idToUpdate = candidateId;
+		var nameField = 'Name';
+		var mobileField = 'MobilePhone';
+		var optOutField = 'smagicinteract__SMSOptOut__c';
+		var packagePrefix = "smagicinteract__";
+		var smsType = 'popup'; // for pop up, use value -'popup'
+		var userId = '{!$User.Id}';
+		var elementIdVar = '';
+		var showUserDropDown = false;
+		var dialogTitle = '';
+
+		/*Built SMS block on the page*/
+		sendSMS(recordType, idToUpdate, userId, nameField, mobileField, optOutField, smsType, elementIdVar, packagePrefix, showUserDropDown, dialogTitle);
+
+		/*Override CSS options*/
+		$( "#InlineEditDialog" ).css({"top":"-33px", "left":"0"});
+		$( "#InlineEditDialog" ).draggable({ disabled: true });
+		$( "#InlineEditDialog" ).css("opacity","10");
+
+		/*Override Button's clicks*/
+		$('#close').click(function(){
+			window.close();
+		});
+
+		$(document).keydown(function(e) {
+			//ESCAPE key pressed
+			if (e.keyCode == 27) {
+				window.close();
+			}
+		});
+
+		/*Override send button*/
+		var senderId = '';
+		$('#send').unbind("click");
+
+		if($('#defaultRadioButton1').is(':checked')) {
+			senderId = $('#defaultSenderIdVal').html();
+		}
+		$('#defaultRadioButton1').click(
+			function(){
+			senderId = $('#defaultSenderIdVal').html();
+			$('#senderIdList').val('0');
+		});
+		$('#defaultRadioButton2').click(
+			function(){
+			senderId = '';
+		});
+		$('#senderIdList').change(function() {
+			$('#defaultRadioButton2').attr('checked', true);
+			var selectedSenderId = $('#senderIdList').val();
+			if(selectedSenderId != null)
+				senderId = selectedSenderId;
+		});
+
+		$('#send').click(function() {
+			try {
+				senderId = $.trim(senderId);
+				if (senderId == null || senderId.length == 0 || senderId == '0') {
+					alert("Please select Sender Id");
+					return null;
+				}
+
+				var smsTextVal = $('#smsText').val();
+				smsTextVal = $.trim(smsTextVal);
+				if (smsTextVal.length <= 0) {
+					alert('Please enter some text or choose template.');
+					return null;
+				}
+
+				var selectedIds = candidateId;
+				if (selectedIds.length <= 0) {
+					alert('Please at least one record.');
+					return null;
+				}
+
+				var isOptOut = false;
+				if ($('#optOutDropDown').val() == 'no') {
+					isOptOut = true;
+				}
+
+				var senderUserId = null;
+				senderUserId = $('#senderNameList').val();
+				$('#senderNameList').change(function() {
+					senderUserId = $('#senderNameList').val();
+				});
+
+				var response = pushSMSCallout(selectedIds, recordType, smsTextVal, senderId, mobileField, nameField, optOutField, isOptOut, showUserDropDown, senderUserId)
+				if (response == '0') {
+					alert("SMS not sent. Please check the available balance & opt out settings.");
+				}
+				else if (response == '1') {
+					alert(response+" sms sent successfully.");
+				}
+				else {
+					alert(response+" sms's sents successfully.");
+				}
+				window.close();
+			}
+			catch (e) {
+				alert('exception : '+e);
+			}
+		});
+	}
+</script>
+
+</apex:page>

@@ -1,0 +1,216 @@
+<apex:page standardController="TASKRAY__Project_Task__c" sidebar="false" showheader="false" extensions="TASKRAY.trStandardController">
+    <!--  <link href="{!URLFOR($Resource.trplugins, 'jquery/redmond/jquery-ui-1.8.17.custom.css')}" rel="stylesheet" type="text/css" /> -->
+    <link href="{!URLFOR($Resource.trplugins, 'jquery/custom-theme/jquery-ui-1.8.17.custom.css')}" rel="stylesheet" type="text/css" />
+    <link href="{!URLFOR($Resource.trbootstrap, 'bootstrap/css/bootstrap.css')}" rel="stylesheet" type="text/css" />
+    <link href="{!URLFOR($Resource.trpopupcss)}" rel="stylesheet" type="text/css" />
+    <link href="{!URLFOR($Resource.trplugins, 'glyphicons/css/glyphicons.css')}" rel="stylesheet" type="text/css" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/jquery-1.7.1.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/jquery-ui-1.8.17.custom.min.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/canvasloadermin.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/jquery.cookie.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trbootstrap, 'bootstrap/js/bootstrap-collapse.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trbootstrap, 'bootstrap/js/bootstrap-modal.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trbootstrap, 'bootstrap/js/bootstrap-tooltip.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trbootstrap, 'bootstrap/js/bootstrap-tab.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trbootstrap, 'bootstrap/js/bootstrap-popover.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trbootstrap, 'bootstrap/js/bootstrap-alert.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trbootstrap, 'bootstrap/js/bootstrap-typeahead.js')}" />
+
+<style type="text/css">
+    body{
+        color: #333333;
+    }
+
+    .personal-archive-span i:before{
+        margin-top: 1px;
+        font-size: 12px !important;
+    }
+    .personal-archive-span{
+        height: 10px;
+        padding: 2px 0 !important;
+        width: 11px;
+        margin-left:2px;
+    }
+    #archive-finished-personal-tasks{
+        width: 24px;
+    }
+
+    .unfollow-archive-span i:before{
+        margin-top: 1px;
+        font-size: 12px !important;
+    }
+    .unfollow-archive-span{
+        height: 10px;
+        padding: 2px 0 !important;
+        width: 11px;
+        margin-left:2px;
+    }
+    #unfollow-archived-tasks{
+        width: 24px;
+    }
+
+
+    #user_prefs label{
+        font-size: 14px;
+        line-height: 20px;
+    }
+
+    #user_prefs hr{
+        margin-top: 2px;
+        margin-bottom: 10px;
+    }
+</style>
+
+<script type="text/javascript">
+var $j = jQuery.noConflict();
+$j(document).ready(function(){
+	populateUserPrefValues();
+    $j("#unfollow-archived-tasks").click(function(e){
+        e.preventDefault();
+        parent.TASKRAY.trController.unfollowArchivedTasks(function(event,result){
+            if (result.status) {
+                alert("All archived tasks are no longer being followed by your user!");
+            }
+        });
+    });
+
+    $j('#archive-finished-personal-tasks').click(function(e){
+        e.preventDefault();
+        parent.TASKRAY.trController.archivePersonalTasksInLastColumn(function(event,result){
+            if (result.status) {
+                alert("All personal tasks in the last column have been archived!");
+                parent.refreshTasks();
+            }
+        });
+    });
+
+    $j(".saveUserPrefsBtn").click(function(e){
+    	e.preventDefault();
+    	if($j('#trUnfollowArchived__c').is(':checked')){unfollowarchived=true;}
+    	else{unfollowarchived=false;}
+    	
+    	if($j('#trDisplaySetupWizard__c').is(':checked')){displaysetupwizard=true;$j.cookie("apex_bltrSetupWizardHide", null);}
+    	else{displaysetupwizard=false;}
+    	
+    	if($j('#trReverseColumns__c').is(':checked')){reversecolumns=true;}
+    	else{reversecolumns=false;}
+    	
+    	if($j('#trDailyNotifications__c').is(':checked')){dailynotifications=true;}
+    	else{dailynotifications=false;}
+
+        if($j('#trDisableTaskReassignEmails__c').is(':checked')){disableTaskReassignEmails=true;}
+        else{disableTaskReassignEmails=false;}
+        
+        var map = {'trDisplaySetupWizard__c':displaysetupwizard, 'trUnfollowArchived__c':unfollowarchived, 'trReverseColumns__c':reversecolumns, 'trDailyNotifications__c':dailynotifications, 'trDisableTaskReassignEmails__c':disableTaskReassignEmails};
+        parent.TASKRAY.trController.updateTrPrefsViaMap(map,function(event,result){
+            if (result.status) {
+                parent.window.location.reload();
+            }
+        });
+    });
+    $j('#recalc-projects-sharing').unbind('click');
+    $j('#recalc-projects-sharing').click(function(e){
+        e.preventDefault();
+        $j('#recalc-projects-sharing-modal').modal('show');
+    });
+    $j('#recalc-projects-sharing-button').unbind('click');
+    $j('#recalc-projects-sharing-button').click(function(e){
+        parent.TASKRAY.trController.recalcAllSharing(function(event,result){
+            if(result.status){
+                $j('#recalc-projects-sharing-modal').modal('hide');
+                $j('#recalc-projects-sharing-result-modal').modal('show');
+            }
+        });
+    });
+
+    $j('#recalc-projects-sharing-result-button').unbind('click');
+    $j('#recalc-projects-sharing-result-button').click(function(e){
+        $j('#recalc-projects-sharing-result-modal').modal('hide');
+    });
+});
+
+function populateUserPrefValues()
+{
+	var unfollowarchived={!userPrefs.trUnfollowArchived__c};
+	var displaysetupwizard={!userPrefs.trDisplaySetupWizard__c};
+	var reversecolumns={!userPrefs.trReverseColumns__c};
+	var dailynotifications={!userPrefs.trDailyNotifications__c};
+    var disableTaskReassign={!userPrefs.trDisableTaskReassignEmails__c};
+	
+	if(unfollowarchived){$j('#trUnfollowArchived__c').attr('checked',true);}
+	else{$j('#trUnfollowArchived__c').attr('checked',false);}
+	
+	if(displaysetupwizard){$j('#trDisplaySetupWizard__c').attr('checked',true);}
+	else{$j('#trDisplaySetupWizard__c').attr('checked',false);}
+	
+	if(reversecolumns){$j('#trReverseColumns__c').attr('checked',true);}
+	else{$j('#trReverseColumns__c').attr('checked',false);}
+	
+	if(dailynotifications){$j('#trDailyNotifications__c').attr('checked',true);}
+	else{$j('#trDailyNotifications__c').attr('checked',false);}
+
+    if(disableTaskReassign){$j('#trDisableTaskReassignEmails__c').attr('checked',true);}
+    else{$j('#trDisableTaskReassignEmails__c').attr('checked',false);}
+}
+</script>
+<div id='user_prefs'>
+<form class="form-vertical">
+    <fieldset>
+        <div class="control-group">
+            <div class="controls span6">
+                <label class="checkbox">
+                    <input type="checkbox" id="trUnfollowArchived__c" /> Auto-unfollow tasks on archived projects
+                </label>
+                <label class="checkbox">
+                    <input type="checkbox" id="trDisplaySetupWizard__c" /> Restart getting started wizard
+                </label>
+                <label class="checkbox">
+                    <input type="checkbox" id="trDailyNotifications__c" /> Send daily email notifications
+                </label>
+                <label class="checkbox">
+                    <input type="checkbox" id="trDisableTaskReassignEmails__c" /> Don't send email notification when a task owner changes
+                </label>
+            </div>
+        </div>
+    </fieldset>
+    <h4>Bulk Actions</h4>
+    <hr />
+    <fieldset>
+        <div class="control-group">
+            <div class="controls span6">
+                <label class="">
+                    <button id='unfollow-archived-tasks'><span class="unfollow-archive-span glyphicons remove"><i class="unfollow-archive-icon"></i></span></button> Mass unfollow all archived tasks and projects.
+                </label>
+                <label class="">
+                    <button id='archive-finished-personal-tasks'><span class="personal-archive-span glyphicons inbox_in"><i class="personal-archive-icon"></i></span></button> Archive personal tasks in the last column.
+                </label>
+            </div>
+        </div>
+    </fieldset>
+</form>
+
+</div>
+<div id="recalc-projects-sharing-modal" class="modal" style="display:none;">
+    <div class="modal-header" style="text-align: center;"><strong>Alert</strong></div>
+    <div class="modal-body">
+        This action will make all projects PUBLIC. Project-Level Access can be further managed by Project Owners, users higher in the role hierarchy, and System Administrators.
+    </div>
+    <div class="modal-footer">
+        <a onclick="$j('#recalc-projects-sharing-modal').modal('hide');" href="#" class="btn-bs">Cancel</a>
+        <a id="recalc-projects-sharing-button" href="#" class="btn-bs btn-bs-primary">Proceed</a>
+    </div>
+</div>
+
+<div id="recalc-projects-sharing-result-modal" class="modal" style="display:none;">
+    <div class="modal-header" style="text-align: center;"><strong>Notification</strong></div>
+    <div class="modal-body">
+        A batch Apex job has been scheduled to perform this sharing recalculation. Emails will be sent to you containing further details.
+    </div>
+    <div class="modal-footer">
+        <a id="recalc-projects-sharing-result-button" href="#" class="btn-bs btn-bs-primary">OK</a>
+    </div>
+</div>
+ <div class="modal-footer" style="background-color:transparent;">
+    <button class="btn-bs btn-bs-primary saveUserPrefsBtn">Save changes</button>
+  </div>
+</apex:page>

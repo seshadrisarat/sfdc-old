@@ -1,0 +1,214 @@
+<apex:page controller="hoopla.CustomTriggerMonitorController" tabStyle="ScoreboardAdmin__tab" standardStylesheets="false" sidebar="false" showHeader="true">
+<apex:stylesheet value="{!URLFOR($Resource.hoopla__sync, 'sync/css/sync.css')}" />  
+<apex:stylesheet value="{!URLFOR($Resource.hoopla__Scoreboard, 'hoopla__Scoreboard/css/admin.css')}" />  
+<apex:stylesheet value="{!URLFOR($Page.hoopla__AdminCSS)}"/>
+<apex:stylesheet value="{!URLFOR($Page.hoopla__ApplicationCSS)}"/>
+<apex:stylesheet value="//assets.zendesk.com/external/zenbox/v2.5/zenbox.css"/>
+<style>
+.status-message {
+	margin: 0 !important;
+	display:none;
+}
+
+.status-message p {
+	margin: 0 0 10px 0 !important;
+	font-weight: bold !important;
+}
+
+.status-message div {
+    border: 1px solid #75C5EF !important;
+    background: #EDEDED !important;
+    padding: 25px 25px !important;
+    -webkit-border-radius: 3px !important;
+    -moz-border-radius: 3px !important;
+    border-radius: 3px !important;
+	margin-left: 25px !important;
+	white-space: nowrap !important;
+	font-size: 12px !important;
+}
+
+.failed-messages {
+	display:none;
+	margin-top: 25px !important;
+    color: #211E20 !important;
+    border: 1px solid red  !important;
+    background: #FEE0DE !important;
+    padding: 25px 25px !important;
+    -webkit-border-radius: 3px !important;
+    -moz-border-radius: 3px !important;
+    border-radius: 3px !important;
+}
+
+.failed-messages ul {
+	margin-left: 5px !important;
+}
+.failed-messages li {
+	font-size: 12px !important;
+	line-height: 24px !important;
+}
+
+.message-link {
+	display:none;
+	font-size: 12px !important;
+	font-style: italic !important;
+	color: blue !important;
+}
+
+.deployment-details {
+	cursor: pointer;
+}
+
+</style>
+<div class="settings">
+<div class="header admin">  
+    <c:AdminHeader />
+</div>
+<div class="column-wrapper">
+<div id="content">
+    <apex:pageMessages ></apex:pageMessages>
+    <div class="content-wrapper">   
+        <div id="hoopla-scoreboard-admin">
+       	<apex:outputPanel >
+           <p class="sync-message">Attempting to deploy custom triggers...</p>
+		   <div class="sync-progress">
+		       <h2 class="syncing">Monitoring deployment</h2>
+		       <ul class="syncs">
+			 	  <li id="stage_1">Initiating Deployment</li>
+			 	  <li id="stage_2">Monitoring progress</li>
+			 	  <li id="stage_3">Finished</li>
+			   </ul>
+	      </div>
+	      <div class="status-message">
+	      	<p>Status Messages:</p>
+	      	<div></div>
+	      </div>
+		  <div class='sync-status completed'>
+		    <div>
+			    <apex:form >
+                	<apex:commandButton value="Continue" action="{!URLFOR($Page.HooplaSFConfigurationSettings)}"/>
+               	</apex:form>
+              	</div>
+		    <p>Trigger Deployment Complete.</p>
+		  </div>
+
+  		  <br/>          	    
+		  <div class="message-link"><span class="deployment-details">Click here for deployment details.</span>&nbsp;&nbsp;<a target="_blank" href="http://hoopla.helpdocsonline.com/#hoopla-setup-tab-custom-object-errors">More Information</a></div>								           	    
+		  <div class='failed-messages'>
+		  	<ul></ul>
+		  </div>
+		  
+  	      </apex:outputPanel>
+
+        </div>
+    </div>
+</div>
+<div class="clear"></div>
+</div>
+</div>
+<script type="text/javascript" src="{!URLFOR($Resource.Scoreboard, 'hoopla__Scoreboard/js/lib/jquery-1.4.2-min.js')}"></script>
+<script type="text/javascript" src="{!URLFOR($Resource.Scoreboard, 'hoopla__Scoreboard/js/lib/underscore-1.0.4-min.js')}"></script>
+<script type="text/javascript" src="{!URLFOR($Resource.Scoreboard, 'hoopla__Scoreboard/js/lib/jquery.query-2.1.7.js')}"></script>
+<script type="text/javascript" src="{!URLFOR($Resource.adminJS)}"></script>
+<script type="text/javascript" src="//assets.zendesk.com/external/zenbox/v2.5/zenbox.js"></script>
+<script type="text/javascript">
+  if (typeof(Zenbox) !== "undefined") {
+    Zenbox.init({
+      dropboxID:   "20106373",
+      url:         "https://hooplasoftware.zendesk.com",
+      tabID:       "Help",
+      tabColor:    "#566EAE",
+      tabPosition: "Right"
+    });
+  }
+</script>
+<div sub-key="sub-c-1b70c3bd-84bc-11e1-8634-c79c9144291b" ssl="on" origin="pubsub.pubnub.com" id="pubnub"></div>
+<script src="https://pubnub.s3.amazonaws.com/pubnub-3.1.min.js"></script>
+<script>(function(){
+
+
+    // LISTEN FOR MESSAGES
+    
+    $('.deployment-details').click(function() {
+    	$('.failed-messages').show();	
+    });
+    
+    var messages = [];
+    var retried = false;
+    PUBNUB.subscribe({
+        channel    : "hoopla:job_info:CustomTriggerDeploy:{!URLENCODE(orgId)}",      // CONNECT TO THIS CHANNEL.
+
+        restore    : false,              // STAY CONNECTED, EVEN WHEN BROWSER IS CLOSED
+                                         // OR WHEN PAGE CHANGES.
+
+        callback   : function(message) { // RECEIVED A MESSAGE.
+			var info = $.parseJSON(message);
+			var job_info = info.hoopla_job_info;
+			var message = job_info.message;
+			var status = job_info.status;
+			
+			if(status == 'Started') {
+				$('#stage_1').addClass('syncing');
+			}
+			else if (status == 'InProgress') {
+				$('.status-message').show();
+				$('#stage_1').removeClass('syncing');
+				$('#stage_1').addClass('completed');
+				$('#stage_2').addClass('syncing');
+				$('.status-message div').html(message);
+			}
+			else if(status == 'Results' || status == 'TestResults' || status == 'TestFailure' || status == 'CoverageWarning' || status == 'Retrying') {
+				messages.push(message);
+			}
+			
+			if(status == 'Retrying') {
+				retried = true;
+			}
+			
+			if(status == 'Succeeded') {
+				$('#stage_1').removeClass('syncing');
+				$('#stage_1').addClass('completed');
+				$('#stage_2').removeClass('syncing');
+				$('#stage_2').addClass('completed');
+				$('#stage_3').addClass('completed');
+				$('.status-message').hide();
+				$('.sync-progress h2').removeClass('syncing');
+				if(retried) {
+					$('.message-link').show();
+					$('.sync-status.completed p').text('Trigger Deployment Complete (with failures)').
+					_.each(messages, function(msg, idx) {
+						$('.failed-messages ul').append('<li>' + msg + '</li>');
+					});
+				}
+				$('.sync-status.completed').show();
+			}
+			else if(status == 'Failed' || status == 'FailedWithFault') {
+				$('#stage_1').removeClass('syncing');
+				$('#stage_1').addClass('completed');
+				$('#stage_2').removeClass('syncing');
+				$('#stage_2').addClass('completed');
+				$('#stage_3').addClass('failed');
+				$('.status-message').hide();
+				$('.sync-progress h2').removeClass('syncing');
+				$('.sync-status.completed p').text('Trigger Deployment Unsuccessful');
+				$('.sync-status.completed').show();
+				$('.message-link').show();
+				_.each(messages, function(msg, idx) {
+					$('.failed-messages ul').append('<li>' + msg + '</li>');
+				});
+			}
+			
+        },
+
+        disconnect : function() {        // LOST CONNECTION.
+        },
+
+        reconnect  : function() {        // CONNECTION RESTORED.
+        },
+
+        connect    : function() {        // CONNECTION ESTABLISHED.
+        }
+    })
+
+})();</script>
+    
+</apex:page>

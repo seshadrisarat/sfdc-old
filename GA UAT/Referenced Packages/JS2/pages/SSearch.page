@@ -1,0 +1,333 @@
+<apex:page controller="ts2.s_SearchController" id="ssPg" tabStyle="ts2__Search__c" action="{!loadAction}" cache="false" expires="600" title="Advanced Contact Search">
+	<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, 'jquery-1.8.2.min.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, 'json2.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__SSearch, 'res/js/s_jquery_noconflict.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__SSearch, 'res/js/s_js.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__SSearch, 'res/js/s_select_items.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__SSearch, 'res/js/s_popup_windows.js')}" />
+
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__SSearch, 'res/css/s_style.css')}" />
+
+	<apex:includeScript value="/soap/ajax/22.0/connection.js" />
+	<apex:includeScript value="/soap/ajax/22.0/apex.js" />
+
+<script>
+	sforce.connection.defaultNamespace = "";
+	sforce.connection.sessionId = "{!$Api.Session_ID}";
+	var sResultItemApiName = '{!$ObjectType.s_ResultItem__c.Name}';
+</script>
+<script>
+	function twistSection(twisty) {
+		var parentDiv = twisty;
+		while (parentDiv.tagName != 'DIV') { parentDiv = parentDiv.parentNode; }
+		var div = parentDiv.nextSibling;
+		while (div.tagName != 'DIV') { div = div.nextSibling; }
+		var elemWasOn = false;
+		if (div.style.display != 'none') {
+			div.style.display = 'none';
+			twisty.className ='showListButton';
+			twisty.alt = twisty.title = 'Show Section - '+twisty.name;
+			elemWasOn = true;
+		}
+		else {
+			div.style.display = 'block';
+			twisty.className = 'hideListButton';
+			twisty.alt = twisty.title = 'Hide Section - '+twisty.name;
+		}
+	}
+	function se(e, sType) {
+		var keynum = 0;
+		if (window.event) { keynum = window.event.keyCode;} else if(e.which){keynum = e.which; }
+		if (keynum == 13) {
+			if (sType == 'L') {
+				booleanSearchClick();
+				triggerBooleanSearch();
+			}
+			if (sType == 'B') {
+				basicSearchClick();
+				triggerBasicSearch();
+			}
+			if (sType == 'I') {
+				intelSearchClick();
+				triggerIntelSearch();
+			}
+			return false;
+		}
+		else {
+			return true;
+		}
+	}
+</script>
+<style>
+	.activeTab {background-color: #f1f1f1; color:#000; background-image:none; font-family: Verdana, Geneva, sans-serif; font-size: 11px; height: 22px; font-weight:bold;}
+	.inactiveTab {background-color: #F3F3F2; color:#000; background-image:none; font-family: Verdana, Geneva, sans-serif; font-size: 11px; height: 22px; font-weight:normal;}
+	.rich-tab-tr-custom-disabled td {color: #aaa;}
+	.bEditBlock img {vertical-align: baseline;}
+	.mouseOverInfoOuter {display:inline-block\0/;}
+	.bEditBlock input, .bEditBlock select { vertical-align:top\0/;}
+</style>
+
+<apex:form id="topFm">
+	<apex:outputText id="global_vars" value="{!serializedValue}" style="display:none;" />
+	<apex:inputHidden value="{!PicklistValStr0}" id="PicklistValStr0"/>
+	<apex:inputHidden value="{!PicklistValStr1}" id="PicklistValStr1"/>
+	<apex:inputHidden value="{!PicklistValStr2}" id="PicklistValStr2"/>
+	<apex:inputHidden value="{!PicklistValStr3}" id="PicklistValStr3"/>
+
+	<apex:sectionHeader title="Advanced Contact Search" help="http://developer.force.com"/>
+
+	<apex:tabPanel switchType="client" value="{!TabValue}" id="mainTabPanel" tabClass="activeTab" inactiveTabClass="inactiveTab" rendered="{!ShowSearchTabPanel}" >
+
+		<apex:tab label="{!$Label.Search_Keyword}" name="booleanTab" id="booleanTab" ontabenter="return(tabOnChange('client','l','booleanTab'));" style="font-size:12px;" rendered="{!NOT(Setup_SearchSettings.ts2__hide_tab_keyword__c)}" >
+		<apex:actionRegion >
+			<apex:actionFunction action="{!booleanSearchAction}" name="triggerBooleanSearch" rerender="currentResults, msg, booleanOutputPanel" onComplete="triggerBooleanSearch_Complete();" />
+
+			<apex:outputPanel id="booleanBlock" layout="block" rendered="{!TabSwitchTypeClient}">
+				<apex:outputPanel id="booleanCriteria">
+					<apex:pageBlock id="booleanSearchPb" title="{!$Label.Search_Keyword} Search" mode="edit">
+						<apex:pageBlockButtons id="booleanSearchPbBtns">
+							<apex:commandButton id="booleanSearchBtn" onclick="booleanSearchClick();return false;" value="Search" />
+							<apex:commandButton id="booleanClearBtn" action="{!booleanClearAction}" value="Clear" rerender="msg"/>
+						</apex:pageBlockButtons>
+						<c:s_Boolean id="boolComp" criteriaHolder="{!TH}" />
+					</apex:pageBlock>
+				</apex:outputPanel>
+				<apex:outputPanel id="booleanOutputPanel" >
+					<apex:pageMessage summary="{!TRH.InfoUIText}" severity="info" strength="1" rendered="{!NOT(ISNULL(TRH.InfoUIText))}" />
+					<apex:pageMessage summary="{!TRH.WarningUIText}" severity="warning" strength="1" rendered="{!NOT(ISNULL(TRH.WarningUIText))}" />
+					<apex:pageMessage summary="{!TRH.BooleanErrorUIText}" severity="error" strength="1" rendered="{!TRH.HasBooleanError}" />
+				</apex:outputPanel>
+				<div style="display:none;" class="waitingSearchDiv waitingSearchDivOpacity waitingSearchDivSearchBlock"></div>
+				<div style="display:none;" class="waitingSearchDiv waitingSearchDivSearchBlock"><span class="waitingSearchHolder" style="top:16px;"><img src="/img/loading.gif" class="waitingImage" /><span class="waitingDescription"></span></span></div>
+			</apex:outputPanel>
+		</apex:actionRegion>
+		</apex:tab>
+
+		<apex:tab label="{!$Label.Search_Genius}" name="basicTab" id="basicTab" ontabenter="return(tabOnChange('client','b','basicTab'));" style="font-size:12px;" rendered="{!NOT(Setup_SearchSettings.ts2__hide_tab_quick_boolean__c)}" >
+		<apex:actionRegion >
+			<apex:actionFunction action="{!basicSearchAction}" name="triggerBasicSearch" rerender="currentResults, msg, basicOutputPanel" onComplete="triggerBasicSearch_Complete();" />
+
+			<apex:outputPanel id="basicBlock" layout="block" rendered="{!TabSwitchTypeClient}">
+				<apex:outputPanel id="basicCriteria">
+					<apex:pageBlock id="basicSearchPb" title="{!$Label.Search_Genius}" mode="edit">
+						<apex:pageBlockButtons id="basicSearchPbBtns">
+							<apex:commandButton id="basicSearchBtn" onclick="basicSearchClick();return false;" value="Search" />
+							<apex:commandButton id="basicClearBtn" action="{!basicClearAction}" value="Clear" rerender="msg"/>
+						</apex:pageBlockButtons>
+						<c:s_Keyword id="keywordComp" criteriaHolder="{!TH}" />
+					</apex:pageBlock>
+				</apex:outputPanel>
+				<apex:outputPanel id="basicOutputPanel" >
+					<apex:pageMessage summary="{!TRH.BasicErrorUIText}" severity="error" strength="1" rendered="{!TRH.HasBasicError}" />
+				</apex:outputPanel>
+				<div style="display:none;" class="waitingSearchDiv waitingSearchDivOpacity waitingSearchDivSearchBlock"></div>
+				<div style="display:none;" class="waitingSearchDiv waitingSearchDivSearchBlock"><span class="waitingSearchHolder" style="top:16px;"><img src="/img/loading.gif" class="waitingImage" /><span class="waitingDescription"></span></span></div>
+			</apex:outputPanel>
+		</apex:actionRegion>
+		</apex:tab>
+
+		<apex:tab label="{!$Label.Search_Skills}" name="intelTab" id="intelTab" ontabenter="return(tabOnChange('client','i','intelTab'));" style="font-size:12px;" rendered="{!NOT(Setup_SearchSettings.ts2__hide_tab_skills__c)}" >
+		<apex:actionRegion >
+			<apex:actionFunction action="{!intelSearchAction}" name="triggerIntelSearch" rerender="currentResults, msg, intelOutputPanel" onComplete="triggerIntelSearch_Complete();" />
+
+			<apex:outputPanel id="intelBlock" layout="block" rendered="{!TabSwitchTypeClient}">
+				<apex:outputPanel id="intelCriteria">
+					<apex:pageBlock id="intelSearchPb" title="{!$Label.Search_Skills} Search" mode="edit">
+						<apex:pageBlockButtons >
+							<apex:commandButton id="intelSearchBtn" onclick="intelSearchClick();return false;" value="Search" />
+							<apex:commandButton id="intelClearBtn" action="{!intelClearAction}" value="Clear" rerender="msg"/>
+						</apex:pageBlockButtons>
+						<c:s_Intel id="intelComp" criteriaHolder="{!TH}" />
+					</apex:pageBlock>
+				</apex:outputPanel>
+				<apex:outputPanel id="intelOutputPanel" >
+					<apex:pageMessage summary="{!TRH.IntelErrorUIText}" severity="error" strength="1" rendered="{!TRH.HasIntelError}" />
+				</apex:outputPanel>
+				<div style="display:none;" class="waitingSearchDiv waitingSearchDivOpacity waitingSearchDivSearchBlock"></div>
+				<div style="display:none;" class="waitingSearchDiv waitingSearchDivSearchBlock"><span class="waitingSearchHolder" style="top:16px;"><img src="/img/loading.gif" class="waitingImage" /><span class="waitingDescription"></span></span></div>
+			</apex:outputPanel>
+		</apex:actionRegion>
+		</apex:tab>
+
+		<apex:tab label="{!$Label.Search_Match}" name="matchTab" id="matchTab" ontabenter="return(tabOnChange('client','m','matchTab'));" style="font-size:12px;" rendered="{!NOT(Setup_SearchSettings.ts2__hide_tab_match__c)}" >
+		<apex:actionRegion >
+			<apex:actionFunction action="{!matchSearchAction}" name="triggerMatchSearch" rerender="currentResults, matchMsg, matchOutputPanel, matchComp" onComplete="triggerMatchSearch_Complete();">
+				<apex:param name="var1" value="" assignTo="{!MatchSearchType}" />
+			</apex:actionFunction>
+
+			<apex:outputPanel id="matchBlock" layout="block" rendered="{!TabSwitchTypeClient}">
+				<apex:outputPanel id="matchCriteria">
+					<apex:pageBlock id="matchSearchPb" title="{!$Label.Search_Match} Search" mode="edit">
+						<apex:pageBlockButtons id="matchSearchPbBtns">
+							<apex:commandButton id="matchClearBtn" action="{!matchClearAction}" immediate="true" value="Clear" rerender="matchMsg"/>
+						</apex:pageBlockButtons>
+						<c:s_Match id="matchComp" criteriaHolder="{!TH}" />
+					</apex:pageBlock>
+				</apex:outputPanel>
+				<apex:outputPanel id="matchOutputPanel" >
+					<apex:pageMessage summary="{!TRH.MatchErrorUIText}" severity="error" strength="1" rendered="{!TRH.HasMatchError}" />
+				</apex:outputPanel>
+				<div style="display:none;" class="waitingSearchDiv waitingSearchDivOpacity waitingSearchDivSearchBlock"></div>
+				<div style="display:none;" class="waitingSearchDiv waitingSearchDivSearchBlock"><span class="waitingSearchHolder" style="top:16px;"><img src="/img/loading.gif" class="waitingImage" /><span class="waitingDescription"></span></span></div>
+			</apex:outputPanel>
+		</apex:actionRegion>
+		</apex:tab>
+
+		<apex:tab label="{!$Label.Search_Saved}" name="namedTab" id="namedTab" ontabenter="return(tabOnChange('server','n','namedTab'));" style="font-size:12px;" rendered="{!NOT(Setup_SearchSettings.ts2__hide_tab_saved__c)}" >
+			<apex:outputPanel layout="block" rendered="{!TabSwitchTypeServer && tabSwitchDef='n'}">
+				<apex:outputPanel id="namedResults">
+					<c:s_Named visible="{!tabSwitchDef=='n'}" />
+				</apex:outputPanel>
+			</apex:outputPanel>
+		</apex:tab>
+
+		<apex:tab label="{!$Label.Search_History}" name="histTab" id="histTab" ontabenter="return(tabOnChange('server','h','histTab'));" style="font-size:12px;" rendered="{!NOT(Setup_SearchSettings.ts2__hide_tab_history__c)}" >
+			<apex:outputPanel id="histBlock" layout="block" rendered="{!TabSwitchTypeServer && tabSwitchDef='h'}">
+				<apex:outputPanel id="histResults">
+					<c:s_History visible="{!tabSwitchDef=='h'}" />
+				</apex:outputPanel>
+				<div style="display:none;" class="waitingSearchDiv waitingSearchDivOpacity waitingSearchDivSearchBlock"></div>
+				<div style="display:none;" class="waitingSearchDiv waitingSearchDivSearchBlock"><span class="waitingSearchHolder" style="top:16px;"><img src="/img/loading.gif" class="waitingImage" /><span class="waitingDescription"></span></span></div>
+			</apex:outputPanel>
+		</apex:tab>
+
+	</apex:tabPanel>
+
+	<apex:actionRegion >
+		<apex:outputPanel id="resultBlock" layout="block" style="margin-top:10px;" rendered="true">
+			<apex:outputPanel id="currentResults">
+				<c:s_Result criteriaHolder="{!TH}" resultSetHolder="{!TRH}" pager="{!TP}" rendered="{!IsContainsResults}" IsSearchMode="{!searchMode}" customize="TRUE" showFilter="TRUE" />
+			</apex:outputPanel>
+			<div style="display:none;" class="waitingSearchDiv waitingSearchDivOpacity waitingSearchDivSearchBlock"></div>
+			<div style="display:none;" class="waitingSearchDiv waitingSearchDivSearchBlock"><span class="waitingSearchHolder" style="top:16px;"><img src="/img/loading.gif" class="waitingImage" /><span class="waitingDescription"></span></span></div>
+		</apex:outputPanel>
+
+		<apex:actionFunction action="{!refreshResultSet}" name="refreshResultSet" rerender="currentResults, booleanErrorPanel,basicErrorPanel,intelErrorPanel,matchErrorPanel, msg" onComplete="refreshResultSet_Complete();" >
+		</apex:actionFunction>
+		<apex:actionFunction action="{!showAdvancedResultsAction}" name="showAdvancedResultsAction" rerender="currentResults, msg" onComplete="showAdvancedResultsOnClick_Complete();" >
+			<apex:param value="" assignTo="{!histId}" name="var1"/>
+		</apex:actionFunction>
+		<apex:actionFunction action="{!customizeFilterColumnsSave}" name="customizeFilterColumnsSave" rerender="currentResults, booleanErrorPanel,basicErrorPanel,intelErrorPanel,matchErrorPanel, msg" onComplete="customizeFilterColumnsSave_Complete();" >
+			<apex:param value="" assignTo="{!customizeFilterColumnsList}" name="var1"/>
+		</apex:actionFunction>
+		<apex:actionFunction action="{!sortResultColumnsSelect}" name="sortResultColumnsSelect" rerender="currentResults, booleanErrorPanel,basicErrorPanel,intelErrorPanel,matchErrorPanel, msg" onComplete="sortResultColumnsSelect_Complete();" >
+			<apex:param value="" assignTo="{!tmpparam}" name="var1"/>
+		</apex:actionFunction>
+		<apex:actionFunction action="{!RemoveNamedSearchAction}" name="removeNamedSearch" rerender="namedResults, msg" onComplete="savedSearchDeleteOnClick_Complete();" >
+			<apex:param value="" assignTo="{!tmpparam}" name="var1"/>
+		</apex:actionFunction>
+		<apex:actionFunction action="{!switchTabTypeAction}" name="switchTabTypeAction" rerender="mainTabPanel, global_vars" onComplete="tabOnChange_Complete();" >
+			<apex:param value="" assignTo="{!tabSwitchType}" name="var1"/>
+			<apex:param value="" assignTo="{!tabSwitchDef}" name="var2"/>
+		</apex:actionFunction>
+	</apex:actionRegion>
+
+	<apex:actionFunction action="{!applyFiltersForResultSet}" name="applyFiltersForResultSet" rerender="currentResults, booleanErrorPanel,basicErrorPanel,intelErrorPanel,matchErrorPanel, msg" onComplete="applyFiltersForResultSet_Complete();" >
+	</apex:actionFunction>
+
+	<apex:outputPanel id="msg">
+		<apex:messages rendered="true"></apex:messages>
+	</apex:outputPanel>
+</apex:form>
+
+
+<!--
+<div id="resumeTextPopupWrapper" style="display:none;">
+	<c:s_ResumePopup id="popupResumeComp"/>
+</div>
+-->
+
+<script type="text/javascript">
+	jQuery(document).ready(function() {
+//		jQuery("#resumeTextPopupWrapper").dialog({
+//			modal: true,
+//			autoOpen: false,
+//			width: 700,
+//			minWidth: 600,
+//			height: 600,
+//			minHeight: 600,
+//			maxHeight: 600,
+//			buttons: {
+//				Close: function() { hideResumeTextPopup(); }
+//			}
+//		});
+		gfxInit();
+		var location = jQuery("select[id*=locationLf] option:selected").val();
+		jQuery("select[id$=locationLf]").find("option[value=]").remove();
+		if (location == '') {
+			jQuery("select[id$=locationLf]").find("option").first().attr('selected','selected');
+		}
+		var country = jQuery("select[id*=countrylLf] option:selected").val();
+		jQuery("select[id$=countrylLf]").find("option[value=]").remove();
+		if (country == '') {
+			jQuery("select[id$=countrylLf]").find("option").first().attr('selected','selected');
+		}
+		var within = jQuery("select[id*=withinlLf] option:selected").val();
+		jQuery("select[id$=withinlLf]").find("option[value=]").remove();
+		if (country == '') {
+			jQuery("select[id$=withinlLf]").find("option").first().attr('selected','selected');
+		}
+		locationReappear();
+		filterValuesExecOnChange();
+	});
+</script>
+<script type="text/javascript">
+	function gfxInit() {
+		a1=new Image; a1.src="{!URLFOR($Resource.SSearch, 'res/img/spinner.gif')}";
+	}
+	function locationReappear() {
+		var countryEl = jQuery("select[id*=countrylLf]").parent().parent();
+		var countryLabel = jQuery("select[id*=countrylLf]").parent().parent().prev();
+		var stateEl = jQuery("input[id*=statelLf]").parent().parent();
+		var postallEl = jQuery("input[id*=postallLf]").parent().parent();
+		var withinlEl = jQuery("select[id*=withinlLf]").parent().parent();
+		var cityEl = jQuery("input[id*=CityLf]").parent().parent();
+		var location = jQuery("select[id*=locationLf] option:selected").val();
+		if (location == 'Anywhere') {
+			countryEl.hide();
+			countryLabel.hide();
+			stateEl.hide();
+			cityEl.hide();
+			postallEl.hide();
+			withinlEl.hide();
+		}
+		else {
+			countryEl.show();
+			countryLabel.show();
+			stateEl.show();
+			cityEl.show();
+			postallEl.show();
+			withinlEl.show();
+
+//			var country = jQuery("select[id*=countrylLf] option:selected").val();
+//			if (country == 'United States') {
+//				postallEl.show();
+//				withinlEl.show();
+//				cityEl.hide();
+//			}
+//			else {
+//				postallEl.hide();
+//				withinlEl.hide();
+//				cityEl.show();
+//			}
+		}
+	}
+	function getGlobalVars(property) {
+		var result = '';
+		var global_vars_hash = '';
+		var global_vars_val = jQuery("span[id$=global_vars]").html();
+		try {
+			global_vars_hash = JSON.parse(global_vars_val);
+		}
+		catch (e) { global_vars_hash=''; }
+		if (typeof global_vars_hash === "object") {
+			try {
+				result = global_vars_hash[property];
+			}
+			catch (e) { result=''; }
+		}
+		return result;
+	}
+</script>
+
+</apex:page>

@@ -1,0 +1,168 @@
+<apex:page controller="ts2.JobSearchController" language="{!UserInfoLanguage}" showHeader="false" cache="false" action="{!LoadAction}">
+
+	<apex:composition template="{!$Site.Template}">
+	<apex:define name="body">
+
+		<apex:outputPanel rendered="{!HasFatalMessages}" layout="none">
+			<div id="atsErrorPageBox">
+				<apex:messages styleClass="atsErrorPageMessage" layout="table" />
+			</div>
+		</apex:outputPanel>
+
+		<apex:outputPanel rendered="{!NOT(HasFatalMessages)}" layout="none">
+			<apex:form id="atsForm" styleClass="atsForm">
+				<span class="atsError">
+					<!-- BEGIN FORM ERROR MESSAGES -->
+					<apex:messages styleClass="atsError" layout="table" globalOnly="true" />
+					<!-- END FORM ERROR MESSAGES -->
+				</span>
+
+				<!-- BEGIN SEARCH BOX -->
+				<div id="atsSearchBox">
+					<div id="atsSearchTitle"><apex:outputText value="{!$Label.SearchOpenings}" /></div>
+					<apex:outputPanel rendered="{!NOT(HasPostedJobs)}" layout="none">
+						<div id="atsNoJobsMessage"><apex:outputText value="{!$Label.NoOpenJobs}" /></div>
+					</apex:outputPanel>
+
+					<apex:actionRegion >
+						<apex:outputPanel layout="none" rendered="{!HasPostedJobs}">
+							<table class="atsSearchTable" cellspacing="0">
+								<apex:repeat value="{!SearchFieldSet}" var="searchfield" >
+									<apex:outputPanel rendered="{!$ObjectType.ts2__Job__c.fields[searchfield.fs].Accessible}" layout="none">
+										<tr>
+											<td valign="top" class="atsSearchTdLeft">
+												<apex:outputLabel value="{!$ObjectType.ts2__Job__c.fields[searchfield.fs].Label}:" for="searchCtrl"/>
+											</td>
+											<td valign="top" class="atsSearchTdRight">
+												<apex:selectList id="searchCtrl" styleClass="atsSelect" value="{!searchfield.value}" size="1">
+													<apex:selectOptions value="{!searchfield.searchOptions}"/>
+												</apex:selectList>
+											</td>
+										</tr>
+									</apex:outputPanel>
+								</apex:repeat>
+								<apex:outputPanel rendered="{!JBSetup_SearchByKeyword}" layout="none">
+								<tr >
+									<td valign="top" class="atsSearchTdLeft"><apex:outputLabel value="{!$Label.SearchByKeyword}" /></td>
+									<td valign="top" class="atsSearchTdRight">
+										<apex:inputText value="{!Keyword1}" size="15" />
+										<apex:selectList id="logicalOperator1" styleClass="atsSelect" value="{!KeywordOperator1}" size="1">
+											<apex:selectOptions value="{!KeywordOperators}"></apex:selectOptions>
+										</apex:selectList>
+										<apex:inputText value="{!Keyword2}" size="15" />
+										<apex:selectList id="logicalOperator2" styleClass="atsSelect" value="{!KeywordOperator2}" size="1">
+											<apex:selectOptions value="{!KeywordOperators}"></apex:selectOptions>
+										</apex:selectList>
+										<apex:inputText value="{!Keyword3}" size="15" />
+									</td>
+								</tr>
+								</apex:outputPanel>
+								<tr>
+									<td valign="top" class="atsSearchTdLeft">&nbsp;</td>
+									<td valign="top" class="atsSearchTdRight">
+										<apex:commandButton styleClass="atsButton" value="{!$Label.Search}" action="{!PerformSearch}" />
+									</td>
+								</tr>
+							</table>
+						</apex:outputPanel>
+					</apex:actionRegion>
+				</div>
+				<!-- END SEARCH BOX -->
+
+				<!-- BEGIN SEARCH RESULTS -->
+				<apex:outputPanel rendered="{!AND(HasPostedJobs, OR(NOT(JBSetup_Show_Search_Only), AND(JBSetup_Show_Search_Only,IsSearchPerformed)))}" layout="none">
+					<div id="atsSearchResultsBox">
+						<apex:outputPanel rendered="{!NOT(ISBLANK(PreDefinedQuery))}" layout="none">
+							<div id="atsFilteredResults"><apex:outputText value="{!FilteredMessage}" /></div>
+						</apex:outputPanel>
+						<div id="atsSearchResultsTitle">{!$Label.SearchResults}</div>
+						<apex:outputPanel rendered="{!TotalJobsCount == 0}" layout="none">
+							<div id="atsNoResultsMessage"><apex:outputText value="{!$Label.NoResults}" /></div>
+						</apex:outputPanel>
+						<apex:outputPanel rendered="{!TotalJobsCount > 0}" layout="none">
+							<div id="atsSearchResultsText"><apex:outputText value="{!TotalJobsCount}" />&nbsp;<apex:outputText value="{!$Label.JobsFound}" /></div>
+						</apex:outputPanel>
+					</div>
+
+					<apex:actionRegion >
+						<apex:actionStatus id="ats_sort_status" startStyleClass="ats_sort_status_start" stopStyleClass="ats_sort_status_stop">
+							<apex:facet name="start">
+								<apex:outputPanel >
+									<apex:image styleClass="ats_pagination_status_spinner" value="{!URLFOR($Resource.ts2__JobBoard, 'loading.gif')}" />
+									<apex:outputText styleClass="ats_pagination_status_text" value="{!$Label.LabelSearchLoading}" />
+								</apex:outputPanel>
+							</apex:facet>
+						</apex:actionStatus>
+
+						<apex:dataTable id="atsSearchResultsTable" value="{!PageOfJobs}" var="j" rendered="{!PageOfJobs.SIZE > 0}" styleClass="atsSearchResultsTable" cellspacing="0" headerClass="atsSearchResultsHead" columnClasses="atsSearchResultsData">
+
+							<apex:repeat value="{!ResultFieldSet}" var="fs">
+								<apex:column >
+									<apex:facet name="header">
+										<apex:outputPanel layout="block">
+											<apex:outputPanel rendered="{!$ObjectType.ts2__Job__c.fields[fs].Sortable}" layout="none">
+												<apex:commandLink title="{!IF(CurrSortField == fs, IF(CONTAINS(CurrSortClause,'ASC'), $Label.SortedAscending, $Label.SortedDescending), null)}" styleClass="atsResultClickable" action="{!sortByField}" rerender="atsSearchResultsTable,atsPagerBottom" status="ats_sort_status" >
+													<apex:param name="sort" value="{!fs}" assignTo="{!sortFieldIn}" />
+													<apex:outputText value="{!$ObjectType.ts2__Job__c.fields[fs].Label}"/>
+													<apex:image alt="{!$Label.SortedAscending}" rendered="{!CurrSortField == fs && CONTAINS(CurrSortClause,'ASC')}" value="{!URLFOR($Resource.ts2__JobBoard, 'sorted_asc.png')}"/>
+													<apex:image alt="{!$Label.SortedDescending}" rendered="{!CurrSortField == fs && CONTAINS(CurrSortClause,'DESC')}" value="{!URLFOR($Resource.ts2__JobBoard, 'sorted_desc.png')}"/>
+												</apex:commandLink>
+											</apex:outputPanel>
+											<apex:outputText rendered="{!NOT($ObjectType.ts2__Job__c.fields[fs].Sortable)}" value="{!$ObjectType.ts2__Job__c.fields[fs].Label}" />
+										</apex:outputPanel>
+									</apex:facet>
+									<apex:outputLink value="{!$Page.ts2__JobDetails}" rendered="{!$ObjectType.ts2__Job__c.fields[fs].NameField}" >
+										<apex:param name="{!JobIdParam}" value="{!j.Id}" />
+										<apex:param name="{!SourceIdParam}" value="{!SourceId}" />
+										<apex:outputText value="{!j.Name}"/>
+									</apex:outputLink>
+									<apex:outputField value="{!j[fs]}" rendered="{!NOT($ObjectType.ts2__Job__c.fields[fs].NameField) && NOT($ObjectType.ts2__Job__c.fields[fs].Type=='multipicklist')}" />
+									<c:SearchResult value="{!j[fs]}" field="{!fs}" rendered="{!$ObjectType.ts2__Job__c.fields[fs].Type=='multipicklist'}" />
+								</apex:column>
+							</apex:repeat>
+
+						</apex:dataTable>
+
+						<apex:outputPanel id="atsPagerBottom" styleClass="ats_pagination_block" rendered="{!showPagination}" layout="block">
+							<apex:commandLink action="{!pojs.first}" rerender="atsSearchResultsTable,atsPagerBottom" rendered="{!showBtnFirst}" status="ats_pagination_status">&lt;&lt;{!$Label.PaginationFirst}</apex:commandlink>
+							<apex:outputText styleClass="ats_pagination_item_inactive" rendered="{!NOT(showBtnFirst)}" value="<<{!$Label.PaginationFirst}" />
+							<apex:outputText >&nbsp;|&nbsp;</apex:outputText>
+							<apex:commandLink action="{!pojs.previous}" rerender="atsSearchResultsTable,atsPagerBottom" rendered="{!showBtnPrev}" status="ats_pagination_status">&lt;{!$Label.PaginationPrevious}</apex:commandlink>
+							<apex:outputText styleClass="ats_pagination_item_inactive" rendered="{!NOT(showBtnPrev)}" value="<{!$Label.PaginationPrevious}" />
+							<apex:outputText >&nbsp;|&nbsp;&nbsp;</apex:outputText>
+
+							<apex:commandLink action="{!pageAction}" rerender="atsSearchResultsTable,atsPagerBottom" rendered="{!showBtnPage1}" status="ats_pagination_status" styleClass="{!IF(Page1==CurrentPage,'ats_pagination-btn_active','ats_pagination-btn')}" value="{!Page1}"><apex:param name="var1" value="{!Page1}" assignTo="{!pageSelected}"/></apex:commandlink>
+							<apex:commandLink action="{!pageAction}" rerender="atsSearchResultsTable,atsPagerBottom" rendered="{!showBtnPage2}" status="ats_pagination_status" styleClass="{!IF(Page2==CurrentPage,'ats_pagination-btn_active','ats_pagination-btn')}" value="{!Page2}"><apex:param name="var1" value="{!Page2}" assignTo="{!pageSelected}"/></apex:commandlink>
+							<apex:commandLink action="{!pageAction}" rerender="atsSearchResultsTable,atsPagerBottom" rendered="{!showBtnPage3}" status="ats_pagination_status" styleClass="{!IF(Page3==CurrentPage,'ats_pagination-btn_active','ats_pagination-btn')}" value="{!Page3}"><apex:param name="var1" value="{!Page3}" assignTo="{!pageSelected}"/></apex:commandlink>
+							<apex:commandLink action="{!pageAction}" rerender="atsSearchResultsTable,atsPagerBottom" rendered="{!showBtnPage4}" status="ats_pagination_status" styleClass="{!IF(Page4==CurrentPage,'ats_pagination-btn_active','ats_pagination-btn')}" value="{!Page4}"><apex:param name="var1" value="{!Page4}" assignTo="{!pageSelected}"/></apex:commandlink>
+							<apex:commandLink action="{!pageAction}" rerender="atsSearchResultsTable,atsPagerBottom" rendered="{!showBtnPage5}" status="ats_pagination_status" styleClass="{!IF(Page5==CurrentPage,'ats_pagination-btn_active','ats_pagination-btn')}" value="{!Page5}"><apex:param name="var1" value="{!Page5}" assignTo="{!pageSelected}"/></apex:commandlink>
+
+							<apex:outputText >&nbsp;&nbsp;|&nbsp;</apex:outputText>
+							<apex:commandLink action="{!pojs.next}" rerender="atsSearchResultsTable,atsPagerBottom" rendered="{!showBtnNext}" status="ats_pagination_status">{!$Label.PaginationNext}&gt;</apex:commandlink>
+							<apex:outputText styleClass="ats_pagination_item_inactive" rendered="{!NOT(showBtnNext)}" value="{!$Label.PaginationNext}>" />
+							<apex:outputText >&nbsp;|&nbsp;</apex:outputText>
+							<apex:commandLink action="{!pojs.last}" rerender="atsSearchResultsTable,atsPagerBottom" rendered="{!showBtnLast}" status="ats_pagination_status">{!$Label.PaginationLast}&gt;&gt;</apex:commandlink>
+							<apex:outputText styleClass="ats_pagination_item_inactive" rendered="{!NOT(showBtnLast)}" value="{!$Label.PaginationLast}>>" />
+
+							<apex:actionStatus id="ats_pagination_status" startStyleClass="ats_pagination_status_start" stopStyleClass="ats_pagination_status_stop">
+								<apex:facet name="start">
+									<apex:outputText >
+										<apex:image styleClass="ats_pagination_status_spinner" value="{!URLFOR($Resource.ts2__JobBoard, 'loading.gif')}" />
+										<apex:outputText styleClass="ats_pagination_status_text" value="{!$Label.LabelSearchLoading}" />
+									</apex:outputText>
+								</apex:facet>
+							</apex:actionStatus>
+						</apex:outputPanel>
+
+					</apex:actionRegion>
+
+				</apex:outputPanel>
+				<!-- END SEARCH RESULTS -->
+
+			</apex:form>
+		</apex:outputPanel>
+
+	</apex:define>
+	</apex:composition>
+
+</apex:page>

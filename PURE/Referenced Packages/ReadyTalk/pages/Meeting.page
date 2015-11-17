@@ -1,0 +1,621 @@
+<apex:page id="page" standardController="RT1__ReadyTalkMeeting__c"
+    extensions="RT1.MeetingController" tabStyle="Readytalk__tab"
+    action="{!initEdit}">
+    <apex:form >
+        <apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__LeadOwnerId__c}" />
+        <apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__Passcode__c}" />
+        <apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__MeetingID__c}" />
+        <apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__MeetingURL__c}" />
+        <apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__LastSyncStarted__c}" />
+        <apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__TollFreeNumber__c}" />
+        <apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__EncodedMeetingID__c}" />
+        <apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__PollQuestionIds__c}" />
+    </apex:form>
+
+    <!-- Updated remote JS library refs, Jordan, 4/9/2012,  -->
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" />
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js" />
+    <apex:stylesheet value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/redmond/jquery-ui.css" />
+    <style type="text/css">
+.select-red {
+    color: red !important;
+    border-color: red;
+}
+
+.poll-question-dropdown {
+    max-width: 450px;
+}
+</style>
+    <script type="text/javascript"> 
+
+var invalidLeadFields = [<apex:repeat value="{!invalidLeadFieldNames}" var="fieldName">'{!fieldName}',</apex:repeat>];
+var invalidContactFields = [<apex:repeat value="{!invalidContactFieldNames}" var="fieldName">'{!fieldName}',</apex:repeat>];
+var duplicateLeadFieldValues = [<apex:repeat value="{!duplicateLeadFieldValues}" var="fieldValue">'{!fieldValue}',</apex:repeat>];
+var duplicateContactFieldValues = [<apex:repeat value="{!duplicateContactFieldValues}" var="fieldValue">'{!fieldValue}',</apex:repeat>];
+var noLeadFieldMappedToEmail = {!noLeadFieldMappedToEmail};
+var noLeadFieldMappedToLastName = {!noLeadFieldMappedToLastName};
+var noContactFieldMappedToLastName = {!noContactFieldMappedToLastName};
+ 
+function compName(orig) {
+    return orig.replace(/:/g, "\\:");
+}
+ 
+ // need for older versions of IE
+if(!Array.prototype.indexOf) {
+    Array.prototype.indexOf = function(needle) {
+        for(var i = 0; i < this.length; i++) {
+            if(this[i] === needle) {
+                return i;
+            }
+        }
+        return -1;
+    };
+} 
+
+
+var ajaxloader_green= '{!URLFOR($Resource.meetingsr,'ajaxloader_green.gif')}';
+var leadBehaviorWidget;
+/** 
+ *  Added fieldMappingValidation check - Jordan, 7/8/2012   
+ **/
+$(function() { 
+    // .. some css setup
+    $('#fieldMappingDialog').find('th').css('text-align','center');
+    var loader = "<img id=\'dataloader\' src=\'"+ajaxloader_green+"'' style=\'display:none;float:right;\' />"; 
+    $('.pbTitle:eq(0)').html(loader);
+    $('[id$=panel]').parent().css('min-width','550px');
+    
+    $('#fieldMappingDialog').find('select').css('width','200px');
+    
+    // field mapping checks
+    $('.lead').each(function(i,o){
+        var selection = $(o).next();
+        if(invalidLeadFields.indexOf($(o).attr('Name')) > -1
+            || duplicateLeadFieldValues.indexOf($(selection).val()) > -1){
+            selection.addClass('select-red');
+            
+            selection.change(function(){
+                $(this).removeClass('select-red');
+            });
+        }
+    });
+    
+    $('.contact').each(function(i,o){
+        var selection = $(o).next();
+        if(invalidContactFields.indexOf($(o).attr('Name')) > -1
+            || duplicateContactFieldValues.indexOf($(selection).val()) > -1){
+            selection.addClass('select-red');
+            
+            selection.change(function(){
+                $(this).removeClass('select-red');
+            });
+        }
+    });
+    
+        // show validation error on 'Lead Field' header 
+    if(noLeadFieldMappedToEmail || noLeadFieldMappedToLastName){
+        $('th').each(function(i,o){
+            if($(o).text() == 'Lead Field'){
+                $(this).css('color','red');
+            }
+        });
+    }
+    
+    // show validation error on 'Contact Field' header  
+    if(noContactFieldMappedToLastName){
+        $('th').each(function(i,o){
+            if($(o).text() == 'Contact Field'){
+                $(this).css('color','red');
+            }
+        });
+    }
+    
+    var userId = "{!$User.Id}";
+    var userFirstAndLastName = "{!$User.FirstName} {!$User.LastName}";
+    leadBehaviorWidget = $("#page\\:form\\:pageBlock\\:informationSection\\:leadAssignmentSectionItem\\:leadAssignmentBehavior").get(0);
+    var leadOwnerDiv = $("#page\\:form\\:pageBlock\\:informationSection\\:leadAssignmentSectionItem\\:leadAssignmentUser_top");
+    var userWidget = $("#page\\:form\\:pageBlock\\:informationSection\\:leadAssignmentSectionItem\\:leadAssignmentPanel\\:leadAssignmentContact").get(0);
+    setLeadAssignmentWidgetVisibility();
+    
+    $(leadBehaviorWidget).change(function() { 
+        setLeadAssignmentWidgetVisibility();
+    });
+    
+    $("#page\\:form").submit(function() { 
+        if ($(leadBehaviorWidget).val() != "Assign to another user") {
+            $("#page\\:form\\:pageBlock\\:informationSection\\:leadAssignmentSectionItem\\:leadAssignmentUser_lkid").val(userId);
+            $("#page\\:form\\:pageBlock\\:informationSection\\:leadAssignmentSectionItem\\:leadAssignmentUser_mod").val("1");
+            $("#page\\:form\\:pageBlock\\:informationSection\\:leadAssignmentSectionItem\\:leadAssignmentUser_mlktp").val("005");
+            $("#page\\:form\\:pageBlock\\:informationSection\\:leadAssignmentSectionItem\\:leadAssignmentUser").val(userFirstAndLastName);
+        }
+    });
+    
+    $("#changeAccessCode").click(function() {
+        $("#credentialsDialog").dialog({
+            width: 300,
+            height: 180,
+            modal: true,
+            title: "Chairperson Login Credentials"
+        });
+        return false;
+    });
+    
+    $("#cancelCredentialsButton").click(function() {
+        $("#credentialsDialog").dialog("close");
+    });
+    
+    $("#saveCredentialsButton").click(function() {
+        $("#{!$Component.form.hiddenTollFreeNumber}".replace(/:/g, "\\:")).val($("#tollFreeNumber").attr('value'));
+        $("#{!$Component.form.hiddenAccessCode}".replace(/:/g, "\\:")).val($("#accessCode").attr('value'));
+        $("#{!$Component.form.hiddenPasscode}".replace(/:/g, "\\:")).val($("#passcode").val());
+        checkCredentials();
+    });   
+
+    $('.updateMappings').click(function(e){
+        e.preventDefault();
+        showFieldMappingDialog();   
+    });              
+    
+    $('#pollUpdatePrompt').dialog({
+        autoOpen: false,
+        modal: true,
+        buttons: {
+            "Ok": function() {
+                $('[id$=saveRedirectSync]').val('true');
+                saveAndRedirect();
+                $(this).dialog("close");
+            },
+            "Cancel": function() {
+                $(this).dialog("close");
+            }
+        }
+    });
+    
+    $('.pollQuestions').click(function(e){
+        e.preventDefault();
+        $("#pollQuestionDialog").dialog({
+            width: 625,
+            height: 300,
+            title: "Poll Questions",
+            buttons: {
+                "Update":function(){
+                    if(checkForPollQuestionUpdates()){
+                        $('#pollUpdatePrompt').dialog('open');
+                    }               
+                    $(this).dialog('close');
+                },  
+                "Cancel":function(){
+                    $(this).dialog('close');
+                }
+            }
+        }); 
+    });
+    
+    /** 
+     *  update the hidden input form that matches the dialog (placing parts of the VF form in a 
+     *  dialog corrupts the values, so there are 2 on the page 
+     **/    
+    $('#fieldMappingDialog').find('select').change(function(){
+        var fieldName = $(this).attr('class');
+        var fieldValue = $(this).val();
+        //loop through the corresponding form and find the input, and update it to the dialog value
+        $('#fieldMappingInput').find('select').each(function(i,o){
+            if($(o).hasClass(fieldName)){
+                $(o).val(fieldValue);
+            }
+        });
+    });   
+    
+    $('#pollQuestionDialog').find('select').change(function(){
+        var fieldName = $(this).attr('class').split(' ')[0];
+        var fieldValue = $(this).val();
+        //loop through the corresponding form and find the input, and update it to the dialog value
+        $('#pollQuestionInput').find('input').each(function(i,o){
+            if($(o).hasClass(fieldName)){
+                $(o).val(fieldValue);
+            }
+        });
+    });
+    
+    if(invalidLeadFields.length > 0 || invalidContactFields.length > 0
+        || duplicateLeadFieldValues.length > 0 || duplicateContactFieldValues.length > 0
+        || noLeadFieldMappedToEmail || noLeadFieldMappedToLastName || noContactFieldMappedToLastName){
+            showFieldMappingDialog();
+    } 
+});
+
+/**
+ *  checkForPollQuestionUpdates() 
+ *  Checks the difference in the input fields for changes
+ **/
+function checkForPollQuestionUpdates(){
+    var change = false;
+    var question1 = ($('[id$=question1-current]').val() == 'null') ? '' : $('[id$=question1-current]').val();
+    var question2 = ($('[id$=question2-current]').val() == 'null') ? '' : $('[id$=question2-current]').val();
+    var question3 = ($('[id$=question3-current]').val() == 'null') ? '' : $('[id$=question3-current]').val();
+    var question4 = ($('[id$=question4-current]').val() == 'null') ? '' : $('[id$=question4-current]').val();
+    var question5 = ($('[id$=question5-current]').val() == 'null') ? '' : $('[id$=question5-current]').val();
+    if(question1 != $('[id$=question1]').val() || question2 != $('[id$=question2]').val() || question3 != $('[id$=question3]').val() 
+        || question4 != $('[id$=question4]').val() || question5 != $('[id$=question5]').val()){
+        change = true;
+    }
+    return change;
+}
+
+function showFieldMappingDialog(){
+    $("#fieldMappingDialog").dialog({
+        width: 625,
+        height: 700,
+        title: "Meeting Member Field Mapping",
+        buttons: {
+            "Update":function(){
+                validateFieldMappings();
+                $(this).dialog('close');
+            }   
+        }
+   });  
+}
+
+function checkdates(){
+    var one_day=1000*60*60*24
+    var startday = new Date($('.inputStartDate').val()).getTime();
+    var endday = new Date($('.inputEndDate').val()).getTime();
+    var differenceInDays =Math.ceil((endday-startday)/(one_day));
+    if(differenceInDays < 1){
+        $('#dataloader').hide();
+        alert('The start date must come before the end date.');
+    }
+    else{
+        updatePastMeetings($('.inputStartDate').val(),$('.inputEndDate').val());
+    }
+}
+
+function checkCredentialsComplete() {
+    var comp = $(compName("#{!$Component.form.credentialsAreValid}")); 
+    if (comp.val() == "true") {
+        refreshMeetingList();
+    }
+    else {
+        alert("The credentials entered are invalid. Please enter a valid toll free number, "
+            + " access code, and passcode.");
+    }
+}
+
+function setLeadAssignmentWidgetVisibility() {
+    var leadBehaviorVal = $(leadBehaviorWidget).val();
+    if (leadBehaviorVal == "Assign to self") {
+        $("#ownerDiv, #assignmentRuleDiv").hide();
+    }
+    else if (leadBehaviorVal == "Assign to another user") {
+        $("#ownerDiv").show();
+        $("#assignmentRuleDiv").hide();
+    }
+    else if (leadBehaviorVal == "Use lead assignment rule") {
+        $("#ownerDiv").hide();
+        $("#assignmentRuleDiv").show();        
+    }
+}
+</script>
+    <apex:outputPanel rendered="{!noGlobalSettingsFlag}">
+        <apex:pageBlock >
+                No settings have been established for ReadyTalk Meeting. Please ask your administrator to vist the "Global Settings" subtab under the ReadyTalk application. <a
+                href="{!URLFOR($Page.ReadytalkTab)}">&#171; Go back</a>
+        </apex:pageBlock>
+    </apex:outputPanel>
+
+    <apex:outputPanel rendered="{!NOT(noGlobalSettingsFlag)}">
+        <apex:form id="form">
+
+            <apex:actionFunction name="saveAndRedirect" action="{!save}" />
+            <apex:actionFunction name="checkCredentials"
+                action="{!checkCredentials}"
+                oncomplete="checkCredentialsComplete();"
+                rerender="hiddenOutputPanel" />
+            <apex:actionFunction name="getMeetingDetailsFromCC"
+                action="{!getMeetingDetailsFromCC}" />
+            <apex:actionFunction name="refreshMeetingList"
+                action="{!refreshMeetingList}" />
+            <apex:actionFunction name="validateFieldMappings"
+                action="{!validateFieldMappings}" />
+            <apex:actionFunction name="updatePastMeetings"
+                action="{!updatePastMeetings}"
+                oncomplete="$('#dataloader').hide();" rerender="panel">
+                <apex:param name="param1" assignTo="{!StartPastMeetings}" value="" />
+                <apex:param name="param2" assignTo="{!EndPastMeetings}" value="" />
+            </apex:actionFunction>
+            <apex:actionFunction name="resetMeetingsList" rerender="panel" />
+
+            <apex:inputHidden value="{!saveRedirectSync}" id="saveRedirectSync" />
+            <apex:inputHidden id="hiddenTollFreeNumber" value="{!TollFreeNumber}" />
+            <apex:inputHidden id="hiddenAccessCode"
+                value="{!RT1__ReadyTalkMeeting__c.RT1__AccessCode__c}" />
+            <apex:inputHidden id="hiddenPasscode"
+                value="{!RT1__ReadyTalkMeeting__c.RT1__Passcode__c}" />
+            <apex:outputPanel id="hiddenOutputPanel">
+                <apex:inputHidden id="credentialsAreValid"
+                    value="{!CredentialsAreValid}" />
+            </apex:outputPanel>
+
+            <apex:sectionHeader title="ReadyTalk Meeting Edit" help=" "
+                subtitle="{!RT1__ReadyTalkMeeting__c.Name}" rendered="{!RT1__ReadyTalkMeeting__c.Id != null}" />
+            <apex:sectionHeader title="ReadyTalk Meeting Edit" help=" "
+                subtitle="New Meeting" rendered="{!RT1__ReadyTalkMeeting__c.Id == null}" />
+            <div class="breadcrumb"><apex:outputLink value="{!URLFOR($Page.RT1__ReadytalkTab)}?tabOverride=meetings">« Back to Meetings</apex:outputLink>
+            </div>
+            <apex:pageMessages rendered="{!NOT(fieldValidationError)}" />
+            <apex:pageBlock id="pageBlock">
+                <apex:pageBlockButtons >
+                    <apex:commandButton value=" Save " action="{!save}" />
+                    <apex:commandButton value=" Cancel " action="{!cancel}" />
+                </apex:pageBlockButtons>
+                <apex:pageBlockSection id="informationSection" title="Information">
+                    <apex:pageBlockSectionItem id="meetingSection"
+                        rendered="{!RT1__ReadyTalkMeeting__c.Id = null}">
+                        <apex:outputLabel for="meetingId" value="ReadyTalk Meeting" />
+                        <apex:outputPanel id="panel">
+                            <apex:selectList id="meeting" size="1"
+                                style="margin-bottom: 5px;" value="{!RT1__ReadyTalkMeeting__c.RT1__MeetingID__c}"
+                                onchange="getMeetingDetailsFromCC();"
+                                disabled="{!deactivateMeetingSelection}">
+                                <apex:selectOptions value="{!MeetingSelectOptions}" />
+                            </apex:selectList>
+                            <br />
+                            <apex:inputCheckbox id="showPastMeetings"
+                                value="{!ShowPastMeetings}" onclick="refreshMeetingList();" />
+                            <apex:outputLabel for="showPastMeetings"
+                                value="Change date range" />
+                            <apex:outputPanel id="pastMeetingsRange"
+                                rendered="{!ShowPastMeetings}">
+                        &nbsp;&nbsp;|&nbsp;&nbsp;   
+                        <apex:outputLabel value="Start: "
+                                    for="pastCampaignStart" />
+                                <apex:inputField value="{!proxyContact1.Birthdate}"
+                                    id="pastCampaignStart" styleClass="inputStartDate"
+                                    onchange="$('#dataloader').show();checkdates();" />
+                                <apex:outputLabel value="End: " for="pastCampaignEnd" />
+                                <apex:inputField value="{!proxyContact2.Birthdate}"
+                                    id="pastCampaignEnd" styleClass="inputEndDate"
+                                    onchange="$('#dataloader').show();checkdates();" />
+                            </apex:outputPanel>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem rendered="{!(RT1__ReadyTalkMeeting__c.Id != null && !deactivateMeetingSelection)}">
+                        <apex:outputLabel value="Title" />
+                        <apex:outputField value="{!RT1__ReadyTalkMeeting__c.Name}" />
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                &nbsp;
+            </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Campaign" for="campaign" />
+                        <apex:inputField value="{!RT1__ReadyTalkMeeting__c.RT1__Campaign__c}" id="campaign" />
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Access Code" />
+                        <apex:outputPanel >
+                            <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__AccessCode__c}" />
+                            <apex:outputPanel >
+                        &nbsp;<a id="changeAccessCode" href="#"
+                                    style="color: #888888; font-size: 10px">change access code</a>
+                            </apex:outputPanel>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:inputField value="{!RT1__ReadyTalkMeeting__c.RT1__AllowOthersToInvite__c}" />
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Meeting Type" />
+                        <apex:inputField value="{!RT1__ReadyTalkMeeting__c.RT1__Meeting_Type__c}" />
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem id="leadAssignmentSectionItem">
+                        <apex:outputLabel value="Lead Assignment" />
+                        <apex:outputPanel id="leadAssignmentPanel">
+                            <apex:inputField id="leadAssignmentBehavior"
+                                value="{!RT1__ReadyTalkMeeting__c.RT1__LeadAssignmentBehavior__c}" />
+                            <div id="ownerDiv"><apex:inputField id="leadAssignmentUser"
+                                value="{!DummyLead.OwnerId}" /></div>
+                            <div id="assignmentRuleDiv" style="padding-top: 5px;"><apex:selectList id="leadAssignmentRule" size="1"
+                                value="{!RT1__ReadyTalkMeeting__c.RT1__LeadAssignmentRuleId__c}">
+                                <apex:selectOptions value="{!assignmentRuleSelectOptions}" />
+                            </apex:selectList></div>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Automatically Create New Leads" />
+                        <apex:inputCheckbox value="{!RT1__ReadyTalkMeeting__c.RT1__CreateNewLeads__c}" />
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel >Lead Source</apex:outputLabel>
+                        <apex:selectList size="1" value="{!RT1__ReadyTalkMeeting__c.RT1__LeadSource__c}">
+                            <apex:selectOptions value="{!LeadSourceSelectOptions}" />
+                        </apex:selectList>
+                    </apex:pageBlockSectionItem>
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.LastModifiedDate}" />
+                    <apex:pageBlockSectionItem rendered="{!fieldMappingEnabled}">
+                        <apex:outputLabel value="Field Mappings Settings" />
+                        <apex:outputLink value="#" styleClass="updateMappings">Update Mapping</apex:outputLink>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Poll Questions" />
+                        <apex:outputLink value="#" styleClass="pollQuestions">Update Mapping</apex:outputLink>
+                    </apex:pageBlockSectionItem>
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.OwnerId}" />
+                    <apex:repeat value="{!$ObjectType.RT1__ReadyTalkMeeting__c.FieldSets.RT1__CustomerFields}" var="f">
+                        <apex:inputField value="{!RT1__ReadyTalkMeeting__c[f]}" />
+                    </apex:repeat>
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.LastModifiedById}" />
+                </apex:pageBlockSection>
+
+                <apex:pageBlockSection id="meetingDetails" title="Meeting Details"
+                    rendered="{!RT1__ReadyTalkMeeting__c.RT1__MeetingID__c != null}">
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.Name}" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__MeetingTimeNative__c}" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__HostName__c}" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__Duration__c}" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__RegistrationURL__c}" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__MeetingType__c}" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__MeetingURL__c}" />
+                    <apex:outputField value="{!RT1__ReadyTalkMeeting__c.RT1__CCMeetingStatus__c}" />
+                </apex:pageBlockSection>
+            </apex:pageBlock>
+            <div id="fieldMappingInput" style="display: none;"><apex:pageBlock >
+                <table>
+                    <tr>
+                        <th>Meeting Member Field</th>
+                        <th>Lead Field</th>
+                        <th>Contact Field</th>
+                    </tr>
+                    <apex:repeat value="{!fieldMappings}" var="mapping">
+                        <tr>
+                            <td><apex:outputField value="{!mapping.Name}" /></td>
+                            <td><apex:selectList styleClass="{!mapping.Name}-lead"
+                                value="{!mapping.RT1__LeadField__c}" size="1"
+                                disabled="{!NOT(mapping.RT1__LeadAllowUpdates__c)}">
+                                <apex:selectOptions value="{!leadFieldsPickList}" />
+                            </apex:selectList></td>
+                            <td><apex:selectList styleClass="{!mapping.Name}-contact"
+                                value="{!mapping.RT1__ContactField__c}" size="1"
+                                disabled="{!NOT(mapping.RT1__ContactAllowUpdates__c)}">
+                                <apex:selectOptions value="{!contactFieldsPickList}" />
+                            </apex:selectList></td>
+                        </tr>
+                    </apex:repeat>
+                </table>
+            </apex:pageBlock></div>
+            <div id="pollQuestionInput" style="display: none;"><apex:inputText value="{!question1}" styleClass="question1" /> <apex:inputText value="{!question2}" styleClass="question2" /> <apex:inputText value="{!question3}" styleClass="question3" /> <apex:inputText value="{!question4}" styleClass="question4" /> <apex:inputText value="{!question5}" styleClass="question5" /></div>
+        </apex:form>
+
+        <div id="credentialsDialog" style="display: none; font-size: 11px"
+            class="bPageBlock">
+        <table class="detailList">
+            <tbody>
+                <apex:outputPanel rendered="{!RT1__ReadyTalkMeeting__c.Id = null}">
+                    <tr>
+                        <td class="labelCol"><label>Toll Free Number</label></td>
+                        <td class="dataCol"><input type="text" id="tollFreeNumber"
+                            value="{!TollFreeNumber}" /></td>
+                    </tr>
+                    <tr>
+                        <td class="labelCol">Access Code</td>
+                        <td class="dataCol"><input type="text" id="accessCode"
+                            value="{!RT1__ReadyTalkMeeting__c.RT1__AccessCode__c}" /></td>
+                    </tr>
+                </apex:outputPanel>
+                <apex:outputPanel rendered="{!RT1__ReadyTalkMeeting__c.Id != null}">
+                    <tr>
+                        <td class="labelCol"><label>Toll Free Number</label></td>
+                        <td class="dataCol" id="tollFreeNumber" value="{!RT1__ReadyTalkMeeting__c.RT1__TollFreeNumber__c}">{!RT1__ReadyTalkMeeting__c.RT1__TollFreeNumber__c}</td>
+                    </tr>
+                    <tr>
+                        <td class="labelCol">Access Code</td>
+                        <td class="dataCol" id="accessCode" value="{!RT1__ReadyTalkMeeting__c.RT1__AccessCode__c}">{!RT1__ReadyTalkMeeting__c.RT1__AccessCode__c}</td>
+                    </tr>
+                </apex:outputPanel>
+                <tr>
+                    <td class="labelCol">Passcode</td>
+                    <td class="dataCol"><input type="password" id="passcode"
+                        value="{!RT1__ReadyTalkMeeting__c.RT1__Passcode__c}" /></td>
+                </tr>
+            </tbody>
+        </table>
+        <div style="text-align: center; padding: 5px;"><input
+            type="button" id="saveCredentialsButton" class="btn" value=" Save " />
+        <input type="button" id="cancelCredentialsButton" class="btn"
+            value=" Cancel " /></div>
+        </div>
+
+        <apex:form >
+            <div id="fieldMappingDialog" style="max-width: 625px; display: none;">
+            <apex:pageBlock >
+                <apex:pageMessages rendered="{!fieldValidationError}" />
+                <table>
+                    <tr>
+                        <th>Meeting Member Field</th>
+                        <th>Lead Field</th>
+                        <th>Contact Field</th>
+                    </tr>
+                    <apex:repeat value="{!fieldMappings}" var="mapping">
+                        <tr>
+                            <td><apex:outputField value="{!mapping.Name}" /></td>
+                            <td><input name="{!mapping.Name}" type="hidden"
+                                class="lead field-selection" value="{!mapping.RT1__LeadField__c}" />
+                            <apex:selectList styleClass="{!mapping.Name}-lead"
+                                value="{!mapping.RT1__LeadField__c}" size="1"
+                                disabled="{!NOT(mapping.RT1__LeadAllowUpdates__c)}">
+                                <apex:selectOptions value="{!leadFieldsPickList}" />
+                            </apex:selectList></td>
+                            <td><input name="{!mapping.Name}" id="{!mapping.Name}"
+                                type="hidden" class="contact field-selection"
+                                value="{!mapping.RT1__ContactField__c}" /> <apex:selectList styleClass="{!mapping.Name}-contact"
+                                value="{!mapping.RT1__ContactField__c}" size="1"
+                                disabled="{!NOT(mapping.RT1__ContactAllowUpdates__c)}">
+                                <apex:selectOptions value="{!contactFieldsPickList}" />
+                            </apex:selectList></td>
+                        </tr>
+                    </apex:repeat>
+                </table>
+            </apex:pageBlock></div>
+        </apex:form>
+
+        <apex:form >
+            <div id="pollQuestionDialog" style="max-width: 625px; display: none;">
+            <apex:pageBlock >
+                <apex:pageBlockSection columns="1">
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Poll Question 1" for="question1" />
+                        <apex:outputPanel >
+                            <apex:inputHidden value="{!question1}" id="question1-current" />
+                            <apex:selectList value="{!question1}" id="question1" size="1"
+                                styleClass="question1 poll-question-dropdown">
+                                <apex:selectOptions value="{!availablePollQuestions}" />
+                            </apex:selectList>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Poll Question 2" for="question2" />
+                        <apex:outputPanel >
+                            <apex:inputHidden value="{!question2}" id="question2-current" />
+                            <apex:selectList value="{!question2}" id="question2" size="1"
+                                styleClass="question2 poll-question-dropdown">
+                                <apex:selectOptions value="{!availablePollQuestions}" />
+                            </apex:selectList>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Poll Question 3" for="question3" />
+                        <apex:outputPanel >
+                            <apex:inputHidden value="{!question3}" id="question3-current" />
+                            <apex:selectList value="{!question3}" id="question3" size="1"
+                                styleClass="question3 poll-question-dropdown">
+                                <apex:selectOptions value="{!availablePollQuestions}" />
+                            </apex:selectList>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Poll Question 4" for="question4" />
+                        <apex:outputPanel >
+                            <apex:inputHidden value="{!question5}" id="question4-current" />
+                            <apex:selectList value="{!question4}" id="question4" size="1"
+                                styleClass="question4 poll-question-dropdown">
+                                <apex:selectOptions value="{!availablePollQuestions}" />
+                            </apex:selectList>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Poll Question 5" for="question5" />
+                        <apex:outputPanel >
+                            <apex:inputHidden value="{!question5}" id="question5-current" />
+                            <apex:selectList value="{!question5}" id="question5"
+                                styleClass="question5 poll-question-dropdown" size="1">
+                                <apex:selectOptions value="{!availablePollQuestions}" />
+                            </apex:selectList>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                </apex:pageBlockSection>
+            </apex:pageBlock></div>
+        </apex:form>
+        <div id="pollUpdatePrompt">You've updated this meetings poll
+        question mappings. Would you like to resync the meeting now?<br />
+        <br />
+        Otherwise, poll question updates will take place after the meeting is
+        saved and the next sync takes place.</div>
+    </apex:outputPanel>
+</apex:page>

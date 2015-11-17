@@ -1,0 +1,299 @@
+<apex:page standardController="Account" extensions="UniqueEntry.uniqueAccountExtension">
+
+	<apex:styleSheet value="{!URLFOR($Resource.UniqueEntry__uniqueEntryResources, 'uniqueStyle.css')}"/>
+	
+    <apex:includeScript value="{!$Resource.UniqueEntry__jQuery}"/>
+    <apex:includeScript value="{!URLFOR($Resource.UniqueEntry__uniqueEntryResources, 'vampire.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.UniqueEntry__uniqueEntryResources, 'genesis.js')}"/>
+    <script src="../../soap/ajax/24.0/connection.js" type="text/javascript"></script>
+
+    <script type="text/javascript">
+    
+        sforce.connection.sessionId = '{!$Api.Session_ID}';
+        var showingDupes = false;
+        var showingMessages = false;
+        var obj = 'Account';
+
+        function addLogo(){      
+            var logoURL = "{!URLFOR($Resource.uniqueEntryResources, 'ringlead_logo_37high.jpg')}";
+            $(".pageDescription").append('<span id="seekStatus" style="float:right;margin:3px 10% 0 0;font-style:italic;font-size:8pt;font-family:arial;color:rgb(88,88,90);">seeking duplicates...</span>');
+            $(".ptBody").append('<a title="Duplicate Prevention Powered by RingLead" href="http://www.ringlead.com" target="_blank"><img alt="RingLead - Prevent Duplicates in Salesforce" style="float:right;margin:3px 20px 0 0;border:0;" src="' + logoURL + '"/></a>');
+			seekStatusOff();
+        }
+        
+        function addToOnload(fn){
+            var old = window.onload;
+            window.onload = function(){
+                old(); fn();
+            }
+        }
+        
+        function seekStatusOn(){
+        	$("#seekStatus").show();
+        }
+        
+        function seekStatusOff(){
+        	$("#seekStatus").hide();
+        }
+        
+        addToOnload(addLogo);
+        if({!NOT(loaded)})
+            addToOnload(genesis);
+            
+        var elementIds = new Array();
+        function fetchKeyFieldIds(){
+        	elementIds = new Array();
+        	$("input[id*='KEYFIELD-']").each(
+        		function(thing){
+        			elementIds.push($(this).attr("Id"));
+        		}
+        	);
+        	lowStart();
+        }
+        
+        function mailLink(){
+        
+        	var $billSt = $("textarea[id*='FIELD-BillingStreet']");
+        	var $shipSt = $("textarea[id*='FIELD-ShippingStreet']");
+
+        	if($billSt.size()>0 && $shipSt.size()>0){
+     	
+        		var $billSection = $billSt.parent().parent().parent().parent().parent().parent();
+        		var $shipSection = $shipSt.parent().parent().parent().parent().parent().parent();
+
+        		if($billSection.attr("Id") == $shipSection.attr("Id")){
+					if($billSection.children().first().hasClass("pbSubheader")){
+        				$billSection.children().first().append('<a onclick="copyAddress()" style="font-weight:bold;font-size:91%;float:right;cursor:pointer;margin-right:10px;">Copy Billing Address to Shipping Address</a>');
+        			}
+        		}
+        	}
+        }
+        
+        function copyAddress(){
+        	$("textarea[id*='FIELD-ShippingStreet']").attr("value",$("textarea[id*='FIELD-BillingStreet']").val());
+        	$("input[id*='FIELD-ShippingCity']").attr("value",$("input[id*='FIELD-BillingCity']").val());
+        	$("input[id*='FIELD-ShippingState']").attr("value",$("input[id*='FIELD-BillingState']").val());
+        	$("input[id*='FIELD-ShippingPostalCode']").attr("value",$("input[id*='FIELD-BillingPostalCode']").val());
+        	$("input[id*='FIELD-ShippingCountry']").attr("value",$("input[id*='FIELD-BillingCountry']").val());
+        }
+        
+        function enterKey(){
+        	$("input[id*='saveButton']").first().click();
+        }
+        
+        function saveClick(){
+        	$("input[id*='Button_ue']").each(
+        		function(thing){
+        			$(this).attr('class','btnDisabled');
+        			$(this).attr('value','Saving...');
+        		}
+        	);
+        }
+        
+        function cancelClick(){
+        	$("input[id*='Button_ue']").each(
+        		function(thing){
+        			$(this).attr('class','btnDisabled');
+        			$(this).attr('value','Canceling...');
+        		}
+        	);
+        }
+        
+        function reinstateButtons(){
+        	$("input[id*='Button_ue']").attr('class','btn');
+        	$("input[id*='saveButton_ue']").attr('value','Save');
+        	$("input[id*='saveNewButton_ue']").attr('value','Save & New');
+        	$("input[id*='cancelButton_ue']").attr('value','Cancel');
+        }
+   
+    </script>
+    
+    <apex:sectionHeader title="{!$ObjectType.Account.Label} Edit" subtitle="New Unique {!$ObjectType.Account.Label}" id="sectionHeader"/>
+
+    <apex:form >
+    
+    	<!-- JAVASCRIPT FUNCTIONS TO CALL METHODS IN THE APEX CONTROLLER -->
+    
+        <apex:actionFunction name="buildLayout" action="{!buildLayout}" reRender="canvas" immediate="true">
+            <apex:param assignTo="{!layoutString}" name="layoutString" value=""/>
+            <apex:param assignTo="{!tempRecordTypeId}" name="tempRecordTypeId" value=""/>
+        </apex:actionFunction>
+        
+        <apex:actionFunction name="sporadicDupeCheck" reRender="dupes" action="{!seekDupes}" immediate="true" oncomplete="reStart();seekStatusOff();">
+        	<apex:param assignTo="{!deltaString}" name="deltaString" value=""/>
+        </apex:actionFunction>
+
+
+		<!-- DUPLICATE SECTION -->
+        
+        <apex:outputPanel id="dupes">
+            <apex:outputPanel rendered="{!accountDupesFound}">
+                <div class="dupeDiv">
+                    
+                    <!--  Title -->
+                    
+                    <apex:outputPanel >
+                    	<div class="dupeTitle">
+                        	{!exclamation} You may be creating a duplicate record.
+                    	</div>
+                    </apex:outputPanel>
+
+                    <!-- Duplicate Accounts -->
+                    	
+					<apex:outputPanel >
+                    	The following <b>{!$ObjectType.Account.LabelPlural}</b> appear to be very similar to the information you are entering:<br/>
+                    	<apex:dataTable id="accountDupes" value="{!accountDupes}" var="d" styleClass="dupeTable"  onRowMouseOver="this.style.background='white';" onRowMouseOut="this.style.background='';">
+                    		<apex:column >
+                    			<!-- Displays only if user has EDIT rights -->
+                    			<apex:outputLink value="/{!d.account.Id}/e?retURL=%2F{!d.account.Id}" rendered="{!d.editable}" title="Edit">
+                    				edit
+                    			</apex:outputLink>
+                    		</apex:column>
+                        	<apex:column headerValue="Name">
+                        		<!-- Displays if User has access to Record -->
+                            	<apex:outputLink title="View (New Window)" value="/{!d.account.Id}" target="_blank" rendered="{!d.readable}">
+                                	<apex:outputText escape="true">
+                                    	{!d.account.Name}
+                                	</apex:outputText>
+                            	</apex:outputLink>
+                        		<!-- Displays if User does NOT have access to Record -->
+                            	<apex:outputPanel rendered="{!NOT(d.readable)}">
+                            		<a title="View (New Window)" style="cursor:pointer;text-decoration:underline" onclick="alert('You do not have access to view this record.\nYou should account the owner(s) with any questions.');">
+                                		<apex:outputText escape="true">
+                                    		{!d.account.Name}
+                                		</apex:outputText>
+                                	</a>
+                            	</apex:outputPanel>
+                        	</apex:column>
+                        	<apex:column value="{!d.account.accountnumber}" headerValue="{!$ObjectType.Account.Fields.AccountNumber.Label}"/>
+                        	<apex:column headerValue="{!$ObjectType.account.Fields.Phone.Label}">
+                        		{!if(OR(settings.UniqueEntry__Security_Level__c='low',d.readable),d.account.Phone,'••••••••••')}
+                        	</apex:column>
+							<apex:column value="{!d.account.billingState}" headerValue="{!$ObjectType.Account.Fields.BillingState.Label}"/>
+                        	<apex:column headerValue="Owner">
+                        		<!-- Displays for Queue Owner -->
+                            	<apex:outputText escape="true" rendered="{!LEFT(d.account.OwnerId,3)<>'005'}">
+                                	{!d.account.Owner.Name}
+                            	</apex:outputText>
+                            	<!-- Displays when Owner is NOT a Queue -->
+                            	<apex:outputLink title="View (New Window)" value="/{!d.account.ownerId}" target="_blank"  rendered="{!LEFT(d.account.OwnerId,3)='005'}">
+                                	<apex:outputText escape="true">
+                                    	{!d.account.Owner.Name}
+                                	</apex:outputText>
+                            	</apex:outputLink>
+                            	<!-- Displays when Owner NOT a Queue AND NOT the current user -->
+                            	<apex:outputPanel rendered="{!AND(LEFT(d.account.OwnerId,3)='005',d.account.OwnerId<>$User.Id)}">
+                                	<a title="Send Email" href="mailto:{!d.account.owner.email}" target="_blank">
+                                    	<apex:image value="{!URLFOR($Resource.UniqueEntry__uniqueEntryResources, 'envelope.jpg')}" alt="Send Email" styleClass="littleIcons"/>
+                                	</a>
+                            	</apex:outputPanel>
+                        	</apex:column>
+<!--  FOR TESTING ONLY         
+<apex:column headerValue="Confidence">
+	<a onclick="alert('{!d.breakdown}')">{!d.confidence}</a>
+</apex:column>
+-->
+                    	</apex:dataTable>
+                    	
+                    	<apex:outputPanel rendered="{!moreAccounts}" styleClass="dupeMoreLink" layout="block">
+                    		{!currentAccountDisplay}
+                    		<apex:commandLink action="{!showMoreAccounts}" reRender="dupes" immediate="true">
+                    			show more...
+                    		</apex:commandLink>
+                    	</apex:outputPanel>
+                    	
+                    </apex:outputPanel>
+
+                </div>
+            </apex:outputPanel>
+
+<!--  FOR TESTING ONLY  
+<div>
+[for testing only]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+dupe search countdown: <span id="countdown"/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+last query returned at: {!now()}
+</div>
+-->
+          
+            <script>
+                if({!accountDupesFound}){
+                    if(!showingDupes){
+                        if($("html").scrollTop()>150 || $("body").scrollTop()>150){
+                            $("html:not(:animated),body:not(:animated)").animate({ scrollTop: 0}, 1000);
+                            scrolled=true;
+                        }
+                        showingDupes = true;
+                    }
+                }
+                else{
+                    showingDupes = false;
+                }
+            </script>
+            
+        </apex:outputPanel>
+        
+        
+        <!-- ERROR MESSAGES -->
+        
+        <apex:outputPanel id="messages">
+        	<apex:outputPanel rendered="{!hasMessages}">
+                <div class="dupeDiv"> 
+                	<div class="dupeTitle">
+                    	The following must be addressed in order to save:
+                    </div>
+                    <apex:messages layout="table" styleClass="messageTable"/>
+                </div>
+            </apex:outputPanel>
+            
+        	<script>
+        	
+                if({!hasMessages}){
+                    if(!showingMessages){
+                        if($("html").scrollTop()>150 || $("body").scrollTop()>150){
+                            $("html:not(:animated),body:not(:animated)").animate({ scrollTop: 0}, 1000);
+                        }
+                        showingMessages = true;
+                    }
+                }
+                else{
+                    showingMessages = false;
+                }
+        	
+        		var goto = '{!goToURL}';
+            	if(goto != ''){
+
+					if(goto == 'record'){
+						var recId = '{!account.id}';
+						window.location='/' + recId.replace(/[^a-zA-Z0-9]/g,'');  //strip out anything but letters and numbers just in case
+					}
+					else if(goto == 'new'){
+						window.location='/apex/uniqueAccount';
+					}
+            	}
+            	else{
+            		reinstateButtons();
+            	}
+            	
+        	</script>
+                  	
+        </apex:outputPanel>
+        
+        
+        <!-- MAIN ENTRY FORM BODY -->
+        
+        <apex:outputPanel id="canvas" style="width:90%">
+        
+        	<script>
+        		if({!loaded}){
+        			mailLink();
+        			fetchKeyFieldIds();
+        		}
+        	</script>
+        
+            <apex:dynamicComponent componentValue="{!dynamicPageBlock}"/>
+
+        </apex:outputPanel>
+        
+    </apex:form>
+
+</apex:page>

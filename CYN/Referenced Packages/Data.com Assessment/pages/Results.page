@@ -1,0 +1,1359 @@
+<apex:page controller="ddcAssess.AssessmentResultsCtlr" title="Data.com Assessment Results" sidebar="false">
+<link rel="stylesheet" href="{!URLFOR($Resource.jquery_ui_base_theme,'jquery-ui.min.css')}" />
+<link rel="stylesheet" type="text/javascript" href="{!URLFOR($Resource.jquery_jqplot,'jquery.jqplot.min.css')}" />
+
+<link rel="stylesheet" type="text/css" href="{!URLFOR($Resource.assessment_css)}" />
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.0/jquery.min.js"></script>
+<script type="text/javascript" src="{!URLFOR($Resource.jquery_migrate)}"></script>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.9.2/jquery-ui.min.js"></script>
+<!--[if lt IE 9]><script type="text/javascript" src="{!URLFOR($Resource.jquery_jqplot,'excanvas.min.js')}"></script><![endif]-->
+<script type="text/javascript" src="{!URLFOR($Resource.jquery_jqplot,'jquery.jqplot.min.js')}"></script>
+<script type="text/javascript" src="{!URLFOR($Resource.jquery_jqplot,'jqplot.pieRenderer.min.js')}"></script>
+<script type="text/javascript" src="{!URLFOR($Resource.jquery_jqplot,'jqplot.donutRenderer.min.js')}"></script>
+<script type="text/javascript" src="{!URLFOR($Resource.jqplotBar)}"></script>
+<script type="text/javascript" src="{!URLFOR($Resource.jqplotCategory)}"></script>
+<script type="text/javascript" src="{!URLFOR($Resource.jqplotPointLabels)}"></script>
+
+
+<script type="text/javascript">
+    function addCommas(nStr)
+    {
+        nStr += '';
+        x = nStr.split('.');
+        x1 = x[0];
+        x2 = x.length > 1 ? '.' + x[1] : '';
+        var rgx = /(\d+)(\d{3})/;
+        while (rgx.test(x1)) {
+        x1 = x1.replace(rgx, '$1' + ',' + '$2');
+        }
+        return x1 + x2;
+    }
+
+    $(document).ready(function() {
+        drawIndustryChart();
+        drawRevenueChart();
+        drawEmployeesChart();
+
+        if(new RegExp("print=([^&]*)", "i").exec(window.location.search) == null) {
+            $("#subtabs").tabs();
+            $("#subtabs").on( "tabsactivate", function( event, ui ) {
+                drawCharts();
+            });
+        } else {
+            $("#subtabs_header").hide();
+            $("#print_link").hide();
+            $("#AppBodyHeader").hide();
+            $(".bodyDiv").css('border', 'none');
+            drawCharts();
+        }
+
+        //drawIndustryCharts();
+        $(".add_commas").each(function(a,b){
+            $(b).html( addCommas( $(b).html() ) );
+        });
+        $("#account_indicator").css('left', '{!accountHealth * 10}%');
+        $("#account_indicator2").css('left', '{!accountHealth * 10}%');
+        $("#contact_indicator").css('left', '{!contactHealth * 10}%');
+        $("#contact_indicator2").css('left', '{!contactHealth * 10}%');
+        $("#lead_indicator").css('left', '{!leadHealth * 10}%');
+        $("#lead_indicator2").css('left', '{!leadHealth * 10}%');
+        console.log('did i get here?');
+        $('a[rel*=leanModal]').leanModal({ top : 100, overlay : 0.4, closeButton: ".modal_close" });        
+        console.log('how about, did i get here?');
+        
+    });
+
+    $(function() {
+    });
+
+    function clickUnmatched() {
+        $("#subtabs_header a[href='#unmatched']").click();
+    }
+
+    function clickDunsright() {
+        $("#subtabs_header a[href='#dunsright']").click();
+    }
+</script>
+
+<style>
+    .chart_footnote {
+        clear: both;
+        margin: 0 auto;
+        width: 500px;
+        font-size: 10px;
+        color: #999999;
+        padding-left: 115px;
+    }
+</style>
+
+<c:AssessmentHeader />
+<br />
+
+<apex:outputPanel id="everything">
+    <div id="print_link">
+        <a href="#" onclick="window.open('{!$Page.Results}?id={!summary.id}&print=x')" class="help_link"><img
+            src="{!URLFOR($Resource.pdf_icon)}" />Printable Version</a>
+    </div>
+    <div id="breadcrumbs" class="inner_content">
+        <a href="{!URLFOR($Page.AssessmentHome)}?sfdc.tabName={!$CurrentPage.parameters.sfdc.tabName}">All Assessments</a>
+        &nbsp;&nbsp;&gt;&nbsp;&nbsp; <b><apex:outputField value="{!summary.createddate}" rendered="{!valid}" /></b>
+    </div>
+    <apex:pageMessages />
+
+    <apex:outputPanel rendered="{!valid}">
+
+        <div id="subtabs">
+            <ul id="subtabs_header">
+                <li><a href="#summary">Summary</a></li>
+                <li><a href="#accounts">Accounts</a></li>
+                <li><a href="#contacts">Contacts</a></li>
+                <li><a href="#leads">Leads</a></li>
+                <li><a href="#unmatched">Unmatched</a></li>
+                <apex:outputPanel layout="none" rendered="{!summary.ddcAssess__Dunsright__c}">
+                <li><a href="#dunsright">DUNSRight</a></li>
+                </apex:outputPanel>
+            </ul>
+            <div id="summary">
+                <div class="inner_content">
+                    <div class="summary_text">
+                        <h2 style=''>Assessment Summary</h2>
+                        <p style=''>
+                            We've analyzed&nbsp;
+                            <apex:outputField value="{!entities['Account'].total__c}" />
+                            account,&nbsp;
+                            <apex:outputField value="{!entities['Contact'].total__c}" />
+                            contact, and&nbsp;
+                            <apex:outputField value="{!entities['Lead'].total__c}" />
+                            lead records.
+                        </p>
+                    </div>
+
+                    <h2>CRM Data Health Rating</h2>
+
+                    <div id="data_health_summary" class="row">
+                        <div class="data_health_summary_sub col col-25">
+                            <div class="data_health_summary_content">
+                                <h3>Accounts</h3>
+                                <div class="gauge"> <apex:image url="{!URLFOR($Resource.assessment_resources,
+                                    'images/gauge.png')}"/> <span class="indicator" id='account_indicator' style='left:0%;transition:all 1s;transition-timing-function:ease-in-out'> <apex:image url="{!URLFOR($Resource.assessment_resources,
+                                    'images/indicator.png')}"/></span> 
+                                </div>
+                                <div class="scale-label-container"> <span class="scale-label left">poor</span><span class="scale-label right">excellent</span> 
+                                </div>
+                                <ul class="ratings-text">
+                                    <li> <span class="ratings-text-label">Usability:</span><span class="ratings-text-value"> {!dataHealthLabels['Account']['Usability']}</span> </li>
+                                    <li> <span class="ratings-text-label">Matchability:</span><span class="ratings-text-value"> {!dataHealthLabels['Account']['Matchability']}</span> </li>
+                                    <li> <span class="ratings-text-label">Uniqueness:</span><span class="ratings-text-value"> {!dataHealthLabels['Account']['Uniqueness']}</span> </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="data_health_summary_sub col col-25">
+                            <div class="data_health_summary_content">
+                                <h3>Contacts</h3>
+                                <div class="gauge"> <apex:image url="{!URLFOR($Resource.assessment_resources,
+                                    'images/gauge.png')}"/> <span class="indicator" id='contact_indicator' style='left:0%;transition:all 1s;transition-timing-function:ease-in-out'> <apex:image url="{!URLFOR($Resource.assessment_resources,
+                                    'images/indicator.png')}"/></span> 
+                                </div>
+                                <div class="scale-label-container"> <span class="scale-label left">poor</span><span class="scale-label right">excellent</span> 
+                                </div>
+                                <ul class="ratings-text">
+                                    <li> <span class="ratings-text-label">Usability:</span><span class="ratings-text-value"> {!dataHealthLabels['Contact']['Usability']}</span> </li>
+                                    <li> <span class="ratings-text-label">Matchability:</span><span class="ratings-text-value"> {!dataHealthLabels['Contact']['Matchability']}</span> </li>
+                                    <li> <span class="ratings-text-label">Uniqueness:</span><span class="ratings-text-value"> {!dataHealthLabels['Contact']['Uniqueness']}</span> </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="data_health_summary_sub col col-25">
+                            <div class="data_health_summary_content">
+                                <h3>Leads</h3>
+                                <div class="gauge"> <apex:image url="{!URLFOR($Resource.assessment_resources,
+                                    'images/gauge.png')}"/> <span class="indicator" id='lead_indicator' style='left:0%;transition:all 1s;transition-timing-function:ease-in-out'> <apex:image url="{!URLFOR($Resource.assessment_resources,
+                                    'images/indicator.png')}"/></span> 
+                                </div>
+                                <div class="scale-label-container"> <span class="scale-label left">poor</span><span class="scale-label right">excellent</span> 
+                                </div>
+                                <ul class="ratings-text">
+                                    <li> <span class="ratings-text-label">Usability:</span><span class="ratings-text-value"> {!dataHealthLabels['Lead']['Usability']}</span> </li>
+                                    <li> <span class="ratings-text-label">Matchability:</span><span class="ratings-text-value"> {!dataHealthLabels['Lead']['Matchability']}</span> </li>
+                                    <li> <span class="ratings-text-label">Uniqueness:</span><span class="ratings-text-value"> {!dataHealthLabels['Lead']['Uniqueness']}</span> </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="data_health_summary_sub col col-25">
+                            <div class="match_rate_sidebar">
+
+                                <img src="{!URLFOR($Resource.did_you_know_icon)}" alt="did you know icon" id="did_you_know_icon"/>
+                                <h3>What’s CRM Data Health Rating?</h3><br />
+                                <p>CRM Data Health Rating is something we created to help
+                                    you quickly get an understanding of your
+                                    overall data quality.
+                                <a href="#crm_learn_more" rel='leanModal' name="summary_crm_learn_more" >Learn More</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div> <!-- data_health_summary -->
+                    <div class="divider"></div>
+                    <h2>Key Data Insights for Clean &amp; Prospector</h2>
+                    <h3 class="sub-head">Data.com Clean</h3>
+                    <div class = "row">
+                        <div class="col col-75">
+                            <div class="record_table  small">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th colspan="2">
+                                             Records we can <b>enrich</b>
+                                            </th>
+                                            <th colspan="2">Records that are likely <b>inactive</b>
+                                            </th>
+                                            <apex:outputPanel layout="none" rendered="{!summary.ddcAssess__Dupe_Check__c}">
+                                                <th colspan="2">Records that are likely <b>duplicates</b>
+                                                </th>
+                                            </apex:outputPanel>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="count add_commas"><apex:outputField value="{!entities['Account'].Different__c}" /></td>
+                                            <td class="field">accounts</td>
+                                            <td class="count add_commas"><apex:outputField value="{!entities['Account'].Inactive__c}" /></td>
+                                            <td class="field">accounts</td>
+                                            <apex:outputPanel layout="none" rendered="{!summary.ddcAssess__Dupe_Check__c}">
+                                                <td class="count add_commas"><apex:outputField value="{!entities['Account'].Duplicate__c}" /></td>
+                                                <td class="field">accounts</td>
+                                            </apex:outputPanel>
+                                        </tr>
+                                        <tr>
+                                            <td class="count add_commas"><apex:outputField value="{!entities['Contact'].Different__c}" /></td>
+                                            <td class="field">contacts</td>
+                                            <td class="count add_commas"><apex:outputField value="{!entities['Contact'].Inactive__c}" /></td>
+                                            <td class="field">contacts</td>
+                                            <apex:outputPanel layout="none" rendered="{!summary.ddcAssess__Dupe_Check__c}">
+                                                <td class="count add_commas"><apex:outputField value="{!entities['Contact'].Duplicate__c}" /></td>
+                                                <td class="field">contacts</td>
+                                            </apex:outputPanel>
+                                        </tr>
+                                        <tr>
+                                            <td class="count add_commas"><apex:outputField value="{!entities['Lead'].Different__c}" /></td>
+                                            <td class="field">leads</td>
+                                            <td class="count add_commas"><apex:outputField value="{!entities['Lead'].Inactive__c}" /></td>
+                                            <td class="field">leads</td>
+                                            <apex:outputPanel layout="none" rendered="{!summary.ddcAssess__Dupe_Check__c}">
+                                                <td class="count add_commas"><apex:outputField value="{!entities['Lead'].Duplicate__c}" /></td>
+                                                <td class="field">leads</td>
+                                            </apex:outputPanel>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="col col-25" style='padding-left:20px'> 
+                            <p>Data.com Clean can automatically fill blank fields on your matched Salesforce records with Data.com values. For more information, check out the <a href='http://www.youtube.com/watch?v=QKPDm6W-EzE'>Data.com Clean Product Demo video</a>, or <a href='https://www.salesforce.com/data/customers/'>read a customer story.</a></p>
+                        </div>
+                    </div>
+
+                    <h3 class="sub-head">Data.com Prospector</h3>
+                    <div class="row">
+                        <div class="col col-75">
+                            <div class="record_table medium">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th colspan="2">For all <b>accounts</b> you have today we can <b>enrich</b> your data with
+                                            </th>
+                                            <th colspan="2">In the <b>top 10 industries</b> we identified for your <b>account</b> we can <b>enrich</b> your data with
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="count add_commas">{!summary.Available_Contacts__c}</td>
+                                            <td class="field">contacts</td>
+                                            <td class="count add_commas">{!summary.Available_Accounts_By_Industry__c}</td>
+                                            <td class="field">accounts</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="count"></td>
+                                            <td class="field"></td>
+                                            <td class="count add_commas">{!summary.Available_Contacts_By_Industry__c}</td>
+                                            <td class="field">contacts</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="col col-25"> 
+                            <div style='padding-left:20px'>
+                                <p>Data.com Prospector provides complete, up-to-date account and contact information which can be imported directly into Salesforce.  For more information, check out the <a href='http://www.youtube.com/watch?v=X4fK3tj9HQY'>Data.com Prospector Product Demo video</a>, or <a href='https://www.salesforce.com/data/customers/'>read a customer story</a>.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div> <!-- summary -->
+
+            <div class="clear"></div>
+
+            <div id="accounts" class="tab_content">
+                <div class="inner_content">
+                    <h2>CRM Data Health Rating</h2>
+                    <div id="data_health_summary" class="row">
+                        <div class="data_health_summary_sub col col-50">
+                            <div class="data_health_summary_content">
+                                <h3>Accounts</h3>
+                                <div class="gauge"> <apex:image url="{!URLFOR($Resource.assessment_resources,
+                                    'images/gauge.png')}"/> <span class="indicator" id='account_indicator2' style='left:0%;transition:all 1s;transition-timing-function:ease-in-out'> <apex:image url="{!URLFOR($Resource.assessment_resources,
+                                    'images/indicator.png')}"/></span> 
+                                </div>
+                                <div class="scale-label-container"> <span class="scale-label left">poor</span><span class="scale-label right">excellent</span> 
+                                </div>
+                                <ul class="ratings-text">
+                                    <li> <span class="ratings-text-label">Usability:</span><span class="ratings-text-value"> {!dataHealthLabels['Account']['Usability']}</span> </li>
+                                    <li> <span class="ratings-text-label">Matchability:</span><span class="ratings-text-value"> {!dataHealthLabels['Account']['Matchability']}</span> </li>
+                                    <li> <span class="ratings-text-label">Uniqueness:</span><span class="ratings-text-value"> {!dataHealthLabels['Account']['Uniqueness']}</span> </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="data_health_summary_sub col col-25">
+                            <div class="match_rate_sidebar">
+                                <img src="{!URLFOR($Resource.did_you_know_icon)}" alt="did you know icon" id="did_you_know_icon"/>
+                                <h3>What’s CRM Data Health Rating?</h3><br />
+                                <p>CRM Data Health Rating is something we created to help
+                                    you quickly get an understanding of your
+                                    overall data quality.
+                                <a href="#crm_learn_more" rel='leanModal' name="summary_crm_learn_more" >Learn More</a>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="data_health_summary_sub col col-25">
+                        </div>
+                    </div>
+                    <div class="divider"></div>
+                    <h2 style='margin-bottom:0px;'>Account Profile</h2>
+                    <div style='color:#666666;margin-bottom:30px;margin-top:5px'>These account profiles are based on the records we were able to match.
+                    </div>
+
+                    <div id="industry_summary" class="row industry-chart-container">
+                        <div class="col col-50">
+                            <h3>Top Ten Industries</h3>
+                            <div id='industry-chart'></div>
+                            <div id='missing_industries_text' class='chart_footnote' style='padding-top:5px'><span id='missing_industries_count'></span> records were excluded from the above chart because they did not contain a value for industry.
+                            </div>
+                        </div>
+                        <div class="col col-25"></div>
+                    </div>
+                    <div style='margin-top:60px' id="industry_summary" class="row revenue-chart-container">
+                        <div class="col col-50">
+                            <h3>Revenue Ranges</h3>
+                            <div id='revenue-chart'></div>
+                            <div id='missing_revenue_text' style='margin-top:-20px;margin-bottom:20px' class='chart_footnote'><span id='missing_revenue_count'></span>  records were excluded in the above chart because they did not contain a value for revenue.
+                            </div>
+                        </div>
+                        <div class="col col-25"></div>
+                    </div>
+                    <div style='margin-top:20px' id="industry_summary" class="row employee-chart-container">
+                        <div class="col col-50">
+                            <h3>Employee Ranges</h3>
+                            <div id='employees-chart'></div>
+                            <div style='margin-top:-20px;margin-bottom:20px' id='missing_employees_text' class='chart_footnote'><span id='missing_employees_count'></span>  records were excluded in the above chart because they did not contain a value for number of employees.
+                            </div>
+                        </div>
+                        <div class="col col-25"></div>
+                    </div>
+                    <h2 style='margin-bottom:0px;'>Account Data Insights</h2>
+                    <h3 style='margin-top:5px' class="sub-head">Data.com Clean</h3>
+                    <div class = "row">
+                        <div class="col col-50">
+                            <div class="record_table large">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th colspan="2">Data.com Clean can add/update <b>industry</b>, <b>revenue</b>, and <b>employee</b> values for
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="count add_commas">{!updateableAccounts}</td>
+                                            <td class="field">accounts</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="col col-25" style='padding-left:20px'> 
+                            <p>Data.com Clean can automatically fill blank fields on your matched Salesforce records with Data.com values. For more information, check out the <a href='http://www.youtube.com/watch?v=QKPDm6W-EzE'>Data.com Clean Product Demo video</a>, or <a href='https://www.salesforce.com/data/customers/'>read a customer story.</a></p>
+                        </div>
+                    </div>      
+                    <div class="divider"></div>
+
+                    <div class="summary_text">
+                        <h2>Matched Record Analysis - Accounts&nbsp;&nbsp;&nbsp;<a href="javascript:clickDunsright();">Also see DUNSRight&#8482; match results</a></h2>
+                        <p>This section breaks down the records we've matched, showing the number and percentage of records by status and
+                            identifying the match percentage.</p>
+                    </div>
+                    <div class="stats_body">
+                        <div class="row">
+                            <div class ="col col-25">
+                                <div id="Account_chart" class="jqplot-target">
+                                    <div class = "donut-value">{! (entities['Account'].matched_pcnt__c)}<span class="donut-percent-sign">% </span><span class="donut-descriptor">matched</span></div>
+                                </div>
+                            </div>
+                            <div class ="col col-50 donut-legend">
+                                <div class="row legend-row">
+                                    <div class ="col col-33">
+                                        <div class="legend_element">
+                                            <div class="legend_in_sync">&nbsp;</div>
+                                            <span><b class='add_commas'><apex:outputField value="{!entities['Account'].in_sync__c}" /> In Sync</b></span>
+                                        </div>
+                                    </div>
+                                    <div class ="col col-33">
+                                        <div class="legend_element">
+                                            <div class="legend_different">&nbsp;</div>
+                                            <span> <b class='add_commas'><apex:outputField value="{!entities['Account'].different__c}" /> Different</b> </span>
+                                        </div>
+                                    </div>
+                                    <div class ="col col-33">
+                                        <div class="legend_element">
+                                            <div class="legend_inactive">&nbsp;</div>
+                                            <span> <b class='add_commas'><apex:outputField value="{!entities['Account'].inactive__c}" />  Inactive</b></span>
+                                        </div> 
+                                    </div>
+                                </div>
+                                <div class="row legend-row">
+                                    <div class ="col col-33">
+                                        <apex:outputPanel layout="none" rendered="{!summary.ddcAssess__Dupe_Check__c}">
+                                        <div class="legend_element">
+                                            <div class="legend_unmatched">&nbsp;</div>
+                                            <span> <b> Unmatched</b></span>
+                                        </div>
+                                        </apex:outputPanel>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class = "row">
+                            <div class="col col-66">
+                                <h2 class="min-margin">Account Fields <span class="field_table_count_header">
+                                    <apex:outputField value="{!entities['Account'].matched__c}" />
+                                    account records
+                                </span></h2>
+                                <table class="assessment_table">
+                                    <thead>
+                                        <tr>
+                                            <th>Field</th>
+                                            <th>Blank</th>
+                                            <th>Blank (%)</th>
+                                            <th>Different</th>
+                                            <th>Different (%)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <apex:repeat value="{!fieldLists['Account']}" var="field">
+                                            <tr>
+                                                <td>{!fieldLabels[field]}</td>
+                                                <td class="{!IF(fields['Account'][field].Blank_pcnt__c >= blankThreshold,'blank_highlight','')}"><apex:outputField value="{!fields['Account'][field].Blank__c}" /></td>
+                                                <td class="{!IF(fields['Account'][field].Blank_pcnt__c >= blankThreshold,'blank_highlight','')}">
+                                                    {!fields['Account'][field].Blank_pcnt__c}%</td>
+                                                <td><apex:outputField value="{!fields['Account'][field].Different__c}" /></td>
+                                                <td class="{!IF(fields['Account'][field].different_pcnt__c >= differentThreshold,'different_highlight','')}">
+                                                    {!fields['Account'][field].Different_pcnt__c}%</td>
+                                            </tr>
+                                        </apex:repeat>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="marketing_sidebar col col-33">
+                                <p>
+                                    The Account fields you see here are included with Data.com Corporate. Data.com Premium provides over 50 additional D&amp;B
+                                    fields for matched account records. <br /> <br /> For complete details on the additional fields, and the other
+                                    advantages of using Data.com Premium, check out the <a class="help_link"
+                                    href="http://www.data.com/export/sites/data/common/assets/pdf/DS_Datadotcom_ProductComparison.pdf" target="_blank">
+                                    Data.com Edition Comparison datasheet</a> or watch the <a class="help_link" href="http://www.youtube.com/watch?v=gGuXbxhrdYc"
+                                    target="_blank"> Data.com Premium</a> video.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div> <!-- accounts -->
+
+            <div class="clear"></div>
+
+            <div id="contacts" class="tab_content">
+                <div class="inner_content">
+                    <h2>CRM Data Health Rating</h2>
+                    <div id="data_health_summary" class="row">
+                        <div class="data_health_summary_sub col col-50">
+                            <div class="data_health_summary_content">
+                                <h3>Contacts</h3>
+                                <div class="gauge"> <apex:image url="{!URLFOR($Resource.assessment_resources,
+                                    'images/gauge.png')}"/> <span class="indicator" id='contact_indicator2' style='left:0%;transition:all 1s;transition-timing-function:ease-in-out'> <apex:image url="{!URLFOR($Resource.assessment_resources,
+                                    'images/indicator.png')}"/></span> 
+                                </div>
+                                <div class="scale-label-container"> <span class="scale-label left">poor</span><span class="scale-label right">excellent</span> 
+                                </div>
+                                <ul class="ratings-text">
+                                    <li> <span class="ratings-text-label">Usability:</span><span class="ratings-text-value"> {!dataHealthLabels['Contact']['Usability']}</span> </li>
+                                    <li> <span class="ratings-text-label">Matchability:</span><span class="ratings-text-value"> {!dataHealthLabels['Contact']['Matchability']}</span> </li>
+                                    <li> <span class="ratings-text-label">Uniqueness:</span><span class="ratings-text-value"> {!dataHealthLabels['Contact']['Uniqueness']}</span> </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="data_health_summary_sub col col-25">
+                            <div class="match_rate_sidebar">
+                                <img src="{!URLFOR($Resource.did_you_know_icon)}" alt="did you know icon" id="did_you_know_icon"/><h3>What’s CRM Data Health Rating?</h3><br />
+                                <p>CRM Data Health Rating is something we created to help
+                                    you quickly get an understanding of your
+                                    overall data quality.
+                                    <a href="#crm_learn_more" rel='leanModal' name="summary_crm_learn_more" >Learn More</a>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="data_health_summary_sub col col-25">
+                        </div>
+                    </div>
+                    <div class="divider"></div>
+                    <h2>Contact Data Insights</h2>
+                    <h3 class="sub-head">Data.com Clean</h3>
+                    <div class = "row">
+                        <div class="col col-50">
+                            <div class="record_table large">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th colspan="2">Data.com Clean can add/update email addresses and/or phone numbers for
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="count add_commas">{!updateableContacts}</td>
+                                            <td style='padding-left:10px'  class="field">of your contacts</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="col col-25" style='padding-left:20px'> 
+                                <p>Data.com Clean can automatically fill blank fields on your matched Salesforce records with Data.com values. For more information, check out the <a href='http://www.youtube.com/watch?v=QKPDm6W-EzE'>Data.com Clean Product Demo video</a>, or <a href='https://www.salesforce.com/data/customers/'>read a customer story.</a></p>
+                        </div>
+                    </div>  
+                    <h3 class="sub-head">Data.com Prospector</h3>
+                    <div class = "row">
+                        <div class="col col-50">
+                            <div class="record_table  large">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th colspan="2">In the top 10 industries that we identified for your account records, we have identified
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="count add_commas"> {!summary.Available_Executive_Contacts_By_Industry__c}</td>
+                                            <td style='padding-left:10px' class="field">New Director, VP and C-level contacts</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="col col-25" style='padding-left:25px'> 
+                            <p>Data.com Prospector provides complete, up-to-date account and contact information which can be imported directly into Salesforce.  For more information, check out the <a href='http://www.youtube.com/watch?v=X4fK3tj9HQY'>Data.com Prospector Product Demo video</a>, or <a href='https://www.salesforce.com/data/customers/'>read a customer story</a>.</p>
+                        </div>
+                    </div>
+
+                    <div class="summary_text">
+                        <h2>Matched Record Analysis - Contacts</h2>
+                        <p>This section breaks down the records we've matched, showing the number and percentage of records by status and
+                            identifying the match percentage.</p>
+                        <div class="row">
+                            <div class ="col col-25">
+                                <div id="Contact_chart" class="jqplot-target">
+                                    <div class = "donut-value">{!entities['Contact'].matched_pcnt__c}<span class="donut-percent-sign">% </span><span class="donut-descriptor">matched</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class ="col col-50 donut-legend">
+                                <div class="row legend-row">
+                                    <div class ="col col-33">
+                                        <div class="legend_element">
+                                            <div class="legend_in_sync">&nbsp;</div>
+                                            <span><b class='add_commas'><apex:outputField value="{!entities['Contact'].in_sync__c}" /> In Sync</b></span>
+                                        </div>
+                                    </div>
+                                    <div class ="col col-33">
+                                        <div class="legend_element">
+                                            <div class="legend_different">&nbsp;</div>
+                                            <span> <b class='add_commas'><apex:outputField value="{!entities['Contact'].different__c}" /> Different</b> </span>
+                                        </div>
+                                    </div>
+                                    <div class ="col col-33">
+                                        <div class="legend_element">
+                                            <div class="legend_inactive">&nbsp;</div>
+                                            <span> <b class='add_commas'><apex:outputField value="{!entities['Contact'].inactive__c}" />  Inactive</b></span>
+                                        </div> 
+                                    </div>
+                                </div>
+                                <div class="row legend-row">
+                                    <div class ="col col-33">
+                                        <apex:outputPanel layout="none" rendered="{!summary.ddcAssess__Dupe_Check__c}">
+                                            <div class="legend_element">
+                                                <div class="legend_unmatched">&nbsp;</div>
+                                                <span> <b>Unmatched</b></span>
+                                            </div>
+                                        </apex:outputPanel>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col col-75">
+                                <h2 class="min-margin">Contact Fields <span class="field_table_count_header">
+                                    <apex:outputField value="{!entities['Contact'].matched__c}" />
+                                    contact records</span>
+                                </h2>
+                                <table class="assessment_table">
+                                    <thead>
+                                        <tr>
+                                            <th>Field</th>
+                                            <th>Blank</th>
+                                            <th>Blank (%)</th>
+                                            <th>Different</th>
+                                            <th>Different (%)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <apex:repeat value="{!fieldLists['Contact']}" var="field">
+                                            <tr>
+                                                <td>{!fieldLabels[field]}</td>
+                                                <td class="{!IF(fields['Contact'][field].Blank_pcnt__c >= blankThreshold,'blank_highlight','')}"><apex:outputField value="{!fields['Contact'][field].Blank__c}" /></td>
+                                                <td class="{!IF(fields['Contact'][field].Blank_pcnt__c >= blankThreshold,'blank_highlight','')}">
+                                                    {!fields['Contact'][field].Blank_pcnt__c}%</td>
+                                                <td><apex:outputField value="{!fields['Contact'][field].Different__c}" /></td>
+                                                <td class="{!IF(fields['Contact'][field].different_pcnt__c >= differentThreshold,'different_highlight','')}">
+                                                    {!fields['Contact'][field].Different_pcnt__c}%</td>
+                                            </tr>
+                                        </apex:repeat>
+                                    </tbody>
+                                </table>
+
+                            </div>
+                            <div class="col col-25">
+                                <div class="marketing_sidebar">
+                                    <p>
+                                        Data.com Clean can automatically fill blank fields on your matched Salesforce records with Data.com values. For more
+                                        information, check out the <a class="help_link" href="http://www.youtube.com/watch?v=QKPDm6W-EzE" target="_blank">
+                                        Data.com Clean Product Demo video</a>, or <a class="help_link" href="https://www.salesforce.com/data/customers/"
+                                        target="_blank"> read a customer story</a>.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div> <!-- contacts -->
+
+            <div class="clear"></div>
+
+            <div id="leads" class="tab_content">
+                <div class="inner_content">
+                    <h2>CRM Data Health Rating</h2>
+                    <div id="data_health_summary" class="row">
+                        <div class="data_health_summary_sub col col-50">
+                            <div class="data_health_summary_content">
+                                <h3>Leads</h3>
+                                <div class="gauge"> <apex:image url="{!URLFOR($Resource.assessment_resources,
+                                    'images/gauge.png')}"/> <span class="indicator" id='lead_indicator2' style='left:0%;transition:all 1s;transition-timing-function:ease-in-out'> <apex:image url="{!URLFOR($Resource.assessment_resources,
+                                    'images/indicator.png')}"/></span> 
+                                </div>
+                                <div class="scale-label-container"> <span class="scale-label left">poor</span><span class="scale-label right">excellent</span> 
+                                </div>
+                                <ul class="ratings-text">
+                                    <li> <span class="ratings-text-label">Usability:</span><span class="ratings-text-value"> {!dataHealthLabels['Lead']['Usability']}</span> </li>
+                                    <li> <span class="ratings-text-label">Matchability:</span><span class="ratings-text-value"> {!dataHealthLabels['Lead']['Matchability']}</span> </li>
+                                    <li> <span class="ratings-text-label">Uniqueness:</span><span class="ratings-text-value"> {!dataHealthLabels['Lead']['Uniqueness']}</span> </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="data_health_summary_sub col col-25">
+                            <div class="match_rate_sidebar">
+                                <img src="{!URLFOR($Resource.did_you_know_icon)}" alt="did you know icon" id="did_you_know_icon"/><h3>What’s CRM Data Health Rating?</h3><br />
+                                <p>CRM Data Health Rating is something we created to help
+                                    you quickly get an understanding of your
+                                    overall data quality.
+                                    <a href="#crm_learn_more" rel='leanModal' name="summary_crm_learn_more" >Learn More</a>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="data_health_summary_sub col col-25">
+                        </div>
+                    </div>
+                    <div class="divider"></div>
+                    <h2>Lead Data Insights</h2>
+                    <h3 class="sub-head">Data.com Clean</h3>
+                    <div class = "row">
+                        <div class="col col-50">
+                            <div class="record_table large">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th colspan="2">Data.com Clean can add/update email addresses and/or phone numbers for
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="count add_commas">{!updateableLeadContactInfo} </td>
+                                            <td class="field">of your leads</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="col col-25" style='padding-left:20px'> 
+                            <p>Data.com Clean can automatically fill blank fields on your matched Salesforce records with Data.com values. For more information, check out the <a href='http://www.youtube.com/watch?v=QKPDm6W-EzE'>Data.com Clean Product Demo video</a>, or <a href='https://www.salesforce.com/data/customers/'>read a customer story.</a></p>
+                        </div>
+                    </div>  
+                    <div class = "row">
+                        <div class="col col-50">
+                            <div class="record_table  large">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th colspan="2">Data.com Clean can add/update company-related information for
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="count add_commas">{!updateableLeadCompanyInfo}</td>
+                                            <td class="field">of your leads</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="col col-25"> 
+                        </div>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="summary_text">
+                        <h2>Matched Record Analysis - Leads</h2>
+                        <p>This section breaks down the records we've matched, showing the number and percentage of records by status and
+                            identifying the match percentage.</p>
+                        <div class="row">
+                            <div class ="col col-25">
+                                <div id="Lead_chart" class="jqplot-target">
+                                    <div class = "donut-value">{!entities['Lead'].matched_pcnt__c}<span class="donut-percent-sign">% </span><span class="donut-descriptor">matched</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class ="col col-50 donut-legend">
+                                <div class="row legend-row">
+                                    <div class ="col col-33">
+                                        <div class="legend_element">
+                                            <div class="legend_in_sync">&nbsp;</div>
+                                            <span><b class='add_commas'><apex:outputField value="{!entities['Lead'].in_sync__c}" /> In Sync</b></span>
+                                        </div>
+                                    </div>
+                                    <div class ="col col-33">
+                                        <div class="legend_element">
+                                            <div class="legend_different">&nbsp;</div>
+                                            <span> <b class='add_commas'><apex:outputField value="{!entities['Lead'].different__c}" /> Different</b> </span>
+                                        </div>
+                                    </div>
+                                    <div class ="col col-33">
+                                        <div class="legend_element">
+                                            <div class="legend_inactive">&nbsp;</div>
+                                            <span> <b class='add_commas'><apex:outputField value="{!entities['Lead'].inactive__c}" />  Inactive</b></span>
+                                        </div> 
+                                    </div>
+                                </div>
+                                <div class="row legend-row">
+                                    <div class ="col col-33">
+                                        <apex:outputPanel layout="none" rendered="{!summary.ddcAssess__Dupe_Check__c}">
+                                            <div class="legend_element">
+                                                <div class="legend_unmatched">&nbsp;</div>
+                                                <span> <b> Unmatched</b></span>
+                                            </div>
+                                        </apex:outputPanel>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col col-75">
+                                <h2 class="min-margin">Lead Fields<span class="field_table_count_header">
+                                    <apex:outputField value="{!entities['Lead'].matched__c}" /></span>
+                                </h2>
+                                <table class="assessment_table">
+                                    <thead>
+                                        <tr>
+                                            <th>Field</th>
+                                            <th>Blank</th>
+                                            <th>Blank (%)</th>
+                                            <th>Different</th>
+                                            <th>Different (%)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <apex:repeat value="{!fieldLists['Lead']}" var="field">
+                                            <tr>
+                                                <td>{!fieldLabels[field]}</td>
+                                                <td class="{!IF(fields['Lead'][field].Blank_pcnt__c >= blankThreshold,'blank_highlight','')}"><apex:outputField value="{!fields['Lead'][field].Blank__c}" /></td>
+                                                <td class="{!IF(fields['Lead'][field].Blank_pcnt__c >= blankThreshold,'blank_highlight','')}">
+                                                    {!fields['Lead'][field].Blank_pcnt__c}%</td>
+                                                <td><apex:outputField value="{!fields['Lead'][field].Different__c}" /></td>
+                                                <td class="{!IF(fields['Lead'][field].different_pcnt__c >= differentThreshold,'different_highlight','')}">
+                                                    {!fields['Lead'][field].Different_pcnt__c}%</td>
+                                            </tr>
+                                        </apex:repeat>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="col col-25" style='padding-left:20px'>
+                                <div class="marketing_sidebar">
+                                    <p>
+                                        Data.com Clean can automatically fill blank fields on your matched Salesforce records with Data.com values. For more
+                                        information, check out the <a class="help_link" href="http://www.youtube.com/watch?v=QKPDm6W-EzE" target="_blank">
+                                        Data.com Clean Product Demo video</a>, or <a class="help_link" href="https://www.salesforce.com/data/customers/"
+                                        target="_blank"> read a customer story</a>.
+                                    </p>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div> <!-- leads -->
+
+            <div class="clear"></div>
+
+            <div id="unmatched">
+                <div class="inner_content">
+                    <div class="row">
+                        <div class="col col-50">
+                            <div class="summary_text">
+                                <h2>Unmatched Record Analysis</h2>
+                                <p>A Salesforce record is considered to be unmatched if we can't find a record in Data.com with enough identical or
+                                    similar information to indicate that the two records represent the same entity. Missing or incomplete information in key
+                                    fields used for matching is the most common reason a record can't be matched. These tables list the key fields we use for
+                                    matching. They also identify the gaps in your data that can prevent a Salesforce record from being matched with one of the
+                                    millions of contacts and over 200 million companies in Data.com.
+                                </p>
+                            </div>
+                            <br />
+                            <div class="field_table_wrapper">
+                                <div>
+                                    <div class="field_table_wrapper">
+                                        <div class="field_table_count_header">
+                                            <apex:outputField value="{!entities['Account'].unmatched__c}" />
+                                            account records
+                                        </div>
+                                        <h2 class="min-margin">Account Fields</h2>
+                                        <table class="assessment_table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Field</th>
+                                                    <th>Blank</th>
+                                                    <th>Blank (%)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <apex:repeat value="{!unmatchedFieldLists['Account']}" var="field">
+                                                    <tr>
+                                                        <td>{!fieldLabels[field]}</td>
+                                                        <td><apex:outputField value="{!fields['Account'][field].Unmatched_Blank__c}" /></td>
+                                                        <td class="{!IF(fields['Account'][field].Unmatched_Blank_pcnt__c >= blankThreshold,'blank_highlight','')}">
+                                                            {!fields['Account'][field].Unmatched_Blank_pcnt__c}%</td>
+                                                    </tr>
+                                                </apex:repeat>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="field_table_wrapper">
+                                        <div class="field_table_count_header">
+                                            <apex:outputField value="{!entities['Contact'].unmatched__c}" />
+                                            contact records
+                                        </div>
+                                        <h2 class="min-margin">Contact Fields</h2>
+                                        <table class="assessment_table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Field</th>
+                                                    <th>Blank</th>
+                                                    <th>Blank (%)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <apex:repeat value="{!unmatchedFieldLists['Contact']}" var="field">
+                                                    <tr>
+                                                        <td>{!fieldLabels[field]}</td>
+                                                        <td><apex:outputField value="{!fields['Contact'][field].Unmatched_Blank__c}" /></td>
+                                                        <td class="{!IF(fields['Contact'][field].Unmatched_Blank_pcnt__c >= blankThreshold,'blank_highlight','')}">
+                                                            {!fields['Contact'][field].Unmatched_Blank_pcnt__c}%</td>
+                                                    </tr>
+                                                </apex:repeat>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="field_table_wrapper">
+                                        <div class="field_table_count_header">
+                                            <apex:outputField value="{!entities['Lead'].unmatched__c}" />
+                                            lead records
+                                        </div>
+                                        <h2 class="min-margin">Lead Fields</h2>
+                                        <table class="assessment_table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Field</th>
+                                                    <th>Blank</th>
+                                                    <th>Blank (%)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <apex:repeat value="{!unmatchedFieldLists['Lead']}" var="field">
+                                                    <tr>
+                                                        <td>{!fieldLabels[field]}</td>
+                                                        <td><apex:outputField value="{!fields['Lead'][field].Unmatched_Blank__c}" /></td>
+                                                        <td class="{!IF(fields['Lead'][field].Unmatched_Blank_pcnt__c >= blankThreshold,'blank_highlight','')}">
+                                                            {!fields['Lead'][field].Unmatched_Blank_pcnt__c}%</td>
+                                                    </tr>
+                                                </apex:repeat>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class ="col col-50 padding-left">
+                            <apex:outputPanel rendered="{!hasInternational}" layout="none">
+                                <h2>International Records</h2>
+                                <p>
+                                    <b>{!entities['Account'].international__c} of your account records ({!entities['Account'].international_pcnt__c}% of your accounts),
+                                    {!entities['Contact'].international__c} of your contact records ({!entities['Contact'].international_pcnt__c}% of your contacts),
+                                    and {!entities['Lead'].international__c} of your lead records ({!entities['Lead'].international_pcnt__c}% of your leads) 
+                                    appear to be located in non-English speaking countries that Data.com Matching does not support.</b>
+                                    (The countries Data.com Matching does support are: Australia, Brazil, Canada, India, Ireland, New Zealand, Singapore, South
+                                    Africa, United Kingdom, and the United States.) Data.com also provides DUNSRight™ Matching, which can provide a higher 
+                                    match rate, particularly for accounts in international locations. Our Sales team is happy to help you with a DUNSRight 
+                                    assessment.
+                                </p>
+                                <apex:outputPanel rendered="{!summary.ddcAssess__Dunsright__c}" layout="none">
+                                    <h2><b>See your match rate with DUNSRight <a href="javascript:clickDunsright();">here</a></b></h2>
+                                </apex:outputPanel>
+                            </apex:outputPanel>
+                            <apex:outputPanel rendered="{!((hasInternational && hasPersonAccount) || (hasInternational && hasPersonalEmail))}"
+                            layout="none">
+                                <br />
+                            </apex:outputPanel>
+                            <apex:outputPanel rendered="{!hasPersonAccount}" layout="none">
+                                <h2>Person Accounts</h2>
+                                <p><b>{!entities['Account'].person__c} of your account records ({!entities['Account'].person_pcnt__c}% of your accounts)
+                                    appear to be person accounts.</b> Data.com has over 200 million business accounts, but our data asset does not include location
+                                    information for individuals, so we cannot match person accounts. A large number of person accounts may cause your
+                                    organization to have lower account match rates.
+                                </p>
+                            </apex:outputPanel>
+                            <apex:outputPanel rendered="{!AND(hasPersonAccount,hasPersonalEmail)}" layout="none">
+                                <br />
+                            </apex:outputPanel>
+                            <apex:outputPanel rendered="{!hasPersonalEmail}" layout="none">
+                                <h2>Personal Email Addresses</h2>
+                                <p><b>{!entities['Contact'].personal_email__c} of your contact records ({!entities['Contact'].personal_email_pcnt__c}% of your contacts)
+                                    and {!entities['Lead'].personal_email__c} of your lead records ({!entities['Lead'].personal_email_pcnt__c}% of your leads) appear to
+                                    contain personal email addresses.</b> Data.com has millions of business contacts, but for matching records, we use only
+                                    business contact information---no personal emails (such as {!personalEmailList}) or personal phone numbers. Personal contact 
+                                    information may cause your organization to have lower contact and lead match rates.
+                                </p>
+                            </apex:outputPanel>
+                            <apex:outputPanel rendered="{!IF(hasInternational || (entities['Account'].person__c > 0) || hasPersonalEmail, true, false)}" layout="none">
+                                <p>
+                                    For more information, see <a class="help_link"
+                                    href="https://help.salesforce.com/HTViewHelpDoc?id=data_dot_com_clean_understanding_matching.htm&language=en_US"
+                                    target="_blank"> Understanding How Salesforce and Data.com Records are Matched</a> in the Salesforce help.
+                                </p>
+                            </apex:outputPanel>
+                        </div>
+                    </div>
+                </div>
+            </div> <!-- unmatched -->
+
+            <div class="clear"></div>
+
+            <apex:outputPanel layout="none" rendered="{!summary.ddcAssess__Dunsright__c}">
+                <div id="dunsright">
+                    <div class="inner_content">
+                        <h2>DUNSRight&#8482; Match</h2>
+                        <p>
+                            If many of your account records are located at international addresses, particularly in non-English speaking countries,
+                            D&amp;B's DUNSRight matching, which is offered as part of Data.com Clean, may provide better match results than Data.com matching.
+                            If you have more than 50,000 account records, the results are based on a random sample of up to 50,000 records.
+                        </p>
+                        <p>We processed {!dunsrightResults['match'] + dunsrightResults['no_match']} account records.</p>            
+                        <div class="stats_body">
+                            <div class="row">
+                                <div class ="col col-25">
+                                    <div id="Dunsright_chart" class="jqplot-target" style="height: 300px">
+                                        <div class = "donut-value">{!dunsrightMatchPercent}<span class="donut-percent-sign">% </span><span class="donut-descriptor">matched</span></div>
+                                    </div>
+                                </div>
+                                <div class ="col col-25">
+                                    <div id="Dunsright_bar_chart" class="jqplot-target" style="height: 300px" />
+                                </div>                        
+                                <div class ="col col-50 barchart-legend">
+                                    <div class="row legend-row">
+                                        <div class ="col col-33">
+                                            <div class="legend_element">
+                                                <div class="legend_10">&nbsp;</div>
+                                                <span><b class='add_commas'>Automatically Matched</b></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row legend-row">
+                                        <div class ="col col-33">
+                                            <div class="legend_element">
+                                                <div class="legend_select_match">&nbsp;</div>
+                                                <span><b class='add_commas'>Select Match</b></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row legend-row">
+                                        <div class ="col col-33">
+                                            <div class="legend_element">
+                                                <div class="legend_unmatched">&nbsp;</div>
+                                                <span><b class='add_commas'>Unmatched</b></span>
+                                            </div>
+                                        </div>
+                                    </div>                                                
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col col-25" style="text-align: center; font-weight:bold;">
+                                    <p>Match rate includes Automatically Matched and Select Match.</p>
+                                </div>
+                                <div class="col col-25" style="text-align: center; font-weight:bold;">
+                                    <p>Confidence Code threshold setting</p>
+                                </div>
+                            </div>
+                            <br/><br/>
+                            <p>
+                                <b>Confidence Code</b> is a match score provided by D&amp;B's DUNSRight matching. Higher codes are equivalent to more exact or precise
+                                matches. Data.com allows you to tune your automatic matching threshold by selecting a confidence code from 7-10. <br/><br/>
+                                Matches below the selected threshold can be reviewed in the application using the <b>Select Match</b> interface. This allows
+                                someone to manually select an appropriate match from a list of choices (see video 
+                                <a href="http://salesforce.vidyard.com/watch/W2ZJZbyVm_CMCZoAWJhzLg​" target="_blank">here</a>). 
+                                Once a record is matched it can be enriched by Data.com clean.
+                            </p>    
+                        </div>
+                    </div>
+                </div>
+            </apex:outputPanel>                        
+        </div>
+
+                    <script type="text/javascript">     
+                        function sortFunction(a, b) {
+                            if (a[0] === b[0]) {
+                                return 1;
+                            }
+                            else {
+                                return (a[0] < b[0]) ? -1 : 1;
+                            }
+                        }
+                        function drawEmployeesChart() {
+                            var options = {
+                                grid: {
+                                    shadow:false,
+                                    borderColor:'#FFFFFF',
+                                    background:'#FFFFFF'
+                                },
+                                highlighter: {fadeTooltip: false},
+                                seriesDefaults: {
+                                    seriesColors: ["#1783B4","#0B4298","#88BDFE"],
+                                    renderer:$.jqplot.DonutRenderer,
+                                    rendererOptions:{
+                                        startAngle: -90,
+                                        innerDiameter: 70,
+                                        showDataLabels: true,
+                                        highlightMouseOver: false,
+                                        highlightMouseDown: false,
+                                        highlightColor: null,
+                                    }
+                                },
+                                legend: {show:true, location: 'e', fontSize: '16px'}
+                            };
+
+                            var employeeRanges = [
+                            <apex:repeat value="{!employeeRangeLabels}" var="employee">
+                            ["{!employee}", {!employeeRangeCount[employee]}],
+                        </apex:repeat>
+                        ];
+                        for(i in employeeRanges) {
+                            if(employeeRanges[i][0] == "-1") {
+                                missing_vals = employeeRanges.splice(i, 1);
+                                $("#missing_employees_count").html(missing_vals[0][1]);
+                                if(missing_vals[0][1] == 0) $("#missing_employees_text").hide();
+                            }
+                        }
+                        try{
+                        $.jqplot('employees-chart', [employeeRanges], options);
+                        }catch(err){
+                            $(".employee-chart-container").hide();
+                        }
+                    }
+                    function drawRevenueChart() {
+                        var options = {
+                            grid: {
+                                shadow:false,
+                                borderColor:'#FFFFFF',
+                                background:'#FFFFFF'
+                            },
+                            highlighter: {fadeTooltip: false},
+                            seriesDefaults: {
+                                seriesColors: ["#1783B4","#0B4298","#88BDFE"],
+                                renderer:$.jqplot.DonutRenderer,
+                                rendererOptions:{
+                                    startAngle: -90,
+                                    innerDiameter: 70,
+                                    showDataLabels: true,
+                                    highlightMouseOver: false,
+                                    highlightMouseDown: false,
+                                    highlightColor: null,
+                                }
+                            },
+                            legend: {show:true, location: 'e', fontSize: '16px'}
+
+                        };
+
+                        var revenues = [
+                            <apex:repeat value="{!revenueRangeLabels}" var="revenueId">
+                                ["{!revenueId}", {!revenueRangeCount[revenueId]}],
+                            </apex:repeat>
+                        ];
+                        for(i in revenues) {
+                            if(revenues[i][0] == "-1") {
+                                missing_vals = revenues.splice(i, 1);
+                                $("#missing_revenue_count").html(missing_vals[0][1]);
+                                if(missing_vals[0][1] == 0) $("#missing_revenue_text").hide();
+                            }
+                        }
+                    try{$.jqplot('revenue-chart', [revenues], options);
+                    }catch(err){
+                        $(".revenue-chart-container").hide();
+                    }
+
+                }   
+                function drawIndustryChart(){
+                    var industryValues = [
+                        <apex:repeat value="{!IndustryNames}" var="industry">
+                            [{!industryNames[industry]}, "{!industry}"], 
+                        </apex:repeat>
+                    ];
+                    for(i in industryValues) {
+                        if(industryValues[i][1] == "-1") {
+                            missing_vals = industryValues.splice(i, 1);
+                            $("#missing_industries_count").html(missing_vals[0][0]);
+                            if(missing_vals[0][0] == 0) $("#missing_industries_text").hide();
+                        }
+                    }    
+                var missing_vals = 
+                industryValues = [industryValues.sort(sortFunction)];
+                try{
+                var plot2 = $.jqplot('industry-chart', industryValues,
+                {
+                    seriesDefaults: {
+                        seriesColors: [ "#2f558d", "#5a9745", "#e7a334", "#be2e2e", "#703a7a", "#7d807f", "#42679c", "#6ca557", "#ebae4f", "#c64344"],
+                        renderer:$.jqplot.BarRenderer,
+                        pointLabels: { show: true, location: 'e', edgeTolerance: -15 },
+                        //shadowAngle: 135,
+                        rendererOptions: {
+                            barDirection: 'horizontal',
+                            varyBarColor: true,
+                            barMargin: 5
+                        }
+                    },
+                    axes: {
+                        yaxis: {
+                            renderer: $.jqplot.CategoryAxisRenderer
+                    //ticks : ['Technology', 'Textiles','Agriculture']
+                }
+            }
+        });
+                }catch(err){ 
+                    $(".industry-chart-container").hide();
+                }
+            }
+
+
+
+            function drawCharts() {
+                var options = {
+                    grid: {
+                        shadow:false,
+                        borderColor:'#FFFFFF',
+                        background:'#FFFFFF'
+                    },
+                    highlighter: {fadeTooltip: false},
+                    seriesDefaults: {
+                         seriesColors: ["#E9E9E9","#12379c","#127fb7", "#88b9fd"],
+                         seriesLabels: ["Yoyo", "","",""],
+
+                        renderer:$.jqplot.DonutRenderer,
+                        rendererOptions:{
+                            startAngle: -90,
+                            innerDiameter: 70,
+                            showDataLabels: true,
+                            highlightMouseOver: false,
+                            highlightMouseDown: false,
+                            highlightColor: null,
+                            dataLabels: 'label'
+                        }
+                    }
+                };
+
+                <apex:repeat value="{!entityList}" var="entity">
+                    var in_sync_pcnt = 0;
+                    var different_pcnt = 0;
+                    var inactive_pcnt = 0;
+                    var totalMatchedRecords = 100 - ( {!entities[entity].unmatched_pcnt__c} );
+
+                    if(totalMatchedRecords != 0) {
+                        in_sync_pcnt = ({!entities[entity].in_sync_pcnt__c} / 100) * totalMatchedRecords;
+                        different_pcnt = ({!entities[entity].different_pcnt__c} / 100) * totalMatchedRecords;
+                        inactive_pcnt = ({!entities[entity].inactive_pcnt__c} / 100) * totalMatchedRecords;
+                    }
+                    try{
+                    $.jqplot('{!entity}_chart', [[
+                        ['',{!entities[entity].unmatched_pcnt__c}],
+                        ['', in_sync_pcnt],
+                        ['', different_pcnt],
+                        ['', inactive_pcnt]
+                        ]], options);
+                    }catch(err){}
+
+                </apex:repeat>
+                if ({!summary.ddcAssess__Dunsright__c}) {
+                    drawDunsrightChart();
+                }
+        };
+        <apex:outputPanel layout="none" rendered="{!summary.ddcAssess__Dunsright__c}">
+        function drawDunsrightChart() {
+            try{
+                var total = {!dunsrightResults['match'] + dunsrightResults['no_match']};
+                var pct10 = Math.round({!dunsrightResults['10']} * 100 / total);
+                var pct9 = Math.round({!dunsrightResults['9']} * 100 / total);
+                var pct8 = Math.round({!dunsrightResults['8']} * 100 / total);
+                var pct7 = Math.round({!dunsrightResults['7']} * 100 / total);
+                var pct6 = Math.round({!dunsrightResults['6']} * 100 / total);
+                var pct5 = Math.round({!dunsrightResults['5']} * 100 / total);
+                var pctMatched = Math.round({!dunsrightResults['match']} * 100 / total);
+                var pctUnmatched = Math.round({!dunsrightResults['no_match']} * 100 / total);
+                
+                var options = {
+                        grid: {
+                            shadow:false,
+                            borderColor:'#FFFFFF',
+                            background:'#FFFFFF'
+                        },
+                        highlighter: {fadeTooltip: false},
+                        seriesDefaults: {
+                             seriesColors: ["#0000FF","#E9E9E9"],
+                             seriesLabels: ["",""],
+
+                            renderer:$.jqplot.DonutRenderer,
+                            rendererOptions:{
+                                startAngle: -90,
+                                innerDiameter: 70,
+                                highlightMouseOver: false,
+                                highlightMouseDown: false,
+                                highlightColor: null
+                            }
+                        }
+                    };
+                $.jqplot('Dunsright_chart', [[
+                    [pctMatched + '%',{!dunsrightResults['match']}],
+                    [pctUnmatched,{!dunsrightResults['no_match']}]
+                    ]], options);
+
+                var barOptions = {
+                    stackSeries: true,
+                    seriesDefaults: {
+                        renderer:$.jqplot.BarRenderer,
+                        rendererOptions: {
+                            barMargin: 30,
+                            barWidth: 40
+                        },
+                        pointLabels: {
+                            show: true
+                        }
+                    },
+                    axes: {
+                        xaxis: {
+                            renderer: $.jqplot.CategoryAxisRenderer,
+                            ticks: ['10', '9', '8', '7']
+                        },
+                        yaxis: {
+                            show:false,
+                            min: 0,
+                            padMin: 0,
+                            showTicks: false,
+                            showTickMarks: false
+                        }
+                    },
+                    series: [
+                        {
+                            label: 'Unmatched',
+                            pointLabels: {
+                                escapeHTML: false,
+                                labels: Array(5).join(1).split('').map(function(){return '<span style="color:gray">' + pctUnmatched + '%</span>';})
+                            },
+                            color: "#E9E9E9"
+                        },
+                        {
+                            label: 'Select Match',
+                            pointLabels: {
+                                labels: [pct5 + pct6 + pct7 + pct8 + pct9 + '%', pct5 + pct6 + pct7 + pct8 + '%', pct5 + pct6 + pct7 + '%', pct5 + pct6 + '%']
+                            },
+                            color: "#88BDFE"
+                        },
+                        {
+                            label: 'Matched',
+                            pointLabels: {
+                                labels: [pct10 + '%', pct10 + pct9 + '%', pct10 + pct9 + pct8 + '%', pct10 + pct9 + pct8 + pct7 + '%']
+                            },
+                            color: "#0000FF"
+                        }
+                    ]
+                };
+                var matched = [ {!dunsrightResults['10']},
+                                {!dunsrightResults['10']} + {!dunsrightResults['9']},
+                                {!dunsrightResults['10']} + {!dunsrightResults['9']} + {!dunsrightResults['8']},
+                                {!dunsrightResults['10']} + {!dunsrightResults['9']} + {!dunsrightResults['8']} + {!dunsrightResults['7']}];
+                var conf56 = {!dunsrightResults['5']} + {!dunsrightResults['6']};
+                var selectMatch = [ conf56 + {!dunsrightResults['7']} + {!dunsrightResults['8']} + {!dunsrightResults['9']},
+                                    conf56 + {!dunsrightResults['7']} + {!dunsrightResults['8']},
+                                    conf56 + {!dunsrightResults['7']},
+                                    conf56];
+                var unmatched = Array(5).join(1).split('').map(function(){return Math.round({!dunsrightResults['no_match']});});
+                $.jqplot('Dunsright_bar_chart', [unmatched, selectMatch, matched], barOptions);
+            }catch(err){
+                console.log(err);
+            }
+        };
+        </apex:outputPanel>
+        </script>
+    </apex:outputPanel>
+</apex:outputPanel>
+<div id='crm_learn_more'>
+    <div class='modal_inner'>
+        <p><b style='color:#1472CB;line-height:100%'>The CRM Data Health Rating provides a high-level assessment of the marketing and prospecting readiness of your  accounts, contacts, and leads.  The  rating is based on three metrics:</b></p><ul><li><b>Usability</b> -  Usability  reflects how easy it is for  users  to prospect and market using the current data available in CRM.   If the fields most commonly used for sales and marketing are up-to-date, then your data is highly usable.</li><li><b>Matchability</b> - Matchability reflects how easy it is to keep your CRM data up-to-date via automated processes.  Highly matchable CRM records generally have good fill-rates for key identifying fields such as name, address, and contact info.</li><li><b>Uniqueness</b> - In a healthy CRM system, each record serves a unique purpose.  Having duplicates in your CRM system inflates reportings and reduces productivity.  A low rate of duplicates is a sign of a healthy CRM system</li></ul>
+    </div>
+</div>
+<script type="text/javascript" src="{!URLFOR($Resource.LeanModal)}"></script>
+</apex:page>

@@ -1,0 +1,2594 @@
+<!--
+Name : Meetings4 [updated version of Meetings App Page "Meetings3"]
+Controller : MeetingsController4
+Modified : Added the following Pages for Story # S-123652 [7/9/2013] Hemant
+                        1. Post IC Voting (only visible for IC members + Frank Brown + Steve Dening)
+                        2. Final IC Review (only visible to "Mark Dzialgaand and Drew Pearson" users)
+-->
+<apex:page showHeader="false"  standardStylesheets="false" cache="false" controller="MeetingsController4" docType="html-5.0" >
+    <apex:outputText escape="false" value="{!'<!DOCTYPE html>'}"/>
+    <html>
+        <head>
+            <style>
+                .ui-bar-b-green {
+                    border: 1px solid #456f9a;
+                    border-radius:10px;
+                    background: #386D38;
+                    color: #fff;
+                    font-weight: bold;
+                    text-shadow: 0 -1px 1px #254f7a;
+                    background-image: -webkit-gradient(linear,left top,left bottom,from(#81a8ce),to(#386D38));
+                    background-image: -webkit-linear-gradient(#386D38,#386D38);
+                    background-image: -moz-linear-gradient(#386D38,#386D38);
+                    background-image: -ms-linear-gradient(#386D38,#386D38);
+                    background-image: -o-linear-gradient(#386D38,#386D38);
+                    background-image: linear-gradient(#386D38,#386D38);
+                }
+            </style>
+            <meta name="apple-mobile-web-app-capable" content="yes" />
+            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <link rel="apple-touch-icon" href="{!BaseURL}{! URLFOR($Resource.GAAppIcon)}"/>
+            <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+
+            <title>GA Meetings</title>
+            <apex:stylesheet value="{!BaseURL}{! URLFOR($Resource.jQueryMobile, 'jquery.mobile-1.0.1/jquery.mobile-1.0.1.min.css') }"/>
+            <apex:stylesheet value="{!BaseURL}{! URLFOR($Resource.jQueryMobile, 'jquery.mobile-1.0.1/jquery.mobile.structure-1.0.1.min.css') }"/>
+
+            <script type="text/javascript" src="{!BaseURL}{!URLFOR($Resource.cloudtunes_jQuery, 'jquery.min.js')}"></script>
+            <script type="text/javascript" src="{!BaseURL}{!URLFOR($Resource.jQueryMobile, 'jquery.mobile-1.0.1/jquery.mobile-1.0.1.min.js')}"></script>
+
+            <script type="text/javascript" >
+                
+                var _selected_MeetingId = '';
+                
+                var MeetingManager=function()
+                {
+                    var _aMeetings=new Array();
+                    var _aAgendaItems=new Array();
+                    var _aNotes=new Array();
+                    var _IsICAdmin=false;
+                    var post_IC_voting_Vote_Options = '';  
+                    var _IsFinal_IC_Review=false;
+                    var _IsPost_IC_Voting=false;
+                    var _Is_Vote_On_Others_Behalf=false;
+                    var _final_IC_Review_AgendaItems = new Array();
+                    var curr_mtngAItemId = '';
+                        
+                    var _getMeetings=function(strType,isShowMore) 
+                    {
+                        var callback=function(){ $j.mobile.hidePageLoadingMsg(); };
+                        
+                        $j('#meetinglist').empty();
+
+                        if(strType)
+                            MeetingsController4.queryActiveMeetingsByType(strType,isShowMore,function(records, e) { _showMeetings(records, callback) }, {escape:true}); 
+                        else
+                            MeetingsController4.queryActiveMeetings(isShowMore,function(records, e) { _showMeetings(records, callback) }, {escape:true}); 
+                    };
+                  
+                    var _showMeetings=function(records, callback)
+                    {
+                        _aMeetings.length = 0;
+                        for(var i = 0; i < records.length; i++) { _aMeetings[records[i].Id] = records[i]; }
+
+                        if(records.length==0)
+                        {
+                            $j('<li></li>').append('<h2>Sorry. No meetings found at this time.</h2>').appendTo('#meetinglist').show();
+                        }
+
+                        var x = 0;
+                        $j.mobile.showPageLoadingMsg();  
+                    
+                        $j.each(records,function() {
+                            $j('<li></li>')
+                            .attr('id',this.Id)         
+                            .append('<h2>'+this.RecordType.Name+' Meeting: ' + new Date(this.Start_Time__c).toDateString()+  '</h2>')           .click(function(e) {
+                                e.preventDefault();            
+                                $j('#MeetingName').html(_aMeetings[this.id].RecordType.Name+': '+new Date(_aMeetings[this.id].Start_Time__c).toDateString());
+                                $j('#MeetingStart').html(new Date(_aMeetings[this.id].Start_Time__c).toTimeString());
+                                $j('#MeetingEnd').html(new Date(_aMeetings[this.id].End_Time__c).toTimeString());
+                                $j('#MeetingLocation').html(_aMeetings[this.id].Location__c);
+                                $j('#MeetingId').val(_aMeetings[this.id].Id);            
+                                $j.mobile.changePage('#detailpage', {changeHash: true});
+                               
+                                var onAgendaLoaded = function(){
+                                    $j.mobile.hidePageLoadingMsg();
+                                    //$j.mobile.changePage('#detailpage', {changeHash: true});
+                                  }
+
+                                _getAgenda(_aMeetings[this.id].Id, onAgendaLoaded );
+                                //Story # S-132864 start
+                                _selected_MeetingId = _aMeetings[this.id].Id;
+                                //Story # S-132864 end
+                                
+                            })
+                            .appendTo('#meetinglist');
+                            x++;
+                        });
+                        
+                    //CWD-- logo click
+                        /*** START Story # S-174746 ***/
+                        /*
+                        $j('#companyLogo').click(function(e){      
+                            e.preventDefault();
+                            $j.mobile.showPageLoadingMsg(); 
+                            MeetingsController4.getCompanyDetails($j('#companyId').val(), function(records, e)
+                            {
+                                console.log(records[0]);
+                                var aFields=['Name', 'Code_Name__c', 'Description','Industry','Status__c','Sector__c','Sub_Sector__c','Latest_Status_Note__c','Next_Steps__c', 'Latest_Status_Note_Subject__c','Website', 'Themes__c', 'Latest_Financials_Year__c', 'Latest_Revenue__c', 'Projected_Financials_Year__c', 'Projected_Revenue__c'];
+                              
+                                if(records.length>0)
+                                {
+                                    for(var i=0;i<aFields.length;++i)
+                                    {
+                                        $j("#companyDetail_"+aFields[i]).html(' ');
+                                        console.log($j("#companyDetail_"+aFields[i]).html() + ': '+ records[0][aFields[i]]);
+                                        if((aFields[i]=='Name')&&(records[0]['Website']))
+                                            $j("#companyDetail_"+aFields[i]).html('<a data-rel="dialog" data-transition="pop" href="'+records[0]['Website']+'">'+records[0][aFields[i]]+'</a>').trigger("create");
+                                        else
+                                            $j("#companyDetail_"+aFields[i]).html(records[0][aFields[i]]);
+                                    
+                                    }
+                                }
+                                else
+                                {
+                                }
+                              
+                                $j.mobile.hidePageLoadingMsg();
+                                $j.mobile.changePage('#companydetailpage', {changeHash: true});
+                            });
+                        });
+
+                    //CWD-- end logo click
+                    /*** END Story # S-174746 ***/      
+                      
+                            
+                        $j.mobile.hidePageLoadingMsg();
+                        $j('#meetinglist').listview('refresh');
+                        if(callback != null) { callback(); }
+                    };
+                  
+                    var _getAgenda=function(iMID,callback)
+                    {
+                        $j('#agendalist').empty();
+                        $j.mobile.showPageLoadingMsg(); 
+                        MeetingsController4.queryAgenda(iMID,function(records, e) { _showAgenda(records, callback) }, {escape:true});
+                        MeetingsController4.getAgendaMaterialsURLs(iMID,function(records, e) { _showMaterialsList('#agendaMaterialsList','#agendaMaterialsIFrame','#agendaMaterialsShimPage',records, callback) }, {escape:true}); 
+                    };
+                   
+                    var _showAgenda=function(records, callback) 
+                    {
+                        _aAgendaItems.length=0;
+                        for(var i = 0; i < records.length; i++) { _aAgendaItems[records[i].Id] = records[i]; }
+                        _final_IC_Review_AgendaItems = new Array();             
+                    
+                        if(records.length==0)
+                        {
+                            $j('<li></li>').append('<h2>Sorry. No agenda items found at this time.</h2>').appendTo('#agendalist').show();
+                        }
+                    
+                        var strTopic='';
+                        var strDealSize='';
+                        var strDealTeam='';
+                        var strMDTeam='';
+                        var mtngAgendaId = '';
+                        $j('#post_IC_voting_page_details_Table1').empty();
+                    
+                    
+                        $j.each(records,function()
+                        {
+                            strTopic=(_aAgendaItems[this.Id].Related_Topic__c)?_aAgendaItems[this.Id].Related_Topic__c+': ':' ';
+                            
+                            if(_Is_Vote_On_Others_Behalf){
+                                $j('#voteOnOthersBehalfList').show();            
+                                $j('#voteOnOthersBehalfList_PIC').show();
+                            }
+                        
+                            if(_IsPost_IC_Voting) {
+                                $j('#post_IC_Voting_List').show();
+                                
+                                if(_aAgendaItems[this.Id].Deal__c != null && _aAgendaItems[this.Id].Deal__r.Related_Company__c != '')
+                                {
+                                    mtngAgendaId = _aAgendaItems[this.Id].Id;
+                                    var compName = _aAgendaItems[this.Id].Deal__r.Related_Company__r.Name;
+                                    var post_IC_voting_Content = $j('#post_IC_voting_page_details_Table1');
+                                    post_IC_voting_Content.append('<input type="hidden" id="post_IC_voting_NoteId_'+mtngAgendaId+'" class="post_IC_voting_Note"/>');
+                                    post_IC_voting_Content.append('<div style="vertical-align:middle"><table width="100%"><tr><td valign="middle" text-align="center" width="25%"><div width="100%" ><div id="post_IC_voting_Company_'+mtngAgendaId+'"><center><strong>' + (compName+"").toUpperCase() + '</strong></center></div></div></td>' 
+                                    +'<td valign="middle" text-align="center" width="25%"><div width="100%" data-role="fieldcontain" class="ui-field-contain ui-body ui-br"><center> <select id="post_IC_voting_vote_'+mtngAgendaId+'">'+post_IC_voting_Vote_Options+'</select> </center></div></td>'
+                                    + '<td valign="middle" text-align="center" width="50%"><div width="100%" data-role="fieldcontain" class="ui-field-contain ui-body ui-br"><center><textarea style="width:90%;" class="ui-input-text ui-body-c ui-corner-all ui-shadow-inset" id="post_IC_voting_comments_'+mtngAgendaId+'" data-theme="c" data-content-theme="c"/><center></div></td></tr></table></div>');
+                                    post_IC_voting_Content.append('<hr width="100%" />');
+                                    
+                                    $j('#post_IC_voting_vote_'+mtngAgendaId).selectmenu();
+                                    $j('#post_IC_voting_vote_'+mtngAgendaId).val('N/A').selectmenu('refresh', true);
+                                    
+                                    MeetingsController4.getNoteForAgendaItem(this.Id, true, function(records, e) { _post_IC_voting_showInputForm(records) }, {escape: false});
+                                    
+                                    //adding meeting agenda items for Final IC Review
+                                    var mtAgenda = {mtAgendaId: mtngAgendaId, companyName: compName, companyId: _aAgendaItems[this.Id].Deal__r.Related_Company__c};
+                                        _final_IC_Review_AgendaItems.push(mtAgenda);
+                                    
+                                    //section only visible to Mark Dzialga and Drew Pearson (show the link)
+                                    if(_IsFinal_IC_Review)
+                                    {
+                                        //$j('#final_IC_review_Link').show();
+                                        $j('.final_IC_review_List').show();
+                                    }
+                                }
+                            }else{
+                              $j('.showPIVLink').each(function() {
+                                    $j(this).hide();                      
+                                });
+                            }
+                        
+                        
+                            var oDivider=$j('<li ><h3>'+strTopic+_aAgendaItems[this.Id].Name+'</h3> </li>')
+                            .attr('id',this.Id)
+                            .appendTo('#agendalist')
+                            .attr('data-role','list-divider')
+                            //START Story # S-174746
+                            //.append('<p>'+new Date(_aAgendaItems[this.Id].Start_Time__c).toTimeString()+'-'+new Date(_aAgendaItems[this.Id].End_Time__c).toDateString()+'</p>')
+                            .append('<p>'+ formatToTime(new Date(_aAgendaItems[this.Id].Start_Time__c).toTimeString())+'</p>')
+                            //END  Story # S-174746
+                            //START Story # S-177195 [Hemant 1/8/2013]
+                            /*
+                            .click(function(e)
+                            {
+                              e.preventDefault();
+                              onAgendaItemClick(this.id);
+                            })
+                            */
+                            ;
+                            
+                            //END Story # S-177195
+                            
+                            var oContent=$j('<li ></li>'); //.append('<h3><h3>')
+
+                            if(_aAgendaItems[this.Id].Deal__r)
+                            {
+                                strDealSize=(_aAgendaItems[this.Id].Deal__r.Deal_Size_MM__c)?(_aAgendaItems[this.Id].Deal__r.Deal_Size_MM__c+'MM '+_aAgendaItems[this.Id].Deal__r.CurrencyIsoCode):'n/a';
+                                strDealTeam=(_aAgendaItems[this.Id].Deal__r.Deal_Team_Members__c)?_aAgendaItems[this.Id].Deal__r.Deal_Team_Members__c:'n/a';
+                                strMDTeam=(_aAgendaItems[this.Id].Deal__r.MD_Principal_Members__c)?_aAgendaItems[this.Id].Deal__r.MD_Principal_Members__c:'n/a';
+                                //Story # S-183841 [hemant 1/23/2014]
+                                //oContent.append('<p><b>Deal team (MDs & Principals): </b> '+strMDTeam+'</p>');
+                                //oContent.append('<p><b>Deal team: </b> '+strDealTeam+' <span class="ui-li-aside"><strong>size: '+strDealSize+'</strong></span> </p>');
+                                oContent.append('<div><p><b>Deal team (MDs & Principals): </b> '+strMDTeam+'</p><p class="ui-li-aside"><b>Deal Size: </b>'+strDealSize+'</p></div>');
+                                oContent.append('<p><b>Deal team: </b> '+strDealTeam+'</p>');
+                                //END S-183841
+                                
+                                //START Story # S-177195 [Hemant 1/8/2013]
+                                //oDivider.append('<p class="ui-li-count">size: <strong>'+strDealSize+'</strong></p>');
+                                var feedbackOnDeal = $j('<p class="ui-li-count" style="font-size:16px;"><strong>Feedback</strong></p>');
+                                oDivider.append(feedbackOnDeal);
+                                oDivider.click(function(e)
+		                            {
+		                              e.preventDefault();
+		                              onAgendaItemClick(oDivider.attr('id'));
+		                            });
+                                //END Story # S-177195
+                            }
+                            
+                            oContent.appendTo('#agendalist').show();
+                        });
+                      
+                        $j.mobile.hidePageLoadingMsg();
+                        $j('#agendalist').listview('refresh');
+                        if(callback != null) { callback(); }
+                    };
+                    
+                    var _showAgendaForOwner=function(records, callback) 
+                    {
+                        _aAgendaItems.length=0;
+                        for(var i = 0; i < records.length; i++) { _aAgendaItems[records[i].Id] = records[i]; }
+                    
+                     
+                        if(records.length==0)
+                        {
+                            $j('<li></li>').append('<h2>Sorry. No agenda items found at this time.</h2>').appendTo('#agendalist').show();
+                        }
+                    
+                        var mtngAgendaId = '';
+                       
+                        $j.each(records, function()
+                        {
+                            if(_aAgendaItems[this.Id].Deal__c != null && _aAgendaItems[this.Id].Deal__r.Related_Company__c != '')
+                            {
+                                mtngAgendaId = _aAgendaItems[this.Id].Id;
+                                $j('#post_IC_voting_NoteId_'+mtngAgendaId).val('');
+                                $j('#post_IC_voting_vote_'+mtngAgendaId).selectmenu();
+                                $j('#post_IC_voting_vote_'+mtngAgendaId).val('N/A').selectmenu('refresh', true);
+                                $j('#post_IC_voting_comments_'+mtngAgendaId).val('');
+                                MeetingsController4.getNoteForAgendaItemForOwner( this.Id, true, $j("#post_IC_voting_user").val() , function(records, e) { _post_IC_voting_showInputForm(records) }, {escape: false});
+                            }
+                        });
+                        $j.mobile.hidePageLoadingMsg();
+                        if(callback != null) { callback(); }
+                    };
+                    
+                    $j('#backMeetings').click(function(e){ 
+                        _getMeetings('',false);
+                        $j('#show_less_meetingDiv').hide();
+                        $j('#show_more_meetingDiv').show(); 
+                    }); 
+                     
+                    $j('.show_more_meetingLink').click(function(e){ 
+                        _getMeetings('',true);
+                        $j('#show_more_meetingDiv').hide();
+                        $j('#show_less_meetingDiv').show();
+                    });
+                    
+                    $j('.show_less_meetingLink').click(function(e){ 
+                        _getMeetings('',false);
+                        $j('#show_less_meetingDiv').hide();
+                        $j('#show_more_meetingDiv').show();     
+                    });
+                  
+                    $j('.showFIRLink').each(function() {
+                      if(!_IsFinal_IC_Review){
+                        $j(this).hide();                      
+                      }
+                    });
+                    
+                    $j('#Meeting_Agenda_Next').click(function(e){
+                        e.preventDefault();
+                        var currAIId = $j('#agendaId').val();
+                        //var nxtElement =  $j('#'+currAIId).next().next();
+                        var nxtElement = goToNextPrev($j('#'+currAIId), true);
+                        var nextElementId = nxtElement.attr('id');
+                        onAgendaItemClick(nextElementId);
+                    });
+                    
+                    $j('#Meeting_Agenda_Prev').click(function(e){
+                        e.preventDefault();
+                        var currAIId = $j('#agendaId').val();
+                        var prevElement =  goToNextPrev($j('#'+currAIId), false);
+                        var prevElementId = prevElement.attr('id');
+                        onAgendaItemClick(prevElementId);
+                    });
+                                        
+                    $j('.final_IC_review_AnchorLink').click(function(e){  
+                        e.preventDefault();
+                        
+                        var final_IC_review_blnFireCreate=($j('#final_IC_review_UserVotes').html().trim()=='')?false:true;
+                        $j('#final_IC_review_UserVotes').empty();
+                        $j('#final_IC_review_PICV_results').show();
+                        
+                        $j.each(_final_IC_Review_AgendaItems,function(){
+                            var agItem = this;
+                            MeetingsController4.getMeetingNotesWithPhotoURL(agItem.mtAgendaId, null, function(records, e)
+                            { 
+                                var final_IC_review_PICV_Header=$j('<div data-content-theme="d"> </div>')
+                                .append('<div class="ui-grid-c"><table width="100%"><tr><td valign="middle" text-align="center" width="100%"><center><h3><span>'+ (agItem.companyName+"").toUpperCase()+'</span></h3></center></td></tr></table></div><hr width="100%"/>');
+                                
+                                /*** START Story # S-174746 ***/
+                                /*
+                                //adding click event on company name start
+                                final_IC_review_PICV_Header.find('span').click(function(e){
+                                    e.preventDefault();
+                                    $j.mobile.showPageLoadingMsg(); 
+                                    MeetingsController4.getCompanyDetails(agItem.companyId, function(records, e)
+                                        {
+                                              
+                                            var aFields=['Name', 'Code_Name__c', 'Description','Industry','Status__c','Sector__c','Sub_Sector__c','Latest_Status_Note__c','Next_Steps__c', 'Latest_Status_Note_Subject__c','Website', 'Themes__c', 'Latest_Financials_Year__c', 'Latest_Revenue__c', 'Projected_Financials_Year__c', 'Projected_Revenue__c'];
+                                              
+                                            if(records.length>0)
+                                            {
+                                                for(var i=0;i<aFields.length;++i)
+                                                {
+                                                    $j("#companyDetail_"+aFields[i]).html(' ');
+                                                    console.log($j("#companyDetail_"+aFields[i]).html() + ': '+ records[0][aFields[i]]);
+                                                    if((aFields[i]=='Name')&&(records[0]['Website']))
+                                                        $j("#companyDetail_"+aFields[i]).html('<a data-rel="dialog" data-transition="pop" href="'+records[0]['Website']+'">'+records[0][aFields[i]]+'</a>').trigger("create");
+                                                    else
+                                                        $j("#companyDetail_"+aFields[i]).html(records[0][aFields[i]]);
+                                                    
+                                                }
+                                            }
+                                            else
+                                            {
+                                            }
+                                              
+                                            $j.mobile.hidePageLoadingMsg();
+                                            $j('#companydetailpage_backAgendaItem').hide();
+                                            $j('#companydetailpage_final_IC_review').show();
+                                            $j.mobile.changePage('#companydetailpage', {changeHash: true});
+                                        }
+                                    );
+                                });
+                                
+                                //click event on company end
+                                /*** START Story # S-174746 ***/
+                                
+                                $j('#final_IC_review_UserVotes').append(final_IC_review_PICV_Header);
+                                
+                                if(records.length==0)
+                                    $j('#final_IC_review_UserVotes').append('<h3>Sorry. No votes yet.</h3>').trigger('create');
+                                    
+                                $j.each(records,function()
+                                {
+                                    var final_IC_review_oSection=$j('<div data-content-theme="d"> </div>')
+                                    .append('<div class="ui-grid-c"> <table width="100%"><tr><td valign="middle" text-align="center" width="20%"> <div width="100%"><table><tr><td><img src="'+ this.userUrl +'" width="50" height="50" alt="'+this.mtngNote.Owner.Name+'" class="chatter-photo" title="'+this.mtngNote.Owner.Name+'"/></td><td>&nbsp;'+this.mtngNote.Owner.Name+'</td></tr></table></div></td></div>'
+                                    +'<td valign="middle" text-align="center" width="10%"><div width="100%"><center><strong>'+this.mtngNote.Vote__c+'</strong></center></div></td>'
+                                    +'<td valign="middle" text-align="center"><div width="100%"><center>'+(this.mtngNote.Note__c?this.mtngNote.Note__c:"no comment")+'</center></div></td>'
+                                    +'<td valign="middle" text-align="center" width="8%"><div width="100%"><center>'+(this.mtngNote.Is_Post_IC_Vote__c?"Post":"Initial")+'</center></div></td></tr></table></div><hr width="100%"/>');
+                                    $j('#final_IC_review_UserVotes').append(final_IC_review_oSection);
+                                    
+                                });
+                            
+                                if(final_IC_review_blnFireCreate) 
+                                    $j('#final_IC_review_UserVotes').trigger('create');
+                                
+                            }, {escape: false}); 
+                        });
+                        
+                        $j.mobile.changePage('#final_IC_review_page', {changeHash: true});  
+                    });
+                    
+                    
+                    
+                    /*************************************************************************************
+                    //DashboardStory # S-146191 Start - Graphs / Dashboard section
+                    *************************************************************************************/
+                    //START S-174746
+                    //function onAgendaItemClick start *****************************************************
+                       function onAgendaItemClick(agendaItemId){
+                                 
+                           $j.mobile.showPageLoadingMsg();
+                           $j('#agendaId').val(agendaItemId);
+                           $j('#companyDetail_Logo').html( $j('<div/>').html( ' ') );
+                           
+                           if(_aAgendaItems[agendaItemId].hasOwnProperty('Deal__r') && _aAgendaItems[agendaItemId].Deal__r.hasOwnProperty('Related_Company__c') )
+                           {
+                               $j('#companyId').val(_aAgendaItems[agendaItemId].Deal__r.Related_Company__c);
+                               
+                               MeetingsController4.getCompanyDetails($j('#companyId').val(), function(records, e)
+                               {
+                                  console.log(records[0]);
+                                  var aFields=['Name', 'Code_Name__c', 'Description','Industry','Status__c','Sector__c','Sub_Sector__c','Latest_Status_Note__c','Next_Steps__c', 'Latest_Status_Note_Subject__c','Website', 'Themes__c', 'Latest_Financials_Year__c', 'Latest_Revenue__c', 'Projected_Financials_Year__c', 'Projected_Revenue__c'];
+                              
+                                  if(records.length>0)
+                                  {
+                                      for(var i=0;i<aFields.length;++i)
+                                      {
+                                          $j("#companyDetail_"+aFields[i]).html(' ');
+                                          console.log($j("#companyDetail_"+aFields[i]).html() + ': '+ records[0][aFields[i]]);
+                                          if((aFields[i]=='Name')&&(records[0]['Website']))
+                                              $j("#companyDetail_"+aFields[i]).html('<a data-rel="dialog" data-transition="pop" href="'+records[0]['Website']+'">'+records[0][aFields[i]]+'</a>').trigger("create");
+                                          else
+                                              $j("#companyDetail_"+aFields[i]).html(records[0][aFields[i]]);
+                                      
+                                      }
+                                  }
+                               });
+                               
+                               if(_aAgendaItems[agendaItemId].Deal__r.Related_Company__r.RKCB__Logo__c)
+                               {
+                                   //$j('#companyLogo').html( $j('<div/>').html(_aAgendaItems[agendaItemId].Deal__r.Related_Company__r.RKCB__Logo__c).text()+' (tap for details)' );
+                                   $j('#companyLogo').html( $j('<div/>').html(_aAgendaItems[agendaItemId].Deal__r.Related_Company__r.RKCB__Logo__c).text());
+                                   $j('#companyDetail_Logo').html( $j('<div/>').html(_aAgendaItems[agendaItemId].Deal__r.Related_Company__r.RKCB__Logo__c).text() );
+                               }
+                               else
+                               {
+                                   //$j('#companyLogo').html( $j('<div/>').html( '<strong>'+_aAgendaItems[agendaItemId].Deal__r.Related_Company__r.Name+':</strong> (tap for details)') );
+                                   $j('#companyLogo').html( $j('<div/>').html( '<strong>'+_aAgendaItems[agendaItemId].Deal__r.Related_Company__r.Name+':</strong>') );
+                                   $j('#companyDetail_Logo').html( $j('<div/>').html( ' ') );
+                               }
+                           
+                           
+                               //$j('#materialsOnTime').html( ( (_aAgendaItems[agendaItemId].Materials_submitted_on_time__c)?'Yes':'No'));
+                               $j('#dealName').html(_aAgendaItems[agendaItemId].Deal__r?_aAgendaItems[agendaItemId].Deal__r.Name:'');
+                           }
+                           else{
+                               $j('#companyId').val('');
+                               $j('#companyLogo').html($j('<div/>').html( ' ') );
+                               $j('#companyDetail_Logo').html($j('<div/>').html( ' ') );
+                               $j('#dealName').html('');
+                               var aFields=['Name', 'Code_Name__c', 'Description','Industry','Status__c','Sector__c','Sub_Sector__c','Latest_Status_Note__c','Next_Steps__c', 'Latest_Status_Note_Subject__c','Website', 'Themes__c', 'Latest_Financials_Year__c', 'Latest_Revenue__c', 'Projected_Financials_Year__c', 'Projected_Revenue__c'];
+                               for(var i=0;i<aFields.length;++i){
+                                  $j("#companyDetail_"+aFields[i]).html(' ');
+                               }   
+                               
+                           }
+                           $j('#materialsOnTime').html( ( (_aAgendaItems[agendaItemId].Materials_submitted_on_time__c)?'Yes':'No'));
+
+                           if(_IsICAdmin)
+                           {
+                               var blnFireCreate=($j('#UserVotes').html().trim()=='')?false:true;
+
+                               $j('#UserVotes').empty();
+                               $j('#meetingNotesEntered').show();
+                               
+                               /* START S-174746 [Hemant 12/31/2013] Hiding fields
+                               MeetingsController4.getMeetingNotesEnteredStats(agendaItemId, function(records, e) 
+                               {
+                                   var avgVote=0;
+                                   var avgQoM=0;
+                                 
+                                   if((records.length>0)&&(records[0].NumVotes>0))
+                                   {
+                                       avgVote=parseFloat(Math.round(records[0].AvgVote * 100) / 100).toFixed(2);
+                                       avgQoM=parseFloat(Math.round(records[0].AvgQoM * 100) / 100).toFixed(2)
+                                   }
+                                 
+                                   $j('#AvgVote').html(avgVote);
+                                   $j('#AvgQoM').html(avgQoM);
+                                 
+                               }, {escape: false});
+                               /* END S-174746 */
+                               
+                               MeetingsController4.getMeetingNotesEntered(agendaItemId, function(records, e)
+                               { 
+                                   if(records.length==0)
+                                       $j('#UserVotes').append('<h3>Sorry. No votes yet.</h3>').trigger('create');
+                               
+                                   $j.each(records,function()
+                                   {
+                                       var oSection=$j('<div data-role="collapsible" data-content-theme="d"> </div>')
+                                       .append('<h4>'+this.Owner.Name+'</h4>')
+                                       
+                                       /* START S-174746 [Hemant 12/31/2013] Hiding fields
+                                       .append('<div class="ui-grid-b"><div class="ui-block-a"><strong>Attractiveness: </strong>'+this.Vote__c+'</div>'
+                                       +'<div class="ui-block-b"><strong>QoBM Vote: </strong>'+this.Quality_of_Materials__c+'</div>'
+                                       +'<div class="ui-block-c"><strong>Would Invest: </strong>'+this.Would_Invest__c+'</div></div>')
+                                       /* END S-174746 */
+                                       .append('<p>'+(this.Note__c?this.Note__c:"no comment")+'</p>');
+                                       $j('#UserVotes').append(oSection);
+                                   });
+                                 
+                                   if(blnFireCreate) 
+                                       $j('#UserVotes').trigger('create'); 
+                                                  
+                               }, {escape: false}); 
+                           }
+                           
+                           
+                           curr_mtngAItemId = agendaItemId;
+                           MeetingsController4.getNoteForAgendaItem(agendaItemId, false, function(records, e) { _showInputFormOnload(records) }, {escape: false});
+                           MeetingsController4.getItemMaterialsURLs(agendaItemId, function(records, e) { _showMaterialsList('#materialsList','#materialsIFrame','#materialsShimPage',records) }, {escape: false});
+                           MeetingsController4.getHistoricalItemMaterialsURLs(agendaItemId, function(records, e) { _showMaterialsList('#histMaterialsList','#materialsIFrame','#materialsShimPage',records) }, {escape: false});
+                           MeetingsController4.getMeetingNotesWithPhotoURL_Agenda(agendaItemId, function(records, e)
+                           {
+                                var final_IC_review_blnFireCreate=($j('#hist_feedback_comments').html().trim()=='')?false:true;
+                                $j('#hist_feedback_comments').empty();
+
+                                var final_IC_review_PICV_Header=$j('<div data-content-theme="d"> </div>')
+                                .append('<div class="ui-grid-c"><table width="100%"><tr><td valign="middle" text-align="center" width="100%"><center><h3><span>'+ (records[0].mtngNote.Agenda_Item__r.Deal__r.Related_Company__r.Name+"").toUpperCase()+'</span></h3></center></td></tr></table></div><hr width="100%"/>');
+
+                                $j('#hist_feedback_comments').append(final_IC_review_PICV_Header);
+                            
+                                if(records.length==0)
+                                    $j('#hist_feedback_comments').append('<h3>Sorry. No votes yet.</h3>').trigger('create');
+                                    
+                                                
+                                $j.each(records,function()
+                                {
+                                    var final_IC_review_oSection=$j('<div data-content-theme="d"> </div>').append('<div class="ui-grid-c"> <table width="100%"><tr></div>'
+                                    +'<td valign="middle" text-align="center" width="10%"><div width="100%"><center><strong>'+this.mtngNote.Agenda_Item__r.Name+'</strong></center></div></td>'
+                                     +'<td valign="middle" text-align="center" width="10%"><div width="100%"><center><strong>'+(new Date(this.mtngNote.CreatedDate).getMonth()+1) + '/' + new Date(this.mtngNote.CreatedDate).getDate() + '/' + new Date(this.mtngNote.CreatedDate).getFullYear() +'</strong></center></div></td>'
+                                    +'<td valign="middle" text-align="center" width="10%"><div width="100%"><center><strong>'+this.mtngNote.Vote__c+'</strong></center></div></td>'
+                                    +'<td valign="middle" text-align="center" width="20%"><div width="100%"><center><strong>'+this.mtngNote.Would_Invest__c+'</strong></center></div></td>'
+                                    +'<td valign="middle" text-align="center" width="20%"><div width="100%"><center><strong>'+this.mtngNote.Quality_of_Materials__c+'</strong></center></div></td>'
+                                    +'<td valign="middle" text-align="center"><div width="100%"><center>'+(this.mtngNote.Note__c?this.mtngNote.Note__c:"no comment")+'</center></div></td>'
+                                    +'</tr></table></div><hr width="100%"/>');
+                                    $j('#hist_feedback_comments').append(final_IC_review_oSection);
+                                    
+                                });
+                            
+                                if(final_IC_review_blnFireCreate) 
+                                    $j('#hist_feedback_comments').trigger('create');
+                           });
+                           
+                           //show hide next button
+                           var nxtElement = goToNextPrev($j('#'+agendaItemId), true);                          
+                           if(!nxtElement.attr('id')){
+                             $j('#Meeting_Agenda_NextTD').hide();
+                           }else{
+                             $j('#Meeting_Agenda_NextTD').show();
+                           }
+                           
+                           //show hide Previous button
+                           var prevElement =  goToNextPrev($j('#'+agendaItemId), false);
+                           if(!prevElement.attr('id')){
+                             $j('#Meeting_Agenda_PrevTD').hide();
+                           }else{
+                             $j('#Meeting_Agenda_PrevTD').show();
+                           }
+                       }
+                       //function onAgendaItemClick end *****************************************************     
+                       //END Story S-174647
+                       
+                    //function loadDashboard start *****************************************************
+                    function loadDashboard(e){
+                      
+                      e.preventDefault();
+                       
+                        var final_IC_review_blnFireCreate=($j('#final_IC_review_UserVotes_Dashboard_Vote_Comments').html().trim()=='')?false:true;
+                        $j('#final_IC_review_UserVotes_Dashboard_Vote_Comments').empty();
+                        $j('#final_IC_review_page_details_Table_GraphDashboard').empty();
+                        $j('#final_IC_review_PICV_results_Dashboard').show();
+                        
+                        //Adding Graph section on the dashboard
+                        $j('#final_IC_review_page_details_Table_GraphDashboard').append('<iframe id="graphIframe" height="100%" frameborder="0" width="100%" src="/apex/Meetings4_Dashboard?meetingId=' + _selected_MeetingId + '"></iframe>');
+                        
+                        var currentIFrame = document.getElementById('graphIframe');
+                          currentIFrame.onload = function(){
+                          setIframeHeight(currentIFrame);
+                        }
+                        
+                        
+                        $j.each(_final_IC_Review_AgendaItems,function(){
+                            var agItem = this;
+                            MeetingsController4.getMeetingNotesWithPhotoURL_Dashboard(agItem.mtAgendaId, function(records, e)
+                            { 
+                                var final_IC_review_PICV_Header=$j('<div data-content-theme="d"> </div>')
+                                .append('<div class="ui-grid-c"><table width="100%"><tr><td valign="middle" text-align="center" width="100%"><center><h3><span>'+ (agItem.companyName+"").toUpperCase()+'</span></h3></center></td></tr></table></div><hr width="100%"/>');
+                                
+                                /*** START Story # S-174746 ***/
+                                /*
+                                //adding click event on company name start
+                                final_IC_review_PICV_Header.find('span').click(function(e){
+                                    e.preventDefault();
+                                    $j.mobile.showPageLoadingMsg(); 
+                                    MeetingsController4.getCompanyDetails(agItem.companyId, function(records, e)
+                                        {
+                                              
+                                            var aFields=['Name', 'Code_Name__c', 'Description','Industry','Status__c','Sector__c','Sub_Sector__c','Latest_Status_Note__c','Next_Steps__c', 'Latest_Status_Note_Subject__c','Website', 'Themes__c', 'Latest_Financials_Year__c', 'Latest_Revenue__c', 'Projected_Financials_Year__c', 'Projected_Revenue__c'];
+                                              
+                                            if(records.length>0)
+                                            {
+                                                for(var i=0;i<aFields.length;++i)
+                                                {
+                                                    $j("#companyDetail_"+aFields[i]).html(' ');
+                                                    console.log($j("#companyDetail_"+aFields[i]).html() + ': '+ records[0][aFields[i]]);
+                                                    if((aFields[i]=='Name')&&(records[0]['Website']))
+                                                        $j("#companyDetail_"+aFields[i]).html('<a data-rel="dialog" data-transition="pop" href="'+records[0]['Website']+'">'+records[0][aFields[i]]+'</a>').trigger("create");
+                                                    else
+                                                        $j("#companyDetail_"+aFields[i]).html(records[0][aFields[i]]);
+                                                    
+                                                }
+                                            }
+                                            else
+                                            {
+                                            }
+                                              
+                                            $j.mobile.hidePageLoadingMsg();
+                                            $j('#companydetailpage_backAgendaItem').hide();
+                                            $j('#companydetailpage_final_IC_review').show();
+                                            $j.mobile.changePage('#companydetailpage', {changeHash: true});
+                                        }
+                                    );
+                                });
+                                
+                                //click event on company end
+                                /*** END Story # S-174746 ***/
+                                
+                                
+                                $j('#final_IC_review_UserVotes_Dashboard_Vote_Comments').append(final_IC_review_PICV_Header);
+                            
+                                if(records.length==0)
+                                    $j('#final_IC_review_UserVotes_Dashboard_Vote_Comments').append('<h3>Sorry. No votes yet.</h3>').trigger('create');
+                                    
+                                                
+                                $j.each(records,function()
+                                {
+                                    var final_IC_review_oSection=$j('<div data-content-theme="d"> </div>')
+                                    .append('<div class="ui-grid-c"> <table width="100%"><tr><td valign="middle" text-align="center" width="20%"> <div width="100%"><table><tr><td><img src="'+ this.userUrl +'" width="50" height="50" alt="'+this.mtngNote.Owner.Name+'" class="chatter-photo" title="'+this.mtngNote.Owner.Name+'"/></td><td>&nbsp;'+this.mtngNote.Owner.Name+'</td></tr></table></div></td></div>'
+                                    +'<td valign="middle" text-align="center" width="10%"><div width="100%"><center><strong>'+this.mtngNote.Vote__c+'</strong></center></div></td>'
+                                    +'<td valign="middle" text-align="center"><div width="100%"><center>'+(this.mtngNote.Note__c?this.mtngNote.Note__c:"no comment")+'</center></div></td>'
+                                    //+'<td valign="middle" text-align="center" width="8%"><div width="100%"><center>'+(this.mtngNote.Is_Post_IC_Vote__c?"Post":"Initial")+'</center></div></td></tr></table></div><hr width="100%"/>');
+                                    +'</tr></table></div><hr width="100%"/>');
+                                    $j('#final_IC_review_UserVotes_Dashboard_Vote_Comments').append(final_IC_review_oSection);
+                                    
+                                });
+                            
+                                if(final_IC_review_blnFireCreate) 
+                                    $j('#final_IC_review_UserVotes_Dashboard_Vote_Comments').trigger('create');
+                                
+                            }, {escape: false}); 
+                        });
+                        
+                        
+                        $j.mobile.changePage('#final_IC_review_page_Dashboard', {changeHash: true});
+                    }
+                    //function loadDashboard end *****************************************************
+                    
+                    $j('.final_IC_review_Dashboard_AnchorLink').click(function(e){  
+                        loadDashboard(e);
+                    });
+                    
+                    
+                    //START Story # S-174746 [1/3/2013 - hemant]
+                    //function load_Pre_IC_Feedback_Page start *****************************************************
+                    function load_Pre_IC_Feedback_Page(e){
+                      
+                      e.preventDefault();
+                       
+                        var final_IC_review_blnFireCreate=($j('#pre_IC_Feedback_Page_Vote_Comments').html().trim()=='')?false:true;
+                        $j('#pre_IC_Feedback_Page_Vote_Comments').empty();
+                        $j.each(_final_IC_Review_AgendaItems,function(){
+                            var agItem = this;
+                            MeetingsController4.getMeetingNotesWithPhotoURL(agItem.mtAgendaId, null, function(records, e)
+                            { 
+                                var final_IC_review_PICV_Header=$j('<div data-content-theme="d"> </div>')
+                                .append('<div class="ui-grid-c"><table width="100%"><tr><td valign="middle" text-align="center" width="100%"><center><h3><span>'+ (agItem.companyName+"").toUpperCase()+'</span></h3></center></td></tr></table></div><hr width="100%"/>');
+                                /*** START Story # S-174746 ***/
+                                /*
+                                //adding click event on company name start
+                                final_IC_review_PICV_Header.find('span').click(function(e){
+                                    e.preventDefault();
+                                    $j.mobile.showPageLoadingMsg(); 
+                                    MeetingsController4.getCompanyDetails(agItem.companyId, function(records, e)
+                                        {
+                                              
+                                            var aFields=['Name', 'Code_Name__c', 'Description','Industry','Status__c','Sector__c','Sub_Sector__c','Latest_Status_Note__c','Next_Steps__c', 'Latest_Status_Note_Subject__c','Website', 'Themes__c', 'Latest_Financials_Year__c', 'Latest_Revenue__c', 'Projected_Financials_Year__c', 'Projected_Revenue__c'];
+                                              
+                                            if(records.length>0)
+                                            {
+                                                for(var i=0;i<aFields.length;++i)
+                                                {
+                                                    $j("#companyDetail_"+aFields[i]).html(' ');
+                                                    console.log($j("#companyDetail_"+aFields[i]).html() + ': '+ records[0][aFields[i]]);
+                                                    if((aFields[i]=='Name')&&(records[0]['Website']))
+                                                        $j("#companyDetail_"+aFields[i]).html('<a data-rel="dialog" data-transition="pop" href="'+records[0]['Website']+'">'+records[0][aFields[i]]+'</a>').trigger("create");
+                                                    else
+                                                        $j("#companyDetail_"+aFields[i]).html(records[0][aFields[i]]);
+                                                    
+                                                }
+                                            }
+                                            else
+                                            {
+                                            }
+                                              
+                                            $j.mobile.hidePageLoadingMsg();
+                                            $j('#companydetailpage_backAgendaItem').hide();
+                                            $j('#companydetailpage_final_IC_review').show();
+                                            $j.mobile.changePage('#companydetailpage', {changeHash: true});
+                                        }
+                                    );
+                                });
+                                
+                                //click event on company end
+                                /*** END Story # S-174746 ***/
+                                
+                                $j('#pre_IC_Feedback_Page_Vote_Comments').append(final_IC_review_PICV_Header);
+                            
+                                if(records.length==0)
+                                    $j('#pre_IC_Feedback_Page_Vote_Comments').append('<h3>Sorry. No votes yet.</h3>').trigger('create');
+                                    
+                                                
+                                $j.each(records,function()
+                                {
+                                    var final_IC_review_oSection=$j('<div data-content-theme="d"> </div>');
+                                    if(!this.mtngNote.Is_Post_IC_Vote__c){
+                                      final_IC_review_oSection.append('<div class="ui-grid-c"> <table width="100%"><tr><td valign="middle" text-align="center" width="30%"> <div width="100%"><table><tr><td><img src="'+ this.userUrl +'" width="50" height="50" alt="'+this.mtngNote.Owner.Name+'" class="chatter-photo" title="'+this.mtngNote.Owner.Name+'"/></td><td>&nbsp;'+this.mtngNote.Owner.Name+'</td></tr></table></div></td></div>'
+                                        +'<td valign="middle" text-align="center"><div width="100%"><center>'+(this.mtngNote.Note__c?this.mtngNote.Note__c:"no comment")+'</center></div></td>'
+                                        +'</tr></table></div><hr width="100%"/>');
+                                        $j('#pre_IC_Feedback_Page_Vote_Comments').append(final_IC_review_oSection);
+                                    }
+                                });
+                            
+                                if(final_IC_review_blnFireCreate) 
+                                    $j('#pre_IC_Feedback_Page_Vote_Comments').trigger('create');
+                                
+                            }, {escape: false}); 
+                        });
+                       $j.mobile.changePage('#pre_IC_Feedback_Page', {changeHash: true});
+                    }
+                    //function load_Pre_IC_Feedback_Page end *****************************************************
+                    
+                    $j('.pre_IC_Feedback_AnchorLink').click(function(e){
+                        load_Pre_IC_Feedback_Page(e);
+                    });
+                    
+                    //END Story # S-174746
+                    
+                    
+                    /*************************************************************************************
+                      //DASHBOARDSTORY # S-146191 END - GRAPHS / DASHBOARD SECTION
+                    ***************************************************************************************/
+                    
+                    /*************************************************************************************
+                    //S-158202 Start - Final IC Review - My Votes Section
+                    *************************************************************************************/
+                    
+                    /************** Click Event for FIR My Votes section */
+                    
+                    $j('.final_IC_review_My_Votes_AnchorLink').click(function(e){  
+                        loadFIR_My_Votes(e);
+                    });
+                    
+                    //function loadFIR_My_Votes start
+                    function loadFIR_My_Votes(e){
+                        
+                        e.preventDefault();
+                       
+                        var final_IC_review_blnFireCreate=($j('#FIR_My_Votes_UserVotes').html().trim()=='')?false:true;
+                        $j('#FIR_My_Votes_UserVotes').empty();
+                        $j('#FIR_My_Votes_PICV_results').show();
+                        
+                        $j.each(_final_IC_Review_AgendaItems,function(){
+                            var agItem = this;
+                            MeetingsController4.getMeetingNotesWithPhotoURL(agItem.mtAgendaId, '{!$User.Id}', function(records, e)
+                            { 
+                                var final_IC_review_PICV_Header=$j('<div data-content-theme="d"> </div>')
+                                .append('<div class="ui-grid-c"><table width="100%"><tr><td valign="middle" text-align="center" width="100%"><center><h3><span>'+ (agItem.companyName+"").toUpperCase()+'</span></h3></center></td></tr></table></div><hr width="100%"/>');
+                                
+                                /**** START Story # S-174746 ***/
+                                /*
+                                //adding click event on company name start
+                                final_IC_review_PICV_Header.find('span').click(function(e){
+                                    e.preventDefault();
+                                    $j.mobile.showPageLoadingMsg(); 
+                                    MeetingsController4.getCompanyDetails(agItem.companyId, function(records, e)
+                                        {
+                                              
+                                            var aFields=['Name', 'Code_Name__c', 'Description','Industry','Status__c','Sector__c','Sub_Sector__c','Latest_Status_Note__c','Next_Steps__c', 'Latest_Status_Note_Subject__c','Website', 'Themes__c', 'Latest_Financials_Year__c', 'Latest_Revenue__c', 'Projected_Financials_Year__c', 'Projected_Revenue__c'];
+                                              
+                                            if(records.length>0)
+                                            {
+                                                for(var i=0;i<aFields.length;++i)
+                                                {
+                                                    $j("#companyDetail_"+aFields[i]).html(' ');
+                                                    console.log($j("#companyDetail_"+aFields[i]).html() + ': '+ records[0][aFields[i]]);
+                                                    if((aFields[i]=='Name')&&(records[0]['Website']))
+                                                        $j("#companyDetail_"+aFields[i]).html('<a data-rel="dialog" data-transition="pop" href="'+records[0]['Website']+'">'+records[0][aFields[i]]+'</a>').trigger("create");
+                                                    else
+                                                        $j("#companyDetail_"+aFields[i]).html(records[0][aFields[i]]);
+                                                    
+                                                }
+                                            }
+                                            else
+                                            {
+                                            }
+                                              
+                                            $j.mobile.hidePageLoadingMsg();
+                                            $j('#companydetailpage_backAgendaItem').hide();
+                                            $j('#companydetailpage_final_IC_review').show();
+                                            $j.mobile.changePage('#companydetailpage', {changeHash: true});
+                                        }
+                                    );
+                                });
+                                //click event on company end
+                                */
+                                /*** END Story # S-174746 ***/
+                                
+                                $j('#FIR_My_Votes_UserVotes').append(final_IC_review_PICV_Header);
+                                
+                                if(records.length==0)
+                                    $j('#FIR_My_Votes_UserVotes').append('<h3>Sorry. No votes yet.</h3>').trigger('create');
+                                    
+                                $j.each(records,function()
+                                {
+                                    var final_IC_review_oSection=$j('<div data-content-theme="d"> </div>')
+                                    .append('<div class="ui-grid-c"> <table width="100%"><tr><td valign="middle" text-align="center" width="20%"> <div width="100%"><table><tr><td><img src="'+ this.userUrl +'" width="50" height="50" alt="'+this.mtngNote.Owner.Name+'" class="chatter-photo" title="'+this.mtngNote.Owner.Name+'"/></td><td>&nbsp;'+this.mtngNote.Owner.Name+'</td></tr></table></div></td></div>'
+                                    +'<td valign="middle" text-align="center" width="10%"><div width="100%"><center><strong>'+this.mtngNote.Vote__c+'</strong></center></div></td>'
+                                    +'<td valign="middle" text-align="center"><div width="100%"><center>'+(this.mtngNote.Note__c?this.mtngNote.Note__c:"no comment")+'</center></div></td>'
+                                    +'<td valign="middle" text-align="center" width="8%"><div width="100%"><center>'+(this.mtngNote.Is_Post_IC_Vote__c?"Post":"Initial")+'</center></div></td></tr></table></div><hr width="100%"/>');
+                                    $j('#FIR_My_Votes_UserVotes').append(final_IC_review_oSection);
+                                    
+                                });
+                            
+                                if(final_IC_review_blnFireCreate) 
+                                    $j('#FIR_My_Votes_UserVotes').trigger('create');
+                                
+                            }, {escape: false}); 
+                        });
+                        
+                        $j.mobile.changePage('#FIR_My_Votes_page', {changeHash: true});  
+                    }
+                    //function loadFIR_My_Votes End 
+                    
+                    /*************************************************************************************
+                    //S-158202 - Final IC Review - My Votes Section End [10/30/2013 hemant]
+                    *************************************************************************************/
+                    
+                    var _showMaterialsList=function(strListName, strShimIFrame ,strShimPageName, records, callback)
+                    {
+                        $j(strListName).empty();
+
+                        if(records.length==0)
+                        {
+                            $j('<li >Sorry. No documents on this item</li>').appendTo(strListName);
+                        }
+
+                        $j.each(records,function()
+                        {
+                            var strURL=this.URL;
+                        
+                            $j('<li ><a href="'+strURL+'" data-transition="flip" rel="external">'+this.Title+'</a></li>')
+                            .appendTo(strListName);
+                        });
+
+                        if(callback != null) { callback(); }  
+
+                        $j(strListName).listview('refresh');  
+                    };
+                  
+                    var _showInputFormOnload=function(records, callback)
+                    {       
+                        if(records!=null)
+                        {
+                            $j('#noteId').val(records.Id);
+                            $j('#voteValue').val(records.Vote__c).selectmenu('refresh', true);                        
+                            $j('#userValue').val(records.OwnerId).selectmenu('refresh', true);      
+                            $j('#wouldInvestValue').val(records.Would_Invest__c).selectmenu('refresh', true);
+                            $j('#materialsValue').val(records.Quality_of_Materials__c).selectmenu('refresh', true);
+                            $j('#commentsValue').val((records.Note__c?records.Note__c:''));
+                        }
+                        else
+                        {
+                            $j('#noteId').val('');                    
+                            $j('#userValue').val('none').selectmenu('refresh', true);      
+                            $j('#voteValue').val('none').selectmenu('refresh', true);
+                            $j('#wouldInvestValue').val('Undecided').selectmenu('refresh', true);
+                            $j('#materialsValue').val('3').selectmenu('refresh', true);
+                            $j('#commentsValue').val('');   
+                        }
+                    
+                    
+                        $j.mobile.hidePageLoadingMsg();  
+                        $j.mobile.changePage('#inputpage', {changeHash: true});
+                        if(callback != null) { callback(); }  
+                    };
+                  
+                    var _showInputForm=function(records, callback)
+                    {       
+                        if(records!=null)
+                        {
+                            $j('#noteId').val(records.Id);
+                            $j('#voteValue').val(records.Vote__c).selectmenu('refresh', true);
+                            $j('#userValue').val(records.OwnerId).selectmenu('refresh', true);      
+                            $j('#wouldInvestValue').val(records.Would_Invest__c).selectmenu('refresh', true);
+                            $j('#materialsValue').val(records.Quality_of_Materials__c).selectmenu('refresh', true);
+                            $j('#commentsValue').val((records.Note__c?records.Note__c:''));
+                        }
+                        else
+                        {
+                            $j('#noteId').val('');
+                            $j('#voteValue').val('none').selectmenu('refresh', true);
+                            $j('#wouldInvestValue').val('Undecided').selectmenu('refresh', true);
+                            $j('#materialsValue').val('3').selectmenu('refresh', true);
+                            $j('#commentsValue').val('');   
+                        }
+                        
+                        $j.mobile.hidePageLoadingMsg();  
+                        $j.mobile.changePage('#inputpage', {changeHash: true});
+                        if(callback != null) { callback(); }  
+                    };                 
+                    var _save=function(evt)
+                    {
+                        var iID=($j('#noteId').val()=='')?null:$j('#noteId').val();
+                        var oNote;
+                        if($j('#userValue').val()=='none'){       
+                            oNote={ id: iID, Note__c: $j('#commentsValue').val(), Vote__c: $j('#voteValue').val(), Would_Invest__c: $j('#wouldInvestValue').val() , Quality_of_Materials__c: $j('#materialsValue').val(), Agenda_Item__c: $j('#agendaId').val()  };
+                        }
+                        else
+                            oNote={ id: iID, Note__c: $j('#commentsValue').val(), OwnerId: $j('#userValue').val(), Vote__c: $j('#voteValue').val(), Would_Invest__c: $j('#wouldInvestValue').val() , Quality_of_Materials__c: $j('#materialsValue').val(), Agenda_Item__c: $j('#agendaId').val()  };
+                            MeetingsController4.saveNote(oNote, function(records, e) 
+                            { 
+                                if(records)
+                                {
+                                    $j('#noteId').val(records);
+                                    $j('#Initial_Vote_Save_Msg_Bottom').show();
+                                    //hide the messages after 3 seconds
+                                    setTimeout(function(){$j('#Initial_Vote_Save_Msg_Bottom').hide();},3000);
+                                    //alert('saved!'); 
+                                }
+                                else
+                                {                               
+                                    $j('#Initial_Vote_Save_ErrMsg_Bottom').show();
+                                    //hide the messages after 3 seconds
+                                    setTimeout(function(){$j('#Initial_Vote_Save_ErrMsg_Bottom').hide();},3000);
+                                    //alert('An error occured while saving. Please contact the administrator');
+                                }
+                            }, {escape: false})
+                        };
+                  
+                        // Story # S-123652 Start - Hemant [7/9/2013]
+                        var _post_IC_voting_showInputForm=function(records, callback)
+                        {       
+                            if(records!=null)
+                            {
+                                $j('#post_IC_voting_NoteId_'+records.Agenda_Item__c).val(records.Id);
+                                $j('#post_IC_voting_vote_'+records.Agenda_Item__c).val(records.Vote__c).selectmenu('refresh', true);
+                                $j('#post_IC_voting_comments_'+records.Agenda_Item__c).val((records.Note__c?records.Note__c:''));
+                            }
+                        
+                            $j.mobile.hidePageLoadingMsg();  
+                            //$j.mobile.changePage('#post_IC_voting_page', {changeHash: true});
+                            if(callback != null) { callback(); }  
+                        };
+                  
+                        var _post_IC_voting_save=function(evt)
+                        {
+                            $j.mobile.showPageLoadingMsg();
+                            $j('#post_IC_voting_saveButton').addClass("ui-disabled");
+                        
+                            //array to save the meeting notes
+                            var _meetingNotesArr = new Array();
+                            var post_IC_voting_mtngNotes = $j('.post_IC_voting_Note');
+                            $j.each(post_IC_voting_mtngNotes,function(){
+                            
+                                var mNoteID=($j(this).val()=='')?null:$j(this).val();
+                                var mAgendaId = (this.id).substr(22); // finding meeting agenda Id as the string in the id after "post_IC_voting_NoteId_" text
+                                if($j('#post_IC_voting_user').val()=='none')
+                                    var mNote={ id: mNoteID, Is_Post_IC_Vote__c: true, Note__c: $j('#post_IC_voting_comments_'+mAgendaId).val(), Vote__c: $j('#post_IC_voting_vote_'+mAgendaId).val(), Agenda_Item__c: mAgendaId };
+                                else
+                                    var mNote={ id: mNoteID, Is_Post_IC_Vote__c: true, OwnerId: $j('#post_IC_voting_user').val(),Note__c: $j('#post_IC_voting_comments_'+mAgendaId).val(), Vote__c: $j('#post_IC_voting_vote_'+mAgendaId).val(), Agenda_Item__c: mAgendaId };
+                                
+                                //save notes only if user has voted (Vote != N/A)
+                                //if($j('#post_IC_voting_vote_'+mAgendaId).val() != "N/A"){
+                                    _meetingNotesArr.push(mNote);           
+                                //}
+                            });
+                    
+                            MeetingsController4.saveMeetingNotes(_meetingNotesArr, function(records, e) 
+                            { 
+                                if(records!=null)
+                                {
+                                    $j.each(records,function(){
+                                        var agId = this.Agenda_Item__c;
+                                        $j('#post_IC_voting_NoteId_'+this.Agenda_Item__c).val(this.Id);
+                                    });
+                                    $j.mobile.hidePageLoadingMsg();
+                                    $j('#post_IC_voting_saveButton').removeClass("ui-disabled");
+                                    $j('#post_IC_voting_Save_Msg_Top').show();
+                                    $j('#post_IC_voting_Save_Msg_Bottom').show();
+                                  
+                                    //hide the messages after 3 seconds
+                                    setTimeout(function(){$j('#post_IC_voting_Save_Msg_Top').hide();$j('#post_IC_voting_Save_Msg_Bottom').hide();},3000);
+                                  
+                                }
+                                else
+                                {
+                                    $j.mobile.hidePageLoadingMsg();
+                                    $j('#post_IC_voting_Save_ErrMsg_Top').show();
+                                    $j('#post_IC_voting_Save_ErrMsg_Bottom').show();
+                                  
+                                    //hide the messages after 3 seconds
+                                    setTimeout(function(){$j('#post_IC_voting_Save_ErrMsg_Top').hide();$j('#post_IC_voting_Save_ErrMsg_Bottom').hide();},3000);
+                                }
+                            }, {escape: false})
+                          
+                        };
+                        // Story # S-123652 End
+                      
+                        return {
+                        init: function()
+                        {
+                            MeetingsController4.isICAdmin(function(records,e) { _IsICAdmin=records; }, {escape: false});
+                            MeetingsController4.IsPostICVoting(function(records,e) { _IsPost_IC_Voting=records; }, {escape: false});
+                            MeetingsController4.IsVoteOnOthersBehalf(function(records,e) { _Is_Vote_On_Others_Behalf=records; }, {escape: false});
+                            MeetingsController4.IsFinalICReview(function(records,e) { _IsFinal_IC_Review=records; }, {escape: false});
+                            
+                            _getMeetings('',false);
+                            
+                            //Done for Story # S-146191
+                            //START Story # S-183841 [hemant 1/24/2014]
+                            //post_IC_voting_Vote_Options = '<option value="N/A">N/A</option><option value="1 - No">1 - No</option><option value="2 - Yes - supportive">2 - Yes - supportive</option><option value="3 - Yes - enthusiastic">3 - Yes - enthusiastic</option>';
+                            post_IC_voting_Vote_Options = '<option value="N/A">N/A</option><option value="1 - No – Strong objection">1 - No – Strong objection</option><option value="2 - No">2 - No</option><option value="3 - Yes">3 - Yes</option><option value="4 - Yes - Enthusiastic">4 - Yes - Enthusiastic</option>';
+                            //END Story # S-183841
+                            
+                            MeetingsController4.getVoteValues(function(records,e)
+                            { 
+                                $j('<option value="none">N/A</option>').appendTo('#voteValue'); 
+                                for(var i=0;i<records.length;++i){
+                                    $j('<option value="'+records[i]+'">'+records[i]+'</option>').appendTo('#voteValue');
+                                    //post_IC_voting_Vote_Options = post_IC_voting_Vote_Options + '<option value="'+records[i]+'">'+records[i]+'</option>';
+                                
+                                }  
+                            });
+                            
+                            
+                            MeetingsController4.getUserValues(function(records,e)
+                            { 
+                                $j('<option value="none">Self</option>').appendTo('#userValue');
+                                $j('<option value="none">Self</option>').appendTo('#post_IC_voting_user');
+                              
+                                for(var i=0;i<records.length;++i){
+                                    var id = records[i].substring(0,18);
+                                    var name = records[i].substring(19,records[i].length);
+                                    $j('<option value="'+id+'">'+name+'</option>').appendTo('#userValue');
+                                    $j('<option value="'+id+'">'+name+'</option>').appendTo('#post_IC_voting_user');
+                                
+                                }  
+                            });
+                            
+                            MeetingsController4.getWouldInvestValues(function(records,e)
+                            {   
+                                
+                                $j('<option value="none">N/A</option>').appendTo('#wouldInvestValue');  
+                                for(var i=0;i<records.length;++i)
+                                    $j('<option value="'+records[i]+'">'+records[i]+'</option>').appendTo('#wouldInvestValue');
+                            });      
+                            
+                            MeetingsController4.getQualityOfMaterialsValues(function(records,e)
+                            { 
+                            
+                                $j('<option value="none">N/A</option>').appendTo('#materialsValue'); 
+                                for(var i=0;i<records.length;++i)
+                                    $j('<option value="'+records[i]+'">'+records[i]+'</option>').appendTo('#materialsValue');
+                            });       
+
+                            
+                            $j('#voteValue').selectmenu();
+                            $j('#userValue').selectmenu();
+                          
+                            $j("#userValue").change(function() {
+                                MeetingsController4.getNoteForAgendaItemForOwner(curr_mtngAItemId, false, $j("#userValue").val(), function(records, e) { _showInputForm(records) }, {escape: false});
+                             
+                            });
+                            $j("#post_IC_voting_user").change(function() {
+                                var callback = function(){ $j.mobile.hidePageLoadingMsg(); };
+                                MeetingsController4.queryAgenda(_selected_MeetingId,function(records, e) { _showAgendaForOwner(records, callback) }, {escape:true});
+                             
+                            });
+                          
+                          
+                            $j('#wouldInvestValue').selectmenu();
+                            $j('#materialsValue').selectmenu();
+                            $j('#saveButton').click(_save);
+                            $j('#post_IC_voting_saveButton').click(_post_IC_voting_save);
+                            $j('#show_less_meetingDiv').hide(); 
+                        },                      
+                        getMeetings: function(strType) 
+                        {
+                          _getMeetings(strType,false);
+                        }
+                    };
+                };
+                
+                var $j = jQuery.noConflict();
+
+                $j(document).bind("mobileinit", function()
+                {
+                    $.mobile.touchOverflow = true;
+                    $j.mobile.touchOverflowEnabled = true;
+                    $j.extend($.mobile, { metaViewportContent: "width=device-width, height=device-height, minimum-scale=1, maximum-scale=1" });
+                });
+
+                $j(document).ready(function() 
+                {
+                    if (navigator.userAgent.match(/iPhone/i) || navigator.userAgent.match(/iPad/i)) {
+                        var viewportmeta = document.querySelector('meta[name="viewport"]');
+                        if (viewportmeta) {
+                            viewportmeta.content = 'width=device-width, minimum-scale=1.0, maximum-scale=1.0, initial-scale=1.0';
+                            document.body.addEventListener('gesturestart', function () {
+                                viewportmeta.content = 'width=device-width, minimum-scale=0.25, maximum-scale=1.6';
+                            }, false);
+                        }
+                    }
+                    
+                    if(window.location.href.indexOf('#') > 0)
+                    {
+                        window.location.href = window.location.href.split("#")[0];
+                    }
+                    
+                    window.scrollTo(0,1);
+                    var oMtgMgr=new MeetingManager();
+                    oMtgMgr.init();
+                    addPageListeners();
+                    $j.mobile.showPageLoadingMsg();
+                });
+
+                function addPageListeners()
+                {
+                    //$j(document).bind('swipeleft',function() { $j.mobile.changePage('#chatterpage ',{ transition : 'flip' } , {changeHash: true});} );
+                    //$j(document).bind('swiperight',function() { $j.mobile.changePage('#mainpage',{ transition : 'flip' } , {changeHash: true});} );
+                }
+
+                
+                function emailPDFData(reportType, isNYO, isMyVotes)
+                {
+                    MeetingsController4.sendEMailWithPDF(_selected_MeetingId, reportType, isNYO, isMyVotes, function(records, e){
+                        if(records)
+                        {
+                            if(isMyVotes){
+                              $j('#FIR_My_Votes_Save_Msg_Bottom').show();
+                              $j('#FIR_My_Votes_Save_Msg_Text_Bottom').html("Votes have been emailed.");
+                              //hide the messages after 3 seconds
+                              setTimeout(function(){$j('#FIR_My_Votes_Save_Msg_Bottom').hide();},3000);
+                            }else{
+                                $j('#final_IC_review_Save_Msg_Bottom').show();
+                                $j('#final_IC_review_Save_Msg_Text_Bottom').html(records);
+                                //hide the messages after 3 seconds
+                                setTimeout(function(){$j('#final_IC_review_Save_Msg_Bottom').hide();},3000);
+                              }  
+                        }
+                        else
+                        {
+                            if(isMyVotes){
+                              $j('#FIR_My_Votes_Save_ErrMsg_Bottom').show();                      
+                              setTimeout(function(){$j('#FIR_My_Votes_Save_ErrMsg_Bottom').hide();},3000);
+                            }else{
+                              $j('#final_IC_review_Save_ErrMsg_Bottom').show();                      
+                                //hide the messages after 3 seconds                     
+                                setTimeout(function(){$j('#final_IC_review_Save_ErrMsg_Bottom').hide();},3000);
+                            
+                            }
+                        }      
+                    });
+                }
+                
+                function printData(reportType, isMyVotes)
+                {
+                   var winURL = "{!BaseURL}/apex/Meetings4_Votes_Review_PDF?reportType=" + reportType + "&meetingId=" + _selected_MeetingId;
+                   if(isMyVotes){
+                     winURL = winURL + "&isMyVotes=true";
+                   }
+                   var printWindow = window.open( winURL, "_blank");
+                   printWindow.print();
+                }
+                
+                function setIframeHeight(iframe) {
+                      if (iframe) {
+                          var iframeWin = iframe.contentWindow || iframe.contentDocument.parentWindow;
+                          if (iframeWin.document.body) {
+                            iframeWin.document.body.style.backgroundColor="#E5E5E5";
+                             //LSLEVIN 12.4.2013 Case 57851 START
+                              //iframe.height = 4 * (iframeWin.document.documentElement.scrollHeight || iframeWin.document.body.scrollHeight) ;                
+                              iframe.height =  (iframeWin.document.documentElement.scrollHeight || iframeWin.document.body.scrollHeight) ; 
+                             //LSLEVIN 12.4.2013 Case 57851 END           
+                          }
+                      }
+                  }
+                //Story # S-132864 end
+                
+                //START Story # S-174746
+                function fomartTimeShow(h_24,min) {
+                    var h = h_24 % 12;
+                    if (h === 0) h = 12;
+                    return (h < 10 ? "0" + h : h) + ":"+ min + (h_24 < 12 ? ' AM' : ' PM');
+                }
+
+                function formatToTime(dateTimeStr){
+                   if(dateTimeStr != ''){
+                    var timeWithAMPM = fomartTimeShow(dateTimeStr.substring(0,2),dateTimeStr.substring(3,5));
+                    var timeZone1 = dateTimeStr.substring(dateTimeStr.indexOf('(')+1,dateTimeStr.indexOf(')'));
+                    var timeZone;
+                    if(timeZone1.indexOf(' ') != -1){
+                      timeZone1 = timeZone1.split(' ');
+                      timeZone = timeZone1[0][0] + timeZone1[1][0] + timeZone1[2][0];
+                    }else{
+                      timeZone = timeZone1;
+                    }
+                    return (timeWithAMPM + " " + timeZone);
+                  }
+                }
+                
+                function goToNextPrev(agendaItem, isNext){
+                   var nxtElement;
+                   if(isNext){
+                     nxtElement = agendaItem.next().next();
+                   }else{
+                     nxtElement = agendaItem.prev().prev();
+                   }
+                   
+                   if(nxtElement.attr('id')){
+                     var j = nxtElement.html().lastIndexOf('<strong>Feedback</strong>');
+                     if(j == -1 ){
+                        nxtElement = goToNextPrev(nxtElement, isNext);
+                     }
+                   }
+                   return nxtElement;                           
+               }
+               //END Story # S-174746
+
+            </script>
+            <style>
+                /** fix for jquery transition jitter in iOS **/
+                .ui-page 
+                {
+                    -webkit-backface-visibility: hidden;
+                } 
+                    
+                .wrapperdiv
+                {
+                  background-image:url(img/loading.gif);
+                  background-repeat:no-repeat;
+                  background-position:center center; /*Can place your loader where ever you like */
+                }
+
+                .companyDetailContent
+                {
+                  padding: 10px 25px;
+                }
+               
+            </style>
+
+        </head>
+        <body>
+            <div data-role="page"  id="mainpage" data-theme="b">
+                <div data-role="header" data-theme="b">
+                    <!-- Story # S-183841 [hemant 1/23/2014] 
+                    <a href='#' id="logout" class='ui-btn-left' data-icon='home'  >Home</a>
+                    <h1>Meetings</h1>             
+                    <div data-role="navbar" data-type="horizontal" >
+                        <ul id="topNav"> </ul>
+                    </div>
+                    -->
+                    <h1>Meetings</h1>
+                </div>
+                <div data-role="content" data-theme="b">
+                    <!-- Story # S-183841 [hemant 1/23/2014]
+                    <ul id="meetinglist" data-role="listview" data-inset="true"  data-filter="true" data-filter-placeholder="Filter meetings"> </ul>
+                    -->
+                    <ul id="meetinglist" data-role="listview" data-inset="true"  data-filter="false"> </ul>
+                </div>
+                <div data-role="content" class="ui-content ui-body-b" role="main" id="show_more_meetingDiv">
+                    <ul id="show_more_meetings" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                        <li><a href="#" id="show_more_meetingLink1"  class = "show_more_meetingLink" data-transition="flip" rel="external">Show more meetings</a></li>
+                    </ul>
+                </div>
+                <div data-role="content" class="ui-content ui-body-b" role="main" id="show_less_meetingDiv">
+                    <ul id="show_more_meetings" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                        <li><a href="#" id="show_less_meetingLink1"  class = "show_less_meetingLink" data-transition="flip" rel="external">Show less meetings</a></li>
+                    </ul>
+                </div>
+            </div>
+          
+            <div data-role="page" id="detailpage" data-theme="b">
+                <div data-role="header" data-theme="b">
+                    <!-- Story # S-183841 [hemant 1/23/2014]
+                    <a href='#mainpage' id="backMeetings" class='ui-btn-left' data-icon='arrow-l' data-direction="reverse">back to Meetings</a>
+                    -->
+                    <a href='#mainpage' id="backMeetings" class='ui-btn-left' data-icon='home'>Home</a>
+                    <h1>Meeting</h1>
+                </div>
+                <div data-role="content" data-theme="b">
+                    <h1 id="MeetingName"></h1>
+                    <div class="ui-grid-b" style="display: none;">
+                        <div class="ui-block-a"><strong>Location:</strong></div>
+                        <div class="ui-block-b"><strong>Start Time:</strong></div>
+                        <div class="ui-block-c"><strong>End Time:</strong></div>
+                    
+                        <div class="ui-block-a" id="MeetingLocation"></div>
+                        <div class="ui-block-b" id="MeetingStart"></div>
+                        <div class="ui-block-c" id="MeetingEnd"></div>
+                    </div>
+                
+                    <input type="hidden" id="MeetingId" />
+          
+
+                    <div data-role="collapsible" data-collapsed="false" data-theme="b" data-content-theme="b">
+                        <h3 id="Agenda">Agenda:</h3>
+                        <ul id="agendalist"  data-role="listview" data-inset="true" data-theme="b" data-dividertheme="b"> </ul>
+                    </div>
+                
+                    <div data-role="collapsible" data-collapsed="false" data-theme="b" data-content-theme="b">
+                        <h3>Materials</h3>
+                        <ul id="agendaMaterialsList" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> </ul>     
+                      
+                    </div>
+                    
+                    <!-- START Story # S-174746 -->
+                    <div data-role="collapsible" class="final_IC_review_List" data-collapsed="false" data-theme="b" data-content-theme="b" style="display : none;">
+                        <!-- START Story # S-183841 [hemant 1/23/2014]
+                        <h3>IC Only</h3>
+                         -->
+                        <h3>Chairman Only</h3>
+                        <!-- END S-183841-->
+                        
+                        <ul id="Admin_Pre_IC" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                          <li><a href="#pre_IC_Feedback_Page" class="pre_IC_Feedback_AnchorLink" data-transition="flip" rel="external">Pre IC – Chairman’s  Feedback Summary</a></li>
+                        </ul>
+                    
+                        <ul id="Admin_Post_IC" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents">
+                          <li><a href="#final_IC_review_page_Dashboard" class="final_IC_review_Dashboard_AnchorLink" data-transition="flip" rel="external">Post IC – Chairman’s Dashboard and Summary</a></li>
+                        </ul>     
+                      
+                    </div>
+                    <!-- END Story # S-174746 -->
+                    
+                    <ul id="post_IC_Voting_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="display : none;"> 
+                        <!-- START Story # S-183841 [hemant 1/23/2014]
+                        <li><a href="#post_IC_voting_page" data-transition="flip" rel="external">Post IC Voting</a></li>
+                        -->
+                        <li><a href="#post_IC_voting_page" data-transition="flip" rel="external">Post IC Voting (IC Members Only)</a></li>
+                        <!-- END S-183841-->
+                    </ul>
+                    
+                    <!-- START Story # S-174746 -->
+<!--                    <ul id="final_IC_review_List1" class="final_IC_review_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="display : none;"> -->
+<!--                        <li><a href="#final_IC_review_page" id="final_IC_review_AnchorLink1" class="final_IC_review_AnchorLink" data-transition="flip" rel="external">Final IC Review</a></li>-->
+<!--                    </ul>-->
+                    
+                    <!-- S-158202 [Hemant 10/31/2013] - Start Adding 3 “my votes” buttons on the Meetings4#detailpage -->
+<!--                    <table width="100%">-->
+<!--                      <tr>-->
+
+                       <!-- Adding See My votes button-->
+<!--                        <td valign="middle" text-align="left" width="33.33%">-->
+<!--                          <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> -->
+<!--                              <li><a href="#FIR_My_Votes_page" class="final_IC_review_My_Votes_AnchorLink" data-transition="flip" rel="external">See my Votes</a></li>-->
+<!--                          </ul>-->
+<!--                        </td>-->
+                        
+                        <!-- Adding Print my Votes button-->
+<!--                        <td valign="middle" text-align="left" width="33.33%">-->
+<!--                          <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> -->
+<!--                              <li><a onclick="printData('Full',true);" data-transition="flip" rel="external">Print my Votes</a></li>-->
+<!--                          </ul>-->
+<!--                        </td>-->
+                        
+                        <!-- Adding Email me my Votes button-->
+<!--                        <td valign="middle" text-align="left" width="33.33%">-->
+<!--                          <ul id="FIR_My_Votes_email" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> -->
+<!--                            <li><a onclick="emailPDFData('Full',true, true);" data-transition="flip" rel="external">Email me my Votes</a></li>-->
+<!--                           </ul>-->
+<!--                        </td>-->
+<!--                        -->
+<!--                      </tr>-->
+<!--                    </table>-->
+                    <!-- S-158202 [Hemant 10/31/2013] -End  Adding 3 “my votes” buttons on the Meetings4#detailpage -->
+                  <!-- END Story # S-174746 -->
+                </div>
+            </div>
+            
+            <div data-role="page" id="inputpage" data-rel="dialog" data-transition="pop" data-theme="b" data-content-theme="b">
+                <div data-role="header" data-theme="b">
+                    <!-- START Story # S-174746 [hemant 1/13/2013]
+                    href='#detailpage' id="backMeeting" class='ui-btn-left' data-icon='arrow-l' data-direction="reverse">back to Meeting Agenda</a>
+                    END Story # S-174746 -->
+                    <h1>Agenda Item</h1>
+                </div>
+                <br/>
+                <div>
+                   <table width="100%">
+                     <tr>
+                       <td id="Meeting_Agenda_PrevTD" valign="middle" text-align="center" width="33.33%">
+                         <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                           <li data-icon="false"><a style="text-align:center;" id="Meeting_Agenda_Prev" data-transition="flip" rel="external">&lt;&nbsp;Previous</a></li>
+                         </ul> 
+                       </td>
+                       
+                       <td valign="middle" text-align="center" width="33.33%">     
+                           <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                             <!-- START Story # S-183841 [hemant 1/23/2014]
+                             <li data-icon="false"><a style="text-align:center;" href="#detailpage" id="Meeting_Agenda_Current" data-transition="flip" rel="external">back to Meeting Agenda</a></li>
+                             -->
+                             <li data-icon="false"><a style="text-align:center;" href="#detailpage" id="Meeting_Agenda_Current" data-transition="flip" rel="external">Back to Meeting Agenda</a></li>
+                             <!--END S-183841 -->
+                         </ul>
+                       </td>
+                       
+                       <td id="Meeting_Agenda_NextTD" valign="middle" text-align="center" width="33.33%">
+                          <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                             <li data-icon="false"><a style="text-align:center;" id="Meeting_Agenda_Next" data-transition="flip" rel="external">Next&nbsp;&gt;</a></li>
+                         </ul>
+                       </td>
+                      </tr>
+                   </table>
+                   <!--                                  
+                     <ul id="post_IC_voting_Meeting_Agenda_List1" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                          <li><a href="#detailpage" id="post_IC_voting_Meeting_Agenda_AnchorLink" data-transition="flip" rel="external">Back to Meeting Agenda</a></li>
+                     </ul>
+                   -->  
+              </div>
+                            
+                <div data-role="content">
+                    <div class="content-primary">
+
+                        <div  data-role="collapsible-set" data-content-theme="c">
+                
+                            <form>
+                                <input type="hidden" id="noteId" />
+                                <input type="hidden" id="agendaId" />
+                                <input type="hidden" id="companyId" />
+                                <div id="companyLogo" style="margin: 10px 5px;"> </div>
+                
+                                <div data-role="collapsible" data-collapsed="false" data-theme="b" data-content-theme="b">
+                                    <h3>Feedback: <span id="dealName"></span></h3>
+                                    <div data-role="fieldcontain" id="voteOnOthersBehalfList" style="display:none">
+                                    <!--START S-174746 [Hemant 12/31/2013] Replacing Label
+                                        <label for="userValue" class="select"><strong>Voting as:</strong></label><select id="userValue" ></select> 
+                                    -->
+                                    <label for="userValue" class="select"><strong>Feedback as:</strong></label><select id="userValue" ></select>
+                                    <!--END S-174746 -->    
+                                    </div>
+                                    
+                                    <!--START S-174746 [Hemant 12/31/2013] Hiding fields
+                                                
+                                    <div data-role="fieldcontain">
+                                        <label for="voteValue" class="select"><strong>Company Attractiveness:</strong><br/><span><small>1=low, 5=very high</small></span></label><select id="voteValue" ></select>
+                                        <label for="materialsValue"><strong>Quality of Business Model:</strong><br/><span><small>poor - excellent</small></span></label><select id="materialsValue"></select>
+                                    </div>  
+                                    <div data-role="fieldcontain" >
+                                        <label for="wouldInvestValue" class="select"><strong>Would you invest?:</strong></label><select id="wouldInvestValue" ></select>
+                                    </div>
+                                    
+                                    END S-174746 -->
+                                    
+                                    <div data-role="fieldcontain" >
+                                        <label for="materialsOnTime" class=""><strong>Materials On Time:</strong></label><span id="materialsOnTime" style="padding-left: 20px;" />
+                                    </div>
+                                    <div data-role="fieldcontain">
+                                        <label for="commentsValue"><strong>Comments:</strong></label><textarea id="commentsValue" data-theme="c" data-content-theme="c" style="min-height: 100px;"/>
+                                        <input type="button" id="saveButton" value="save"/>
+                                    </div>
+                                    
+                                    <!-- Notification to be shown when notes are saved       -->
+                                    <div class="ui-bar ui-bar-b-green" id="Initial_Vote_Save_Msg_Bottom"  style="display: none;">
+                                        <center><strong>Votes have been saved successfully.</strong></center>
+                                    </div>
+                            
+                                    <div class="ui-bar ui-bar-b-green" id="Initial_Vote_Save_ErrMsg_Bottom" style="display: none;">
+                                        <center><strong>An error occured while saving. Please contact the administrator.</strong></center>
+                                    </div>
+                                    <!-- Notification to be shown when notes are saved      -->
+                                </div>
+                                <br/>
+                                
+                                <div data-role="collapsible" data-collapsed="false" data-theme="b" data-content-theme="b">
+                                    <h3>Materials</h3>
+                                    <p>
+                                        <ul id="materialsList" data-role="listview" data-inset="true" data-filter="true" data-filter-placeholder="Filter documents"> </ul>
+                                    </p>
+                                </div>
+                                <br/>
+                                
+                                <div id="meetingNotesEntered" data-role="collapsible" data-collapsed="true" data-theme="b" data-content-theme="b" style="display: none;">
+                    
+                                    <h3>Meeting Feedback Entered</h3>
+                                    <div data-role="content">
+                                        <!--START S-174746 [Hemant 12/31/2013] Hiding fields
+                                        <p>
+                                        <div class="ui-grid-a">
+                                            <div class="ui-block-a"><strong>Average Vote: </strong> <span id="AvgVote"> </span></div>
+                                            <div class="ui-block-b"><strong>Average Quality of Business Model Vote:</strong> <span id="AvgQoM"> </span></div>
+                                        </div>
+                                        </p>
+                                        END S-174746 -->
+                    
+                                        <div data-role="collapsible-set" data-theme="c" data-content-theme="d" id="UserVotes"> </div>
+                                    </div>
+                                </div>
+                            <br />
+                            
+                            <!-- START Story # S-174746                            -->
+                            <div data-role="collapsible" data-collapsed="true" data-theme="b" data-content-theme="b">
+                                <h3>Company Details</h3>
+                                
+                                <div data-role="content">
+                                  <div class="content-primary">
+                                      <div id="companydetails">
+                                          <div class="ui-grid-a ui-body ui-body-b" data-theme="b" data-inset="true">
+              
+                                              <div class="ui-block-a"><hr class="ui-bar ui-bar-b"/></div>
+                                              <div class="ui-block-b"><hr class="ui-bar ui-bar-b"/></div>
+                                              <!-- START Story # S-174746  -->
+                                              <!--
+                                              <div class="ui-block-c"><hr class="ui-bar ui-bar-b"/></div>
+                                              
+                                              <div class="ui-block-a" data-inset="true">
+                                                  <div class="ui-bar ui-bar-b"><strong>Name/Code Name:</strong></div>
+                                                  <div class="companyDetailContent">
+                                                      <div id="companyDetail_Name">Block A</div>
+                                                      <div id="companyDetail_Code_Name__c">Block b</div> 
+                                                      <div id="companyDetail_Logo"> </div> 
+                                                  </div>  
+                                              </div>
+                                              <!-- END Story # S-174746  -->
+                                              
+                                              <div class="ui-block-a" data-inset="true">
+                                                  <div class="ui-bar ui-bar-b"> <strong>GA Team:</strong></div> 
+                                                  <div class="companyDetailContent" id="companyDetail_Industry">Block c</div> 
+                                              </div> 
+                                              <div class="ui-block-b" data-inset="true">
+                                                  <div class="ui-bar ui-bar-b"> <strong>Financials:</strong></div> 
+                                                  <div class="companyDetailContent">
+                                                      <div><strong>Revenue:</strong></div>
+                                                      <div ><strong><span id="companyDetail_Latest_Financials_Year__c">Block c </span>:</strong> $<span id="companyDetail_Latest_Revenue__c">Block c </span> (actual)</div>
+                                                      <div ><strong><span id="companyDetail_Projected_Financials_Year__c">Block c </span>:</strong> $<span id="companyDetail_Projected_Revenue__c">Block c </span> (projected)</div>
+                                                  </div>
+                                              </div> 
+              
+                                              <div class="ui-block-a"><hr class="ui-bar ui-bar-b"/></div>
+                                              <div class="ui-block-b"><hr class="ui-bar ui-bar-b"/></div>
+                                              <!-- START Story # S-174746  -->
+                                              <!--
+                                              <div class="ui-block-c"><hr class="ui-bar ui-bar-b"/></div>
+                                              
+                                              <div class="ui-block-a "> <div class="ui-bar ui-bar-b"><strong>Status:</strong></div> <div class="companyDetailContent" id="companyDetail_Status__c">Block b</div> </div>
+                                              -->  
+                                              <div class="ui-block-a "> <div class="ui-bar ui-bar-b"><strong>Sector:</strong></div> <div class="companyDetailContent"> <div id="companyDetail_Sector__c">Block c</div> <div id="companyDetail_Sub_Sector__c"> </div> </div> </div>          
+                                              <div class="ui-block-b" data-inset="true">
+                                                  <div class="ui-bar ui-bar-b"> <strong>Themes:</strong></div> 
+                                                  <div class="companyDetailContent" id="companyDetail_Themes__c">Block c</div> 
+                                              </div>
+                                              
+                                          </div>
+                                          <div class="ui-grid-b ui-body ui-body-b" data-theme="b" data-inset="true">     
+                                              
+                                              <div class="ui-block-a"><hr class="ui-bar ui-bar-b"/></div>
+                                              <div class="ui-block-b"><hr class="ui-bar ui-bar-b"/></div>
+                                              <div class="ui-block-c"><hr class="ui-bar ui-bar-b"/></div>
+                                              
+                                              <div class="ui-block-a"><div class="ui-bar ui-bar-b"><strong>Description:</strong></div> <div class="companyDetailContent" id="companyDetail_Description">Block d</div> </div>
+                                              <div class="ui-block-b"><div class="ui-bar ui-bar-b"><strong>Status Note:</strong></div> <div class="companyDetailContent" id="companyDetail_Latest_Status_Note__c">Block d</div> </div>
+                                              <div class="ui-block-c"><div class="ui-bar ui-bar-b"><strong>Next Steps:</strong></div> <div class="companyDetailContent" id="companyDetail_Next_Steps__c">Block b</div> </div>
+                        
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+                                
+                           </div>
+                           <!-- END Story # S-174746-->
+
+                           <br/>
+
+                           <div data-role="collapsible" data-collapsed="true" data-theme="b" data-content-theme="b">
+                                <h3>Historical Documents</h3>
+                                <p>
+                                    <ul id="histMaterialsList" data-role="listview" data-inset="true" data-filter="true" data-filter-placeholder="Filter documents"> </ul>
+                                </p>
+                            </div>
+
+                            <br/>
+
+                            <div id="hist_feedback" data-role="collapsible" data-collapsed="true" data-theme="b" data-content-theme="b">
+                                  <h3>Historical Feedback</h3>
+                             
+                                <div data-role="content">  
+                                    
+                                    <div id="hist_feedback_table" class="ui-grid-c ui-body ui-body-c" data-theme="d" data-inset="true" width="100%">
+
+                                        <table width="100%" cellspacing="0" cellpadding="0">
+                                            <tr>
+                                                <td valign="middle" text-align="center" width="10%">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Agenda</strong></center></div>
+                                                    </div>
+                                                </td>
+
+                                                <td valign="middle" text-align="center" width="10%">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Date</strong></center></div>
+                                                    </div>
+                                                </td>
+                            
+                                                <td valign="middle" text-align="center" width="10%">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Vote</strong></center></div> 
+                                                    </div>
+                                                </td>
+
+                                                <td valign="middle" text-align="center" width="20%">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Would Invest</strong></center></div> 
+                                                    </div>
+                                                </td>
+
+                                                <td valign="middle" text-align="center" width="20%">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Business Model</strong></center></div> 
+                                                    </div>
+                                                </td>
+                            
+                                                <td valign="middle" text-align="center">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Comments</strong></center></div> 
+                                                    </div>
+                                                </td>
+                                                
+                                                <!-- 
+                                                <td valign="middle" text-align="center" width="8%">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Round</strong></center></div> 
+                                                    </div>
+                                                </td>
+                                                 -->
+                                            </tr>
+                                        </table>
+                                    </div>
+                                    
+                                      <div id="hist_feedback_comments" class="ui-grid-b ui-body ui-body-b" data-theme="b" data-inset="true"></div>
+                                </div>
+                            </div>
+
+                         </form>
+                            
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div data-role="page" id="materialsShimPage" data-rel="dialog" data-transition="flip" data-theme="b" data-content-theme="b">
+                <div data-role="header" data-theme="b">
+                    <a href='#inputpage' id="backDetails" class='ui-btn-left' data-icon='arrow-l' data-transition="flip" data-direction="reverse">Back</a>
+                    <h1>Materials</h1>
+                </div>
+                <div data-role="content">
+                    <iframe id="materialsIFrame" name="materialsIFrame" src="" width="100%" height="100%" scrolling="on" frameborder="0"> </iframe>
+                </div>
+            </div>    
+
+            <div data-role="page" id="agendaMaterialsShimPage" data-rel="dialog" data-transition="flip" data-theme="b" data-content-theme="b">
+                <div data-role="header" data-theme="b">
+                    <a href='#detailpage' id="backDetails" class='ui-btn-left' data-icon='arrow-l' data-transition="flip" data-direction="reverse">Back</a>
+                    <h1>Agenda Materials</h1>
+                </div>
+                <div data-role="content" style="-webkit-overflow-scrolling:touch">
+                    <iframe id="agendaMaterialsIFrame" name="agendaMaterialsIFrame" src="" width="100%" height="90%" scrolling="on" frameborder="0" > </iframe>
+                </div>
+            </div>  
+          
+            <!-- START Story # S-174746-->
+            <!--
+            <div data-role="page" id="companydetailpage" data-rel="dialog" data-transition="pop" data-theme="b" data-content-theme="b">
+            
+                <div data-role="header" data-theme="b" id="companydetailpage_backAgendaItem">
+                    <a href='#inputpage' id="backAgendaItem" class='ui-btn-left' data-icon='arrow-l' data-direction="reverse">back to Agenda Item</a>
+                    <h1>Company Details</h1>
+                </div>
+            
+                <div data-role="header" data-theme="b" id="companydetailpage_final_IC_review" style="display: none;">
+                    <a href='#final_IC_review_page' class='ui-btn-left final_IC_review_AnchorLink' data-icon='arrow-l' data-direction="reverse">back to Final IC Review</a>
+                    <h1>Company Details</h1>
+                </div>
+          
+                <div data-role="content">
+                    <div class="content-primary">
+                        <div id="companydetails">
+                            <div class="ui-grid-b ui-body ui-body-b" data-theme="b" data-inset="true">
+
+                                <div class="ui-block-a"><hr class="ui-bar ui-bar-b"/></div>
+                                <div class="ui-block-b"><hr class="ui-bar ui-bar-b"/></div>
+                                <div class="ui-block-c"><hr class="ui-bar ui-bar-b"/></div>
+                                
+                                <div class="ui-block-a" data-inset="true">
+                                    <div class="ui-bar ui-bar-b"><strong>Name/Code Name:</strong></div>
+                                    <div class="companyDetailContent">
+                                        <div id="companyDetail_Name">Block A</div>
+                                        <div id="companyDetail_Code_Name__c">Block b</div> 
+                                        <div id="companyDetail_Logo"> </div> 
+                                    </div>  
+                                </div>
+                                <div class="ui-block-b" data-inset="true">
+                                    <div class="ui-bar ui-bar-b"> <strong>GA Team:</strong></div> 
+                                    <div class="companyDetailContent" id="companyDetail_Industry">Block c</div> 
+                                </div> 
+                                <div class="ui-block-b" data-inset="true">
+                                    <div class="ui-bar ui-bar-b"> <strong>Financials:</strong></div> 
+                                    <div class="companyDetailContent">
+                                        <div><strong>Revenue:</strong></div>
+                                        <div ><strong><span id="companyDetail_Latest_Financials_Year__c">Block c </span>:</strong> $<span id="companyDetail_Latest_Revenue__c">Block c </span> (actual)</div>
+                                        <div ><strong><span id="companyDetail_Projected_Financials_Year__c">Block c </span>:</strong> $<span id="companyDetail_Projected_Revenue__c">Block c </span> (projected)</div>
+                                    </div>
+                                </div> 
+
+                                <div class="ui-block-a"><hr class="ui-bar ui-bar-b"/></div>
+                                <div class="ui-block-b"><hr class="ui-bar ui-bar-b"/></div>
+                                <div class="ui-block-c"><hr class="ui-bar ui-bar-b"/></div>
+                                
+                                <div class="ui-block-a "> <div class="ui-bar ui-bar-b"><strong>Status:</strong></div> <div class="companyDetailContent" id="companyDetail_Status__c">Block b</div> </div>  
+                                <div class="ui-block-b "> <div class="ui-bar ui-bar-b"><strong>Sector:</strong></div> <div class="companyDetailContent"> <div id="companyDetail_Sector__c">Block c</div> <div id="companyDetail_Sub_Sector__c"> </div> </div> </div>          
+                                <div class="ui-block-c" data-inset="true">
+                                    <div class="ui-bar ui-bar-b"> <strong>Themes:</strong></div> 
+                                    <div class="companyDetailContent" id="companyDetail_Themes__c">Block c</div> 
+                                </div> 
+                                
+                                <div class="ui-block-a"><hr class="ui-bar ui-bar-b"/></div>
+                                <div class="ui-block-b"><hr class="ui-bar ui-bar-b"/></div>
+                                <div class="ui-block-c"><hr class="ui-bar ui-bar-b"/></div>
+                                
+                                <div class="ui-block-a"><div class="ui-bar ui-bar-b"><strong>Description:</strong></div> <div class="companyDetailContent" id="companyDetail_Description">Block d</div> </div>
+                                <div class="ui-block-b"><div class="ui-bar ui-bar-b"><strong>Status Note:</strong></div> <div class="companyDetailContent" id="companyDetail_Latest_Status_Note__c">Block d</div> </div>
+                                <div class="ui-block-c"><div class="ui-bar ui-bar-b"><strong>Next Steps:</strong></div> <div class="companyDetailContent" id="companyDetail_Next_Steps__c">Block b</div> </div>
+                            
+                    
+          
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            -->
+            <!-- END Story # S-174746-->
+          
+            <!-- post_IC_voting page section start -->
+            <div data-role="page" id="post_IC_voting_page" data-rel="dialog" data-transition="pop" data-theme="b" data-content-theme="b">
+                <div data-role="header" data-theme="b">
+                    <!-- START Story # S-174746 [hemant 1/13/2013]
+                    <a href='#detailpage' id="post_IC_voting_backMeeting" class='ui-btn-left' data-icon='arrow-l' data-direction="reverse">back to Meeting Agenda</a>
+                    END Story # S-174746 -->
+                    <h1>Post IC Voting ({!$User.FirstName} {!$User.LastName})</h1>
+                </div>
+            
+                <div data-role="content">
+                    <div class="content-primary">
+                        <div id="post_IC_voting_page_details">
+                              
+                            <div id="post_IC_voting_page_details_Table" class="ui-grid-b ui-body ui-body-b" data-theme="b" data-inset="true">
+                            
+                                <!-- START Story # S-174746 [hemant 1/13/2013] -->
+                                <ul id="post_IC_voting_Meeting_Agenda_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+						                        <li><a href="#detailpage" style="text-align:center;" id="post_IC_voting_Meeting_Agenda_AnchorLink" data-transition="flip" rel="external">Back to Meeting Agenda</a></li>
+						                    </ul>
+						                    <!-- END Story # S-174746 -->
+						                    
+                                <table width="100%" cellspacing="0" cellpadding="0">
+                                    <tr id="voteOnOthersBehalfList_PIC" style="display:none">
+                                        <td valign="middle" text-align="center" width="25%">
+                                            <div width="100%" data-inset="true">
+                                            <div class="ui-bar ui-bar-b"><center><strong>Voting as:</strong></center></div>
+                                            </div>
+                                        </td>
+                                        
+                                        <td valign="middle" text-align="center" width="75%" colspan = "2">
+                                            <div width="100%" data-role="fieldcontain" class="ui-field-contain ui-body ui-br">
+                                                <center> 
+                                                   <select id="post_IC_voting_user"></select>
+                                                </center>
+                                            </div>
+                                        </td>                
+                                       
+                                    </tr>   
+                                      
+                                    <tr>
+                                        <td valign="middle" text-align="center" width="25%">
+                                            <div width="100%" data-inset="true">
+                                            <div class="ui-bar ui-bar-b"><center><strong>Company Name</strong></center></div>
+                                            </div>
+                                        </td>
+                                        
+                                        <td valign="middle" text-align="center" width="25%">
+                                            <div width="100%" data-inset="true">
+                                                <div class="ui-bar ui-bar-b"><center><strong>Vote</strong></center></div> 
+                                          </div>
+                                        </td>
+                                        
+                                        <td valign="middle" text-align="center" width="50%">
+                                            <div width="100%" data-inset="true">   
+                                                <div class="ui-bar ui-bar-b"><center><strong>Comments</strong></center></div> 
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </table>   
+                            </div>
+                  
+                            <div id="post_IC_voting_page_details_Table1" class="ui-grid-b ui-body ui-body-b" data-theme="b" data-inset="true">
+                            </div>
+                    
+                            <div data-role="fieldcontain">
+                                <input type="button" id="post_IC_voting_saveButton" value="save"/>
+                            </div>
+                    
+                            <!-- Notification to be shown when notes are saved      -->
+                            <div class="ui-bar ui-bar-b-green" id="post_IC_voting_Save_Msg_Bottom" style="display: none;">
+                                <center><strong>Votes have been saved successfully.</strong></center>
+                            </div>
+                        
+                            <div class="ui-bar ui-bar-b-green" id="post_IC_voting_Save_ErrMsg_Bottom" style="display: none;">
+                                <center><strong>An error occured while saving. Please contact the administrator.</strong></center>
+                            </div>
+                            <!-- Notification to be shown when notes are saved      -->
+                        
+                        </div>
+                    </div>
+                </div>
+                
+                
+                  <div data-role="content" class="ui-content ui-body-b" role="main">
+                
+                    <!-- Story # S-177195 My Votes Button section Start  -->
+                    <table width="100%">
+                      <tr>
+                       
+                       <!-- Adding See My votes button-->
+                        <td valign="middle" text-align="left" width="33.33%">
+                          <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                              <li><a href="#FIR_My_Votes_page" class="final_IC_review_My_Votes_AnchorLink" data-transition="flip" rel="external">See my Votes</a></li>
+                          </ul>
+                        </td>
+                        
+                        <!-- Adding Print my Votes button-->
+                        <td valign="middle" text-align="left" width="33.33%">
+                          <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                              <li><a onclick="printData('Full',true);" data-transition="flip" rel="external">Print my Votes</a></li>
+                          </ul>
+                        </td>
+                        
+                        <!-- Adding Email me my Votes button-->
+                        <td valign="middle" text-align="left" width="33.33%">
+                          <ul id="FIR_My_Votes_email" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                            <li><a onclick="emailPDFData('Full',true, true);" data-transition="flip" rel="external">Email me my Votes</a></li>
+                           </ul>
+                        </td>
+                        
+                      </tr>
+                    </table>
+                    <!-- My Votes Button section End   -->
+                
+                    <!-- Adding section for Final IC review page link   -->
+                    <!-- Story # S-177195
+                    <ul id="final_IC_review_List" class="final_IC_review_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="display : none;"> 
+                        <li><a href="#final_IC_review_page" id="final_IC_review_AnchorLink" class="final_IC_review_AnchorLink" data-transition="flip" rel="external">Final IC Review</a></li>
+                    </ul>
+                      
+                    <ul id="post_IC_voting_Meeting_Agenda_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                        <li><a href="#detailpage" style="text-align:center;" id="post_IC_voting_Meeting_Agenda_AnchorLink" data-transition="flip" rel="external">Back to Meeting Agenda</a></li>
+                    </ul>
+                    -->
+                </div>
+            </div>
+            
+            <!-- post_IC_voting page section end -->
+            
+            <!-- Final IC review page section start -->
+            <div data-role="page" id="final_IC_review_page" data-rel="dialog" data-transition="pop" data-theme="b" data-content-theme="b">
+                <div data-role="header" data-theme="b">
+                    <a href='#post_IC_voting_page' id="final_IC_review_post_IC_votingLink" class='ui-btn-left showPIVLink' data-icon='arrow-l' data-direction="reverse">back to Post IC Voting</a>
+                    <h1>Final IC Review</h1>
+                </div>
+            
+                <div data-role="content">
+                    <div class="content-primary">
+                        <div id="final_IC_review_page_details">
+                  
+                            <div id="final_IC_review_PICV_results" data-role="collapsible" data-collapsed="false" data-theme="b" data-content-theme="b" style="display: none;">
+                    
+                                <h3>Post IC voting results</h3>
+                             
+                                <div data-role="content">        
+                        
+                    
+                                    <div id="final_IC_review_page_details_Table" class="ui-grid-c ui-body ui-body-c" data-theme="d" data-inset="true" width="100%">
+
+                                        <table width="100%" cellspacing="0" cellpadding="0">
+                                            <tr>
+                                                <td valign="middle" text-align="center" width="20%">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Voter</strong></center></div>
+                                                    </div>
+                                                </td>
+                            
+                                                <td valign="middle" text-align="center" width="10%">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Vote</strong></center></div> 
+                                                    </div>
+                                                </td> 
+                            
+                                                <td valign="middle" text-align="center">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Comments</strong></center></div> 
+                                                    </div>
+                                                </td>
+                            
+                                                <td valign="middle" text-align="center" width="8%">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Round</strong></center></div> 
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                  
+                                    <div id="final_IC_review_UserVotes" class="ui-grid-b ui-body ui-body-b" data-theme="b" data-inset="true">
+                                        </div>
+                                        
+                                        <!-- Notification to be shown when email is sent -->
+                                        <div class="ui-bar ui-bar-b-green" id="final_IC_review_Save_Msg_Bottom" style="display: none;">
+                                            <center><strong><span id="final_IC_review_Save_Msg_Text_Bottom"></span></strong></center>
+                                        </div>
+                                        
+                                        <div class="ui-bar ui-bar-b-green" id="final_IC_review_Save_ErrMsg_Bottom" style="display: none;">
+                                            <center><strong>An error occured while saving. Please contact the administrator.</strong></center>
+                                        </div>
+                                        <!-- Notification to be shown when email is sent   -->
+                                        
+                                    </div>
+                                </div>
+                  
+                            </div>
+                        </div>
+                    </div>
+            
+            
+                <div data-role="content" class="ui-content ui-body-b" role="main">
+                
+                  <!-- S-158202 Adding collapse “Printing” menu [Hemant 10/30] -->
+                  <div data-role="collapsible" data-collapsed="true" data-theme="b" data-content-theme="b">
+                      <h3>Printing</h3>
+                
+                    <!-- Adding section for Final IC review PDF page To Email link Start -->
+                    <table width="100%">
+                    
+                    <!-- Adding headers for buttons -->
+                   <tr>
+                       <th valign="middle" text-align="left" width="33.33%">
+                           <div width="100%" data-inset="true">
+                           <div class="ui-bar ui-bar-b"><strong>Full report (all rounds)</strong></div>
+                           </div>
+                       </th>
+   
+                       <th valign="middle" text-align="left" width="33.33%">
+                           <div width="100%" data-inset="true">
+                           <div class="ui-bar ui-bar-b"><strong>Initial round</strong></div> 
+                           </div>
+                       </th> 
+   
+                       <th valign="middle" text-align="left" width="33.33%">
+                           <div width="100%" data-inset="true">
+                           <div class="ui-bar ui-bar-b"><strong>Post IC</strong></div> 
+                           </div>
+                       </th>
+                   </tr>
+                    
+                    <!-- Adding Email as PDF link-->
+                    <tr>
+                        <td>
+                            <ul id="final_IC_review_pdfPg_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                                <li><a onclick="emailPDFData('Full',false, false);" data-transition="flip" rel="external">Email as pdf</a></li>
+                            </ul> 
+                        </td>
+                        
+                        <td>      
+                            <ul id="final_IC_Initial_review_pdfPg_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                                <li><a onclick="emailPDFData('Initial', false, false);" data-transition="flip" rel="external">Email as pdf</a></li>
+                            </ul>
+                        </td>
+                        
+                        <td>
+                         <ul id="final_IC_Post_review_pdfPg_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                            <li><a onclick="emailPDFData('Post', false, false);" data-transition="flip" rel="external">Email as pdf</a></li>
+                          </ul>
+                        </td>
+                    </tr>
+                    
+                    <!-- Adding Print as PDF link-->
+                    <tr>
+                    <td>
+                        <ul id="final_IC_review_print_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                            <li><a href="javascript:window.print();" id="final_IC_review_print_AnchorLink" data-transition="flip" rel="external">Print</a></li>
+                        </ul>
+                    </td>
+                    
+                    <td>
+                      <ul id="final_IC_review_print_IC_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                          <li><a onclick="printData('Initial',false);" id="final_IC_review_print_IC_AnchorLink" data-transition="flip" rel="external">Print</a></li>
+                      </ul>
+                    </td>
+                    
+                    <td>
+                      <ul id="final_IC_review_print_PIC_ List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                          <li><a onclick="printData('Post',false);" id="final_IC_review_print_PIC_AnchorLink" data-transition="flip" rel="external">Print</a></li>
+                      </ul>
+                    </td>
+                    
+                    </tr>
+                    
+                    <!-- Adding Email as PDF (Print in NYO boardroom) To NYO link-->
+                    <tr>
+                    <td>
+                    <ul id="final_IC_review_pdfPg_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                        <li><a onclick="emailPDFData('Full',true, false);" data-transition="flip" rel="external">Print in NYO boardroom</a></li>
+                    </ul>
+                    </td>
+                    
+                    <td>       
+                        <ul id="final_IC_Initial_review_pdfPg_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                            <li><a onclick="emailPDFData('Initial',true, false);" data-transition="flip" rel="external">Print in NYO boardroom</a></li>
+                        </ul>
+                    </td>
+                    
+                    <td>
+                     <ul id="final_IC_Post_review_pdfPg_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                        <li><a onclick="emailPDFData('Post',true, false);" data-transition="flip" rel="external">Print in NYO boardroom</a></li>
+                      </ul>
+                    </td>
+                    
+                    </tr>
+                    </table>
+                    
+                    </div>
+                    <!-- S-158202 Adding collapse “Printing” menu Div end [Hemant 10/30] -->
+                    
+                    <table width="100%">
+                        <tr>
+                         
+                         <!-- Adding See My votes button-->
+                          <td valign="middle" text-align="left" width="33.33%">
+                                <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                                    <li><a href="#FIR_My_Votes_page" class="final_IC_review_My_Votes_AnchorLink" data-transition="flip" rel="external">See my Votes</a></li>
+                                </ul>
+                          </td>
+                          
+                          <!-- Adding Print my Votes button-->
+                          <td valign="middle" text-align="left" width="33.33%">
+                          <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                              <li><a onclick="printData('Full',true);" data-transition="flip" rel="external">Print my Votes</a></li>
+                          </ul>
+                        </td>
+                        
+                        <!-- Adding Email me my Votes button-->
+                        <td valign="middle" text-align="left" width="33.33%">
+                          <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                              <li><a onclick="emailPDFData('Full',true, true);" data-transition="flip" rel="external">Email me my votes</a></li>
+                          </ul>
+                        </td>
+                        
+                        </tr>
+                    </table>   
+                    
+                    <!-- Adding Dashboard link-->
+                    <ul id="final_IC_review_Dashboard_Link" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                        <li><a href="#final_IC_review_page_Dashboard" id="final_IC_review_Dashboard_AnchorLink1" class="final_IC_review_Dashboard_AnchorLink" data-transition="flip" rel="external">Dashboard</a></li>
+                    </ul>
+                    
+                    <!-- Adding Back to Post IC Voting link-->
+                    <ul id="final_IC_review_post_IC_voting_List" class="showPIVLink" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                        <li><a href="#post_IC_voting_page" id="final_IC_review_post_IC_voting_AnchorLink" data-transition="flip" rel="external">Back to Post IC Voting</a></li>
+                    </ul>       
+                
+                    <!-- Adding Back to Meeting Agenda link-->
+                    <ul id="final_IC_review_Meeting_Agenda_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                        <li><a href="#detailpage" id="final_IC_review_Meeting_Agenda_AnchorLink" data-transition="flip" rel="external">Back to Meeting Agenda</a></li>
+                    </ul>
+                </div>
+            
+            </div>
+            <!-- Final IC review page section end -->
+            <!-- Story # S-123652 End  -->
+            
+            <!-- Story # S-146191 Start  Graphs / Dashboard section-->
+            <!-- Final IC review Dashboard section start -->
+            <div data-role="page" id="final_IC_review_page_Dashboard" data-rel="dialog" data-transition="pop" data-theme="b" data-content-theme="b">
+            
+                <div data-role="header" data-theme="b">
+                    <!-- Story # S-177195 [hemant 1/13/2013]
+                    <a href='#final_IC_review_page' id="final_IC_review_post_IC_votingLink1" class='ui-btn-left final_IC_review_AnchorLink' data-icon='arrow-l' data-direction="reverse">back to Final IC Review</a>
+                    <a href='#detailpage' class='ui-btn-left' data-icon='arrow-l' data-direction="reverse">back to Meeting Agenda</a>
+                    <h1>Post IC Review Dashboard</h1>
+                    -->
+                    <h1>Post IC – Chairman’s Dashboard and Summary</h1>
+                </div>
+            
+                <div data-role="content">
+                    <div class="content-primary">
+                        <div id="final_IC_review_page_details_Dashboard">
+                          
+                                     <!-- Story # S-177195 Adding Back to Meeting Agenda link-->
+									                    <ul id="final_IC_review_Meeting_Agenda_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+									                        <li><a href="#detailpage" style="text-align:center;" id="final_IC_review_Meeting_Agenda_AnchorLink1" data-transition="flip" rel="external">Back to Meeting Agenda</a></li>
+									                    </ul>
+                                    
+                                    <!-- Adding Refresh Button-->
+                                    <ul id="final_IC_review_Dashboard_RefreshLink" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                                        <li><a href="#final_IC_review_page_Dashboard" style="text-align:center;" class="final_IC_review_Dashboard_AnchorLink" id="final_IC_review_Dashboard_RefreshAnchorLink" data-transition="flip" rel="external">Refresh</a></li>
+                                    </ul>
+                  
+                            <div id="final_IC_review_PICV_results_Dashboard" data-role="collapsible" data-collapsed="false" data-theme="b" data-content-theme="b" style="display: none;">
+                                <h3>Post IC Voting Summary</h3>
+                             
+                                <div data-role="content">
+                                    
+                                    <!-- Adding Graph section on the dashboard-->
+                                    <div id="final_IC_review_page_details_Table_GraphDashboard" style="overflow:auto;" class="ui-grid-c ui-body ui-body-c" data-theme="d" data-inset="true" width="100%" height="100%">
+                                    </div>
+                                 </div>
+                              </div>      
+                                
+                                <div id="final_IC_review_PICV_results_Dashboard_VoteComments" data-role="collapsible" data-collapsed="false" data-theme="b" data-content-theme="b">
+                                  <h3>Post IC Voting Comments</h3>
+                             
+                                <div data-role="content">  
+                                    
+                                    <div id="final_IC_review_page_details_Table_Data" class="ui-grid-c ui-body ui-body-c" data-theme="d" data-inset="true" width="100%">
+
+                                        <table width="100%" cellspacing="0" cellpadding="0">
+                                            <tr>
+                                                <td valign="middle" text-align="center" width="20%">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Voter</strong></center></div>
+                                                    </div>
+                                                </td>
+                            
+                                                <td valign="middle" text-align="center" width="10%">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Vote</strong></center></div> 
+                                                    </div>
+                                                </td> 
+                            
+                                                <td valign="middle" text-align="center">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Comments</strong></center></div> 
+                                                    </div>
+                                                </td>
+                                                
+                                                <!-- 
+                                                <td valign="middle" text-align="center" width="8%">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Round</strong></center></div> 
+                                                    </div>
+                                                </td>
+                                                 -->
+                                            </tr>
+                                        </table>
+                                    </div>
+                                    
+                                      <div id="final_IC_review_UserVotes_Dashboard_Vote_Comments" class="ui-grid-b ui-body ui-body-b" data-theme="b" data-inset="true"></div>
+                                    </div>
+                                    
+                                    <!-- Printing Menu Start-->
+                                 <div data-role="collapsible" data-collapsed="true" data-theme="b" data-content-theme="b">
+                                  <h3>Printing</h3>
+                            
+                                <table width="100%">
+                                
+                                <!-- Adding headers for buttons -->
+                               <tr>
+                                   <th valign="middle" text-align="left" width="33.33%">
+                                       <div width="100%" data-inset="true">
+                                       <div class="ui-bar ui-bar-b"><strong>Full report (all rounds)</strong></div>
+                                       </div>
+                                   </th>
+               
+                                   <th valign="middle" text-align="left" width="33.33%">
+                                       <div width="100%" data-inset="true">
+                                       <div class="ui-bar ui-bar-b"><strong>Initial round</strong></div> 
+                                       </div>
+                                   </th> 
+               
+                                   <th valign="middle" text-align="left" width="33.33%">
+                                       <div width="100%" data-inset="true">
+                                       <div class="ui-bar ui-bar-b"><strong>Post IC</strong></div> 
+                                       </div>
+                                   </th>
+                               </tr>
+                                
+                                <!-- Adding Email as PDF link-->
+                                <tr>
+                                    <td>
+                                        <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                                            <li><a onclick="emailPDFData('Full',false, false);" data-transition="flip" rel="external">Email as pdf</a></li>
+                                        </ul> 
+                                    </td>
+                                    
+                                    <td>      
+                                        <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                                            <li><a onclick="emailPDFData('Initial', false, false);" data-transition="flip" rel="external">Email as pdf</a></li>
+                                        </ul>
+                                    </td>
+                                    
+                                    <td>
+                                     <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                                        <li><a onclick="emailPDFData('Post', false, false);" data-transition="flip" rel="external">Email as pdf</a></li>
+                                      </ul>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Adding Print as PDF link-->
+                                <tr>
+                                <td>
+                                    <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                                        <li><a onclick="printData('Full',false);" id="final_IC_review_print_AnchorLink" data-transition="flip" rel="external">Print</a></li>
+                                    </ul>
+                                </td>
+                                
+                                <td>
+                                  <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                                      <li><a onclick="printData('Initial',false);" id="final_IC_review_print_IC_AnchorLink" data-transition="flip" rel="external">Print</a></li>
+                                  </ul>
+                                </td>
+                                
+                                <td>
+                                  <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                                      <li><a onclick="printData('Post',false);" id="final_IC_review_print_PIC_AnchorLink" data-transition="flip" rel="external">Print</a></li>
+                                  </ul>
+                                </td>
+                                
+                                </tr>
+                                
+                                <!-- Adding Email as PDF (Print in NYO boardroom) To NYO link-->
+                                <tr>
+                                <td>
+                                <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                                    <li><a onclick="emailPDFData('Full',true, false);" data-transition="flip" rel="external">Print in NYO boardroom</a></li>
+                                </ul>
+                                </td>
+                                
+                                <td>       
+                                    <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                                        <li><a onclick="emailPDFData('Initial',true, false);" data-transition="flip" rel="external">Print in NYO boardroom</a></li>
+                                    </ul>
+                                </td>
+                                
+                                <td>
+                                 <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                                    <li><a onclick="emailPDFData('Post',true, false);" data-transition="flip" rel="external">Print in NYO boardroom</a></li>
+                                  </ul>
+                                </td>
+                                
+                                </tr>
+                                </table>
+                                
+                                </div>
+                                <!-- Printing Menu end -->
+                                    
+                                </div>
+                  
+                            </div>
+                        </div>
+                    </div>
+            
+            
+                <div data-role="content" class="ui-content ui-body-b" role="main">
+                    
+                    <!-- Adding Back to Final IC Review link-->
+                    <!-- Story # S-177195
+                    <ul id="final_IC_review_post_IC_voting_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                        <li><a href="#final_IC_review_page" id="final_IC_review_post_IC_voting_AnchorLink1" data-transition="flip" rel="external">Back to Final IC Review</a></li>
+                    </ul>
+                    -->       
+                
+                    <!-- Adding Back to Meeting Agenda link-->
+                    <!-- Story # S-177195
+                    <ul id="final_IC_review_Meeting_Agenda_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                        <li><a href="#detailpage" style="text-align:center;" id="final_IC_review_Meeting_Agenda_AnchorLink1" data-transition="flip" rel="external">Back to Meeting Agenda</a></li>
+                    </ul>
+                    -->
+                </div>
+            
+            </div>
+            <!-- Story # S-146191 End - Graphs / Dashboard screen-->
+            
+            <!-- Story # S-158202 -->
+            <!-- Final IC review My Votes page section start -->
+            <div data-role="page" id="FIR_My_Votes_page" data-rel="dialog" data-transition="pop" data-theme="b" data-content-theme="b">
+                <div data-role="header" data-theme="b">
+                    <a href='#final_IC_review_page' class='ui-btn-left final_IC_review_AnchorLink showFIRLink' data-icon='arrow-l' data-direction="reverse">back to Final IC Review</a>
+                    <h1>My Votes</h1>
+                </div>
+            
+                <div data-role="content">
+                    <div class="content-primary">
+                        <div id="FIR_My_Votes_page_details">
+                  
+                            <div id="FIR_My_Votes_PICV_results" data-role="collapsible" data-collapsed="false" data-theme="b" data-content-theme="b" style="display: none;">
+                    
+                                <h3>My Votes</h3>
+                             
+                                <div data-role="content">        
+                        
+                    
+                                    <div id="FIR_My_Votes_page_details_Table" class="ui-grid-c ui-body ui-body-c" data-theme="d" data-inset="true" width="100%">
+
+                                        <table width="100%" cellspacing="0" cellpadding="0">
+                                            <tr>
+                                                <td valign="middle" text-align="center" width="20%">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Voter</strong></center></div>
+                                                    </div>
+                                                </td>
+                            
+                                                <td valign="middle" text-align="center" width="10%">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Vote</strong></center></div> 
+                                                    </div>
+                                                </td> 
+                            
+                                                <td valign="middle" text-align="center">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Comments</strong></center></div> 
+                                                    </div>
+                                                </td>
+                            
+                                                <td valign="middle" text-align="center" width="8%">
+                                                    <div width="100%" data-inset="true">
+                                                    <div class="ui-bar ui-bar-b"><center><strong>Round</strong></center></div> 
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                  
+                                    <div id="FIR_My_Votes_UserVotes" class="ui-grid-b ui-body ui-body-b" data-theme="b" data-inset="true">
+                                    </div>
+                                        
+                                     <!-- Notification to be shown when email is sent -->
+                                     <div class="ui-bar ui-bar-b-green" id="FIR_My_Votes_Save_Msg_Bottom" style="display: none;">
+                                         <center><strong><span id="FIR_My_Votes_Save_Msg_Text_Bottom"></span></strong></center>
+                                     </div>
+                                     
+                                     <div class="ui-bar ui-bar-b-green" id="FIR_My_Votes_Save_ErrMsg_Bottom" style="display: none;">
+                                         <center><strong>An error occured while saving. Please contact the administrator.</strong></center>
+                                     </div>
+                                     <!-- Notification to be shown when email is sent   -->
+                                        
+                                    </div>
+                                </div>
+                  
+                            </div>
+                        </div>
+                    </div>
+            
+            
+                <div data-role="content" class="ui-content ui-body-b" role="main">
+                
+                    <table width="100%">
+                      <tr>
+                       
+                       <!-- Adding See My votes button-->
+                        <td valign="middle" text-align="left" width="33.33%">
+                          <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                              <li><a href="#FIR_My_Votes_page" class="final_IC_review_My_Votes_AnchorLink" data-transition="flip" rel="external">See my Votes</a></li>
+                          </ul>
+                        </td>
+                        
+                        <!-- Adding Print my Votes button-->
+                        <td valign="middle" text-align="left" width="33.33%">
+                          <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                              <li><a onclick="printData('Full',true);" data-transition="flip" rel="external">Print my Votes</a></li>
+                          </ul>
+                        </td>
+                        
+                        <!-- Adding Email me my Votes button-->
+                        <td valign="middle" text-align="left" width="33.33%">
+                          <ul id="FIR_My_Votes_email" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                            <li><a onclick="emailPDFData('Full',true, true);" data-transition="flip" rel="external">Email me my Votes</a></li>
+                           </ul>
+                        </td>
+                        
+                      </tr>
+                    </table>
+                
+                    <!-- Adding Back to Final IC Review link-->
+                    <ul id="FIR_My_Votes_post_IC_voting_List" class="showFIRLink" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                        <li><a href="#final_IC_review_page" id="FIR_My_Votes_final_IC_review_AnchorLink" class="final_IC_review_AnchorLink" data-transition="flip" rel="external">Back to Final IC Review</a></li>
+                    </ul>       
+                
+                    <!-- Adding Back to Meeting Agenda link-->
+                    <ul id="final_IC_review_Meeting_Agenda_List" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+                        <li><a href="#detailpage" id="final_IC_review_Meeting_Agenda_AnchorLink" data-transition="flip" rel="external">Back to Meeting Agenda</a></li>
+                    </ul>
+                </div>
+            
+            </div>
+            <!-- Final IC review My Votes page section end -->
+            
+            <!-- Story # S-174746 Start PRE IC Feedback section-->
+            <!-- PRE IC Feedback section start -->
+            <div data-role="page" id="pre_IC_Feedback_Page" data-rel="dialog" data-transition="pop" data-theme="b" data-content-theme="b">
+            
+                <div data-role="header" data-theme="b">
+                    <!-- START Story # S-174746 [hemant 1/13/2013]
+                    <a href='#detailpage' class='ui-btn-left' data-icon='arrow-l' data-direction="reverse">back to Meeting Agenda</a>
+                    END Story # S-174746 -->
+                    <h1>Pre IC – Chairman’s  Feedback Summary</h1>
+                </div>
+            
+                <div data-role="content">
+                    <div class="content-primary">
+                    
+                        <!-- Adding Back to Meeting Agenda link-->
+		                    <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> 
+		                        <li><a href="#detailpage" style="text-align:center;" data-transition="flip" rel="external">Back to Meeting Agenda</a></li>
+		                    </ul>
+                        
+                        <div data-role="collapsible" data-collapsed="false" data-theme="b" data-content-theme="b">
+                          <h3>Pre IC Voting Comments</h3>
+                     
+                        <div data-role="content">  
+                            <div id="pre_IC_Feedback_Page_Vote_Comments" class="ui-grid-b ui-body ui-body-b" data-theme="b" data-inset="true"></div>
+                            </div>
+                        </div>
+                        
+                     <!-- Printing Menu Start-->
+                     <div data-role="collapsible" data-collapsed="true" data-theme="b" data-content-theme="b">
+                      <h3>Printing</h3>
+                
+                    <table width="100%">
+                    
+                    <!-- Adding headers for buttons -->
+                   <tr>
+                       <th valign="middle" text-align="left" width="33.33%">
+                           <div width="100%" data-inset="true">
+                           <div class="ui-bar ui-bar-b"><strong>Full report (all rounds)</strong></div>
+                           </div>
+                       </th>
+   
+                       <th valign="middle" text-align="left" width="33.33%">
+                           <div width="100%" data-inset="true">
+                           <div class="ui-bar ui-bar-b"><strong>Initial round</strong></div> 
+                           </div>
+                       </th> 
+   
+                       <th valign="middle" text-align="left" width="33.33%">
+                           <div width="100%" data-inset="true">
+                           <div class="ui-bar ui-bar-b"><strong>Post IC</strong></div> 
+                           </div>
+                       </th>
+                   </tr>
+                    
+                    <!-- Adding Email as PDF link-->
+                    <tr>
+                        <td>
+                            <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                                <li><a onclick="emailPDFData('Full',false, false);" data-transition="flip" rel="external">Email as pdf</a></li>
+                            </ul> 
+                        </td>
+                        
+                        <td>      
+                            <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                                <li><a onclick="emailPDFData('Initial', false, false);" data-transition="flip" rel="external">Email as pdf</a></li>
+                            </ul>
+                        </td>
+                        
+                        <td>
+                         <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                            <li><a onclick="emailPDFData('Post', false, false);" data-transition="flip" rel="external">Email as pdf</a></li>
+                          </ul>
+                        </td>
+                    </tr>
+                    
+                    <!-- Adding Print as PDF link-->
+                    <tr>
+                    <td>
+                        <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                            <li><a onclick="printData('Full',false);" id="final_IC_review_print_AnchorLink" data-transition="flip" rel="external">Print</a></li>
+                        </ul>
+                    </td>
+                    
+                    <td>
+                      <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                          <li><a onclick="printData('Initial',false);" id="final_IC_review_print_IC_AnchorLink" data-transition="flip" rel="external">Print</a></li>
+                      </ul>
+                    </td>
+                    
+                    <td>
+                      <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                          <li><a onclick="printData('Post',false);" id="final_IC_review_print_PIC_AnchorLink" data-transition="flip" rel="external">Print</a></li>
+                      </ul>
+                    </td>
+                    
+                    </tr>
+                    
+                    <!-- Adding Email as PDF (Print in NYO boardroom) To NYO link-->
+                    <tr>
+                    <td>
+                    <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                        <li><a onclick="emailPDFData('Full',true, false);" data-transition="flip" rel="external">Print in NYO boardroom</a></li>
+                    </ul>
+                    </td>
+                    
+                    <td>       
+                        <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                            <li><a onclick="emailPDFData('Initial',true, false);" data-transition="flip" rel="external">Print in NYO boardroom</a></li>
+                        </ul>
+                    </td>
+                    
+                    <td>
+                     <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents" style="margin-bottom:-0px;margin-top:-0px;"> 
+                        <li><a onclick="emailPDFData('Post',true, false);" data-transition="flip" rel="external">Print in NYO boardroom</a></li>
+                      </ul>
+                    </td>
+                    
+                    </tr>
+                    </table>
+                    
+                    </div>
+                    <!-- Printing Menu end -->
+                        
+                    </div>
+                 </div>
+            
+<!--                <div data-role="content" class="ui-content ui-body-b" role="main">-->
+                    <!-- Adding Back to Meeting Agenda link-->
+<!--                    <ul data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> -->
+<!--                        <li><a href="#detailpage" style="text-align:center;" data-transition="flip" rel="external">Back to Meeting Agenda</a></li>-->
+<!--                    </ul>-->
+<!--                </div>-->
+            
+            </div>
+            <!-- Story # S-174746 End - PRE IC Feedback screen-->
+          
+            <div data-role="page" id="chatterpage" data-rel="dialog" data-transition="pop" data-theme="b" data-content-theme="b">
+                <div style="margin: 10 auto;">
+                    <!-- chatter:feed entityId="0F9Z0000000CbDw" showHeader="false" / -->
+                </div>
+            </div>
+        </body>
+    </html>
+</apex:page>

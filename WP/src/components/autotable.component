@@ -1,0 +1,128 @@
+<apex:component Controller="autoTableController">
+<apex:includeScript value="{!$Resource.number_format_js}" />
+<apex:includeScript value="{!$Resource.wp_base_js}" />
+<apex:includeScript value="{!$Resource.date_js}" />
+
+<script type="text/javascript">var __sfdcSessionId = '{!GETSESSIONID()}';</script>
+<script src="../../soap/ajax/23.0/connection.js" type="text/javascript"></script>
+<apex:includeScript value="{!$Resource.json_js}" />
+
+<apex:attribute name="BusyText" assignTo="{!BusyText}" default="" type="String" description="Text to be shown when refreshing" />
+<apex:attribute name="DisableQueryAtStartup" assignTo="{!DisableQueryAtStartup}" default="false" type="boolean" description="Self describing." />
+<apex:attribute name="ShowColumnHeaders" assignTo="{!ShowColumnHeaders}" default="true" type="boolean" description="Self describing." />
+<apex:attribute name="TblID" required="true" assignTo="{!TblID}" type="String" description="unique id of this table control; must be unique on the whole page." />
+<apex:attribute name="ContainingDiv" required="true" assignTo="{!ContainingDiv}" type="String" description="name of div that holds the table" />
+<apex:attribute name="QueryDelay" default="50" assignTo="{!QueryDelay}" type="String" description="milliseconds after loading when load function is called" />
+<apex:attribute name="FieldConfig" required="true" assignTo="{!FieldConfig}" type="String" description="field config, format (separated by #s)                   col header name : col header class : soql field to show : data cell class : soql field for URL link (if applicable):format (SHORTDATE[FROMSTRING]|PERCENT|CURRENCY[NOCOMMAS|DOLLARSIGN|CENTS])#" />
+<apex:attribute name="NameField" assignTo="{!NameField}" type="Integer" description="field name from field config to be used when row must be identified.  Note: this must be an integer indicating the field config to use.  Required if delete or add options enabled." /> 
+<apex:attribute name="PrimaryObjectType" assignTo="{!PrimaryObjectType}" type="String" description="Object type used for delete/add functions.  Required if delete or add options enabled." />
+<apex:attribute name="PrimaryObjectName" assignTo="{!PrimaryObjectName}" type="String" description="Object type used for delete/add functions.  Required if delete or add options enabled." />
+<apex:attribute name="TableClassName" assignTo="{!TableClassName}" type="String" description="if defined, class name to be used for table" />
+<apex:attribute name="DefaultCellClass" default="td1" assignTo="{!DefaultCellClass}" type="String" description="" />
+<apex:attribute name="DefaultColHeaderClass" default="basicTableColHeading" assignTo="{!DefaultColHeaderClass}" type="String" description="" />
+<apex:attribute name="URLLinkPrefix" default="/" assignTo="{!URLLinkPrefix}" type="String" description="" />
+<apex:attribute name="SOQLquery" assignTo="{!SOQLquery}" type="String" description="if specified, this query will be executed against sf" />
+<apex:attribute name="UseDataFromOtherAutoTableID" assignTo="{!AutoTableDataSponsorID}" type="String" description="If specified, data will be used from UseDataFromOtherAutoTableID; refreshes on UseDataFromOtherAutoTableID will cause automatic refresh to this table;" />
+<apex:attribute name="UseDataFromOtherAutoTableNamePrefix" type="String" description="If specified, will prefix string used from UseDataFromOtherAutoTableID;" />
+<apex:attribute name="IncludeDeleteColumn" default="false" assignTo="{!IncludeDeleteColumn}" type="Boolean" description="Include column at end of table enabling record delete." />
+<apex:attribute name="DeleteQuestion" default="" type="String" description="If specified, will be used instead of generic 'delete' question." />
+<apex:attribute name="FuncNameTableStarting" required="true" assignto="{!funcNameTableStarting}" type="String" description="must enter 'null' if not specifying; name of javascript function called upon table render start; must take 4 parms: AutoTableConfig, htmlTable,fldCfgs,records" />
+<apex:attribute name="FuncNameTableComplete" required="true" assignto="{!funcNameTableComplete}" type="String" description="must enter 'null' if not specifying; name of javascript function called upon table completion; must take 4 parms: AutoTableConfig, htmlTable,fldCfgs,records" />
+<apex:attribute name="FuncNameColHeaderComplete" required="true" assignto="{!funcNameColHeaderComplete}" type="String" description="must enter 'null' if not specifying; name of javascript function called upon each col header cell completion; must take 4 parms: AutoTableConfig, tblCell,fldCfgs,thisFieldID" />
+<apex:attribute name="FuncNameCellComplete" assignto="{!funcNameCellComplete}" type="String" description="must enter 'null' if not specifying; name of javascript function called upon each cell completion; must take 5 parms: AutoTableConfig, tblCell,fldCfgs,thisFieldID,rec" />
+<apex:attribute name="FuncNameRowComplete" required="true" assignto="{!funcNameRowComplete}" type="String" description="must enter 'null' if not specifying; name of javascript function called upon each row completion; must take 4 parms: AutoTableConfig, fldCfgs, tblRow, rec" />
+<apex:attribute name="FuncRetrieveSOQLQuery" required="true" assignto="{!funcNameFuncRetrieveSOQLQuery}" type="String" description="must enter 'null' if not specifying; name of javascript which, if not null, will return to autotable the soql it should use; necessary if soql changes intra-page refresh;" />
+<apex:attribute name="FuncDeleteRow" required="true" assignto="{!funcNameDeleteRow}" type="String" description="must enter 'null' if not specifying; name of javascript which, if not null, will be called when user pushes delete button on a row; function must take parms atCfg,fldCfgs,rec" />
+
+    <script>
+var ObserverRefreshFunctions_{!TblID} = new Object();
+function enableObserverForAT_{!TblID}(sId,pObserverFunc){
+    if (ObserverRefreshFunctions_{!TblID}[sId]==null)    {
+        var atObCfg = { Id : sId, RefreshFunc: pObserverFunc };
+        ObserverRefreshFunctions_{!TblID}[sId]= atObCfg;
+        }
+    }
+var atData_{!TblID}=null;
+function getATableData_{!TblID}(){return atData_{!TblID};}
+function redrawATable_{!TblID}(queryResult, source) {    var records = queryResult.getArray('records');   atData_{!TblID}=records;  redrawATableB_{!TblID}( records);    }
+function redrawATableB_{!TblID}( records) {
+
+    var elDiv = ge('{!ContainingDiv}');
+    if (elDiv!=null && '{!BusyText}'!='') { elDiv.innerHTML='<i>{!BusyText}</i>'; }
+    var sFldConfig = "{!FieldConfig}";
+    var sDefCellClass = "{!DefaultCellClass}";
+    var sDefColHeaderClass = "{!DefaultColHeaderClass}";
+    var URLLinkPrefix="{!URLLinkPrefix}";
+    var stb="atbl_{!TblID}";
+    var elT = ge(stb);
+    if (elT!=null)  elDiv.removeChild(elT); 
+    var atCfg = {
+        AutoTableId : '{!TblID}',
+        NameField : '{!NameField}',
+        ContainingDivId : '{!ContainingDiv}',
+        HTMLTableId : stb,
+        PrimaryObjectType : '{!PrimaryObjectType}',
+        PrimaryObjectName : '{!PrimaryObjectName}',
+        IncludeDeleteOption : {!IncludeDeleteColumn},
+        ShowColumnHeaders : {!ShowColumnHeaders},
+        URLLinkPrefix : URLLinkPrefix,
+        DeleteQuestion: '{!DeleteQuestion}'
+    };
+    var pFRedraw = soqlExecRedrawATable_{!TblID};
+    if ('{!UseDataFromOtherAutoTableID}'!='')
+        pFRedraw = {!UseDataFromOtherAutoTableNamePrefix}soqlExecRedrawATable_{!UseDataFromOtherAutoTableID};
+        
+    var tbl = createAutoTableFromSOQLRecords(atCfg, records,sFldConfig, {!funcNameTableComplete}, sDefColHeaderClass,{!funcNameColHeaderComplete}, sDefCellClass,{!funcNameCellComplete},{!funcNameRowComplete},URLLinkPrefix,
+        pFRedraw, {!funcNameTableStarting},{!funcNameDeleteRow});
+    if ('{!TableClassName}'!='')
+        tbl.className="{!TableClassName}";
+    
+   tbl.id=stb;
+    if (elDiv!=null && '{!BusyText}'!='') elDiv.innerHTML='';
+    elDiv.appendChild(tbl);
+    
+    for ( var xC in ObserverRefreshFunctions_{!TblID})
+    {
+    if (ObserverRefreshFunctions_{!TblID}[xC]!=null)
+        {
+        var xQ=ObserverRefreshFunctions_{!TblID}[xC];
+        if (xQ.RefreshFunc!=null)
+            xQ.RefreshFunc();
+        }
+    }
+
+}
+function soqlExecFailedRedrawATable_{!TblID}(error, source) {
+if (error.message!=null && error.message.indexOf("freed script") != -1)
+    alert('There was an error loading the page - please reload.');  
+else
+ alert('Error retrieving data for autotable id(' + source.TblID + '):' + error);   }
+
+function soqlExecRedrawATable_{!TblID}() {
+
+    if ('{!UseDataFromOtherAutoTableID}'!='')
+        {
+        var d = {!UseDataFromOtherAutoTableNamePrefix}getATableData_{!UseDataFromOtherAutoTableID}();
+        redrawATableB_{!TblID}(d);
+        }
+        else
+        {
+        var state = { TblID : '{!TblID}' };
+    var callback = {  onSuccess: redrawATable_{!TblID}, onFailure: soqlExecFailedRedrawATable_{!TblID}, source: state};
+    var soq="{!SOQLquery}";
+    if ('{!funcNameFuncRetrieveSOQLQuery}'!='null' && '{!funcNameFuncRetrieveSOQLQuery}'!='') {
+        say("getting soql from function");
+        soq={!funcNameFuncRetrieveSOQLQuery}();
+        //say ('soq is now ' + soq);
+        }
+    say("");say("");    say("autotable query[" + soq + "]");    say("");say("");    
+       sforce.connection.query(soq, callback);
+       }
+}
+</script>
+    <script>
+if ('{!UseDataFromOtherAutoTableID}'!='')
+    {!UseDataFromOtherAutoTableNamePrefix}enableObserverForAT_{!UseDataFromOtherAutoTableID}('{!TblID}',soqlExecRedrawATable_{!TblID})
+else {  if ({!DisableQueryAtStartup}==false)     addWindowOnLoadEvent(soqlExecRedrawATable_{!TblID}); }
+</script>
+</apex:component>

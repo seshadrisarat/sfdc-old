@@ -1,0 +1,157 @@
+<apex:page standardController="ts2__Filter__c" extensions="ts2.s_SearchConfigDao" action="{!LoadAction}" title="{!FilterObjectDescribe.Label+': '+IF(ISNULL(FilterId),$Label.FilterView_LABEL_CreateNew,$Label.FilterView_LABEL_Edit)+' '+$ObjectType.ts2__Filter__c.Label}">
+	<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, 'jquery-1.8.2.min.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__stcode, 'res/js/ui-2.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__stcode, 'res/js/filtereditor.js')}" />
+
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__stcode, 'res/css/ui-2.css')}"/>
+
+<apex:form id="frm">
+	<apex:pageMessages id="pageMessages" />
+
+	<apex:sectionHeader title="{!FilterObjectDescribe.LabelPlural}" subtitle="{!IF(ISNULL(FilterId),$Label.FilterView_LABEL_CreateNew,$Label.FilterView_LABEL_Edit)+' '+$ObjectType.ts2__Filter__c.Label}" />
+
+	<apex:pageBlock mode="edit" id="FilterEditor">
+		<apex:pageBlockButtons location="both">
+			<apex:commandButton value="{!$Label.FilterView_BTN_Save}" title="{!$Label.FilterView_BTN_Save}" action="{!SaveAction}" />
+			<apex:commandButton value="{!$Label.FilterView_BTN_Delete}" title="{!$Label.FilterView_BTN_Delete}" action="{!DeleteAction}" rendered="{!NOT(ISNULL(FilterId)) && $ObjectType.ts2__Filter__c.Deletable && $ObjectType.ts2__Filter_Line__c.Deletable}" onclick="return confirm('{!$Label.FilterView_LABEL_DeleteConfirm}')" />
+			<apex:commandButton value="{!$Label.FilterView_BTN_Cancel}" title="{!$Label.FilterView_BTN_Cancel}" action="{!cancel}" />
+		</apex:pageBlockButtons>
+
+		<apex:pageBlockSection title="{!$Label.FilterView_LABEL_Step_1}" columns="2">
+			<apex:inputField required="true" value="{!Filter.Name}" style="width: 200px;" />
+			<apex:outputText value="" />
+
+			<apex:pageBlockSectionItem rendered="{!NOT(ISNULL(FilterId))}">
+				<apex:outputLabel value="{!$Label.FilterView_LABEL_FieldCreatedBy+':'}" />
+				<apex:outputPanel >
+					<apex:outputField value="{!Filter.CreatedById}"/>&nbsp;
+					<apex:outputField value="{!Filter.CreatedDate}"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem rendered="{!NOT(ISNULL(FilterId))}">
+				<apex:outputLabel value="{!$Label.FilterView_LABEL_FieldModifiedBy+':'}" />
+				<apex:outputPanel >
+					<apex:outputField value="{!Filter.LastModifiedById}"/>&nbsp;
+					<apex:outputField value="{!Filter.LastModifiedDate}"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+
+		<apex:pageBlockSection title="{!$Label.FilterView_LABEL_Step_2}" columns="1">
+			<apex:outputText value="{!$Label.FilterView_LABEL_FilterByOwner}" style="font-weight: bold" />
+			<apex:selectRadio value="{!FilterOwnership}" layout="pageDirection" >
+				<apex:selectOption itemValue="All" itemLabel="{!$Label.FilterView_LABEL_All + ' ' + FilterObjectDescribe.LabelPlural}" />
+				<apex:selectOption itemValue="My" itemLabel="{!$Label.FilterView_LABEL_My + ' ' + FilterObjectDescribe.LabelPlural}" />
+			</apex:selectRadio>
+
+			<apex:outputText value="" />
+
+			<apex:outputText value="{!$Label.FilterView_LABEL_FilterByFields}" style="font-weight: bold" />
+
+			<apex:variable var="seq" value="{!1}" />
+			<apex:dataTable value="{!FilterLines}" var="line" id="FilterLines" >
+				<apex:column >
+					<apex:outputPanel layout="block" style="margin: 7px 7px 1px 1px;"><apex:outputText value="{!TEXT(seq)+'.'}" /></apex:outputPanel>
+					<apex:variable var="seq" value="{!seq+1}" />
+				</apex:column>
+				<apex:column headerValue="{!$ObjectType.ts2__Filter_Line__c.Fields.ts2__Field__c.Label}">
+					<apex:selectList value="{!line.Field}" multiselect="false" size="1" style="margin: 3px;" onchange="FilterEditor.UpdateOperator(this);FilterEditor.SelectNotNone(this);" id="FieldControl" >
+						<apex:selectOptions value="{!FilterFieldOptions}" />
+					</apex:selectList>
+				</apex:column>
+				<apex:column headerValue="{!$ObjectType.ts2__Filter_Line__c.Fields.ts2__Operator__c.Label}">
+					<apex:selectList value="{!line.Operator}" multiselect="false" size="1" style="width: 126px; margin: 3px;" id="OperatorControl">
+						<apex:selectOption itemValue="" itemLabel="{!'--' + $Label.None + '--'}" />
+						<apex:selectOption itemValue="e" itemLabel="{!$Label.FilterView_LABEL_OperatorE}" />
+						<apex:selectOption itemValue="n" itemLabel="{!$Label.FilterView_LABEL_OperatorN}" />
+						<apex:selectOption itemValue="l" itemLabel="{!$Label.FilterView_LABEL_OperatorL}" />
+						<apex:selectOption itemValue="g" itemLabel="{!$Label.FilterView_LABEL_OperatorG}" />
+						<apex:selectOption itemValue="m" itemLabel="{!$Label.FilterView_LABEL_OperatorM}" />
+						<apex:selectOption itemValue="h" itemLabel="{!$Label.FilterView_LABEL_OperatorH}" />
+						<apex:selectOption itemValue="c" itemLabel="{!$Label.FilterView_LABEL_OperatorC}" />
+						<apex:selectOption itemValue="k" itemLabel="{!$Label.FilterView_LABEL_OperatorK}" />
+						<apex:selectOption itemValue="s" itemLabel="{!$Label.FilterView_LABEL_OperatorS}" />
+						<apex:selectOption itemValue="u" itemLabel="{!$Label.FilterView_LABEL_OperatorU}" />
+						<apex:selectOption itemValue="x" itemLabel="{!$Label.FilterView_LABEL_OperatorX}" />
+						<apex:selectOption itemValue="w" itemLabel="{!$Label.FilterView_LABEL_OperatorW}" />
+					</apex:selectList>
+				</apex:column>
+				<apex:column headerValue="{!$ObjectType.ts2__Filter_Line__c.Fields.ts2__Value__c.Label}" style="vertical-align:baseline;">
+					<apex:inputText value="{!line.Value}" style="margin: 3px;" id="FilterValue"/>
+					<br/>
+					<apex:outputPanel style="margin: 5px;" rendered="{!NOT(ISNULL(line.ErrorMessage))}">
+						<apex:outputText style="color:red; font-weight:bold;" value="{!$Label.FilterView_LABEL_Error}"/>&nbsp;<apex:outputText value="{!line.ErrorMessage}" style="color:red;" />
+					</apex:outputPanel>
+				</apex:column>
+				<apex:column style="vertical-align:baseline;">
+					<apex:outputPanel id="LookupIcon" style="display: none">
+						<apex:outputLink value="javascript:void(0)" onclick="openPickerWindow(this, '{!JSENCODE(FilterObjectDescribe.Name)}')">
+							<apex:image value="/s.gif" styleClass="lookupIcon" onmouseout="this.className='lookupIcon';" onmouseover="this.className='lookupIconOn';" />
+						</apex:outputLink>
+					</apex:outputPanel>
+				</apex:column>
+				<apex:column >
+					<apex:outputPanel layout="block" id="boolean_operator" style="margin: 3px;" rendered="{!seq <= 5}">
+						<apex:outputText value="{!$Label.FilterView_LABEL_And}" />
+					</apex:outputPanel>
+				</apex:column>
+			</apex:dataTable>
+
+			<apex:outputPanel layout="block" id="frowButtons" styleClass="addRemoveRowControl">
+				<apex:outputLink value="javascript:FilterEditor.addRow()" id="fAddRowLink"><apex:outputText value="{!$Label.FilterView_BTN_AddRow}" /></apex:outputLink><apex:outputPanel id="fAddRowLinkGreyed" styleClass="greyedLink"><apex:outputText value="{!$Label.FilterView_BTN_AddRow}" /></apex:outputPanel>&nbsp;|&nbsp;
+				<apex:outputLink value="javascript:FilterEditor.removeRow()" id="fRemoveRowLink"><apex:outputText value="{!$Label.FilterView_BTN_RemoveRow}" /></apex:outputLink><apex:outputPanel id="fRemoveRowLinkGreyed" styleClass="greyedLink"><apex:outputText value="{!$Label.FilterView_BTN_RemoveRow}" /></apex:outputPanel>
+			</apex:outputPanel>
+
+			<apex:outputPanel layout="block" styleClass="booleanLogicControl">
+				<apex:outputPanel layout="block" style="margin-bottom: 6px;" >
+					<apex:outputLink value="javascript:FilterEditor.setBooleanMode(false)" id="bool_filter_clear"><apex:outputText value="Clear Filter Logic" /></apex:outputLink><apex:outputLink value="javascript:FilterEditor.setBooleanMode(true)" id="bool_filter_add"><apex:outputText value="Add Filter Logic" /></apex:outputLink><br/>
+				</apex:outputPanel>
+				<apex:outputPanel id="boolean_filter_span">
+					<apex:outputLabel for="boolean_filter" value="{!$Label.FilterView_LABEL_FilterLogic}" /><br/>
+					<apex:inputField id="boolean_filter" value="{!Filter.ts2__Boolean_Logic__c}" style="width: 530px;" /><br/>
+					<apex:image value="/img/report_boolean_filter.gif" width="533" height="211" title="{!$Label.FilterView_LABEL_BooleanFiltersHelp}" alt="{!$Label.FilterView_LABEL_BooleanFiltersHelp}" /><br/>
+				</apex:outputPanel>
+			</apex:outputPanel>
+		</apex:pageBlockSection>
+
+		<apex:pageBlockSection title="{!$Label.FilterView_LABEL_Step_3}" columns="1" rendered="{!IsMyOwnFilter}">
+			<apex:selectRadio value="{!FilterVisibility}" layout="pageDirection" >
+				<apex:selectOption itemValue="Private" itemLabel="{!$Label.FilterView_LABEL_VisibleUser}" />
+				<apex:selectOption itemValue="Public" itemLabel="{!$Label.FilterView_LABEL_VisibleAll}" />
+			</apex:selectRadio>
+		</apex:pageBlockSection>
+
+	</apex:pageBlock>
+
+</apex:form>
+
+<script>
+	jQuery.noConflict();
+	var Field2Type = {!FilterFieldTypeMapJSON};
+	var FilterEditor = new FilterEditorInstance("FilterEditor");
+	jQuery(document).ready(function() {
+		gfxInit();
+	});
+	function gfxInit() {
+		a1=new Image; a1.src="{!URLFOR($Resource.stcode, 'res/img/spinner.gif')}";
+		a2=new Image; a2.src="/img/loading.gif";
+		a3=new Image; a3.src="/img/func_icons/util/lookup20.gif";
+	}
+
+	function openPickerWindow(sender, objectName) {
+		var tr = jQuery(sender).parent().parent().parent();
+		var fieldName = tr.find("select[id$=FieldControl] option:selected").attr("value");
+		var valueElement = tr.find("input[id$=FilterValue]").get(0);
+		var pageURL = "{!$Page.s_UserListNew}";
+		pageURL = (typeof(pageURL)=='string') ? pageURL : "/apex/s_UserListNew";
+		var url = pageURL + "?o=" + objectName + "&f=" + fieldName + "&e=" + valueElement.id;
+		var features = 'directories=no,menubar=no,titlebar=no,toolbar=no,scrollbars=yes,width=620,height=430';
+		win = window.open(url, '', features);
+	}
+	function setField(fieldName) {
+		LoadingElementShow(jQuery("[id$=pbSendEmail]").find("div.pbBody").get(0), '{!JSENCODE($Label.Candidates_LABEL_Loading)}');
+		SelectTemplateAction(templateId);
+	}
+</script>
+
+</apex:page>

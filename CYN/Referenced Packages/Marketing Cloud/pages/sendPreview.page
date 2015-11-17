@@ -1,0 +1,746 @@
+<apex:page controller="et4ae5.phoenixSendControl"
+    tabStyle="ExactTargetPhoenix__tab">
+    <!--
+    <apex:stylesheet value="https://imh.s1.exacttarget.com/FuelUX/css/fuel-all.css" />
+    <apex:stylesheet value="https://imh.s1.exacttarget.com/FuelUX/css/ie8.css" />
+    <apex:stylesheet value="https://imh.s1.exacttarget.com/xpresscore/css/styles.css" />
+    <div id="previewSendControl" style="display: none;"><apex:sectionHeader title="Send Preview - {!dspEmailName}" />
+    <div id="subscriberPreviewLoader"></div>
+    <div id="subscriberPreviewContainer">
+    <div id="subscriberPreviewNotification"></div>
+    <div id="subscriberPreviewUA"></div>
+    <div id="selectSubscriberRegion">
+    <div class="subscriber-preview-section" id="selectSubscriber">
+    <table class="subscriber-selection-container">
+        <tr id="subscriber-selection-container-row" />
+    </table>
+    <div id="emailTypeSelector"></div>
+    </div>
+    <div
+        class="subscriber-preview-section fuel-editor-canvas-layout modal-wrap"
+        style="width: 85%; margin: 5px auto; text-align: center;"
+        id="subscriberPreviewImageContainer"><iframe
+        id="previewHTMLIframe" frameborder="0"
+        style="visibility: hidden; overflow-y: auto; height: 450px; width: 920px;">
+    </iframe></div>
+    <div class="subscriber-preview-section fuel-block"
+        id="subscriberPreviewTextTrayContainer" /></div>
+    </div>
+    </div>
+
+    <script type="text/javascript"
+        src="https://app.s1.qa1.exacttarget.com/FuelUX/js/fuel-loader.js"></script>
+    <script type="text/javascript" src="../../soap/ajax/27.0/connection.js"></script>
+    <script type="text/javascript">
+        var base64 = {};
+        base64.PADCHAR = '=';
+        base64.ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+        
+        base64.makeDOMException = function() {
+            // sadly in FF,Safari,Chrome you can't make a DOMException
+            var e, tmp;
+        
+            try {
+                return new DOMException(DOMException.INVALID_CHARACTER_ERR);
+            } catch (tmp) {
+                // not available, just passback a duck-typed equiv
+                // https://developer.mozilla.org/en/Core_JavaScript_1.5_Reference/Global_Objects/Error
+                // https://developer.mozilla.org/en/Core_JavaScript_1.5_Reference/Global_Objects/Error/prototype
+                var ex = new Error("DOM Exception 5");
+        
+                // ex.number and ex.description is IE-specific.
+                ex.code = ex.number = 5;
+                ex.name = ex.description = "INVALID_CHARACTER_ERR";
+        
+                // Safari/Chrome output format
+                ex.toString = function() { return 'Error: ' + ex.name + ': ' + ex.message; };
+                return ex;
+            }
+        }
+        
+        base64.getbyte64 = function(s,i) {
+            // This is oddly fast, except on Chrome/V8.
+            //  Minimal or no improvement in performance by using a
+            //   object with properties mapping chars to value (eg. 'A': 0)
+            var idx = base64.ALPHA.indexOf(s.charAt(i));
+            if (idx === -1) {
+                throw base64.makeDOMException();
+            }
+            return idx;
+        }
+        
+        base64.decode = function(s) {
+            // convert to string
+            s = '' + s;
+            var getbyte64 = base64.getbyte64;
+            var pads, i, b10;
+            var imax = s.length
+            if (imax === 0) {
+                return s;
+            }
+        
+            if (imax % 4 !== 0) {
+                throw base64.makeDOMException();
+            }
+        
+            pads = 0
+            if (s.charAt(imax - 1) === base64.PADCHAR) {
+                pads = 1;
+                if (s.charAt(imax - 2) === base64.PADCHAR) {
+                    pads = 2;
+                }
+                // either way, we want to ignore this last block
+                imax -= 4;
+            }
+        
+            var x = [];
+            for (i = 0; i < imax; i += 4) {
+                b10 = (getbyte64(s,i) << 18) | (getbyte64(s,i+1) << 12) |
+                    (getbyte64(s,i+2) << 6) | getbyte64(s,i+3);
+                x.push(String.fromCharCode(b10 >> 16, (b10 >> 8) & 0xff, b10 & 0xff));
+            }
+        
+            switch (pads) {
+            case 1:
+                b10 = (getbyte64(s,i) << 18) | (getbyte64(s,i+1) << 12) | (getbyte64(s,i+2) << 6);
+                x.push(String.fromCharCode(b10 >> 16, (b10 >> 8) & 0xff));
+                break;
+            case 2:
+                b10 = (getbyte64(s,i) << 18) | (getbyte64(s,i+1) << 12);
+                x.push(String.fromCharCode(b10 >> 16));
+                break;
+            }
+            return x.join('');
+        }
+        
+        base64.getbyte = function(s,i) {
+            var x = s.charCodeAt(i);
+            if (x > 255) {
+                throw base64.makeDOMException();
+            }
+            return x;
+        }
+        
+        base64.encode = function(s) {
+            if (arguments.length !== 1) {
+                throw new SyntaxError("Not enough arguments");
+            }
+            var padchar = base64.PADCHAR;
+            var alpha   = base64.ALPHA;
+            var getbyte = base64.getbyte;
+        
+            var i, b10;
+            var x = [];
+        
+            // convert to string
+            s = '' + s;
+        
+            var imax = s.length - s.length % 3;
+        
+            if (s.length === 0) {
+                return s;
+            }
+            for (i = 0; i < imax; i += 3) {
+                b10 = (getbyte(s,i) << 16) | (getbyte(s,i+1) << 8) | getbyte(s,i+2);
+                x.push(alpha.charAt(b10 >> 18));
+                x.push(alpha.charAt((b10 >> 12) & 0x3F));
+                x.push(alpha.charAt((b10 >> 6) & 0x3f));
+                x.push(alpha.charAt(b10 & 0x3f));
+            }
+            switch (s.length - imax) {
+            case 1:
+                b10 = getbyte(s,i) << 16;
+                x.push(alpha.charAt(b10 >> 18) + alpha.charAt((b10 >> 12) & 0x3F) +
+                       padchar + padchar);
+                break;
+            case 2:
+                b10 = (getbyte(s,i) << 16) | (getbyte(s,i+1) << 8);
+                x.push(alpha.charAt(b10 >> 18) + alpha.charAt((b10 >> 12) & 0x3F) +
+                       alpha.charAt((b10 >> 6) & 0x3f) + padchar);
+                break;
+            }
+            return x.join('');
+        }
+    
+        require([
+        'fuel-jquery',
+        'fuel-controls',
+        'button'
+        ],
+        
+        function() {
+            subscriberPreview = (function() {
+                var pub = {},
+                    // Private properties
+                    // Defined by the environment's App Center app
+                    // QA2S1
+                    //_clientId = 'geavv2ncce5w3bzgwvc7vj6s',
+                    //_clientSecret = 'ntxbHHuuzdtdEQExPnT7VPSk',
+                    //_appId = '7472e5a0-6c03-499d-a37a-0843e5f92095',
+                    
+                    // QA1S1
+                    //_clientId = 'mrvftgqk7eae9e65s4namb7m',
+                    //_clientSecret = 'EqvjgVvQWgsapeSUMbRjF7CE',
+                    //_appId = '4ecb7b93-1ded-4319-8e9d-991ca63025ae',
+                    
+                    // PROD
+                    _clientId = 'x3tmhb2dgz33gsvfwr3hy868',
+                    _clientSecret = 'aAvqCVBQUW6KnHKwwXgY6FZa',
+                    _appId = '4a994c2d-34e0-427b-be36-4b8f0e29ed4e',
+            
+                    // Locals
+                    _deGuid = '',
+                    _emailId = 0,
+                    _objectId = '',
+                    _objectType = '',
+                    _token = '',
+                    _curSub = {},
+                    _curIdx = 0,
+                    _subs = [],
+                    _maxSubs = 250,
+                    _sfNamespace = 'et4ae5',
+                    _isInitialPreview = true,
+    
+                    // Controls
+                    _control = {},
+                    _iframe = {},
+                    _notifier = {},
+                    _emailTypeSelector = {},
+                    _subSelector = {},
+                    _previewLoadingIcon = {},
+                    
+                    _allParamsValid = function() {
+                        var invalidParam = '';
+                        var detailedMsg = '';
+                        if(typeof _emailId == 'undefined' || _emailId <= 0) {
+                            invalidParam = 'Email ID';
+                        }
+                        else if(typeof _objectId == 'undefined' || _objectId.length == 0) {
+                            invalidParam = 'Object ID';
+                        }
+                        else if(!typeof _objectType == 'undefined' || _objectType.length == 0 || $.inArray(_objectType , ['contact', 'lead', 'campaign', 'report']) == -1) {
+                            invalidParam = 'Object Type';
+                            detailedMsg = 'Supported types are Contact, Lead, Campaign & Report.';
+                        }
+                        else if(typeof _token == 'undefined' || _token.length == 0) {
+                            invalidParam = 'Token';
+                        }
+                        
+                        if(invalidParam.length > 0) {
+                            _showErrorMessage('Invalid ' + invalidParam + ' provided. ' + detailedMsg);
+                            return false;
+                        }
+                        else {
+                            return true;
+                        }
+                    },
+    
+                    _checkSyncSubscribers = function(syncResponse) {
+                        // Requires encoded sync subscriber id
+                        Fuel.ajax({
+                            url: Fuel.endpoints.Rest + 'beta/integration/subscriber/synchronization/' + syncResponse.id
+                            , dataType: "json"
+                            , contentType: "application/json"
+                            , type: "GET"
+                            , cache: false
+                            , success: function(response, status, xhr){
+                                if(response.syncStatus.toLowerCase() == 'errored') {
+                                    _showMessage('error', 'Error:', ' Unable to retrieve synchronize subscriber status.');
+                                }
+                                else if(response.syncStatus.toLowerCase() != 'completed'){
+                                    setTimeout(function(){ _checkSyncSubscribers(syncResponse) }, 1000);
+                                }
+                                else {
+                                    _deGuid = _decodeGuid(response.customObject.objectId);
+                                    _retrieveSubscribers(response.customObject.objectId);
+                                }
+                            }
+                            , error: function(xhr, status, error) {
+                                _showErrorMessage('Unable to retrieve synchronize subscriber status.');
+                                _toggleSyncLoadingIcon('hide');
+                            }
+                        });
+                    },
+    
+                    _clearPreview = function() {
+                        _iframe.contents().find('body').html('');
+                        _iframe.css({"height": "450px", "width": "920px"});
+                    },
+    
+                    _decodeGuid = function (guid) {
+                        // Decodes a REST encoded GUID
+                        var result = base64.decode(guid);
+                        var parts = result.split(':');
+                        var value = parts[0] + '==';
+                        value = value.replace(/_/g, '/').replace(/-/g, '+');
+                        result = base64.decode(value);
+    
+                        var data = result.split("");
+                        var copy = data.slice(0);
+                        data[0] = copy[3];
+                        data[1] = copy[2];
+                        data[2] = copy[1];
+                        data[3] = copy[0];
+                        data[4] = copy[5];
+                        data[5] = copy[4];
+                        data[6] = copy[7];
+                        data[7] = copy[6];
+    
+                        var guid = [];
+                        for (var i = 0; i < data.length; i++) {
+                            if (i == 4 || i == 6 || i == 8 || i == 10) guid.push("-");
+                            var b = data[i].charCodeAt(0).toString(16);
+                            if(b.length == 1) b = "0" + b;
+                            guid.push(b);
+                        }
+                        return guid.join("");
+                    },
+                    
+                    _determineEmailType = function(htmlBody, textBody, selectedItem) {
+                        if(htmlBody == textBody && htmlBody.search('</body>') == -1) {
+                            _emailTypeSelector.fuelButtonSet('selectButton', 'Text');
+                            _emailTypeSelector.fuelButtonSet('setDisabled');
+                            selectedItem.value = 'text';
+
+                            _showMessage('informative', 'Note:', ' HTML preview is not available for Text Only emails.', $('#subscriberPreviewUA'));
+                        }
+                        else {
+                            _showMessage('informative', 'Note:', ' Test emails will be sent in HTML format.', $('#subscriberPreviewUA'));
+                        }
+                    },
+    
+                    _emailTypeSelected = function(evt, item) {
+                        _clearPreview();
+                        
+                        if(item.value == 'html') {
+                            _iframe.contents().find('body').html(_curSub.htmlBody);
+                        }
+                        else if(item.value == 'text') {
+                            _iframe.contents().find('body').html('<pre>' + _curSub.textBody + '</pre>');
+                        }
+                        
+                        _resizeIframe();
+                    },
+    
+                    _getPreview = function(options) {
+                        // Get preview
+                        Fuel.ajax($.extend({
+                            url: Fuel.endpoints.FuelAPI + 'guide/v1/emails/' + _emailId + '/dataExtension/' + _deGuid+ '/contacts/key:' + _curSub.subscriberKey + '/preview'
+                            , dataType: "json"
+                            , type: "POST"
+                            , cache: false
+                            , useFuel2Token: true
+                        }, options));
+                    },
+    
+                    _hideResults = function(e) {
+                        var qry = $(e.target);
+                        if(!qry.closest('#subScroller').length && !qry.closest('#subScrollerResults').length) {
+                            $('#subScrollerResults').hide();
+                        }
+                    },
+            
+                    _init = function () {
+                        sforce.connection.sessionId = '{!GETSESSIONID()}';
+                        
+                        _emailId = "{!dspEmailId}";
+                        _objectId = "{!dspObjectId}";
+                        _objectType = "{!dspObjectType}";
+                        _token = "{!dspToken}";
+                            
+                        _control = $('#previewSendControl');
+                        _notifier = $('#subscriberPreviewNotification');
+                        _iframe = $('#previewHTMLIframe');
+                        _emailTypeSelector = $('#emailTypeSelector');
+                        _previewLoadingIcon = $('#subscriberPreviewImageContainer');
+                        
+                        if(_allParamsValid()) {
+                            _toggleSyncLoadingIcon('show');
+                            
+                            _initFuel();
+                            _retrieveAccessToken({
+                                success: function(response) {
+                                    Fuel.oAuth.setTokens(response);
+                                    _syncSubscribers();
+                                    // *** DEBUGGING ONLY *** //
+                                    //var id = 'N3N4ei1ISDNFZUsyTWhpcEJXVFk0QTo0NTow';
+                                    ////var id = 'Tkl0dFA0VDlFZUsyTWhpcEJXVFk0QTo0NTow';
+                                    //_deGuid = _decodeGuid(id);
+                                    //_retrieveSubscribers(id);
+                                    // ********************** //
+                                }
+                                , error: function(xhr, status, error) {
+                                    _showErrorMessage('Authorization failed.');
+                                    _toggleSyncLoadingIcon('hide');
+                                }
+                            });
+                        }
+                    },
+    
+                    _initFuel = function() {
+                        var restFieldName = _sfNamespace + '__Root_Rest_API_URL__c';
+                        var configObjName = _sfNamespace  + '__Configuration__c';
+                        var config = sforce.connection.query('SELECT ' + restFieldName + ' FROM ' + configObjName + ' LIMIT 1');
+                        var url = config.records[restFieldName];
+                        
+                        url = url[url.length - 1] != '/' ? url + '/' : url;
+                        var baseUrl = url.replace('rest', 'imh');
+                        var fuelApi = 'https://www.exacttargetapis.com/';
+                        var fuelAuthApi = 'https://auth.exacttargetapis.com/';
+                        if(baseUrl.indexOf('qa1') > 0) {
+                            fuelApi = 'https://qa.exacttargetapis.com/';
+                            fuelAuthApi = 'https://auth-qa1s1.exacttargetapis.com/';
+                        }
+                        else if(baseUrl.indexOf('qa2') > 0) {
+                            fuelApi = 'https://qa.exacttargetapis.com/';
+                            fuelAuthApi = 'https://auth-qa2s1.exacttargetapis.com/';
+                        }
+                        
+                        var endpoints = {
+                            FuelUX: baseUrl + 'FuelUX/1.8/'
+                            , Platform: baseUrl
+                            , Rest: baseUrl + 'rest/'
+                            , TokenRefresh: baseUrl + 'XpressCore/' + 'utilities/serverSide/update-token.html'
+                            , XpressCore: baseUrl + 'XpressCore/'
+                            , FuelAPI: fuelApi
+                            , FuelAuthAPI: fuelAuthApi
+                        };
+    
+                        Fuel.init({ 
+                            appId: _appId
+                            //, TOKENS: tokens
+                            , endpoints: endpoints
+                        });
+                    },
+    
+                    _nextSubscriber = function() {
+                        if(_subs.length != 1) {
+                            if(_subs.length - 1 != _curIdx) {
+                                _curIdx++;
+                            }
+                            else {
+                                _curIdx = 0;
+                            }
+    
+                            _selectSubscriber();
+                        }
+                    },
+    
+                    _previousSubscriber = function() {
+                        if(_subs.length != 1) {
+                            if(_curIdx != 0) {
+                                _curIdx--;
+                            }
+                            else {
+                                _curIdx = _subs.length - 1;
+                            }
+    
+                            _selectSubscriber();
+                        }
+                    },
+    
+                    _populateSubscribers = function(response) {
+                        try {     
+                            // Render the HTML before we populate the hidden results DIV
+                            _render();
+        
+                            var results = $('#subScrollerResults'), result;
+                            for(i in response.entry){
+                                // *** DEBUGGING ONLY *** //
+                                //var subKeyField = $.grep(response.entry[i].customObjectData, function(e){return e.name.toLowerCase() == "whoid";});
+                                // ********************** //
+                                var subKeyField = $.grep(response.entry[i].customObjectData, function(e){return e.name.toLowerCase() == "subscriberkey";});
+                                var emailField = $.grep(response.entry[i].customObjectData, function(e){return e.name.toLowerCase() == "emailaddress";});
+                                var emailField2 = $.grep(response.entry[i].customObjectData, function(e){return e.name.toLowerCase() == "emailaddr";});
+                                
+                                if(subKeyField.length > 0){
+                                    response.entry[i].subscriberKey = subKeyField[0].value;
+                                }
+                                
+                                if(emailField.length > 0){
+                                    response.entry[i].emailAddress = emailField[0].value;
+                                }
+                                else if(emailField2.length > 0){
+                                    response.entry[i].emailAddress = emailField2[0].value;
+                                }
+                                
+                                _subs.push(response.entry[i]);
+                                result = $('<div id="' + i +'"></div>').html(response.entry[i].emailAddress);
+                                result.click(function(){
+                                    if(_curIdx != this.id) {
+                                        _curIdx = this.id;
+                                        _selectSubscriber();
+                                    }
+                                    results.hide();
+                                });
+                                
+                                result.mouseover(function() {
+                                    $(this).css("background-color", "#98C9F4"); 
+                                });
+                                
+                                result.mouseout(function() {
+                                    $(this).css("background-color", "#FFFFFF");
+                                });
+                                
+                                results.append(result);
+                            }
+        
+                            _toggleSyncLoadingIcon('hide');
+        
+                            if(_subs.length) {
+                                _curIdx = 0;
+                                _selectSubscriber();
+                            } else {
+                                results.append($('<div>No data found.</div>')).show();
+                                _emailTypeSelector.fuelButtonSet('setDisabled');
+                                //_showMessage('informative', 'No subscriber data found.', ' ' + _objectType.charAt(0).toUpperCase() + _objectType.slice(1) + ' may have opted out.', $('#subscriberPreviewUA'));
+                                _showMessage('informative', 'No subscriber data found.', ' Subscriber(s) may have opted out.', $('#subscriberPreviewUA'));
+                            }
+                        }
+                        catch(e) {
+                            _showErrorMessage('Unable to populate subscriber data - ' + e.message);
+                            _toggleSyncLoadingIcon('hide');
+                        }
+                    },
+            
+                    _render = function() {
+                        _control.click(_hideResults);
+    
+                        $('#subscriber-selection-container-row').append('<th><span class="fuel-label">Generate Email Based on Subscriber:</span>&nbsp;</th><td><button id="prevBtn" class="fuel-button-small">&lt;</button></td><td><div id="subScroller"> </div><div id="subScrollerResults" style="overflow-y: scroll;overflow-x:hidden;z-index: 100;background-color:#fff;position:absolute;width:298px;height:150px;border:1px solid black;display:none;"> </div></td><td><button id="nextBtn" class="fuel-button-small">&gt;</button></td>');
+                        $('#subscriberPreviewTextTrayContainer').append('<span id="subscriberPreviewTestEmails" class="fuel-label">Send Test Email to:</span><div class="subscriber-preview-text-tray" id="subscriberPreviewTextTray"><div id="subscriberPreviewEmails" style="width:98%;margin:inherited inherited 10px inherited;"></div></div>')
+    
+                        _subSelector = $('#subScroller');
+                        _subSelector.fuelInput({label: '', placeholder: 'Email address', width: 300}).click(_showResults);
+                        _subSelector.find('input').css('width', '270px');
+                        $('div .fuel-input-wrap').css('margin-bottom', '0px')
+                        $('#subscriberPreviewEmails').fuelInput({label:'', placeholder: 'Email address', width:600});
+                        // Remove the max length, then limit the number of recipients of we wish in _sendTestEmail
+                        $('#subscriberPreviewEmails').find('input').removeAttr('maxlength')
+    
+                        var emailTypeButtons = [{ "name": "HTML", "value": "html", "selected": true}, { "name": "Text", "value": "text" }];
+                        _emailTypeSelector.fuelButtonSet({ items: emailTypeButtons, onitemselected: _emailTypeSelected });
+                        
+                        $('#subscriberPreviewTextTrayContainer').css('visibility', 'visible');
+                        _iframe.css('visibility', 'visible');
+    
+                        $('div #subscriberPreviewEmails').append('<button type="button" style="display:block;margin-top:10px;" id="testSend" class="fuel-button-primary">Test send</button>');
+    
+                        $('div .subscriber-preview-section').css('padding-bottom', '50px');
+    
+                        $('#testSend').click(_sendTestEmail);
+                        $('#prevBtn').click(_previousSubscriber);
+                        $('#nextBtn').click(_nextSubscriber);
+                    },
+                    
+                    _resizeIframe = function() {
+                        //_iframe.css('height', _iframe.contents().height() + 'px');
+                        var width = _iframe.contents().width() + 50;
+                        if(width > 920) {
+                            width = 920;
+                        }
+                        
+                        //var height= _iframe.contents().height() + 50;
+                        //if(height> 800) {
+                        //    height= 800;
+                        //}
+                        
+                        //_iframe.css({"width": width + "px", "height": height + "px"});
+                        _iframe.css({"width": width + "px"});
+                    },
+    
+                    _retrieveAccessToken = function(options) {
+                        // Get access token
+                        Fuel.ajax($.extend({
+                            url: Fuel.endpoints.FuelAuthAPI + 'v1/requestToken?legacy=1'
+                            , dataType: "json"
+                            , contentType: "application/json"
+                            , type: "POST"
+                            , cache: false
+                            , data: JSON.stringify({"clientId": _clientId, "clientSecret": _clientSecret, "scope": "cas:" + _token})
+                        }, options));
+                    },
+    
+                    _retrieveSubscribers = function(encodedDeGuid) {
+                        // Requires an encoded data extension id
+                        Fuel.ajax({
+                            url: Fuel.endpoints.Rest + 'beta/object/' + encodedDeGuid + '/data/?$sort=subscriberKey&$top=' + _maxSubs 
+                            , dataType: "json"
+                            , type: "GET"
+                            , cache: false
+                            , success: function (response, textStatus, xhr) {
+                                _populateSubscribers(response);
+                            }
+                            , error: function(data) {
+                                _showErrorMessage('Unable to retrieve subscriber data.');
+                                _toggleSyncLoadingIcon('hide');
+                            }
+                        });
+                    },
+    
+                    _selectSubscriber = function() {
+                        _togglePreviewLoadingIcon('show');
+                        _curSub = _subs[_curIdx];
+    
+                        // TODO: Remove cache from subs to prevent memory issues
+    
+                        _subSelector.fuelInput('setValue', _curSub.emailAddress);
+    
+                        var selectedItems = _emailTypeSelector.fuelButtonSet('getSelectedItems')
+                        var selectedItem = selectedItems.length > 0 ? selectedItems[0] : '';
+                        if (selectedItem.value == 'html' && _curSub.htmlBody) {
+                            _iframe.contents().find('body').html(_curSub.htmlBody);
+                            _togglePreviewLoadingIcon('hide');
+                        }
+                        else if (selectedItem.value == 'text' && _curSub.textBody) {
+                            _iframe.contents().find('body').html('<pre>' + _curSub.textBody + '</pre>');
+                            _togglePreviewLoadingIcon('hide');
+                        }
+                        else {
+                            _getPreview({
+                                error: function(data) {
+                                    _showMessage('error', 'Error:', ' Unable to retrieve subscriber send preview.');
+                                    _clearPreview();
+                                    _emailTypeSelector.fuelButtonSet('setDisabled');
+                                    _togglePreviewLoadingIcon('hide');
+                                },
+                                success: function(data) {
+                                    var htmlView = $.grep(data.message.views, function(e){return e.contentType.toLowerCase() == 'vnd.exacttarget.message.email.htmlbody';});
+                                    var textView = $.grep(data.message.views, function(e){return e.contentType.toLowerCase() == 'vnd.exacttarget.message.email.textbody';});
+    
+                                    var htmlBody = '';
+                                    if(htmlView.length > 0){
+                                        htmlBody = htmlView[0].content;
+                                    }
+                                    
+                                    var textBody = '';
+                                    if(textView.length > 0){
+                                        textBody = textView[0].content;
+                                    }
+    
+                                    _curSub.htmlBody = htmlBody;
+                                    _curSub.textBody = textBody;
+                                    
+                                    if(_isInitialPreview) {
+                                        _determineEmailType(htmlBody, textBody, selectedItem);
+                                        _resizeIframe();
+                                        
+                                        _isInitialPreview = false;
+                                    }
+    
+                                    if(selectedItem.value == 'html') {
+                                        _iframe.contents().find('body').html(htmlBody);
+                                    }
+                                    else if (selectedItem.value == 'text') {
+                                        _iframe.contents().find('body').html('<pre>' + textBody + '</pre>');
+                                    }
+                                    
+                                    _togglePreviewLoadingIcon('hide');
+                                }
+                            });
+                        }
+                    },
+                    
+                    _showErrorMessage = function(msg) {
+                        _showMessage('error', 'Error: ', msg);
+                    },
+    
+                    _showMessage = function(type, boldMsgPortion, msg, el) {
+                        var element = el || _notifier;
+                        element.fuelNotification();
+                        element.fuelNotification('show', type, boldMsgPortion, msg);
+                    },
+    
+                    _showResults = function() {
+                        if($('#subScrollerResults div').length) {
+                            $('#subScrollerResults').show();
+                        }
+                    },
+    
+                    _syncSubscribers = function() {
+                        var syncRequest = '';
+                        if (_objectType == 'campaign') {
+                            syncRequest = {"isOneTime":true, "source": { "salesForce": { "version":"5.0", "sourceList": { "campaigns": [{ "campaignId": _objectId  }] }, "properties": [ { "name":"SubscriberRetentionPeriod", "value":"1" }]} }};
+                        }
+                        else if (_objectType == 'report') {
+                            syncRequest = {"isOneTime":true, "source": { "salesForce": { "version":"5.0", "sourceList": { "reports": [{ "reportId": _objectId }] }, "properties": [ { "name":"SubscriberRetentionPeriod", "value":"1" }]} }};
+                        }
+                        else {
+                            syncRequest = {"isOneTime":true, "source": { "salesForce": { "version":"5.0", "sourceList": { "single": { "objectType": _objectType, "objectId": _objectId } }, "properties": [ { "name":"SubscriberRetentionPeriod", "value":"1" }]} }};
+                        }
+                        Fuel.ajax({
+                            url: Fuel.endpoints.Rest + 'beta/integration/subscriber/synchronization'
+                            , dataType: "json"
+                            , contentType: "application/json"
+                            , type: "POST"
+                            , cache: false
+                            , data: JSON.stringify(syncRequest )
+                            , success: _checkSyncSubscribers
+                            , error: function(xhr, status, error) {
+                                _showErrorMessage('Synchronize subscriber request failed.');
+                                _toggleSyncLoadingIcon('hide');
+                            }
+                        });
+                    },
+    
+                    _sendTestEmail = function() {
+                        // Remove whitespace and replace commas with semi-colons for delimiter
+                        var testSendEmails = $('#subscriberPreviewEmails').find('input').val().replace(/\s+/g, '').replace(/,/g, ';').split(';');
+                        if(testSendEmails.length > 0 && testSendEmails[0].toLowerCase() != 'email address') {
+                            var sendJson = {"emailID": _emailId, "fromName": testSendEmails[0], "fromEmail": testSendEmails[0], "dataSource": { "contact": "key:" + _curSub.subscriberKey, "type": "DataExtension", "id": _deGuid},"recipients": testSendEmails};
+    
+                            Fuel.ajax({
+                                url: Fuel.endpoints.FuelAPI + 'guide/v1/emails/preview/send'
+                                , dataType: "json"
+                                , contentType: "application/json"
+                                , type: "POST"
+                                , cache: false
+                                , useFuel2Token: true
+                                , data: JSON.stringify(sendJson)
+                                , success: function(response, textStatus, xhr) {
+                                    _showMessage('information', 'Test email sent.', ' Email sent to ' + testSendEmails.join(', ').replace(/, (?=[^,]*$)/, ' & ') + '.');
+                                }
+                                , error: function(xhr, status, error) {
+                                    _showErrorMessage('Test send failed.');
+                                }
+                            });
+                        }
+                        else {
+                            _showErrorMessage('Specify at least one email address for the test send.');
+                        }
+                    },
+                    
+                    _togglePreviewLoadingIcon = function(state) {
+                        switch(state) {
+                            case "hide":
+                                $('#subscriberPreviewImageContainer').fuelLoadingIconOnly('destroy');
+                                break;
+                            case "show":
+                                $('#subscriberPreviewImageContainer').fuelLoadingIconOnly();
+                                break;
+                        }
+                    },
+                    
+                    _toggleSyncLoadingIcon = function(state) {
+                        switch(state) {
+                            case "hide":
+                                _control.fuelLoader('destroy');
+                                break;
+                            case "show":
+                                _control.fuelLoader({ annotated: "Sending data to ExactTarget..." });
+                                $('.fuel-loader-cell').css('vertical-align', 'middle');
+                                $('.fuel-loader-node').css('width', '95px');
+                                break;
+                        }
+                    };
+            
+                    // Expose public methods
+                    return {
+                        init: _init
+                    };
+            }());
+            
+            subscriberPreview.init();
+        });
+    </script>
+    -->
+</apex:page>

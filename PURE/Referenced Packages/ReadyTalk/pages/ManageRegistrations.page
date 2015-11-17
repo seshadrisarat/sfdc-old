@@ -1,0 +1,306 @@
+<apex:page standardController="RT1__ReadyTalkMeeting__c" extensions="RT1.ManageRegistrationsController" tabStyle="Readytalk__tab">
+<apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js" />
+<apex:sectionHeader title="{!RT1__ReadyTalkMeeting__c.Name}" 
+    subtitle="Match Meeting Member to Salesforce Record"/>
+<style type="text/css">
+.breadcrumb {
+    margin: 10px 0px;   
+}
+.breadcrumb a {
+    color: #015BA7;
+    text-decoration: none;
+    font-family: Verdana, Geneva, sans-serif;
+    font-size: 90%;
+}
+
+.searching{
+	background-color: #E3F3FF;
+}
+
+</style>
+<script type="text/javascript">
+	var ajaxloader_green = '{!URLFOR($Resource.meetingsr,'ajaxloader_green.gif')}';
+	$(function(){
+		var loader = "<img class=\'dataloader\' src=\'"+ajaxloader_green+"'' style=\'display:none;float:right;margin-right:10px;\' />"; 
+		$('.mainTitle').parent().prepend(loader);
+	});
+
+	function searchHighlight(searchingId){
+		$('.dataRow').removeClass('searching');
+		$('#'+searchingId).parents('tr:first').addClass('searching');
+	}
+	
+	function refreshLeadsContacts(){
+		$('.dataloader').show();
+		refreshLeadsContactsAction($("[id$='pageSizeSelect']").val(),$("[id$='pageSelect']").val());
+	}
+	
+	function pageNext(){
+		$('.dataloader').show();
+		var page = parseInt($("[id$='pageSelect']").val()) + 1;
+		refreshLeadsContactsAction($("[id$='pageSizeSelect']").val(),page);
+	}
+	
+	function pagePrevious(){
+		var page = parseInt($("[id$='pageSelect']").val()) - 1;
+		if(page > 0){
+			$('.dataloader').show();
+			refreshLeadsContactsAction($("[id$='pageSizeSelect']").val(),page);
+		}
+	}
+	
+	function modifiedSearch(){
+		$('.dataloader').show();
+		var searchName = '';
+		var searchFirstName = '';
+		var searchLastName = '';
+		if($("#search-firstname-active").is(":checked") && $("#search-lastname-active").is(":checked")){
+			searchName = $("[id$='searchFirstName']").val() + ' ' + $("[id$='searchLastName']").val();
+		} else {
+			searchFirstName = ($("#search-firstname-active").is(":checked")) ? $("[id$='searchFirstName']").val() : '';
+			searchLastName = ($("#search-lastname-active").is(":checked")) ? $("[id$='searchLastName']").val() : '';
+		}
+		var searchEmail = ($("#search-email-active").is(":checked")) ? $("[id$='searchEmail']").val() : '';
+		var searchPhone = ($("#search-phone-active").is(":checked")) ? $("[id$='searchPhone']").val() : '';
+		var searchCompany = ($("#search-company-active").is(":checked")) ? $("[id$='searchCompany']").val() : '';
+		if(searchName == '' && searchFirstName == '' && searchLastName == '' && searchEmail == '' && searchPhone == '' && searchCompany == ''){
+			alert('Please enter at least one search term.');
+		}else{
+		modifySearchTerms(true, searchFirstName, searchLastName, searchName, searchEmail, searchPhone, searchCompany);
+		}
+	}
+	
+	function hashPage(){
+		location.hash = '#'+$("[id$='massCreateLeads']").attr('id');
+	}
+	
+	function hashSearch(){
+		location.hash = '#'+$("[id$='searchInput']").attr('id');
+	}
+	
+	function hashTop(){
+		location.hash = '#'
+	}
+</script>
+
+<apex:pageMessages id="pageMessages" />
+
+<div class="breadcrumb">
+    <apex:outputLink value="/{!RT1__ReadyTalkMeeting__c.Id}">« Back to Meeting: {!RT1__ReadyTalkMeeting__c.Name}</apex:outputLink>
+</div>
+
+<apex:form >
+	<apex:actionFunction name="showMassCreateLeadList" action="{!displayLeadsToBeCreated}" rerender="unmatchedMembers,massCreateLeads,searchresults,searchInput" oncomplete="hashPage();"/>
+	<apex:actionFunction name="searchLeadsAndContacts" action="{!searchRegistration}" rerender="pagedetails,searchresults,massCreateLeads,searchInput" oncomplete="$('.dataloader').hide(); hashSearch();">
+        <apex:param name="modifySearchTerms" assignTo="{!modifySearchTerms}" value="" />
+        <apex:param name="MeetingMemberId" assignTo="{!MeetingMemberId}" value="" />    
+	</apex:actionFunction>
+	<apex:actionFunction name="matchLead" action="{!matchLead}" rerender="pagedetails,pageMessages,searchresults,searchInput,unmatchedMembers" oncomplete="hashTop();">
+        <apex:param name="matchedLeadId" assignTo="{!matchedLeadId}" value="" />
+    </apex:actionFunction>
+	<apex:actionFunction name="matchContact" action="{!matchContact}" rerender="pagedetails,searchresults,unmatchedMembers,searchInput" oncomplete="hashTop();">
+        <apex:param name="matchedContactId" assignTo="{!matchedContactId}" value="" />    
+	</apex:actionFunction>
+	<apex:actionFunction name="createLead" action="{!createLead}" oncomplete="$('.dataloader').hide();" rerender="pagedetails,unmatchedMembers,searchresults,pageMessages,massCreateLeads,searchResults,searchInput" onComplete="$('.searching').remove(); hashTop();">
+        <apex:param name="MeetingMemberId" assignTo="{!MeetingMemberId}" value="" />    
+	</apex:actionFunction>
+	<apex:actionFunction name="refreshLeadsContactsAction" action="{!instantiateStdSetController}" rerender="unmatchedMembers,massCreateLeads" oncomplete="$('.dataloader').hide();">
+		<apex:param name="PageSize" assignTo="{!PageSize}" value="" />
+		<apex:param name="PageNumber" assignTo="{!PageNumber}" value="" />
+	</apex:actionFunction>
+	<apex:actionFunction name="massCreateLeadsFromMeetingMembers" action="{!massCreateLeadsFromMeetingMembers}" oncomplete="$('.dataloader').hide(); hashTop();" rerender="pagedetails,unmatchedMembers,searchresults,pageMessages,massCreateLeads"/>  
+	<apex:actionFunction name="modifySearchTerms" action="{!searchRegistration}" rerender="searchresults" oncomplete="$('.dataloader').hide();" >
+		<apex:param name="modifySearchTerms" assignTo="{!modifySearchTerms}" value="" />
+		<apex:param name="searchFirstName" assignTo="{!searchFirstName}" value="" />
+		<apex:param name="searchLastName" assignTo="{!searchLastName}" value="" />
+		<apex:param name="searchName" assignTo="{!searchName}" value="" />
+		<apex:param name="searchEmail" assignTo="{!searchEmail}" value="" />
+		<apex:param name="searchPhone" assignTo="{!searchPhone}" value="" />
+		<apex:param name="searchCompany" assignTo="{!searchCompany}" value="" />
+		<apex:param name="searchMemberId" assignTo="{!searchMemberId}" value="" />
+	</apex:actionFunction>
+	<apex:outputPanel id="pagedetails">
+		<apex:inputHidden value="{!RT1__ReadyTalkMeeting__c.RT1__LeadSource__c}" />
+		<apex:inputHidden value="{!MeetingMemberId}" />
+		<apex:inputHidden value="{!matchedContactId}" />
+		<apex:inputHidden value="{!matchedLeadId}" />
+	</apex:outputPanel>
+    <apex:pageBlock id="unmatched-registrations" title="Unmatched Registrations"> 
+    	<apex:outputPanel id="unmatchedMembers">
+	        <apex:outputPanel rendered="{!meetingMembers.size = 0}">
+	            All meeting members are matched to a Contact or Lead.
+	        </apex:outputPanel>
+	        <apex:outputPanel rendered="{!meetingMembers.size > 0}">
+	            <div style="float:right;">
+	            	<a class="btn" onclick="showMassCreateLeadList();">Mass Create Leads</a>
+	            </div> 
+	            	<div style="margin: 15px 0px">Match a meeting member to a Contact or Lead or create a new Lead.
+	            </div>
+	            <apex:pageBlockTable value="{!meetingMembers}" var="member" style="margin: 10px 0px;">
+	                <apex:column >
+	                    <apex:facet name="header">Action</apex:facet>
+	                    <a href="#" id="{!member.id}" onclick="$('.dataloader').show(); searchLeadsAndContacts(false,'{!member.id}'); searchHighlight('{!member.id}');">Search</a>
+	                </apex:column>
+	                <apex:column >
+	                    <apex:facet name="header">Registration Name</apex:facet>
+	                    <apex:outputLink value="{!URLFOR($Action.ReadyTalkMeetingMember__c.View, member.Id)}">
+	                        {!member.RT1__RegistrationLastName__c}, {!member.RT1__RegistrationFirstName__c} 
+	                    </apex:outputLink>
+	                </apex:column>
+	                <apex:column >
+	                    <apex:facet name="header">Registration Email</apex:facet>
+	                    {!member.RT1__RegistrationEmail__c}
+	                </apex:column>
+	                <apex:column >
+	                    <apex:facet name="header">Registration Company</apex:facet>
+	                    {!member.RT1__RegistrationCompany__c}
+	                </apex:column>
+	            </apex:pageBlockTable>
+	            <apex:selectList id="pageSizeSelect" value="{!PageSize}" size="1" onChange="refreshLeadsContacts();">
+	               <apex:selectOptions value="{!PageSizeSelectOptions}" />
+	           </apex:selectList>
+	           <apex:selectList id="pageSelect" value="{!PageNumber}" size="1" onChange="refreshLeadsContacts();">
+	               <apex:selectOptions value="{!PageSelectOptions}" />
+	           </apex:selectList>
+	           <span style="float:right;">
+	           	<a onclick="pagePrevious();" style="cursor:pointer;">&laquo;&nbsp;Previous</a>&nbsp;&mdash;&nbsp;<a onclick="pageNext();" style="cursor:pointer;">Next&nbsp;&raquo;</a> 
+	           </span>
+	        </apex:outputPanel>
+		</apex:outputPanel>	      
+    </apex:pageBlock>
+    <apex:outputPanel id="searchInput">
+		<apex:outputPanel rendered="{!searchStarted}">
+			<apex:pageblock title="Find Leads & Contacts">
+				<apex:pageBlockButtons >
+					<a class ="btn" onclick="modifiedSearch();">Search</a>
+					<a class="btn" onclick="createLead('{!JSENCODE(MeetingMemberId)}');">Create Leads</a>
+					<apex:commandLink styleClass="btn" action="{!cancel}" value="Cancel" style="text-decoration: none;"/> <!-- commandlink inside of form -->
+				</apex:pageBlockButtons>
+				<apex:pageBlocksection >
+					<apex:pageBlockSectionItem >
+						<apex:outputLabel value="First Name" />
+						<apex:outputPanel >
+							<apex:inputText id="searchFirstName" value="{!searchFirstName}" />
+							<apex:outputPanel rendered="{!searchFirstName != ''}">
+								<input type="checkbox" id="search-firstname-active" class="search-field-activate-checkbox"/>
+							</apex:outputPanel>
+							<apex:outputPanel rendered="{!searchFirstName == ''}">
+								<input type="checkbox" id="search-firstname-active" class="search-field-activate-checkbox" />
+							</apex:outputPanel>
+						</apex:outputPanel>
+					</apex:pageBlockSectionItem>
+					<apex:pageBlockSectionItem >
+						<apex:outputLabel value="Last Name" />
+						<apex:outputPanel >
+							<apex:inputText id="searchLastName" value="{!searchLastName}" />
+							<apex:outputPanel rendered="{!searchLastName != ''}">
+								<input type="checkbox" id="search-lastname-active" class="search-field-activate-checkbox"/>
+							</apex:outputPanel>
+							<apex:outputPanel rendered="{!searchLastName == ''}">
+								<input type="checkbox" id="search-lastname-active" class="search-field-activate-checkbox" />
+							</apex:outputPanel>
+						</apex:outputPanel>
+					</apex:pageBlockSectionItem>
+					<apex:pageBlockSectionItem >
+						<apex:outputLabel value="Email" />
+						<apex:outputPanel >					
+							<apex:inputText id="searchEmail" value="{!searchEmail}" />
+							<apex:outputPanel rendered="{!searchEmail != ''}">	
+								<input type="checkbox" id="search-email-active" class="search-field-activate-checkbox" checked="checked"/>
+							</apex:outputPanel>
+							<apex:outputPanel rendered="{!searchEmail == ''}">
+								<input type="checkbox" id="search-email-active" class="search-field-activate-checkbox" />
+							</apex:outputPanel>
+						</apex:outputPanel>
+					</apex:pageBlockSectionItem>
+					<apex:pageBlockSectionItem >
+						<apex:outputLabel value="Phone" />
+						<apex:outputPanel >
+							<apex:inputText id="searchPhone" value="{!searchPhone}" />
+							<apex:outputPanel rendered="{!searchPhone != ''}">
+								<input type="checkbox" id="search-phone-active" class="search-field-activate-checkbox"/>
+							</apex:outputPanel>
+							<apex:outputPanel rendered="{!searchPhone == ''}">
+								<input type="checkbox" id="search-phone-active" class="search-field-activate-checkbox" />	
+							</apex:outputPanel>
+						</apex:outputPanel>
+					</apex:pageBlockSectionItem>
+					<apex:pageBlockSectionItem >
+						<apex:outputLabel value="Company" />
+						<apex:outputPanel >	
+							<apex:inputText id="searchCompany" value="{!searchCompany}" />
+							<apex:outputPanel rendered="{!searchCompany != ''}">
+								<input type="checkbox" id="search-company-active" class="search-field-activate-checkbox"/>
+							</apex:outputPanel>
+							<apex:outputPanel rendered="{!searchCompany == ''}">
+								<input type="checkbox" id="search-company-active" class="search-field-activate-checkbox" />	
+							</apex:outputPanel>
+						</apex:outputPanel>
+					</apex:pageBlockSectionItem>	
+				</apex:pageBlocksection>
+			</apex:pageblock>
+		</apex:outputPanel>    
+	</apex:outputPanel>
+    <apex:outputPanel id="searchresults" >
+	    <apex:outputPanel rendered="{!searchStarted}" >
+		    <apex:pageBlock title="Leads" >
+		    	<apex:pageBlockTable value="{!leadSearchResults}"  var="lead" rendered="{!leadResultsExist}">
+		   			<apex:column >
+		   				<apex:facet name="header">Action</apex:facet>
+		   				<a class="btn" onclick="matchLead('{!lead.id}');">Match</a>
+		   			</apex:column>
+		   			<apex:column value="{!lead.Name}" style="cursor:pointer;" onclick="window.open('/{!lead.id}','_blank')" />
+		   			<apex:column value="{!lead.Email}" style="cursor:pointer;" onclick="window.open('/{!lead.id}','_blank')" />
+		   			<apex:column value="{!lead.Company}" style="cursor:pointer;" onclick="window.open('/{!lead.id}','_blank')" />
+		    	</apex:pageBlockTable>
+		    	<apex:outputPanel rendered="{!NOT(leadResultsExist)}">
+		    		<h1>No Leads found.</h1>
+		    	</apex:outputPanel>
+		    </apex:pageBlock>
+		    <apex:pageBlock title="Contacts" >
+		    	<apex:pageBlockTable value="{!contactSearchResults}"  var="contact" rendered="{!contactResultsExist}">
+		   			<apex:column >
+		   				<apex:facet name="header">Action</apex:facet>
+		   				<a class="btn" onclick="matchContact('{!contact.id}');">Match</a>
+		   			</apex:column>
+		   			<apex:column value="{!contact.Name}" style="cursor:pointer;" onclick="window.open('/{!contact.id}','_blank')" />
+		   			<apex:column value="{!contact.Email}" style="cursor:pointer;" onclick="window.open('/{!contact.id}','_blank')" />
+		    		<apex:column value="{!contact.Account.Name}" style="cursor:pointer;" onclick="window.open('/{!contact.id}','_blank')" />
+		    	</apex:pageBlockTable>
+		    	<apex:outputPanel rendered="{!NOT(contactResultsExist)}">
+		    		<h1>No Contacts found.</h1>
+		    	</apex:outputPanel>
+		    </apex:pageBlock>
+	    </apex:outputPanel>
+	</apex:outputPanel>	
+	<apex:outputpanel id="massCreateLeads">
+		<apex:outputPanel rendered="{!massCreateLeadsStarted}">
+			<apex:pageBlock title="Create Leads">
+				<apex:pageBlockButtons >
+					<a class="btn" onClick="hashTop(); $('.dataloader').show(); massCreateLeadsFromMeetingMembers();">Create Leads</a>
+				</apex:pageBlockButtons>
+					<apex:pageBlockTable value="{!meetingMembers}" var="member">
+						<apex:column >
+							<apex:facet name="header">Action</apex:facet>
+			   				<a onclick="$('.dataloader').show(); createLead('{!member.id}');" class="btn">Create Lead</a>		
+						</apex:column>
+						<apex:column >
+	                    <apex:facet name="header">Registration Name</apex:facet>
+	                    <apex:outputLink value="{!URLFOR($Action.ReadyTalkMeetingMember__c.View, member.Id)}">
+	                        {!member.RT1__RegistrationLastName__c}, {!member.RT1__RegistrationFirstName__c} 
+	                    </apex:outputLink>
+		                </apex:column>
+		                <apex:column >
+		                    <apex:facet name="header">Registration Email</apex:facet>
+		                    {!member.RT1__RegistrationEmail__c}
+		                </apex:column>
+		                <apex:column >
+		                    <apex:facet name="header">Registration Company</apex:facet>
+		                    {!member.RT1__RegistrationCompany__c}
+		                </apex:column>
+					</apex:pageBlockTable>
+			</apex:pageBlock>
+		</apex:outputPanel>	
+	</apex:outputpanel>
+	</apex:form>
+</apex:page>

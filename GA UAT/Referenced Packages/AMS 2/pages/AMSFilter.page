@@ -1,0 +1,205 @@
+<apex:page standardController="ts2extams__AMS_Filter__c" extensions="ts2extams.AMSFilterControllerExtension" title="{!$Label.AMS_LABEL_MainPageTitle & ': '&IF(ISBLANK(ts2extams__AMS_Filter__c.Id), $Label.AMS_LABEL_New_Filter,$Label.AMS_LABEL_Edit&' '&$Label.AMS_LABEL_Filter)}">
+<apex:includeScript value="{!URLFOR($Resource.ts2extams__UIRes, 'res/js/jquery-1.6.min.js')}" />
+<style>
+	.lookUp {
+		background-image: url("/img/func_icons/util/lookup20.gif");
+		background-position: 0px 0px;
+		width: 20px;
+		height: 20px;
+		background-position: top left;
+		cursor: pointer;
+		display: inline-block;
+	}
+	.lookUpOn {
+		background: url("/img/func_icons/util/lookup20.gif");
+		background-position: 0px 0px;
+		width: 20px;
+		height: 20px;
+		background-position: top right;
+		cursor: pointer;
+		display: inline-block;
+	}
+</style>
+<script type="text/javascript" charset="utf-8">
+
+function showWindow(obj, picklistField) {
+	var windowFeatures = 'directories=no,menubar=no,titlebar=no,toolbar=no,width=500,height=500,scrollbars=1';
+	win = window.open('/apex/{!JSENCODE($Setup.ts2__ApplicantManagementSystem__c.Prefix__c)}FilterLookupPage?ElementID='+obj.parentNode.previousSibling.getAttribute("Id")+'&fieldName='+picklistField, '', windowFeatures);
+	win.focus();
+}
+function fromLeftToRight(SelectLeft, SelectRight){
+	for (var i=0; i < SelectLeft.options.length; i++) {
+		if (SelectLeft.options[i].selected) {
+			SelectRight.options[SelectRight.options.length] = new Option(SelectLeft.options[i].text, SelectLeft.options[i].value);
+			SelectLeft.options[i]= null;
+		}
+	}
+}
+function fromRightToLeft(SelectLeft, SelectRight, groupVal, searchVal){
+	for (var i=0; i < SelectRight.options.length; i++) {
+		if (SelectRight.options[i].selected) {
+			//SelectLeft.options[SelectLeft.options.length] = new Option(SelectRight.options[i].text, SelectRight.options[i].value);
+			SelectRight.options[i]= null;
+		}
+	}
+	var arr = [];
+	for (var i=0; i < SelectRight.options.length; i++) {
+		arr.push(SelectRight.options[i].value);
+	}
+	SearchRoleBlockJavascript(groupVal, searchVal,((arr.length > 0) ? arr.join(';') :''));
+}
+
+
+</script>
+
+	<apex:form id="frm" >
+	<apex:actionFunction action="{!RoleList}" name="ShowRoleBlockJavascript" immediate="true" rerender="outSelectOptions,blockComeBack">
+		<apex:param name="firstParam" assignTo="{!GroupType}" value="" />
+		<apex:param name="secondParam" assignTo="{!ListValues}" value="" />
+	</apex:actionFunction>
+	<apex:actionFunction action="{!searchGroup}" name="SearchRoleBlockJavascript" immediate="true" rerender="outSelectOptions,blockComeBack">
+		<apex:param name="firstParam" assignTo="{!GroupType}" value="" />
+		<apex:param name="secondParam" assignTo="{!searchVal}" value="" />
+		<apex:param name="thirdParam" assignTo="{!ListValues}" value="" />
+	</apex:actionFunction>
+	<apex:inputtext value="{!ListValues}" style="display:none" id="listElement"/>
+	<apex:inputText value="{!isShowBlock}" style="display:none" id="DisplayValue"/>
+	<apex:pageMessages id="pageMessages" />
+	<apex:sectionHeader title="{!$ObjectType.ts2__Application__c.Label}" subtitle="{!IF(ISBLANK(ts2extams__AMS_Filter__c.Id), $Label.AMS_LABEL_New_Filter,$Label.AMS_LABEL_Edit&' '&$Label.AMS_LABEL_Filter)}" />
+	<apex:pageBlock mode="edit" title="">
+		<apex:pageBlockButtons >
+			<apex:commandButton value="{!$Label.AMS_BTN_Save}" onclick="setId();" action="{!SaveFilter}" rerender="frm"/>
+			<apex:commandButton value="{!$Label.AMS_BTN_Delete}" action="{!deleteOwerride}"/>
+			<apex:commandButton value="{!$Label.AMS_BTN_Cancel}" action="{!cancel}"/>
+		</apex:pageBlockButtons>
+		<apex:pageBlockSection title="{!$Label.AMS_LABEL_Step_1}" columns="2">
+			<apex:inputField required="true" value="{!ts2extams__AMS_Filter__c.Name}"/>
+			<apex:outputPanel />
+			<apex:pageBlockSectionItem rendered="{!NOT(ISBLANK(ts2extams__AMS_Filter__c.Id))}">
+				<apex:outputLabel value="{!$Label.AMS_LABEL_Created_By}" />
+				<apex:outputPanel >
+					<apex:outputfield value="{!ts2extams__AMS_Filter__c.CreatedById}"/>&nbsp;
+					<apex:outputfield value="{!ts2extams__AMS_Filter__c.CreatedDate}"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem rendered="{!NOT(ISBLANK(ts2extams__AMS_Filter__c.Id))}">
+				<apex:outputLabel value="{!$Label.AMS_LABEL_Modified_By}" />
+				<apex:outputPanel >
+					<apex:outputfield value="{!ts2extams__AMS_Filter__c.LastModifiedById}"/>&nbsp;
+					<apex:outputfield value="{!ts2extams__AMS_Filter__c.LastModifiedDate}"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+		<apex:pageBlockSection title="{!$Label.AMS_LABEL_Step_2}" columns="1">
+			<apex:outputPanel style="font-weight: bold">
+				{!$Label.AMS_LABEL_Filter_By} <!--Filter By Additional Fields (Optional):  -->
+			</apex:outputPanel>
+			<br/>
+			<apex:dataTable value="{!FilterList}" var="rec" >
+				<apex:column >
+					<apex:facet name="header">{!$Label.AMS_LABEL_Field}</apex:facet>  <!-- Field -->
+					<apex:actionRegion immediate="true">
+					<apex:selectList value="{!rec.FilterField}" multiselect="false" size="1" style="margin: 5px;">
+						<apex:selectOptions value="{!AppFields}"/>
+						<apex:actionSupport event="onchange" action="{!FieldAction}" rerender="AMSBlock,AMSFilterValue,PicklistIcon">
+							<apex:param name="AMSparam" assignTo="{!actionParam}" value="{!rec.recordId}" />
+						</apex:actionSupport>
+					</apex:selectList>
+					</apex:actionRegion>
+				</apex:column>
+				<apex:column >
+					<apex:facet name="header">{!$Label.AMS_LABEL_Operator}</apex:facet> <!-- Operator -->
+					<apex:selectList value="{!rec.FilterCriteria}" multiselect="false" size="1" style="margin: 5px;" id="AMSBlock">
+						<apex:selectOptions value="{!rec.lCriteriaPicklist}"/>
+					</apex:selectList>
+				</apex:column>
+				<apex:column >
+					<apex:facet name="header">{!$Label.AMS_LABEL_Value}</apex:facet> <!-- Value -->
+					<apex:inputText value="{!rec.FilterValue}" style="margin: 5px;" id="AMSFilterValue"/>
+						<apex:outputpanel id="PicklistIcon">
+							<apex:image value="/s.gif" style="border: 0px; display: {!JSENCODE(rec.ShowBlock)};" id="theImage" styleClass="lookUp" onmouseout="this.className = 'lookUp';" onmouseover="this.className = 'lookUpOn';" onclick="javascript:showWindow(this,'{!JSENCODE(rec.FilterField)}');" />
+						</apex:outputpanel>
+					<br/>
+					<apex:outputPanel style="margin: 5px;" rendered="{!rec.isError}"><apex:outputText style="color:red; font-weight: bold;" value="Error: "/><apex:outputText value="{!rec.ErrorMsg}" style="color:red;" /></apex:outputPanel>
+				</apex:column>
+				<apex:column >
+					<apex:facet name="header"></apex:facet>
+					<apex:outputPanel layout="block" style="margin: 5px;">
+						<apex:outputText value="AND" rendered="{!rec.recordId !='Last'}" />
+					</apex:outputPanel>
+				</apex:column>
+			</apex:dataTable>
+		</apex:pageBlockSection>
+		<apex:pageBlockSection title="{!$Label.AMS_LABEL_Step_3}" columns="1">
+				<apex:selectRadio onclick="showBlock(this)" value="{!VisibleType}" layout="pageDirection" >
+					<apex:selectOptions value="{!VisibleList}"/>
+				</apex:selectRadio>
+			<apex:OutputPanel layout="block" id="BlockGroups" style="display: {!JSENCODE(isShowBlock)}" >
+
+					<apex:outputText value="Search:" />
+					<apex:selectList value="{!GroupType}" onchange="CompareValues(this)" multiselect="false" size="1">
+						<apex:selectOptions value="{!GroupsList}"/>
+					</apex:selectList>
+					&nbsp; <apex:outputText value="For:" /> <apex:inputText value="{!searchVal}" id="SearchCriteria" / > <apex:CommandButton action="{!searchGroup}" value="Find" rerender="outSelectOptions"/>
+				<apex:outputpanel layout="block" id="ShowPanelBlock">
+				<table>
+					<tr>
+						<td>
+							<apex:outputpanel layout="block" ><apex:outputText style="font-weight: bold;" value="Available for Sharing" /></apex:outputpanel>
+							<apex:selectList size="12" id="outSelectOptions">
+								<apex:selectOptions value="{!AvailableShareList}"/>
+							</apex:selectList>
+						</td>
+						<td style="vertical-align: middle; text-align: center;">
+							<apex:outputpanel layout="block" ><apex:outputText value="Add" /><br/>
+								<apex:outputLink value="javascript:fromLeftToRight(document.getElementById('{!$Component.outSelectOptions}'),document.getElementById('{!$Component.InSelectOptions}'));"><apex:image id="theImage1" value="/img/arrow2_picklist_right.gif" /></apex:outputLink>
+							</apex:outputpanel>
+							<apex:outputpanel layout="block" id="blockComeBack" >
+								<apex:outputLink value="javascript:fromRightToLeft(document.getElementById('{!$Component.outSelectOptions}'),document.getElementById('{!$Component.InSelectOptions}'), '{!GroupType}','{!searchVal}');"><apex:image id="theImage2" value="/img/arrow2_picklist_left.gif" /></apex:outputLink>
+							<br/>
+							<apex:outputText value="Remove" /></apex:outputpanel>
+						</td>
+						<td>
+							<apex:outputpanel layout="block" ><apex:outputText style="font-weight: bold;" value="Shared To" /></apex:outputpanel>
+							<apex:selectList size="12" id="InSelectOptions">
+								<apex:selectOptions value="{!SharedToList}"/>
+							</apex:selectList>
+						</td>
+					</tr>
+				</table>
+				</apex:outputpanel>
+			</apex:OutputPanel>
+		</apex:pageBlockSection>
+	</apex:pageBlock>
+	</apex:form>
+<script type="text/javascript" charset="utf-8">
+	function showBlock (obj) {
+		if (obj.value == 'G') {
+			jQuery('[id$=BlockGroups]').show();
+			jQuery('[id$=DisplayValue]').val('block');
+		}
+		else {
+			jQuery('[id$=BlockGroups]').hide();
+			jQuery('[id$=DisplayValue]').val('none');
+		}
+	}
+	function CompareValues(obj) {
+		var id = jQuery('[id$=InSelectOptions]').attr('id');
+		var selectBlock = document.getElementById(id);
+		var arr = [];
+		for (var i=0; i < selectBlock.options.length; i++) {
+			arr.push(selectBlock.options[i].value);
+		}
+		ShowRoleBlockJavascript(obj.value,((arr.length > 0) ? arr.join(';') :''));
+	}
+	function setId() {
+		var id = jQuery('[id$=InSelectOptions]').attr('id');
+		var selectBlock = document.getElementById(id);
+		var arr = [];
+		for (var i=0; i < selectBlock.options.length; i++) {
+			arr.push(selectBlock.options[i].value);
+		}
+		jQuery('[id$=listElement]').val(((arr.length > 0) ? arr.join(';') :''));
+	}
+</script>
+</apex:page>

@@ -1,0 +1,1044 @@
+<!-- 
+
+/*
+* @author : sfdcdev, Tamarack Consulting, Inc.
+* @date : 02/09/2015
+* @description: Team dashboard
+*   https://trello.com/c/dd4U9I6F/5-add-team-metrics-view-to-dashboard
+*
+* © Copyright 2003 - 2015 Tamarack Consulting, Inc.  All Rights Reserved.
+* 
+*/
+ -->
+
+<apex:page showHeader="{!!onPrintPage}" sidebar="false" controller="TC_TeamAnnualGoalDashboardCtrl" title="Team Business Dashboard">
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"/>
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/jquery-ui.min.js"/>
+    <apex:includeScript value="{!URLFOR($Resource.BTG_Resources, 'bootstrap-3.0.2/js/bootstrap.min.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.chosenJs, 'chosen.jquery.min.js')}"/> 
+    <apex:includeScript value="https://cdn.datatables.net/1.10.5/js/jquery.dataTables.min.js"/>
+
+    <apex:stylesheet value="{!URLFOR($Resource.BTG_Resources, 'bootstrap-3.0.2/css/bootstrap-btg-force.css')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.chosenJs, 'chosen.min.css')}"/>
+    <apex:stylesheet value="https://cdn.datatables.net/1.10.5/css/jquery.dataTables.min.css"/>
+
+     <style>
+       .btg-force {width: 90%; margin-left: auto; margin-right: auto; margin-top: 20px;}
+       .btg-force * {font-family: 'Trebuchet MS' , 'Helvetica', 'sans-serif' !important;}
+      /* .main-header, .sub-header {font-family: 'Trebuchet MS' , 'Helvetica', 'sans-serif' !important;}*/
+       .main-header-container {color: #177cd1 !important; background-color: #ffffff !important; padding-bottom: 0px; margin-bottom: 10px; border-bottom: 2px solid #aaaaaa;}
+       .panel-main {background-color: #eeeeee !important; border-color: #cccccc !important;}
+       .panel-pres-body-height {min-height: 246px;}
+       .panel-main-body-height {min-height: 160px}
+       .section-header {margin-bottom: 5px; border-bottom: 1px solid #aaaaaa;}
+       .section-margin {margin-top: 10px;}
+       .name-header-container {background-color: #ffffff !important; padding-bottom: 0px; margin-bottom: 15px; border-bottom: 4px solid #aaaaaa;}
+       .name-header-container h1{color: #177cd1 !important;}
+       .header{margin-bottom: 0px !important;}
+       .btg-force .progress .progress-bar{text-align: right;}
+       .btg-force .progress .progress-bar-backlog {background-color: #aaaaaa;}
+       .btg-force .progress-bar-black {background-color: #000000;}
+       
+       .quarter-goal-legend{display:inline-block; background-color:#A64D4D; width: 13px; height: 13px; margin-right: 2px;}
+       .goal-legend{display:inline-block; background-color:#800000; width: 13px; height: 13px; margin-right: 2px;}
+       .fmv-legend{display:inline-block; background-color:#8BBEE8; width: 13px; height: 13px; margin-right: 2px;}
+       .fma-legend{display:inline-block; background-color:#177cd1; width: 13px; height: 13px; margin-right: 2px;}
+       .csc-legend{display:inline-block; background-color:#0E4A7D; width: 13px; height: 13px; margin-right: 2px;}
+       .table-goals{font-size: 14px;}
+       .btg-force .chart-container [hidden], .btg-force .chart-container template {display: inline;}
+       .btg-force .progress-bar {color: #000000;}
+       .overlay {position: fixed; top: 0; left: 0; height: 100%; width: 100%; z-index: 10; background-color: rgba(0,0,0,0.5);}
+        .white-box{width: 300px; height: 110px; position: fixed; top: 50%; left: 50%; margin-top: -100px; margin-left: -150px; background-color: #FFFFFF; border-radius: 5px; text-align: center; z-index: 11;}
+        .white-box img{width: 75px;}
+        #loadingLabel{font-weight: bold; font-size: 25px;}
+   </style>
+
+    <apex:form id="dashboardForm">
+        
+        <apex:outputPanel layout="block" styleClass="btg-force olegforce fordawin">
+            <div class="row">
+                <div class="col-md-12">
+                   <div class="name-header-container clearfix">
+                        <div class="row">
+                            <h1 class="name-header">Team Business Dashboard 
+                            <span style="display: {!IF(onPrintPage, 'inline', 'none')};">- {!teamAnnualGoal.Sales_Team__c}</span></h1>  
+                            <div class="pull-right" style="margin-top: 8px; display: {!IF(onPrintPage, 'none', 'block')}">
+                                <apex:outputPanel id="lastModifiedPnl">
+                                    <!-- <a href="{!URLFOR($Page.AnnualGoalsDashboard)}" title="Switch to Individual Annual Goals Dashboard">Switch to Individual Business Dashboard</a>
+                                    <br/> -->
+                                    <a href="/{!teamAnnualGoal.Id}" target="_blank" title="Annual Goals Record"> Link to Record</a>
+                                    <br/>
+                                    <apex:commandLink value="Printer Friendly Version" action="{!switchToPrintView}"/>
+                                    <br/>                           
+                                    <span class="small">Last Updated: <apex:outputField value="{!teamAnnualGoal.LastModifiedDate}" /></span>
+                                   </apex:outputPanel>
+                            </div> 
+                        </div>
+
+                        
+                        <div class="row" style="margin:8px 4px;">
+                            
+                            <!-- tamarack added label 01-25-15-->
+                            <!-- tamarack removed conditional rendering when annual goals null -->
+                            <apex:outputPanel layout="block" styleClass="col-md-3" rendered="{!NOT(onPrintPage) && IsManager}">
+                                <apex:outputLabel value="Select Team: "/><br/>
+                                <apex:selectList html-data-placeholder="Select Team" id="teamList" value="{!selectedTeamName}" multiselect="false" size="1" style="width: 200px;" styleClass="teamOptions options">
+                                    <apex:selectoptions value="{!teamOptions}" />
+                                    <apex:actionsupport event="onchange" rerender="dashboardForm" action="{!rerenderDashboard}" status="progressStatus" oncomplete="init()"/>
+                                </apex:selectList>
+                            </apex:outputPanel>
+                             <!-- tamarack 01-25-15 years picklist -->
+                            <apex:outputPanel layout="block" styleClass="col-md-3" rendered="{!NOT(onPrintPage)}">
+                                <apex:outputLabel value="Select Year: "/><br/>
+                                <apex:selectList html-data-placeholder="Select Year" id="yearList" value="{!selectedYearString}" multiselect="false" size="1" style="width: 200px;" styleClass="yearOptions options">
+                                    <apex:selectoptions value="{!yearOptions}" />
+                                    <apex:actionsupport event="onchange" rerender="dashboardForm" action="{!rerenderDashboard}" status="progressStatus" oncomplete="init()"/>
+                                </apex:selectList>
+                            </apex:outputPanel>
+                            <!-- end tamarack -->
+                        </div>              
+                    </div>
+                </div>
+            </div>
+
+            <apex:pageMessages />
+
+            <apex:outputPanel id="data" rendered="{!teamAnnualGoal  != null}">
+                <!-- BEGIN TEAM WIDGET -->
+                <apex:outputPanel layout="block" rendered="{!permUtil.AnnualBusinessPlanTeam}">
+                    <div class="row">
+                       <div class="col-md-12">               
+                          <div class="main-header-container">
+                             <h3 class="main-header">Annual Business Plan</h3>
+                          </div>
+                      </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="panel panel-default panel-main">
+                                <div class="panel-body">
+                                    <div class="panel panel-default">
+                                        <div class="panel-heading">
+                                            <h4 class="sub-header">Activities and Production</h4>
+                                        </div>
+                                        <div class="panel-body">
+                                            <div class="row">
+                                                <div class="col-md-9">
+                                                    <table class="table table-goals" id="goalsTable">
+
+                                                        <!-- HEADER -->
+                                                        
+                                                        <thead>
+                                                            <th style="width:20%">
+                                                                <b>Metric</b>
+                                                            </th>
+                                                            <th style="width:10%">
+                                                                <b>YTD Total</b>
+                                                            </th>
+                                                            <th style="width:10%">
+                                                                <b>Annual Goal</b>
+                                                            </th>
+                                                            <th>
+                                                               <span style="display:none">Chart</span>
+                                                            </th>
+                                                            
+                                                        </thead>
+                                                        
+
+                                                        <tbody>
+
+                                                             <tr>
+                                                                <!-- BEGIN AwardedApprovedCGM__c -->
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.AwardedApprovedCGM__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.AwardedApprovedCGM__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.AwardedApprovedCGMGoal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.AwardedApprovedCGMGoal__c != 0 && teamAnnualGoal.AwardedApprovedCGMGoal__c != null 
+                                                                                                && teamAnnualGoal.AwardedApprovedCGM__c != 0 && teamAnnualGoal.AwardedApprovedCGM__c != null}">
+                                                                        
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.AwardedApprovedCGMGoal__c >= teamAnnualGoal.AwardedApprovedCGM__c}" >
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar"
+                                                                                        rendered="{!CEILING(goal.AwardedApprovedCGM__c/teamAnnualGoal.AwardedApprovedCGMGoal__c *100)>=1}"
+                                                                                         style="width:{!goal.AwardedApprovedCGM__c/teamAnnualGoal.AwardedApprovedCGMGoal__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.AwardedApprovedCGMGoal__c < teamAnnualGoal.AwardedApprovedCGM__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.AwardedApprovedCGM__c/teamAnnualGoal.AwardedApprovedCGMGoal__c *100)}"/>
+                                                                            
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar" rendered="{!CEILING(goal.AwardedApprovedCGM__c/teamAnnualGoal.AwardedApprovedCGM__c *100)>=1}"
+                                                                                         style="width:{!goal.AwardedApprovedCGM__c/teamAnnualGoal.AwardedApprovedCGM__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+                                                                    </apex:outputPanel> <!-- end if not null -->
+                                                                </td>
+                                                        
+                                                                <!-- END   AwardedApprovedCGM__c -->
+
+                                                            </tr>
+                                                            
+                                                            <tr>
+                                                                <!-- BEGIN     FMVGrossMargin__c -->
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.FMVGrossMargin__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.FMVGrossMargin__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.FMVGrossMarginGoal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.FMVGrossMarginGoal__c != 0 && teamAnnualGoal.FMVGrossMarginGoal__c != null 
+                                                                                                && teamAnnualGoal.FMVGrossMargin__c != 0 && teamAnnualGoal.FMVGrossMargin__c != null}">
+                                                                        
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.FMVGrossMarginGoal__c >= teamAnnualGoal.FMVGrossMargin__c}" >
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar"
+                                                                                        rendered="{!CEILING(goal.FMVGrossMargin__c/teamAnnualGoal.FMVGrossMarginGoal__c *100)>=1}"
+                                                                                         style="width:{!goal.FMVGrossMargin__c/teamAnnualGoal.FMVGrossMarginGoal__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.FMVGrossMarginGoal__c < teamAnnualGoal.FMVGrossMargin__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.FMVGrossMargin__c/teamAnnualGoal.FMVGrossMarginGoal__c *100)}"/>
+                                                                            
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar" rendered="{!CEILING(goal.FMVGrossMargin__c/teamAnnualGoal.FMVGrossMargin__c *100)>=1}"
+                                                                                         style="width:{!goal.FMVGrossMargin__c/teamAnnualGoal.FMVGrossMargin__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+                                                                    </apex:outputPanel> <!-- end if not null -->
+                                                                </td>
+                                                            
+                                                                <!-- END   FMVGrossMargin__c -->
+                                                            </tr>
+                                                            <tr>
+                                                                <!-- BEGIN     FMAGrossMargin__c -->
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.FMAGrossMargin__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.FMAGrossMargin__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.FMAGrossMarginGoal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.FMAGrossMarginGoal__c != 0 && teamAnnualGoal.FMAGrossMarginGoal__c != null 
+                                                                                                && teamAnnualGoal.FMAGrossMargin__c != 0 && teamAnnualGoal.FMAGrossMargin__c != null}">
+                                                                        
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.FMAGrossMarginGoal__c >= teamAnnualGoal.FMAGrossMargin__c}" >
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar"
+                                                                                        rendered="{!CEILING(goal.FMAGrossMargin__c/teamAnnualGoal.FMAGrossMarginGoal__c *100)>=1}"
+                                                                                         style="width:{!goal.FMAGrossMargin__c/teamAnnualGoal.FMAGrossMarginGoal__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.FMAGrossMarginGoal__c < teamAnnualGoal.FMAGrossMargin__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.FMAGrossMargin__c/teamAnnualGoal.FMAGrossMarginGoal__c *100)}"/>
+                                                                            
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar" rendered="{!CEILING(goal.FMAGrossMargin__c/teamAnnualGoal.FMAGrossMargin__c *100)>=1}"
+                                                                                         style="width:{!goal.FMAGrossMargin__c/teamAnnualGoal.FMAGrossMargin__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+                                                                    </apex:outputPanel> <!-- end if not null -->
+                                                                </td>
+                                                            </tr>
+                                                            <!-- END   FMAGrossMargin__c -->
+                                                            <tr>
+                                                                <!-- BEGIN CSCGrossMargin__c -->
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.CSCGrossMargin__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.CSCGrossMargin__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.CSCGrossMarginGoal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.CSCGrossMarginGoal__c != 0 && teamAnnualGoal.CSCGrossMarginGoal__c != null 
+                                                                                                && teamAnnualGoal.CSCGrossMargin__c != 0 && teamAnnualGoal.CSCGrossMargin__c != null}">
+                                                                        
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.CSCGrossMarginGoal__c >= teamAnnualGoal.CSCGrossMargin__c}" >
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar"
+                                                                                        rendered="{!CEILING(goal.CSCGrossMargin__c/teamAnnualGoal.CSCGrossMarginGoal__c *100)>=1}"
+                                                                                         style="width:{!goal.CSCGrossMargin__c/teamAnnualGoal.CSCGrossMarginGoal__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.CSCGrossMarginGoal__c < teamAnnualGoal.CSCGrossMargin__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.CSCGrossMargin__c/teamAnnualGoal.CSCGrossMarginGoal__c *100)}"/>
+                                                                            
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar" rendered="{!CEILING(goal.CSCGrossMargin__c/teamAnnualGoal.CSCGrossMargin__c *100)>=1}"
+                                                                                         style="width:{!goal.CSCGrossMargin__c/teamAnnualGoal.CSCGrossMargin__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+                                                                    </apex:outputPanel> <!-- end if not null -->
+                                                                </td>
+                                                            </tr>
+                                                            <!-- END   CSCGrossMargin__c -->
+                                                             <tr>
+                                                                <!-- BEGIN  NewAccounts__c -->
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.NewAccounts__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.QualifiedNewAccounts__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.NewAccountsGoal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.NewAccountsGoal__c != 0 && teamAnnualGoal.NewAccountsGoal__c != null 
+                                                                                                && teamAnnualGoal.QualifiedNewAccounts__c != 0 && teamAnnualGoal.QualifiedNewAccounts__c != null}">
+                                                                        
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.NewAccountsGoal__c >= teamAnnualGoal.QualifiedNewAccounts__c}" >
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar"
+                                                                                        rendered="{!CEILING(goal.QualifiedNewAccounts__c/teamAnnualGoal.NewAccountsGoal__c *100)>=1}"
+                                                                                         style="width:{!goal.QualifiedNewAccounts__c/teamAnnualGoal.NewAccountsGoal__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.NewAccountsGoal__c < teamAnnualGoal.QualifiedNewAccounts__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.QualifiedNewAccounts__c/teamAnnualGoal.NewAccountsGoal__c *100)}"/>
+                                                                            
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar" rendered="{!CEILING(goal.QualifiedNewAccounts__c/teamAnnualGoal.QualifiedNewAccounts__c *100)>=1}"
+                                                                                         style="width:{!goal.QualifiedNewAccounts__c/teamAnnualGoal.QualifiedNewAccounts__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+                                                                    </apex:outputPanel> <!-- end if not null -->
+                                                                </td>
+                                                                <!-- END    QualifiedNewAccounts__c -->
+                                                            </tr>
+                                                            <tr>
+                                                                <!-- BEGIN Prospects_Closing_Rate__c -->
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.Prospects_Closing_Rate__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.Prospects_Closing_Rate__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.ProspectsClosingRateGoal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel rendered="{!teamAnnualGoal.ProspectsClosingRateGoal__c != 0 
+                                                                                                    && teamAnnualGoal.ProspectsClosingRateGoal__c != 0
+                                                                                                    && teamAnnualGoal.ProspectsClosingRateGoal__c != null
+                                                                                                    && teamAnnualGoal.Prospects_Closing_Rate__c != null}">
+                                                                        
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.ProspectsClosingRateGoal__c >= teamAnnualGoal.Prospects_Closing_Rate__c}" >
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                          
+                                                                        <div class="row"><div class="progress">   
+                                                                            <apex:outputPanel layout="block" styleClass="progress-bar" 
+                                                                                style="width: {!teamAnnualGoal.Prospects_Closing_Rate__c/teamAnnualGoal.ProspectsClosingRateGoal__c*100}%; background-color:{!teamChartColor}"/>    
+                                                                        </div></div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.ProspectsClosingRateGoal__c < teamAnnualGoal.Prospects_Closing_Rate__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.Prospects_Closing_Rate__c/teamAnnualGoal.ProspectsClosingRateGoal__c*100)}"/>
+                                                                            <div class="row"><div class="progress">   
+                                                                                <apex:outputPanel layout="block" styleClass="progress-bar" 
+                                                                                    style="width: 100%; background-color:{!teamChartColor}"/>    
+                                                                            </div></div>
+                                                                        </apex:outputPanel>
+
+                                                                    </apex:outputPanel>
+                                                                </td>
+                                                                <!-- END Prospects_Closing_Rate__c -->
+                                                            </tr>
+                                                             <tr>
+                                                                <!-- BEGIN All_Proposals_Closing_Rate__c -->
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.All_Proposals_Closing_Rate__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.All_Proposals_Closing_Rate__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.AllProposalsClosingRateGoal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel rendered="{!teamAnnualGoal.AllProposalsClosingRateGoal__c != 0 
+                                                                                                && teamAnnualGoal.AllProposalsClosingRateGoal__c != 0
+                                                                                                && teamAnnualGoal.AllProposalsClosingRateGoal__c != null
+                                                                                                && teamAnnualGoal.All_Proposals_Closing_Rate__c != null
+                                                                                                }">
+                                                                        
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.AllProposalsClosingRateGoal__c >= teamAnnualGoal.All_Proposals_Closing_Rate__c}" >
+                                                                        <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                          
+                                                                         <div class="row"><div class="progress">   
+                                                                                <apex:outputPanel layout="block" styleClass="progress-bar" 
+                                                                                    style="width: {!teamAnnualGoal.All_Proposals_Closing_Rate__c/teamAnnualGoal.AllProposalsClosingRateGoal__c*100}%; background-color:{!teamChartColor}"/>    
+                                                                        </div></div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.AllProposalsClosingRateGoal__c < teamAnnualGoal.All_Proposals_Closing_Rate__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.All_Proposals_Closing_Rate__c/teamAnnualGoal.AllProposalsClosingRateGoal__c*100)}"/>
+                                                                            <div class="row"><div class="progress">   
+                                                                                <apex:outputPanel layout="block" styleClass="progress-bar" 
+                                                                                    style="width: 100%; background-color:{!teamChartColor}"/>    
+                                                                            </div></div>
+                                                                        </apex:outputPanel>
+                                                                    </apex:outputPanel>
+                                                                </td>
+                                                                <!-- END   All_Proposals_Closing_Rate__c -->
+                                                            </tr>
+                                                          
+                                                        
+                                                            <tr>
+                                                                <!-- BEGIN Current_Customers_Closing_Rate__c -->
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.Current_Customers_Closing_Rate__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.Current_Customers_Closing_Rate__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.CurrentCustomersClosingRateGoal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel rendered="{!teamAnnualGoal.CurrentCustomersClosingRateGoal__c != 0 
+                                                                                                    && teamAnnualGoal.CurrentCustomersClosingRateGoal__c != 0
+                                                                                                    && teamAnnualGoal.CurrentCustomersClosingRateGoal__c != null
+                                                                                                    && teamAnnualGoal.Current_Customers_Closing_Rate__c != null }">
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.CurrentCustomersClosingRateGoal__c >= teamAnnualGoal.Current_Customers_Closing_Rate__c}" >
+                                                                        <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                          
+                                                                         <div class="row"><div class="progress">   
+                                                                                <apex:outputPanel layout="block" styleClass="progress-bar" 
+                                                                                    style="width: {!teamAnnualGoal.Current_Customers_Closing_Rate__c/teamAnnualGoal.CurrentCustomersClosingRateGoal__c*100}%; background-color:{!teamChartColor}"/>    
+                                                                        </div></div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.CurrentCustomersClosingRateGoal__c < teamAnnualGoal.Current_Customers_Closing_Rate__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.Current_Customers_Closing_Rate__c/teamAnnualGoal.CurrentCustomersClosingRateGoal__c*100)}"/>
+                                                                            <div class="row"><div class="progress">   
+                                                                                <apex:outputPanel layout="block" styleClass="progress-bar" 
+                                                                                    style="width: 100%; background-color:{!teamChartColor}"/>    
+                                                                            </div></div>
+                                                                        </apex:outputPanel>
+
+                                                                    </apex:outputPanel>
+                                                                </td>
+                                                            
+                                                                <!-- END   Current_Customers_Closing_Rate__c -->
+                                                            </tr>
+                                                            <tr>
+                                                                <!-- BEGIN Team_Composite_Call_Score_YTD__c -->
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.Team_Composite_Call_Score_YTD__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.Team_Composite_Call_Score_YTD__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.Team_Composite_Call_Score_Goal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel rendered="{!teamAnnualGoal.Team_Composite_Call_Score_Goal__c != null 
+                                                                                                    && teamAnnualGoal.Team_Composite_Call_Score_YTD__c != null
+                                                                                                    && teamAnnualGoal.Team_Composite_Call_Score_Goal__c != 0 
+                                                                                                    && teamAnnualGoal.Team_Composite_Call_Score_Goal__c != 0
+                                                                                                    }">
+                                                                        
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.Team_Composite_Call_Score_Goal__c >= teamAnnualGoal.Team_Composite_Call_Score_YTD__c}" >
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                              
+                                                                            <div class="row"><div class="progress">   
+                                                                                <apex:outputPanel layout="block" styleClass="progress-bar" 
+                                                                                    style="width: {!teamAnnualGoal.Team_Composite_Call_Score_YTD__c/teamAnnualGoal.Team_Composite_Call_Score_Goal__c*100}%; background-color:{!teamChartColor}"/>    
+                                                                            </div></div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.Team_Composite_Call_Score_Goal__c < teamAnnualGoal.Team_Composite_Call_Score_YTD__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.Team_Composite_Call_Score_YTD__c/teamAnnualGoal.Team_Composite_Call_Score_Goal__c*100)}"/>
+                                                                            <div class="row"><div class="progress">   
+                                                                                <apex:outputPanel layout="block" styleClass="progress-bar" 
+                                                                                    style="width: 100%; background-color:{!teamChartColor}"/>    
+                                                                            </div></div>
+                                                                        </apex:outputPanel> 
+                                                                    </apex:outputPanel>
+                                                                </td>
+                                                                <!-- END Team_Composite_Call_Score_YTD__c -->
+                                                            </tr>
+                                                            <tr>
+                                                                <!-- BEGIN VirtualMeetings__c -->
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.VirtualMeetings__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.VirtualMeetings__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.VirtualMeetingsGoal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.VirtualMeetingsGoal__c != 0 && teamAnnualGoal.VirtualMeetingsGoal__c != null 
+                                                                                                && teamAnnualGoal.VirtualMeetings__c != 0 && teamAnnualGoal.VirtualMeetings__c != null}">
+                                                                        
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.VirtualMeetingsGoal__c >= teamAnnualGoal.VirtualMeetings__c}" >
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar"
+                                                                                        rendered="{!CEILING(goal.VirtualMeetings__c/teamAnnualGoal.VirtualMeetingsGoal__c *100)>=1}"
+                                                                                         style="width:{!goal.VirtualMeetings__c/teamAnnualGoal.VirtualMeetingsGoal__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.VirtualMeetingsGoal__c < teamAnnualGoal.VirtualMeetings__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.VirtualMeetings__c/teamAnnualGoal.VirtualMeetingsGoal__c *100)}"/>
+                                                                            
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar" rendered="{!CEILING(goal.VirtualMeetings__c/teamAnnualGoal.VirtualMeetings__c *100)>=1}"
+                                                                                         style="width:{!goal.VirtualMeetings__c/teamAnnualGoal.VirtualMeetings__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+                                                                    </apex:outputPanel> <!-- end if not null -->
+                                                                </td>
+                                                                <!-- END VirtualMeetings__c -->
+                                                            </tr>
+                                                            <tr>
+                                                                <!-- BEGIN OfficeMeetings__c -->
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.OfficeMeetings__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.OfficeMeetings__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.OfficeMeetingsGoal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.OfficeMeetingsGoal__c != 0 && teamAnnualGoal.OfficeMeetingsGoal__c != null 
+                                                                                                && teamAnnualGoal.OfficeMeetings__c != 0 && teamAnnualGoal.OfficeMeetings__c != null}">
+                                                                        
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.OfficeMeetingsGoal__c >= teamAnnualGoal.OfficeMeetings__c}" >
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar"
+                                                                                        rendered="{!CEILING(goal.OfficeMeetings__c/teamAnnualGoal.OfficeMeetingsGoal__c *100)>=1}"
+                                                                                         style="width:{!goal.OfficeMeetings__c/teamAnnualGoal.OfficeMeetingsGoal__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.OfficeMeetingsGoal__c < teamAnnualGoal.OfficeMeetings__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.OfficeMeetings__c/teamAnnualGoal.OfficeMeetingsGoal__c *100)}"/>
+                                                                            
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar" rendered="{!CEILING(goal.OfficeMeetings__c/teamAnnualGoal.OfficeMeetings__c *100)>=1}"
+                                                                                         style="width:{!goal.OfficeMeetings__c/teamAnnualGoal.OfficeMeetings__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+                                                                    </apex:outputPanel> <!-- end if not null -->
+                                                                </td>
+                                                                <!-- END OfficeMeetings__c -->
+                                                            </tr>
+                                                            <tr>
+                                                                <!-- BEGIN  Leads__c -->
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.Leads__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.Leads__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.LeadsGoal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.LeadsGoal__c != 0 && teamAnnualGoal.LeadsGoal__c != null 
+                                                                                                && teamAnnualGoal.Leads__c != 0 && teamAnnualGoal.Leads__c != null}">
+                                                                        
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.LeadsGoal__c >= teamAnnualGoal.Leads__c}" >
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar"
+                                                                                        rendered="{!CEILING(goal.Leads__c/teamAnnualGoal.LeadsGoal__c *100)>=1}"
+                                                                                         style="width:{!goal.Leads__c/teamAnnualGoal.LeadsGoal__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.LeadsGoal__c < teamAnnualGoal.Leads__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.Leads__c/teamAnnualGoal.LeadsGoal__c *100)}"/>
+                                                                            
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar" rendered="{!CEILING(goal.Leads__c/teamAnnualGoal.Leads__c *100)>=1}"
+                                                                                         style="width:{!goal.Leads__c/teamAnnualGoal.Leads__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+                                                                    </apex:outputPanel> <!-- end if not null -->
+                                                                </td>
+                                                                <!-- END Leads -->
+                                                            </tr>
+                                                            
+                                                             <tr>
+                                                                <!-- BEGIN  Proposals__c -->
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.Proposals__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.Proposals__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.ProposalsGoal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.ProposalsGoal__c != 0 && teamAnnualGoal.ProposalsGoal__c != null 
+                                                                                                && teamAnnualGoal.Proposals__c != 0 && teamAnnualGoal.Proposals__c != null}">
+                                                                        
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.ProposalsGoal__c >= teamAnnualGoal.Proposals__c}" >
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar"
+                                                                                        rendered="{!CEILING(goal.Proposals__c/teamAnnualGoal.ProposalsGoal__c *100)>=1}"
+                                                                                         style="width:{!goal.Proposals__c/teamAnnualGoal.ProposalsGoal__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.ProposalsGoal__c < teamAnnualGoal.Proposals__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.Proposals__c/teamAnnualGoal.ProposalsGoal__c *100)}"/>
+                                                                            
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar" rendered="{!CEILING(goal.Proposals__c/teamAnnualGoal.Proposals__c *100)>=1}"
+                                                                                         style="width:{!goal.Proposals__c/teamAnnualGoal.Proposals__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+                                                                    </apex:outputPanel> <!-- end if not null -->
+                                                                </td>
+                                                                <!-- END Proposals -->
+                                                            </tr>
+                                                            <tr>
+                                                                <!-- BEGIN Lead_Conversion_Rate__c -->
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.Lead_Conversion_Rate__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.Lead_Conversion_Rate__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.LeadConversionRateGoal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel rendered="{!teamAnnualGoal.LeadConversionRateGoal__c != 0 
+                                                                                                    && teamAnnualGoal.LeadConversionRateGoal__c != 0
+                                                                                                    && teamAnnualGoal.LeadConversionRateGoal__c != null
+                                                                                                    && teamAnnualGoal.Lead_Conversion_Rate__c != null
+                                                                                                    }">
+                                                                        
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.LeadConversionRateGoal__c >= teamAnnualGoal.Lead_Conversion_Rate__c}" >
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                              
+                                                                            <div class="row"><div class="progress">   
+                                                                            <apex:outputPanel layout="block" styleClass="progress-bar" 
+                                                                                style="width: {!teamAnnualGoal.Lead_Conversion_Rate__c/teamAnnualGoal.LeadConversionRateGoal__c*100}%; background-color:{!teamChartColor}"/>    
+                                                                            </div></div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.LeadConversionRateGoal__c < teamAnnualGoal.Lead_Conversion_Rate__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.Lead_Conversion_Rate__c/teamAnnualGoal.LeadConversionRateGoal__c*100)}"/>
+                                                                            <div class="row"><div class="progress">   
+                                                                                <apex:outputPanel layout="block" styleClass="progress-bar" 
+                                                                                    style="width: 100%; background-color:{!teamChartColor}"/>    
+                                                                            </div></div>
+                                                                        </apex:outputPanel> 
+
+
+
+                                                                        
+                                                                        
+                                                                    </apex:outputPanel>
+                                                                </td>
+                                                                <!-- END Lead_Conversion_Rate__c -->
+                                                            </tr>
+
+                                                            <tr>
+                                                                <!-- BEGIN Avg_Proposal_Size__c -->
+                                                                
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.Avg_Proposal_Size__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.Avg_Proposal_Size__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.AvgProposalSizeGoal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.AvgProposalSizeGoal__c != 0 && teamAnnualGoal.AvgProposalSizeGoal__c != null 
+                                                                                                && teamAnnualGoal.Avg_Proposal_Size__c != 0 && teamAnnualGoal.Avg_Proposal_Size__c != null}">
+                                                                        
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.AvgProposalSizeGoal__c >= teamAnnualGoal.Avg_Proposal_Size__c}" >
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar"
+                                                                                        rendered="{!CEILING(goal.Avg_Proposal_Size__c/teamAnnualGoal.AvgProposalSizeGoal__c *100)>=1}"
+                                                                                         style="width:{!goal.Avg_Proposal_Size__c/teamAnnualGoal.AvgProposalSizeGoal__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.AvgProposalSizeGoal__c < teamAnnualGoal.Avg_Proposal_Size__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.Avg_Proposal_Size__c/teamAnnualGoal.AvgProposalSizeGoal__c *100)}"/>
+                                                                            
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar" rendered="{!CEILING(goal.Avg_Proposal_Size__c/teamAnnualGoal.Avg_Proposal_Size__c *100)>=1}"
+                                                                                         style="width:{!goal.Avg_Proposal_Size__c/teamAnnualGoal.Avg_Proposal_Size__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+                                                                    </apex:outputPanel> <!-- end if not null -->
+                                                                </td>
+                                                            <!-- END   Avg_Proposal_Size__c -->
+                                                            </tr>
+                                                             <tr>
+                                                                <!-- BEGIN AACGMNewCustomers__c -->
+                                                                <td>
+                                                                    {!$ObjectType.AnnualGoals__c.fields.AACGMNewCustomers__c.label}
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.AACGMNewCustomers__c}"/>
+                                                                </td>
+
+                                                               
+                                                                <td>
+                                                                    <apex:outputField value="{!teamAnnualGoal.AACGMNewCustomersGoal__c}"/>
+                                                                </td>
+
+                                                                <td>
+                                                                    <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.AACGMNewCustomersGoal__c != 0 && teamAnnualGoal.AACGMNewCustomersGoal__c != null 
+                                                                                                && teamAnnualGoal.AACGMNewCustomers__c != 0 && teamAnnualGoal.AACGMNewCustomers__c != null}">
+                                                                        
+                                                                        <!-- GOAL NOT EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.AACGMNewCustomersGoal__c >= teamAnnualGoal.AACGMNewCustomers__c}" >
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="100"/>
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar"
+                                                                                        rendered="{!CEILING(goal.AACGMNewCustomers__c/teamAnnualGoal.AACGMNewCustomersGoal__c *100)>=1}"
+                                                                                         style="width:{!goal.AACGMNewCustomers__c/teamAnnualGoal.AACGMNewCustomersGoal__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+
+                                                                        <!-- GOAL EXCEEDED -->
+                                                                        <apex:outputPanel layout="block" rendered="{!teamAnnualGoal.AACGMNewCustomersGoal__c < teamAnnualGoal.AACGMNewCustomers__c}">
+                                                                            <c:TC_SalesDashboardPercentageRow maxLabel="{!CEILING (teamAnnualGoal.AACGMNewCustomers__c/teamAnnualGoal.AACGMNewCustomersGoal__c *100)}"/>
+                                                                            
+                                                                            <div class="row">
+                                                                                <div class="progress">
+                                                                                    <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                                                        <apex:outputPanel layout="block" styleClass="progress-bar" rendered="{!CEILING(goal.AACGMNewCustomers__c/teamAnnualGoal.AACGMNewCustomers__c *100)>=1}"
+                                                                                         style="width:{!goal.AACGMNewCustomers__c/teamAnnualGoal.AACGMNewCustomers__c *100}%; 
+                                                                                            background-color:{!goal.color__c}"/>
+                                                                                    </apex:repeat>
+                                                                                </div>
+                                                                            </div>
+                                                                        </apex:outputPanel>
+                                                                    </apex:outputPanel> <!-- end if not null -->
+                                                                </td>
+                                                            </tr>
+                                                            <!-- END   AACGMNewCustomers__c -->
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+
+                                                <div class="col-md-2 col-md-offset-1" style="border: 1px solid #DDD;margin: 0px 30px;padding-left: 35px;">
+                                                    
+                                                    <div class="row" style="padding:5px;">
+                                                       <h5> Legend: </h5>
+                                                    </div>   
+
+                                                    <div class="row">
+                                                        <apex:repeat value="{!individualMemberGoals}" var="goal">
+                                                            <div class="row">
+                                                                <div class="col-md-1">
+                                                                    <div style="width:15px; height:10px; background-color:{!goal.color__c}"></div>
+                                                                </div>
+                                                                <div class="col-md-8">
+                                                                    <apex:outputLink value="{!URLFOR($Page.AnnualGoalsDashboard)}?userId={!goal.User__c}&year={!selectedYearString}" target="_blank">
+                                                                        {!goal.User__r.FirstName} {!goal.User__r.LastName}
+                                                                    </apex:outputLink>
+                                                                </div>
+                                                            </div>
+                                                        </apex:repeat>
+                                                        <!-- add team total color -->
+                                                        <div class="row">
+                                                                <div class="col-md-1">
+                                                                    <div style="width:15px; height:10px; background-color:{!teamChartColor}"></div>
+                                                                </div>
+                                                                <div class="col-md-8">
+                                                                    Team Total
+                                                                </div>
+                                                            </div>
+
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </apex:outputPanel>
+                <!-- END TEAM WIDGET -->
+            </apex:outputPanel>
+
+        </apex:outputPanel>
+
+    </apex:form>
+    <c:ProgressStatus labelText="Please Wait"/>
+    <script type="text/javascript">
+        $(document).ready(function(){
+            init();
+        });
+
+        function init () {
+            initPicklists ();
+            //initTable ();
+        }
+
+        function initTable () {
+            $('.table-goals').DataTable({
+                "pageLength": 50,
+                "orderFixed": [ 0, 'desc' ],
+               
+            });
+        }
+
+        function initPicklists () {
+            $('.options').chosen({
+                no_results_text: "Nothing found!",
+                max_selected_options : 1
+            });
+        }
+    </script>
+
+    <style type="text/css">
+
+    .progress {
+        margin-left: 15px;
+        margin-right: 15px;
+    }
+
+    #goalsTable_length, #goalsTable_filter, #goalsTable_info, #goalsTable_paginate {
+        display: none;
+    }
+    </style>
+</apex:page>

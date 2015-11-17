@@ -1,0 +1,627 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<title>Salesforce - Absolute Automation Setup</title>
+<link rel='stylesheet' type='text/css' href='/sCSS/22.0/Theme3/default/common.css'/>
+<link rel='stylesheet' type='text/css' href='/sCSS/22.0/Theme3/default/extended.css'/>
+<script type="text/javascript" src="/js/functions.js"></script>
+<script type="text/javascript" src="/soap/ajax/12.0/connection.js"></script>
+<script type="text/javascript" src="/soap/ajax/12.0/apex.js"></script>
+<script type="text/javascript" src="https://www.ihance.com/js/prototype.js"></script>
+<script type="text/javascript">
+<!--
+var START_AACFG, AACFG; // cache the first loaded & current aacfg values
+var STEP = 1;
+var STEPS = 4;
+var SIGNUP_STEP = 1;
+var ADDRS_STEP  = 2;
+var LAYOUT_STEP = 3;
+var STEP_STATUS = [ null, false, false, false, false ];
+
+var preload = new Image();
+preload.src = "https://www.ihance.com/img/aav2/ajaxloader.gif";
+
+var SID = '{!$Api.Session_ID}';
+var SRV = '{!$Api.Partner_Server_URL_120}';
+
+//-------------------------------------------------------------------------------
+// page load & global
+//-------------------------------------------------------------------------------
+function initPage() {
+	hideParentButtons();
+	sforce.connection.client = 'DoveTail/1.0';
+
+	if (canQueryAAConfig()) {
+		setLayoutEditorVisibility();
+		sfGetAAConfig();
+		START_AACFG = AACFG;
+	
+		setDataStatus(); // set the users/contacts/leads catalog status
+
+		showSetupDiv(!AACFG.isSetupDone());
+		}
+	else {
+		showSetupDiv(false);
+		}
+
+	// heighten my window
+	try {
+		window.parent.document.getElementById('itarget').style.height = '2000px';
+		}
+	catch (e) {}
+	}
+
+
+// same as the parent frame's "Don't Show Me This Page Again" button
+function hideSplashScreen() {
+	var loc = window.parent.location;
+	var args = $H(loc.search.toQueryParams());
+	args.set('splash', 'HIDE'); // overwrite current value if it exists
+	args.set('hide', 1); // overwrite current value if it exists
+	loc.replace(loc.pathname + '?' + args.toQueryString());
+	}
+
+// hide SFDC's "Don't show me this page again" and "Continue" buttons in the parent frame
+function hideParentButtons() {
+	var pDoc = window.parent.document;
+	['continue', 'hide'].each(function(str) { 
+		var list = pDoc.getElementsByName(str);
+		if (list.length > 0) hide(list.item(0));
+		});
+	}
+
+//-------------------------------------------------------------------------------
+// SFDC interactions
+//-------------------------------------------------------------------------------
+function sfGetAAConfig() {
+	var qr = sforce.connection.query('select Id, LastModifiedDate, i__UIKey__c, i__InstallUsers__c, i__InstallContacts__c, i__InstallLeads__c, i__InstallPageLayouts__c from i__AAConfig__c');
+	AACFG = addCfgMethods(qr.records ? qr.records : {}); // singleton row = use 'qr.records' instead of 'qr.records[0]'
+	}
+
+function addCfgMethods(cfg) {
+	cfg.isDataDone = function() {
+		return this.i__InstallUsers__c == '(done)'
+				&& this.i__InstallLeads__c == '(done)'
+				&& this.i__InstallContacts__c == '(done)';		
+		}
+	cfg.isDataStarted = function() {
+		return this.i__InstallUsers__c != null
+				|| this.i__InstallLeads__c != null
+				|| this.i__InstallContacts__c != null;
+		}
+	cfg.isLayoutsDone  = function() { return this.i__InstallPageLayouts__c == '(done)'; }
+	cfg.isUIKeySet     = function() {	return this.i__UIKey__c != null; }
+	cfg.isSetupDone    = function() { return this.isUIKeySet() && this.isDataDone(); } // don't gate on layouts; unsure if that flag updates for manual-page-updaters
+	return cfg;
+	}
+
+// catch two error types:
+// a.  User does not have read permission to AAConfig = query throws exception
+// b.  User has read permission, but (for some reason) cannot actually read the rows (row sharing issue)
+// We no longer check for aa_api permissions, as PE orgs don't allow WebService access via partner token
+// So we query for the existing row (detects a) and compare to the aa_api call (detects b)
+function canQueryAAConfig() {
+	try {
+		return sforce.connection.query('select Id from i__AAConfig__c').size > 0;
+		}
+	catch (e) { // case (a)
+		return false;
+		}
+	}
+
+function setLayoutEditorVisibility() {
+	try {
+		var ignored = sforce.apex.execute('i.aa_api', 'config_exists', {}); // only works if user has access to aa_api (and thus should have MDAPI as well)
+		}
+	catch (e) { // no access
+		$$('.noMDAPI').each(hide);
+		layouts_toggle(true);
+		}
+	}
+
+//-------------------------------------------------------------------------------
+// utility
+//-------------------------------------------------------------------------------
+function show(obj, disp) { 
+	$(obj).style.display = disp;
+	$(obj).style.visibility = "visible";
+	}
+function hide(obj) {
+	if ($(obj) == null) return;
+	$(obj).style.display = "none";
+	$(obj).style.visibility = "hidden";
+	}
+function mask(obj) {
+	$(obj).style.visibility = "hidden";
+	}
+
+function showSetupDiv(showAdmin) {
+	hide(showAdmin ? 'usersetup' : 'adminsetup');
+	show(showAdmin ? 'adminsetup' : 'usersetup', 'block');
+	if (showAdmin) {
+		STEP = 1;
+		new Step(1).show();
+		}
+	if (!showAdmin && AACFG == null) hide('sysadmin_review_link'); // user can't even query AACFG; don't show sysadmin review link
+	}
+
+function layoutArgs() { 
+	return 'mob=1&sid=' + encodeURIComponent(SID) + '&srv=' + encodeURIComponent(SRV); // note "mobile" arg
+	}
+
+function layouts_toggle(showManual) {
+	hide(showManual ? 'layouts_auto' : 'layouts_manual');
+	show(showManual ? 'layouts_manual' : 'layouts_auto', 'block');
+	if (showManual) new Step(LAYOUT_STEP).finish(); // make "Next" button appear
+	}
+
+// call 'func' every 'opts.wait' seconds until it 'func' returns true
+// multiply 'opts.wait' by 'opts.backoff' on every interation to a max wait of 'opts.max'
+function backoff_loop(func, opts) {
+	opts         = opts         || {};
+	opts.wait    = opts.wait    || 1;
+	opts.max     = opts.max     || 60;
+	opts.backoff = opts.backoff || 1.25;
+	var mywait = opts.wait;
+	opts.wait = opts.wait * opts.backoff;
+	func() || setTimeout(function() { backoff_loop(func, opts); }, mywait*1000);
+	}
+
+//-------------------------------------------------------------------------------
+// step navigation
+//-------------------------------------------------------------------------------
+function nextStep(inc) {
+	new Step(STEP).hide();
+	STEP += inc;
+	new Step(STEP).show();
+	}
+
+function toggleNav(nav, viz) {
+	$('btn_' + nav + '_step').style.visibility = viz ? 'visible' : 'hidden';
+	}
+
+function showSubStep(substep) {
+	$('step' + substep).style.visibility='visible';
+	}
+
+function Step(stepnum) {
+	this.stepnum = stepnum;
+	this.name = 'step' + stepnum;
+	this.go_link = this.name + '_go_link';
+	this.status_area = this.name + '_status_area';
+	}
+Step.prototype.checkDone = function() {
+	if (this.stepnum == ADDRS_STEP && AACFG.isDataDone()) { this.finish(); return true; }// special-case hackery
+	return false;
+	}
+Step.prototype.finish = function() {
+	STEP_STATUS[this.stepnum] = true;
+	toggleNav('next',true);
+	}
+Step.prototype.go = function(func) {
+	hide(this.go_link);
+	show(this.status_area,'block');
+	if (func) setTimeout(func, 10); // need to use 'setTimeout' so UI updates actually happen
+	}
+Step.prototype.show = function() {
+	show(this.name,'block');
+	toggleNav('prev', this.stepnum != 1);
+	if (this.stepnum != STEPS && STEP_STATUS[this.stepnum]) toggleNav('next', true);
+	if (this.stepnum == ADDRS_STEP)  showAddrsStep();
+	if (this.stepnum == SIGNUP_STEP) showSignupStep();
+	if (this.stepnum == LAYOUT_STEP) showLayoutStep();
+	this.checkDone();
+	}
+Step.prototype.hide = function() {
+	hide(this.name);
+	toggleNav('prev', false);
+	toggleNav('next', false);
+	}
+
+	
+//-------------------------------------------------------------------------------
+// Step 1 - api access
+//-------------------------------------------------------------------------------
+function showSignupStep() {
+	backoff_loop(function() {
+		sfGetAAConfig();
+		if (AACFG.isUIKeySet()) uiKeyDone();
+		return AACFG.isUIKeySet();
+		},
+		{ wait: 4, max: 20, backoff: 1.1 } // tweak intervals b/c OAuth grant happens in other window
+		); 
+	}
+
+function uiKeyDone() {
+	hide('signupframe');
+	show('signup_status', 'block');
+	new Step(SIGNUP_STEP).finish();
+	}	
+
+//-------------------------------------------------------------------------------
+// Step 2 - data initialization
+//-------------------------------------------------------------------------------
+function showAddrsStep() {
+	new Step(ADDRS_STEP).go(doData); // simulate button-click for already started catalog step
+	}
+
+function doData() {
+	if (AACFG.isDataDone()) return new Step(ADDRS_STEP).checkDone();
+	backoff_loop(function() {
+		updateDataStatus();
+		return AACFG.isDataDone(); // can exit loop
+		});
+	}
+
+function updateDataStatus() {
+	show('data_status_refreshing');
+	sfGetAAConfig(); // so our cached AACFG has users/leads/contact '(done)'
+	setDataStatus(); // set the users/contacts/leads catalog status
+	setTimeout(function() { mask('data_status_refreshing'); }, 450);
+	new Step(ADDRS_STEP).checkDone();
+	}
+
+function setDataStatus() {
+	$('data_status_text').innerHTML = ''
+		+ 'Users    : ' + getExistingAddrStatus(AACFG.i__InstallUsers__c) + '<br/>'
+		+ 'Leads    : ' + getExistingAddrStatus(AACFG.i__InstallLeads__c) + '<br/>'
+		+ 'Contacts : ' + getExistingAddrStatus(AACFG.i__InstallContacts__c)
+		;
+	}
+
+function getExistingAddrStatus(str) {
+	if (str == null) return 'starting...';
+	if (str.match(/(done|Aborted|Failed|error)/)) return str;
+	return 'running';
+	}
+
+//-------------------------------------------------------------------------------
+// Step 3 - page layout editor
+//-------------------------------------------------------------------------------
+function showLayoutStep() {
+	checkLayoutsDone();
+	if (!AACFG.isLayoutsDone()) $('layoutframe').src = 'https://www.ihance.com/aav2/layouteditor.aspx?checkall=on&' + layoutArgs();
+	}
+
+function checkLayoutsDone() {
+	backoff_loop(function() {
+		sfGetAAConfig();
+		if (AACFG.isLayoutsDone()) layoutsDone();
+		return AACFG.isLayoutsDone();
+		});
+	}
+
+function layoutsDone() {
+	// keep layout frame visible in case it has useful info like skipped files.
+	show('layout_status', 'block');
+	new Step(LAYOUT_STEP).finish();
+	}
+
+
+//-->
+</script>
+<style type="text/css">
+<!--
+div.page_title {
+width: 90%;
+text-align: center;
+height: 40px;
+padding-top:20px;
+}
+
+div.page_title h1 {
+font-size:12px;
+font-weight:bold;
+padding-bottom:8px;
+border-bottom:4px solid #E9702D;
+}
+
+div.logo {
+text-align:right;
+margin-top:-40px;
+}
+
+li.hidden_step {
+visibility:hidden;
+}
+
+div.step_wrapper {
+display:none;
+visibility:hidden;
+}
+
+div.step_hdr {
+padding:4px;
+font-weight:bold;
+font-size:1.3em;
+border-bottom: 1px solid #DBDBDB;
+margin-bottom: 10px;
+}
+
+div.step_wrapper div.pbBody {
+border-bottom: 1px solid #DBDBDB;
+padding-left: 4px;
+}
+
+#step1 div.pbBody {
+height:300px;
+}
+
+div.status_area {
+display:none;
+visibility:hidden;
+font-size:110%;
+}
+
+img.loading_img {
+margin-bottom:-2px;
+margin-right:10px;
+}
+
+div.manualsteps ol li {
+padding-bottom: 12px;
+padding-left:4px;
+}
+
+div.manualsteps ol li img {
+margin:20px;
+}
+
+div.manualsteps ol.tighter li {
+padding-bottom: 6px;
+}
+
+div.manualsteps ol li ol li {
+list-style-type: lower-alpha;
+padding-top: 6px;
+padding-bottom: 0px;
+margin-left:0px;
+}
+div.manualsteps ol li ol li p {
+margin-top:0px;
+padding-top:4px;
+padding-bottom:0px;
+margin-bottom:0px;
+}
+
+.comment {
+font-style: italic;
+margin-left: 12px;
+}
+
+span.vidlink {
+margin-left: 12px;
+}
+
+span.vidlink a {
+padding:2px;
+color:blue;
+}
+
+div#usersetup li {
+padding-top: 32px;
+}
+
+li em {
+font-size: 110%;
+font-style: normal;
+font-weight: bold;
+}
+
+#dataTable {
+border: 1px #999 solid;
+}
+
+tr.data_status_refresh td {
+padding-top:4px;
+}
+
+-->
+</style>
+</head>
+<body onload="initPage();">
+
+<div class="page_title">
+	<h1>iHance Absolute Automation Setup</h1>
+</div>
+<div class="logo">
+	<img src="https://www.ihance.com/img/aav2/setup_logo.gif"/>
+</div>
+
+<br/><br/>
+
+<div id="usersetup" style="visibility:hidden;display:none;">
+
+<table width=100%>
+<tr>
+<td valign="top">
+	<h2>Please customize your tabs to include the new "Emails" tab.</h2>
+	<ol>
+		<li><em><a href="/p/setup/layout/ConfigureMyTabs" target="dowork">Click here</a></em> to edit your tabs.<span class="comment">(this will open a new window)</span></li>
+		<li>On <em>that</em> page, add the <em>Emails</em> tab, and then click <em>Save</em>.</li>
+		<li>Back on <em>this</em> page, click <input class="btn" type="button" title="Don't show me this page again" onclick="hideSplashScreen();" name="hide" value="Don't show me this page again"/> and continue on to <a href="/apex/i__aaprefs" target=_top>the Emails tab!</a>.
+			<div id="sysadmin_review_link" class="comment" style="font-size:95%;margin-top:200px;">sysadmins - click <a href="#" onclick="showSetupDiv(true);return false;">here</a> to review the administrative setup.</div>
+		</li>
+	</ol>
+</td>
+<td align="center">
+	<img src="https://www.ihance.com/img/aav2/customizetabs.gif"/>
+	<br/>
+	<span class="comment"><a href="/p/setup/layout/ConfigureMyTabs" target="dowork">Customize your tabs</a></span>
+	<span class="vidlink">|</span>
+	<span class="vidlink"><a target="setupvid" href="https://www.ihance.com/flash/aav2setup/customize_tabs/customize_tabs.htm">Watch video</a></span>
+</td>
+</tr>
+</table>
+</div>
+
+
+
+<div id="adminsetup" style="visibility:hidden;display:none;">
+
+This process should take about 20 minutes.  If you need help at any point, please contact <a href="mailto:support@ihance.com">support@ihance.com</a> and we'll get you unstuck.
+<br/><br/>
+
+<div class="individualPalette">
+	<div class="Custom92Block">
+		<div class="bPageBlock secondaryPalette">
+
+			<div class="step_wrapper" id="step1">
+				<div class="pbHeader">
+					<div class="step_hdr">Step 1 of 4:&nbsp;&nbsp;API Access</div>
+				</div>
+				<div class="pbBody">
+					<a target="_new" href="/services/oauth2/authorize?response_type=code&client_id=3MVG9VmVOCGHKYBT4dfRBZNk1Fw0xYLzsW7e9i8DH.F7Oq2qIAeiJIgg1dIU54.7YpCstl1rtu3r7LBedjdyJ&redirect_uri=https://www.ihance.com/aav2/oauthcallback/&state=newcid%3D1">Click here</a> to grant API access so iHance can log your emails.
+					<br/><br/>
+					This will open a new tab; when you are done come back to this page and go to the next step.
+					<br/><br/>
+					<div id="signup_status" class="status_area">
+						<b>Done!</b>
+						<br/><br/>
+					</div>
+				</div>
+			</div>
+
+			<div class="step_wrapper" id="step2">
+				<div class="pbHeader">
+					<div class="step_hdr">Step 2 of 4:&nbsp;&nbsp;Data Initialization</div>
+				</div>
+				<div class="pbBody">
+					Before using Absolute Automation, we must first catalog all of the existing email addresses in your system.
+					<br/><br/>
+					These jobs have already started, and must complete before proceeding.
+					<br/><br/>
+					<i>Note: this doesn't change your existing data in any way.</i>
+					<br/><br/>
+					<div id="step2_status_area" class="status_area">
+						<br/>
+						<table id="dataTable">
+							<tr><td><pre id="data_status_text"></pre></td></tr>
+							<tr class='data_status_refresh'><td><img id="data_status_refreshing" style="display:block;visibility:hidden;" class="loading_img" src="https://www.ihance.com/img/aav2/ajaxloader.gif"/></td><td style="font-size:90%;">(<a href="#" onclick="updateDataStatus();return false;">refresh</a>)</td></tr>
+						</table>
+						<div style="margin-top:16px;line-height:2em;">
+							Once all 3 types are "done", go to the next step by clicking <b>Next</b> below.
+							<br/>
+							You can leave this can leave this page and check back at any time.<br/>
+							You can also check the job status on the <a target="dowork" href="/apexpages/setup/listAsyncApexJobs.apexp">Apex Jobs page</a>.
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="step_wrapper" id="step3">
+				<div class="pbHeader">
+					<div class="step_hdr">Step 3 of 4:&nbsp;&nbsp;Page Layouts</div>
+				</div>
+				<div class="manualsteps">
+					The next step is to add Absolute Automation email lists to your current Page Layouts for Accounts, Contacts, Leads, Opportunities, and Cases.
+				</div>
+				<div id="layouts_auto" class="pbBody manualsteps noMDAPI">
+					<br/><br/>
+					In the area below, select the layouts you want Email related lists to appear in.
+					<span class="comment">If you'd rather do this by hand, <a href="#" onclick="layouts_toggle(true);return false;">click here</a>.</span>
+					<br/><br/>
+					<iframe id="layoutframe" style="height:240px;width:700px;border: 1px #999 solid;" frameborder=0></iframe>
+					<div id="layout_status" class="status_area">
+						<br/><br/>
+						<b>Done!</b>
+						<br/><br/>
+					</div>
+				</div>
+				<div id="layouts_manual" class="pbBody manualsteps" style="display:none;visibility:hidden;">
+					<span class="comment noMDAPI"><br/>If you'd rather we automate this for you, <a href="#" onclick="layouts_toggle(false);return false;">click here</a>.</span>
+					<ol>
+						<li>Add the "Emails" snippet to Account, Contact, Lead, and Opportunity page layouts.
+							<ol>
+								<li>Go to <a target="dowork" href="/ui/setup/layout/PageLayouts?type=Account" title="Go to Account Page Layouts (new window)"><b>Setup &gt; App Setup / Customize &gt; Accounts &gt; Page Layouts</b></a> and edit the base <b>Account Layout</b>.</li>
+								<li>In the top left area of the Layout Editor, choose <b>Visualforce Pages</b> and drag a new Section down into your layout.
+									<p><img src="https://www.ihance.com/img/aav2/layouteditor_1.png"/></p>
+									<p>We recommend placing this section at the bottom of the detail area, just above the "Related Lists" section.</p>
+									<p>When prompted to configure the new Section, name it <b>Emails</b> and make sure it is <b>1 column</b> rather than the default 2-column layout.</p>
+									<p><img src="https://www.ihance.com/img/aav2/layouteditor_2.png"/></p>
+									</li>
+								<li>Back at the top of the layout editor, grab the <b>Absolute Automation...</b> widget and drag it into your new Section.
+									<p><img src="https://www.ihance.com/img/aav2/layouteditor_3.png"/></p>
+								</li>
+								<li>For salesforce1 support, move the <b>mobile Absolute A...</b> widget and into the "Mobile Cards" area of the layout.
+									<p><img src="https://www.ihance.com/img/aav2/layouteditor_mobile.png"/></p>
+									<p>Edit the properties of the "Mobile Card" to be 185 pixels high, rather than the default of 200.</p>
+									<p><img src="https://www.ihance.com/img/aav2/layouteditor_mobile_properties.png"/></p>
+								</li>
+								<li>Save the layout.</li>
+								<li><b>Repeat</b> this process for all desired page layouts in
+									<span class="noMDAPI"><a target="dowork" href="/ui/setup/layout/PageLayouts?type=Account"     title="Go to Account Page Layouts (new window)"><b>Accounts</b></a>,</span>
+									<a target="dowork" href="/ui/setup/layout/PageLayouts?type=Contact"     title="Go to Contact Page Layouts (new window)"><b>Contacts</b></a>,
+									<a target="dowork" href="/ui/setup/layout/PageLayouts?type=Lead"        title="Go to Lead Page Layouts (new window)"><b>Leads</b></a>, and
+									<a target="dowork" href="/ui/setup/layout/PageLayouts?type=Opportunity" title="Go to Opportunity Page Layouts (new window)"><b>Opportunities</b></a>.
+								</li>
+							</ol>
+						</li>
+						<li>Add the "Emails" related list to the Case page layout.
+							<ol>
+								<li>Go to <a target="dowork" href="/ui/setup/layout/PageLayouts?type=Case" title="Go to Case Page Layouts (new window)"><b>Setup &gt; App Setup / Customize &gt; Cases &gt; Page Layouts</b></a> and edit the base <b>Case Layout</b>.</li>
+								<li>In the top left area of the Layout Editor, choose <b>Related Lists</b> and drag <b>Emails (Case)</b> related list to the layout.</li>
+								<li>Edit the <b>Emails (Case) Properties</b> to show the <b>Subject</b>, <b>Sent</b>, <b>From</b>, and <b>To</b> fields (in that order).
+									<p><b>Sort</b> by "Sent" descending.</p>
+									<p><b>Uncheck</b> the "New" Standard Buttons option.</p>
+								</li>
+								<li class="noMDAPI"><b>Repeat</b> this process for all desired Case page layouts.
+							</ol>
+						</li>
+						<li>Add the "Other Email Addresses" field to the
+									<a target="dowork" href="/ui/setup/layout/PageLayouts?type=Contact" title="Go to Contact Page Layouts (new window)"><b>Contact</b></a> and 
+									<a target="dowork" href="/ui/setup/layout/PageLayouts?type=Lead"    title="Go to Lead Page Layouts (new window)"><b>Lead</b></a> page layouts.
+							<p>This step is similar to the previous two; note there may be multiple pages of Fields so you might need to page through them to find "Other Email Addresses."
+							<br/>We recommend placing the "Other Email Addresses" field directly below the existing "Email" field.</p>
+							<p><img src="https://www.ihance.com/img/aav2/layouteditor_otheremails.png"/></p>
+						</li>
+					</ol>
+				</div>
+			</div>
+
+
+
+			<div class="step_wrapper" id="step4">
+				<div class="pbHeader">
+					<div class="step_hdr">Step 4 of 4:&nbsp;&nbsp;Admin tasks</div>
+				</div>
+				<div class="pbBody manualsteps">
+					Just one more step!
+					<ol>
+						<li>
+							Enable Absolute Automation for your target Users.
+							<ol>
+								<li><b><a target="dowork" href="/apex/i__aaadmin" title="Go to Admin area (new window)">Click here</a></b> to go to the Admin area of Absolute Automation.</li>
+								<li>Scroll down to the "User Preferences" area.</li>
+								<li>Check the "Use Absolute Automation" checkbox for your target Users.</li>
+									<p><span class="comment">If desired, edit or change their Email Addresses list.  Absolute Automation must be enabled for each User whose email will be logged.</span></p>
+								<li>Click <b>Save</b>.
+									<span class="comment">Note - your new users will get an Email with a link to the Absolute Automation interface.</span>
+								</li>
+								<li><a href="#" onclick="showSubStep('4_2');return false;">Click here when done</a>
+							</ol>
+						</li>
+						<li id="step4_2" class="hidden_step">	
+							<b/>Setup complete!</b>
+							<br/><br/>
+							<a href="#" onclick="new Step(4).finish();new Step(4).hide();showSetupDiv(false);return false;">Click here</a> for the standard User setup.
+						</li>
+					</ol>
+				</div>
+			</div>
+
+			<div class="pbBottomButtons">
+				<input id="btn_prev_step" type="button" value="Previous" onclick="nextStep(-1); return false;" style="margin:8px;padding:4px 18px;visibility:hidden;font-size:1.2em;" class="btn"/>
+				<input id="btn_next_step" type="button" value="Next" onclick="nextStep(1); return false;" style="margin:8px;padding:4px 18px;visibility:hidden;font-size:1.2em;" class="btn"/>
+			</div>
+			<div class="pbFooter secondaryPalette">
+				<div class="bg"></div>
+			</div>
+		</div>
+	</div>
+</div>
+</div> <!-- /adminsetup -->
+
+
+</body>
+</html>

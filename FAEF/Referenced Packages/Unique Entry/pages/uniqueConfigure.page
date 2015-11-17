@@ -1,0 +1,195 @@
+<apex:page setup="true" controller="UniqueEntry.uniqueConfigureController">
+
+	<apex:styleSheet value="{!URLFOR($Resource.UniqueEntry__uniqueEntryResources, 'uniqueStyle.css')}"/>
+    <apex:includeScript value="{!$Resource.UniqueEntry__jQuery}"/>
+   
+    <script>
+    
+        function showMessagePop() {
+            $("#overlay").css("visibility", "visible");
+            $("#messagePop").css("visibility", "visible");
+        }
+        
+        function hideMessagePop() {
+            $("#overlay").css("visibility", "hidden");
+            $("#messagePop").css("visibility", "hidden");
+        }
+        
+		function addToOnload(fn){
+            var old = window.onload;
+            window.onload = function(){
+                old(); fn();
+            }
+        }
+        
+        function moveMoreFields(){
+        
+        	var $leadSelect = $("table[id*='leadPanel']").find("select[id*='leftList']");
+        	var $leadMoreSelect = $("select[id*='moreLeadFields']");
+        	$leadMoreSelect.find('option').clone().appendTo($leadSelect);
+        	
+        	var $personAccountSelect = $("table[id*='personAccountPanel']").find("select[id*='leftList']");
+        	var $personAccountMoreSelect = $("select[id*='morePersonAccountFields']");
+        	$personAccountMoreSelect.find('option').clone().appendTo($personAccountSelect);
+        	
+        	var $accountSelect = $("table[id*='accountPanel']").find("select[id*='leftList']");
+        	var $accountMoreSelect = $("select[id*='moreAccountFields']");
+        	$accountMoreSelect.find('option').clone().appendTo($accountSelect);
+        	
+        	var $contactSelect = $("table[id*='contactPanel']").find("select[id*='leftList']");
+        	var $contactMoreSelect = $("select[id*='moreContactFields']");
+        	$contactMoreSelect.find('option').clone().appendTo($contactSelect);
+        }
+        
+        addToOnload(moveMoreFields);
+    
+    </script>
+
+
+    <apex:sectionHeader title="Unique Entry Settings"/>
+    
+    <apex:form >
+    
+        <apex:pageBlock mode="edit">
+    
+            <apex:pageBlockButtons >
+                <apex:commandButton value="Save" action="{!onSave}" rerender="messagePop" oncomplete="showMessagePop()"/>
+                <apex:commandButton value="Cancel" action="{!onCancel}"/>
+            </apex:pageBlockButtons>
+    
+            <apex:pageBlockSection title="Security Setting" columns="1">
+                <apex:selectRadio layout="pageDirection" value="{!settings.UniqueEntry__Security_Level__c}" label="">
+                    <apex:selectOption itemValue="high" itemLabel="HIGH - Possible duplicate record searches are limited to records the user has access to view."/>
+                    <apex:selectOption itemValue="medium" itemLabel="MEDIUM - Possible duplicate records the user doesn't normally have access to view are displayed but with all fields hidden except Name and Owner."/>
+                    <apex:selectOption itemValue="low" itemLabel="LOW - Duplicate search includes and displays all possible duplicates regardless of whether the user has access to view that record or not."/>
+                </apex:selectRadio>
+            </apex:pageBlockSection>
+            
+            <apex:pageBlockSection title="{!$ObjectType.Account.Label} Settings" columns="1">
+            	<apex:panelGrid columns="2" columnClasses="labelColumn,fieldColumn" styleClass="optionGrid" cellpadding="6" id="accountPanel">
+            	
+            		<apex:outputPanel styleClass="multiSelectLabel" layout="block">
+            			Select up to five fields to display in the warning box when duplicate {!$ObjectType.Account.LabelPlural} are detected.<br/>
+            			<br/>
+            			"{!$ObjectType.Account.Fields.Name.Label}" is always displayed and is before the fields you select here, "Owner" is always displayed and appears last.
+            		</apex:outputPanel>
+                	<c:MultiselectPicklist leftLabel="Available {!$ObjectType.Account.Label} Fields" leftOptions="{!allAccountFields}" rightLabel="Selected {!$ObjectType.Account.Label} Fields" rightOptions="{!selectedAccountFields}" size="14" width="150px"/>
+            	
+            	</apex:panelGrid>
+            </apex:pageBlockSection>
+            
+            <apex:pageBlockSection title="Person Account Settings" columns="1" rendered="{!isPersonAccountsEnabled}">
+            	<apex:panelGrid columns="2" columnClasses="labelColumn,fieldColumn" styleClass="optionGrid" cellpadding="6" id="personAccountPanel">
+            	
+            		<apex:outputPanel styleClass="multiSelectLabel" layout="block">
+            			Select up to five fields to display in the warning box when duplicate Person Accounts are detected.<br/>
+            			<br/>
+            			"Name" is always displayed and is before the fields you select here, "Owner" is always displayed and appears last.
+            		</apex:outputPanel>
+                	<c:MultiselectPicklist leftLabel="Available Person Account Fields" leftOptions="{!allPersonAccountFields}" rightLabel="Selected Person Account Fields" rightOptions="{!selectedPersonAccountFields}" size="14" width="150px"/>
+            
+            	</apex:panelGrid>
+            </apex:pageBlockSection>
+            
+            <apex:pageBlockSection title="{!$ObjectType.Contact.Label}  Settings" columns="1">
+            	<apex:panelGrid columns="2" columnClasses="labelColumn,fieldColumn" styleClass="optionGrid" cellpadding="6" id="contactPanel">
+            	
+            		<apex:outputPanel styleClass="multiSelectLabel" layout="block">
+            			Select up to five fields to display in the warning box when duplicate {!$ObjectType.Contact.LabelPlural} are detected.<br/>
+            			<br/>
+            			"{!$ObjectType.Contact.Fields.Name.Label}" is always displayed and is before the fields you select here, "Owner" is always displayed and appears last.
+            		</apex:outputPanel>
+                	<c:MultiselectPicklist leftLabel="Available {!$ObjectType.Contact.Label}  Fields" leftOptions="{!allContactFields}" rightLabel="Selected {!$ObjectType.Contact.Label}  Fields" rightOptions="{!selectedContactFields}" size="14" width="150px"/>
+
+					<apex:outputPanel rendered="{!camp}">
+            			Campaign lookup field on {!$ObjectType.Contact.Label} entry pages
+            		</apex:outputPanel>
+                	<apex:selectList value="{!settings.UniqueEntry__Contact_Campaign_Lookup_Field__c}" multiselect="false" size="1" rendered="{!camp}">
+                    	<apex:selectOption itemValue="required" itemLabel="Display as required"/>
+                    	<apex:selectOption itemValue="optional" itemLabel="Display as optional"/>
+                    	<apex:selectOption itemValue="hidden" itemLabel="Do not display"/>
+                	</apex:selectList>
+                
+                </apex:panelGrid>
+            </apex:pageBlockSection>
+        
+            <apex:pageBlockSection title="{!$ObjectType.Lead.Label} Settings" columns="1">
+            	<apex:panelGrid columns="2" columnClasses="labelColumn,fieldColumn" styleClass="optionGrid" cellpadding="6" id="leadPanel">
+            
+            		<apex:outputPanel styleClass="multiSelectLabel" layout="block">
+            			Select up to five fields to display in the warning box when duplicate {!$ObjectType.Lead.LabelPlural} are detected.<br/>
+            			<br/>
+            			"{!$ObjectType.Lead.Fields.Name.Label}" is always displayed and is before the fields you select here, "Owner" is always displayed and appears last.
+            		</apex:outputPanel>
+                	<c:MultiselectPicklist leftLabel="Available {!$ObjectType.Lead.Label} Fields" leftOptions="{!allLeadFields}" rightLabel="Selected {!$ObjectType.Lead.Label} Fields" rightOptions="{!selectedLeadFields}" size="14" width="150px"/>
+                
+                	<apex:outputPanel >
+            			"Assign Using Assignment Rules" Checkbox on {!$ObjectType.Lead.Label} entry pages
+            		</apex:outputPanel>
+                	<apex:selectList value="{!settings.UniqueEntry__Lead_Assignment_Checkbox__c}" multiselect="false" size="1">
+                    	<apex:selectOption itemValue="checked" itemLabel="Display, checked by default"/>
+                    	<apex:selectOption itemValue="unchecked" itemLabel="Display, unchecked by default"/>
+                    	<apex:selectOption itemValue="hidden" itemLabel="Do not display"/>
+                	</apex:selectList>
+                
+                	<apex:outputPanel rendered="{!camp}">
+            			Campaign lookup field on {!$ObjectType.Lead.Label} entry pages
+            		</apex:outputPanel>
+                	<apex:selectList value="{!settings.UniqueEntry__Campaign_Lookup_Field__c}" multiselect="false" size="1" rendered="{!camp}">
+                    	<apex:selectOption itemValue="required" itemLabel="Display as required"/>
+                    	<apex:selectOption itemValue="optional" itemLabel="Display as optional"/>
+                    	<apex:selectOption itemValue="hidden" itemLabel="Do not display"/>
+                	</apex:selectList>
+                
+                </apex:panelGrid>
+            </apex:pageBlockSection>
+        
+            <apex:pageBlockSection title="Additional Setting" columns="1">
+				<apex:panelGrid columns="2">
+				
+					<apex:inputField value="{!settings.UniqueEntry__Boring_Mode__c}"/>
+            		<apex:outputPanel >
+            			<b>Boring Mode</b> - The duplicate warning box randomly selects a fun phrase to display each time it appears such as "Stop the Presses!" and "Heads up, my friend".
+            			Check this box to disable this feature and always use "Attention:" instead.
+            		</apex:outputPanel>
+                	
+                </apex:panelGrid>
+            </apex:pageBlockSection>
+        
+        </apex:pageBlock>
+        
+        <apex:outputPanel >
+        	<apex:selectList id="moreLeadFields" styleClass="secret" size="1">
+        		<apex:selectOptions value="{!moreLeadFields}"/>
+        	</apex:selectList>
+
+        	<apex:selectList id="morePersonAccountFields" styleClass="secret" size="1">
+        		<apex:selectOptions value="{!morePersonAccountFields}"/>
+        	</apex:selectList>
+
+        	<apex:selectList id="moreAccountFields" styleClass="secret" size="1">
+        		<apex:selectOptions value="{!moreAccountFields}"/>
+        	</apex:selectList>
+
+        	<apex:selectList id="moreContactFields" styleClass="secret" size="1">
+        		<apex:selectOptions value="{!moreContactFields}"/>
+        	</apex:selectList>
+        </apex:outputPanel>
+        
+    </apex:form>
+    
+    <div id="overlay">
+    </div>
+    
+    <apex:form >
+    	<div id="messagePop">
+            <div>
+                <apex:outputPanel id="messagePop">
+                    <apex:messages layout="table"/><br/>
+                	<input type="button" onclick="hideMessagePop();" value="OK"/>
+                </apex:outputPanel>
+            </div>
+        </div>
+    </apex:form>
+
+</apex:page>

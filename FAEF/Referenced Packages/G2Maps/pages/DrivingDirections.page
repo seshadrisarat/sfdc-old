@@ -1,0 +1,327 @@
+<apex:page cache="true" controller="g2maps.DrivingDirectionsController" title="G2Maps Driving Directions">
+    <!-- CloudTrigger G2Maps, Copyright 2011, CloudTrigger, Inc. -->
+     
+<apex:form >
+    <div style="width: 54%; float: left; border: solid silver 1px; padding: 3px;" id="directionsMap" class="tundra">
+        <c:CustomSettingMap id="locate" Width="100%" Height="400px" Visible="{!VisibleLayers}"/>
+        
+        <table width="100%">
+            <thead>
+                <tr>
+                    <th>Start Time</th>
+                    <th>Route Optimization</th>
+                    <th>Time Windows</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><input type="text" name="time1" id="time1" dojoType="dijit.form.TimeTextBox"/></td>
+                    <td>
+                        <select name="optimize" id="optimize">
+                            <option value="none">-- None --</option>
+                            <option value="lock_neither">Optimal start and end</option>
+                            <option value="lock_first">Lock the first location</option>
+                            <option value="lock_last">Lock the last location</option>
+                            <option value="lock_both">Lock both locations</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select name="windows" id="windows">
+                            <option value="none">-- None --</option>
+                            <option value="enforced">Enforced</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="button" value="Get new route" onClick="addDirections()"/>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+            
+        <div id="stopGrid" dojoType="dojox.grid.DataGrid" structure="storeLayout" queryOptions="{deep:true}" query="{}" rowsPerPage="40"></div>
+        
+    </div>
+    <div style="width: 45%; float: right; clear: right;">
+        <div style="width: 100%; clear: both; border: solid silver 1px; padding: 3px; margin-top: 3px;">
+            <div id="directionsSummary" style="width: 100%; clear: both; padding: 3px;" onClick="g2directions.zoomToFullRoute()"></div>
+            <div id="directionsDetail" style="width: 100%; clear: both; padding: 3px;"></div>
+            <div id="directionsPermalink" style="width: 100%; clear: both; padding: 3px;"></div>                             
+           
+            <!-- <input type="button" value="Send Directions" onclick="createActivity()" /> -->
+            
+            <apex:actionFunction action="{!createActivity}" name="JSdoPost" status="PostStatus" rerender="">
+                <apex:param name="curURL" assignTo="{!curURL}" value="" />                  
+            </apex:actionFunction>  
+        </div>
+    </div>
+    
+    <script type="text/javascript">
+
+
+        var storeLayout = [
+            {
+                field: "no",
+                name: "No.",
+                width: "30px",
+                editable: true
+            },
+            {
+                field: "Name",
+                name: "Name",
+                width: "200px"
+            },
+            {
+                field: "arv",
+                name: "Arrive",
+                width: "60px",
+                formatter: timeFormatter,
+                hidden: true
+            },
+            {
+                field: "dpt",
+                name: "Depart",
+                width: "60px",
+                formatter: timeFormatter,
+                hidden: true
+            },
+            {
+                field: "arvdpt",
+                name: "Arrive<br/>Depart",
+                width: "60px"
+            },
+            {
+                field: "dur",
+                name: "Duration",
+                width: "50px",
+                styles: "text-align: right;",
+                editable: true
+            },
+            {
+                field: "Id",
+                name: "i",
+                width: "120px",
+                hidden: true
+            },
+            {
+                field: "TimeWindowStart",
+                name: "Window Start",
+                width: "60px",
+                formatter: timeFormatter,
+                hidden: true
+            },
+            {
+                field: "TimeWindowEnd",
+                name: "Window End",
+                width: "60px",
+                formatter: timeFormatter,
+                hidden: true
+            },
+            {
+                field: "TimeWindow",
+                name: "Window",
+                width: "60px"
+            },
+            {
+                field: "Notes",
+                name: "Notes",
+                width: "60px"
+            }
+        ];
+        var dataStoreForGrid;
+        
+        function timeFormatter(d) {
+            if (!d || d == 0 || d == "") return "";
+            var theDate = new Date(d);
+            
+            return dojo.date.locale.format(theDate, { selector: "time" } );
+        }
+        
+        function violationFormatter(v) {
+            if (!v || v == 0 || v == "") return " ";
+            return "<img src=\"{!URLFOR($Resource.g2maps__G2Maps, 'resources/violation.gif')}\" onClick=\"alert('" + Math.round(v) + " minute Time Window violation')\"/>";
+        }
+        
+        function initDirections() {
+            if (!g2directions) return;
+            dijit.byId("time1").set("value", new Date());
+            
+            var gra, evtPt;
+            <apex:repeat value="{!Stops}" var="s">
+                evtPt = new esri.geometry.Point({!s.x}, {!s.y}, new esri.SpatialReference({ wkid: 102100 })); 
+                gra = new esri.Graphic(evtPt, g2directions.selSymbol);
+                gra.setAttributes( {
+                    "i":"{!JSENCODE(s.stopId)}",
+                    "l":"{!JSENCODE(s.LayerName)}",
+                    "x":"{!s.x}",
+                    "y":"{!s.y}",
+                    "n":"{!JSENCODE(s.Name)}",
+                    "Time":"{!NullValue(s.Duration,0)}",
+                    "Name":"{!JSENCODE(s.Name)}",
+                    "TimeWindowStart": dojo.date.stamp.fromISOString("{!JSEncode(s.StartTime)}"),
+                    "TimeWindowEnd": dojo.date.stamp.fromISOString("{!JSEncode(s.EndTime)}"),
+                    "Sequence": {!s.seq}
+                } );
+                g2directions.selectionLayer.add(gra);
+                
+            </apex:repeat>
+            
+            addDirections();
+            
+            var stopGrid = dijit.byId("stopGrid");
+            dojo.connect(stopGrid, "onApplyEdit", gridChange);
+        }
+        
+        function addDirections() {
+            g2directions.startTime = dijit.byId("time1").value;
+            
+            g2directions.findBestSequence = (dojo.byId("optimize").value != "none");
+            g2directions.preserveFirstStop = (dojo.byId("optimize").value == "lock_first" || dojo.byId("optimize").value == "lock_both");
+            g2directions.preserveLastStop = (dojo.byId("optimize").value == "lock_last" || dojo.byId("optimize").value == "lock_both");
+            
+            g2directions.useTimeWindows = (dojo.byId("windows").value == "enforced");
+
+            g2directions.startSpinning();
+            
+            dojo.connect(g2directions, "onRouteComplete", showRoute);
+            
+            g2directions.getDirections();
+        }
+        
+        function showRoute() {
+            //Display the total time and distance of the route
+            dojo.byId("directionsSummary").innerHTML = g2directions.directionsSummary;
+            g2directions.stopSpinning();
+     
+            //List the directions and create hyperlinks for each route segment
+            var dirStrings = [];
+            var counter = 1;
+            var region = getRegion();
+            dirStrings.push("<table width=\"100%\">");
+            dojo.forEach(g2directions.directionFeatures, function(feature, i) {
+                if (feature.attributes.maneuverType == "esriDMTStop" || feature.attributes.maneuverType == "esriDMTDepart") {
+                    dirStrings.push("<tr onclick=\"g2directions.zoomToSegment(" + i + "); return false;\">");
+                    
+                    dirStrings.push("<td colspan=\"3\" style=\"border-top: solid silver 2px; border-bottom: solid silver 2px; padding-top: 3px; padding-bottom: 3px;\">");
+                    dirStrings.push(feature.attributes.text);
+                    dirStrings.push("&nbsp;");
+                    dirStrings.push("around " + dojo.date.locale.format(new Date(feature.attributes.ETA), { "pattern": "HH:mm a vz", "selector":"time" }));
+                    
+                    dirStrings.push("</td>");
+                    dirStrings.push("</tr>");
+                    
+                    if (feature.attributes.maneuverType == "esriDMTDepart") {
+                        counter = 1;
+                    }
+                }
+                else {
+                    dirStrings.push("<tr onclick=\"g2directions.zoomToSegment(" + i + "); return false;\" style=\"padding-top: 2px; padding-bottom: 2px;\">");
+                    dirStrings.push("<td>" + counter + ".</td>");
+                    dirStrings.push("<td>" + feature.attributes.text + "</td>");
+                    if(region === "EU") {
+                        dirStrings.push("<td width=\"20%\">" + g2directions.formatDistance(feature.attributes.length ,"kilometers") + "</td>");
+                    } else {
+                        dirStrings.push("<td width=\"20%\">" + g2directions.formatDistance(feature.attributes.length ,"miles") + "</td>");
+                    }
+                    dirStrings.push("</tr>");
+                    counter++;
+                }
+            });
+            dirStrings.push("</table>");
+            
+            dojo.byId("directionsDetail").innerHTML = dirStrings.join("");
+            
+            // Populate the list of stops
+            var stopGrid = dijit.byId("stopGrid");
+            
+            var locations = [];
+            dojo.forEach(g2directions.directionStops, function(stop, j) {
+                var selectedObj = g2directions.getSelectedByName(stop.attributes.Name);
+                
+                if (selectedObj) {
+                    var obj = {
+                        "uid": selectedObj.attributes.l + ":" + selectedObj.attributes.i + "_" + Math.floor(Math.random() * 9999999999),
+                        "id": selectedObj.attributes.i,
+                        "no": stop.attributes.Sequence,
+                        "Name": selectedObj.attributes.Name,
+                        "arv": stop.attributes.ArriveTime,
+                        "dpt": stop.attributes.DepartTime,
+                        "arvdpt": timeFormatter(stop.attributes.ArriveTime) + "\n" + timeFormatter(stop.attributes.DepartTime), 
+                        "dur": selectedObj.attributes.Time,
+                        "TimeWindowStart": stop.attributes.TimeWindowStart,
+                        "TimeWindowEnd": stop.attributes.TimeWindowEnd,
+                        "TimeWindow": timeFormatter(stop.attributes.TimeWindowStart) + "\n" + timeFormatter(stop.attributes.TimeWindowEnd),   
+                        "Notes": stop.attributes.Violation_Time// || dojo.number.round(stop.attributes.Cumul_Time)
+                    };
+                    locations.push(obj);
+                    selectedObj.attributes.Sequence = stop.attributes.Sequence;
+                }
+            });
+            var storeData = {
+                identifier: "uid",
+                label: "Id",
+                items: locations
+            };
+            
+            dataStoreForGrid = new dojo.data.ItemFileWriteStore({ data: storeData });
+            stopGrid.setStore(dataStoreForGrid);
+     
+            g2directions.zoomToFullRoute();
+            
+                        
+            // Populate the list of Permalinks
+            dirStrings = [];
+            dirStrings.push("<table border=\"0\" align=\"center\">");
+            dojo.forEach(g2directions.getPermalinks(), function(feature, i) {
+                dirStrings.push("<tr>");
+                dirStrings.push("<td><a href=\"" + feature.url + "\" target=\"_blank\">" + feature.engine + "</a></td>");
+                dirStrings.push("<td><input onClick=\"this.focus(); this.select();\" class=\"permalinkInput\" style=\"width:400px;\" name=\"perma" + feature.engine + "\" value=\"" + feature.url + "\" /></td>");
+                dirStrings.push("</tr>");
+            });
+            dirStrings.push("</table>");
+            dojo.byId("directionsPermalink").innerHTML = dirStrings.join("");
+            
+        }
+        
+        function getRegion() {
+            var euroExtent = new esri.geometry.Extent(-11.843262,35.906849,31.245117,71.441171, new esri.SpatialReference({ wkid:4326 }));
+            var region = "NA";
+            for (var i = 0, il = g2directions.selectionLayer.graphics.length; i < il; i++) {
+                var graphic = g2directions.selectionLayer.graphics[i].geometry;
+                var outGeom = esri.geometry.webMercatorToGeographic(graphic);
+                if(euroExtent.contains(outGeom)) {
+                    region = "EU";
+                }
+            }
+            return region;
+        }
+        function gridChange( inRowIndex ) {
+            var stopGrid = dijit.byId("stopGrid");
+            var item = stopGrid.getItem(inRowIndex);
+            
+            var i = stopGrid.store.getValue(item, "id");
+            var dur = stopGrid.store.getValue(item, "dur");
+            var sequence = stopGrid.store.getValue(item, "no");
+            var startTime = stopGrid.store.getValue(item, "TimeWindowStart");
+            var endTime = stopGrid.store.getValue(item, "TimeWindowEnd");
+            
+            var selectedObj = g2directions.getSelectedById(i);
+            
+            selectedObj.attributes.Time = dur;
+            selectedObj.attributes.Sequence = sequence;
+        }
+        
+        function createActivity()
+        {
+            var curURL = window.location.href;          
+            JSdoPost(curURL);   
+        }
+        
+        require(['dojo','dijit', 'dojox','dojo/parser', 'dojox/grid/DataGrid', 'dijit/form/TimeTextBox', 'dojo/data/ItemFileWriteStore', 'dojo/date/locale'], function(dojo, dijit, dojox){
+            dojo.parser.parse();
+            dojo.ready(initDirections);
+        });
+
+    </script>
+</apex:form> 
+</apex:page>

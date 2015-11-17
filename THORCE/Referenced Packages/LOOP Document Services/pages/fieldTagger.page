@@ -1,0 +1,345 @@
+<apex:page standardController="Loop__DDP__c" title="Field Tagger" sidebar="false" extensions="Loop.fieldTaggerExt" id="apage">
+    <style>
+        .test {
+            display: none;
+            font-size: 115%;
+            float: left;
+        }
+        .statusContainer {
+            position: absolute;
+            padding: 1px 0 0 5px;
+        }
+        .status {
+            right: -24px;
+            top: 0;
+        }
+        .status.isIE {
+            top: -11px;
+        }
+        .bPageBlock .pbBody .pbSubsection .detailList .list .dataRow .selectTagCell {
+            padding-right: 10px;
+        }
+        .detailList th .helpButton .helpOrb, .detailList th .helpButtonOn .helpOrb {
+            border: none;
+        }
+    </style>
+    <script type="text/javascript" src="{!URLFOR($Resource.JQuery)}"></script>
+    <script src="{!URLFOR($Resource.Scripts, 'jquery.drawloop.js')}"></script>
+    <script type="text/javascript">
+        jQuery.noConflict(); // Can't use $ because prototype and jQuery will have naming issues.
+                             // This command fixes that, but you must use "jQuery" instead of "$"
+                             // for jQuery commands.
+        jQuery(function() {
+            jQuery("#AppBodyHeader").css('display', 'none');
+            sizeInputs();
+            jQuery('[id$=":dateMessages"]').parent().attr('colspan', '3');
+            jQuery('.selectTagCell').live('click', function() {
+                jQuery(this).closest('tr').find('.tagInput').select();
+            });
+            jQuery.notifie({
+                allowCompatibilityView: false,
+                requiredVersion: 7,
+                containerSelector: '#ieMsgs',
+                compatibilityViewMessage: '{!JSENCODE($Label.IE_Compatibility_View_Warning)}',
+                versionMessage: '{!JSENCODE($Label.IE_Higher_Version_Required)}'
+            });
+        });
+        
+        function sizeInputs() {
+            //jQuery(".test").each(function() {
+                //jQuery(this).next().css('width', jQuery(this).innerWidth()+'px');
+            //});
+        }
+        
+        function addPrimaryRole() {
+            jQuery('select.contactRole').append(jQuery('<option />').attr('value', 'IsPrimary').text('Primary'));
+        }
+        
+        function log(msg) {
+            window.debug && window.console && window.console.log && window.console.log(msg);
+        }
+        function updateData(referenceId, elem) {
+            log('update data for: ' + referenceId);
+            if (elem === undefined) {
+                elem = jQuery('.' + referenceId).parent();
+            }
+            addProcessingIcon(elem);
+            populateData(referenceId);
+        }
+        function handleLookupChange(referenceId) {
+            var $lookup = getLookupField(referenceId);
+            if ($lookup.size() && hasValidId($lookup)) {
+                updateData(referenceId, $lookup.parent());
+            }
+        }
+        function handleDDPChange(referenceId) {
+            var $lookup = getLookupField(referenceId);
+            if (hasValidId($lookup)) {
+                addProcessingIcon($lookup.parent());
+                resetOptions();
+            }
+        }
+        function getLookupField(referenceId) {
+            return jQuery(':input.' + referenceId + ':eq(0)');
+        }
+        function hasValidId($lookup) {
+            if ($lookup.val()) {
+                var $recordIdElement = 
+                    $lookup.attr('id').substring($lookup.attr('id').length - 5) == '_lkid'
+                        ? $lookup
+                        : jQuery('[id="' + $lookup.attr('id') + '_lkid' + '"]');
+                return ($recordIdElement.length 
+                    && ($recordIdElement.val().length == 15 || $recordIdElement.val().length == 18));
+            }
+            return false;
+        }
+        function handleKeyPrefixOverride(referenceId, keyPrefix) {
+            $lookup = getLookupField(referenceId);
+                log('override key prefix: ' + referenceId + ', ' + keyPrefix);
+            if ($lookup.size()) {
+                var elem = document.getElementById($lookup.attr('id') + '_lktp');
+                if (elem) elem.value = keyPrefix;
+            }
+        }
+        function addProcessingIcon(elem) {
+            jQuery(elem).append('<span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>');
+        }
+    </script>
+    <apex:sectionHeader title="Field Tagger" help="http://support.drawloop.com/salesforce/looplus/basic/tagging-documents/" />
+    <div id="ieMsgs" />
+    <apex:actionRegion immediate="true">
+        <apex:outputPanel id="pgmsgs">
+            <apex:pageMessages />
+        </apex:outputPanel>
+        <apex:form id="form">
+            <apex:actionFunction action="{!populateData}" name="populateData" rerender="lookupPanel,fieldtags">
+                <apex:param name="referenceId" assignTo="{!updatedReferenceId}" value="" />
+            </apex:actionFunction>
+            <apex:actionFunction action="{!changeAvailableObjects}" name="resetOptions" rerender="form" />
+            <apex:pageBlock title="Find Field" mode="edit" id="pb">
+                <apex:pageBlockButtons location="top">
+                    <apex:commandButton value="Reset Options" reRender="form" action="{!changeAvailableObjects}" oncomplete="sizeInputs();" status="changeDDPStatus" />
+                    <apex:actionStatus startText="• • •" stopText="" id="changeDDPStatus" >
+                        <apex:facet name="start">
+                            <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                        </apex:facet>
+                    </apex:actionStatus>
+                </apex:pageBlockButtons>
+                <apex:pageBlockSection title="Options" columns="2" id="pbs">
+                    <apex:inputField value="{!cio.Loop__DDP__c}" required="false" styleClass="relatedDDP" onchange="handleDDPChange('relatedDDP');" />
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel for="docType" value="Document Type" />
+                        <apex:outputPanel >
+                            <apex:selectList id="docType" size="1" value="{!documentType}">
+                                <apex:selectOption itemLabel="Word/PowerPoint" itemValue="doc" />
+                                <apex:selectOption itemLabel="Excel/PDF" itemValue="xls" />
+                                <apex:selectOption itemLabel="DocuSign Template" itemValue="dpd" rendered="{!hasDsCio}" />
+                                <apex:actionSupport event="onchange" action="{!changeField}" reRender="fieldtags" oncomplete="sizeInputs();" status="docTypeStatus" />
+                            </apex:selectList>
+                            <apex:actionStatus startText="• • •" stopText="" id="docTypeStatus" >
+                                <apex:facet name="start">
+                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                </apex:facet>
+                            </apex:actionStatus>                            
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem> 
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel for="mainObj" value="Main Object" />
+                        <apex:outputPanel >
+                            <apex:selectList id="mainObj" size="1" value="{!mainObject}">
+                                <apex:selectOptions value="{!availableObjects}" />
+                                <apex:actionSupport event="onchange" action="{!mainObjectChange}" reRender="lookupPanel,aliasLabelPanel,aliasPanel,rolePanel,roleLabelPanel,objectFieldsPanel,lookupFieldsLabelPanel,lookupFieldsPanel,formatLabelPanel,formatPanel,dateMessages,fieldtags,recipientLabelPanel,recipientPanel" oncomplete="sizeInputs();" status="mainObjStatus" />
+                            </apex:selectList>
+                            <apex:actionStatus startText="• • •" stopText="" id="mainObjStatus" >
+                                <apex:facet name="start">
+                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                </apex:facet>
+                            </apex:actionStatus>                            
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>                    
+                    <apex:pageBlockSectionItem >
+                        <apex:outputPanel id="roleLabelPanel">
+                            <apex:outputLabel value="Role Name" rendered="{!showContactRoles}" />
+                        </apex:outputPanel>
+                        <apex:outputPanel id="rolePanel">
+                            <apex:outputPanel rendered="{!mainObject=='OpportunityContactRole'}">
+                                <apex:inputField value="{!ocr.Role}" styleClass="contactRole">
+                                    <apex:actionSupport event="onchange" action="{!changeFieldTags}" reRender="fieldtags" oncomplete="sizeInputs();" status="contactRoleStatus" />
+                                </apex:inputField>
+                            </apex:outputPanel>
+                            <apex:outputPanel rendered="{!mainObject=='AccountContactRole'}">
+                                <apex:inputField value="{!acr.Role}" styleClass="contactRole">
+                                    <apex:actionSupport event="onchange" action="{!changeFieldTags}" reRender="fieldtags" oncomplete="sizeInputs();" status="contactRoleStatus" />
+                                </apex:inputField>
+                            </apex:outputPanel>
+                            <apex:outputPanel rendered="{!mainObject=='ContractContactRole'}">
+                                <apex:inputField value="{!ccr.Role}" styleClass="contactRole">
+                                    <apex:actionSupport event="onchange" action="{!changeFieldTags}" reRender="fieldtags" oncomplete="sizeInputs();" status="contactRoleStatus" />
+                                </apex:inputField>
+                            </apex:outputPanel>
+                            <apex:outputPanel rendered="{!mainObject=='CaseContactRole'}">
+                                <apex:inputField value="{!cacr.Role}" styleClass="contactRole">
+                                    <apex:actionSupport event="onchange" action="{!changeFieldTags}" reRender="fieldtags" oncomplete="sizeInputs();" status="contactRoleStatus" />
+                                </apex:inputField>
+                            </apex:outputPanel>
+                            <apex:actionStatus startText="• • •" stopText="" id="contactRoleStatus" >
+                                <apex:facet name="start">
+                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                </apex:facet>
+                            </apex:actionStatus>                            
+                            <script>addPrimaryRole();</script>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputPanel id="recipientLabelPanel">
+                            <apex:outputLabel value="{!$ObjectType.Loop__dsRecipient__c.label}" for="recipient" rendered="{!mainObject=='Recipients'}" />
+                        </apex:outputPanel>
+                        <apex:outputPanel id="recipientPanel">
+                            <apex:selectList id="recipient" size="1" rendered="{!mainObject=='Recipients'}" value="{!recipient}">
+                                <apex:selectOptions value="{!recipientList}" />
+                                <apex:actionSupport event="onchange" action="{!changeRecipient}" reRender="objectFieldsPanel,fieldtags" oncomplete="sizeInputs();" status="recipientStatus" />
+                            </apex:selectList>
+                            <apex:actionStatus startText="• • •" stopText="" id="recipientStatus" >
+                                <apex:facet name="start">
+                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                </apex:facet>
+                            </apex:actionStatus>                            
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem />
+                    <apex:pageBlockSectionItem id="fieldpbsi">
+                        <apex:outputLabel for="field" value="Field" />
+                        <apex:outputPanel id="objectFieldsPanel">
+                            <apex:selectList id="field" size="1" value="{!field}">
+                                <apex:selectOptions value="{!objectFields}" />
+                                <apex:actionSupport event="onchange" reRender="aliasLabelPanel,aliasPanel,lookupFieldsLabelPanel,lookupFieldsPanel,formatLabelPanel,formatPanel,dateMessages,fieldtags" action="{!changeField}" oncomplete="sizeInputs();" status="objFldStatus" />
+                            </apex:selectList>
+                            <apex:actionStatus startText="• • •" stopText="" id="objFldStatus" >
+                                <apex:facet name="start">
+                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                </apex:facet>
+                            </apex:actionStatus>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputPanel id="aliasLabelPanel">
+                            <apex:outputLabel value="Alias" rendered="{!showAliasOptions}" />
+                        </apex:outputPanel>
+                        <apex:outputPanel id="aliasPanel">
+                            <apex:selectList id="aliases" size="1" rendered="{!showAliasOptions}" value="{!alias}">
+                                <apex:selectOptions value="{!aliasOptions}" />
+                                <apex:actionSupport event="onchange" action="{!changeFieldTags}" reRender="fieldtags" oncomplete="sizeInputs();" status="aliasStatus" />
+                            </apex:selectList>
+                            <apex:actionStatus startText="• • •" stopText="" id="aliasStatus" >
+                                <apex:facet name="start">
+                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                </apex:facet>
+                            </apex:actionStatus>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputPanel id="lookupFieldsLabelPanel">
+                            <apex:outputLabel for="lookupFields" value="Lookup Object Field" rendered="{!NOT(lookupFieldsDisabled)}" />
+                        </apex:outputPanel>
+                        <apex:outputPanel id="lookupFieldsPanel">
+                            <apex:selectList id="lookupFields" size="1" value="{!lookupObjectField}" rendered="{!NOT(lookupFieldsDisabled)}">
+                                <apex:selectOptions value="{!lookupObjectFields}" />
+                                <apex:actionSupport event="onchange" reRender="aliasLabelPanel,aliasPanel,formatLabelPanel,formatPanel,dateMessages,fieldtags" action="{!changeLookupField}" oncomplete="sizeInputs();" status="lkupFldStatus" />
+                            </apex:selectList>
+                            <apex:actionStatus startText="• • •" stopText="" id="lkupFldStatus" >
+                                <apex:facet name="start">
+                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                </apex:facet>
+                            </apex:actionStatus>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem />
+                    <apex:pageBlockSectionItem >
+                        <apex:outputPanel id="formatLabelPanel">
+                            <apex:outputLabel for="format" value="Format" rendered="{!NOT(formatDisabled)}" />
+                        </apex:outputPanel>
+                        <apex:outputPanel id="formatPanel">
+                            <apex:selectList id="format" size="1" value="{!format}" rendered="{!NOT(formatDisabled)}">
+                                <apex:selectOptions value="{!formatOptions}" />
+                                <apex:actionSupport event="onchange" reRender="fieldtags" action="{!changeFieldTags}" oncomplete="sizeInputs();" status="formatChangeStatus" />
+                            </apex:selectList>
+                            <apex:actionStatus startText="• • •" stopText="" id="formatChangeStatus" >
+                                <apex:facet name="start">
+                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                </apex:facet>
+                            </apex:actionStatus>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem />
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel />
+                        <apex:outputPanel id="dateMessages">
+                            <apex:outputPanel rendered="{!isDateFormat}">
+                                * These options change formats based on the user's locale.<br />
+                                Day and month names will be determined by the user's locale.<br />
+                                Date values passed into Excel will be formatted as specified in the cell formatting.
+                            </apex:outputPanel>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                </apex:pageBlockSection>
+                <apex:outputPanel id="lookupPanel">
+                    <apex:pageBlockSection title="Lookup Data" columns="1" rendered="{!AND(!mainObjectIsApexData, !ISBLANK(CurrentRecordDataList))}">
+                        <apex:repeat var="data" value="{!CurrentRecordDataList}">
+                            <apex:pageBlockSectionItem helpText="{!LookupDataHelpText}">
+                                <apex:outputPanel id="recordDataLabelPanel">
+                                    <apex:outputLabel rendered="{!AND(!ISBLANK(data.Info), !ISBLANK(data.Info.ReferenceFieldName))}" value="Lookup {!data.Info.ObjectLabel}" /> 
+                                </apex:outputPanel>
+                                <apex:outputPanel id="recordDataPanel">
+                                    <apex:inputField styleClass="{!data.Info.ReferenceId}" required="false" rendered="{!AND(!ISBLANK(data.Info), !ISBLANK(data.Info.ReferenceFieldName))}" value="{!data.Info.ChildObject[data.Info.ReferenceFieldName]}" onchange="handleLookupChange('{!JSENCODE(data.Info.ReferenceId)}');" />
+                                    <script type="text/javascript">if ({!data.Info.OverrideKeyPrefix}) handleKeyPrefixOverride('{!JSENCODE(data.Info.ReferenceId)}','{!JSENCODE(data.Info.KeyPrefix)}');</script>
+                                </apex:outputPanel>
+                            </apex:pageBlockSectionItem>
+                            <apex:pageBlockSectionItem />
+                        </apex:repeat>
+                        <apex:repeat var="data" value="{!relatedObjectDataList}">
+                            <apex:pageBlockSectionItem >
+                                <apex:outputPanel id="childRecordDataLabelPanel">
+                                    <apex:outputLabel rendered="{!!ISBLANK(data.Info)}" value="Select {!data.Info.ObjectLabel}" /> 
+                                </apex:outputPanel>
+                                <apex:outputPanel id="childRecordDataPanel">
+                                    <apex:selectList size="1" value="{!data.SelectedValue}" styleClass="{!data.Info.ReferenceId}" required="false" onchange="updateData('{!JSENCODE(data.Info.ReferenceId)}');">
+                                        <apex:selectOptions value="{!data.Items}" />
+                                    </apex:selectList>
+                                </apex:outputPanel>
+                            </apex:pageBlockSectionItem>
+                            <apex:pageBlockSectionItem />
+                        </apex:repeat>
+                        <script type="text/javascript">(window.closePopup && window.closePopup());</script>
+                    </apex:pageBlockSection>
+                </apex:outputPanel>
+                <apex:outputPanel id="fieldtags">
+                    <apex:pageBlockSection title="Field Tags" columns="1">
+                        <apex:pageMessages id="fieldMessages" />
+                        <apex:pageBlockTable value="{!fieldTags}" var="t">
+                            <apex:column headerValue="Label" styleClass="selectTagCell labelCell" width="22%">
+                                <span id="{!t.HtmlId}-_help" class="helpButton">
+                                    <span><label>{!t.Label}</label></span><apex:image value="/s.gif" alt="" styleClass="helpOrb" rendered="{!!t.formatDisabled}" />
+                                        <apex:outputPanel rendered="{!!t.formatDisabled}">
+                                            <script type="text/javascript">sfdcPage && sfdcPage.setHelp("{!JSENCODE(t.HtmlId)}", "{!JSENCODE(t.HelpText)}")</script>
+                                        </apex:outputPanel>
+                                </span>
+                            </apex:column>
+                            <apex:column headerValue="Tag" styleClass="selectTagCell tagCell">
+                                <input class="tagInput" readonly="readonly" value="{!t.FullTag}" size="{!TagInputSize}" onclick="jQuery(this).select();" />
+                            </apex:column>
+                            <apex:column styleClass="selectTagCell valueCell" rendered="{!!ISBLANK(RelatedRecord) && ISBLANK(lookupObjectField)}" width="32%">
+                                <apex:facet name="header">
+                                    <span id="columnHeaderValue-_help" class="helpButton">
+                                        <span><label>Value</label></span><img src="/s.gif" alt="" class="helpOrb" />
+                                        <script type="text/javascript">sfdcPage && sfdcPage.setHelp("columnHeaderValue", "{!JSENCODE(ValueColumnHelpText)}")</script>
+                                    </span>
+                                </apex:facet>
+                                <apex:outputText rendered="{!t.HasMappedValue && !ISBLANK(RelatedRecord)}" value="{!NULLVALUE(RelatedRecord[t.OriginalFieldName], '')}" />
+                            </apex:column>
+                        </apex:pageBlockTable>
+                    </apex:pageBlockSection>
+                </apex:outputPanel>
+            </apex:pageBlock>
+        </apex:form>
+    </apex:actionRegion>
+</apex:page>

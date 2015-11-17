@@ -1,0 +1,231 @@
+<apex:page standardController="LStore__Stored_Document__c" extensions="LStore.storedDoc" id="aP" title="{!IF(docDetail.LStore__File_Name__c == '', IF(recordType=='Folder', 'Folder Edit: New Folder', 'Document Edit: New Document'), 'Document Edit: ' + docDetail.LStore__File_Name_Calc__c)}" action="{!onload}" showHeader="{!showHeader}" sidebar="{!showSidebar}">
+<script type="text/javascript" src="{!$Resource.LStore__JQuery}"></script>
+<script type="text/javascript">
+jQuery.noConflict();
+jQuery(function()
+{
+    var $filter = jQuery('#searchFilter');
+    if ($filter.size()) {
+        jQuery('#searchFilter').keydown(function(e) {
+            if (e.keyCode == 13) {
+                updateAvailOpts(this.value);
+                return false;
+            }
+        });
+        jQuery('#searchBtn').click(function() {
+            updateAvailOpts($filter.val());
+            return false;
+        });
+        jQuery('[id$=:secType]').change(function() {
+            $filter.val('');
+            updateAvailOpts('');
+        });
+    }
+    if ('{!allowEdit}' != 'true')
+        jQuery('.bPageTitle:first').append('<div class="ptBreadcrumb"> « <a href="/{!docDetail.Id}" target="_top">Back to Document</a></div>');
+    if ('{!JSENCODE($Request.delID)}' != '' && '{!recordType}' == 'Document')
+    {
+        deleteAndRedirect('{!JSENCODE($Request.delID)}');
+        //jQuery('#act').val('delete');
+        //jQuery('#contentType').val('script');
+        jQuery('#overlay, #form_loading_img').removeClass('invisible');
+        //jQuery('[id=aP:aF]').attr('action', '{!actionUrl}').attr('target', 'fileiFrame').submit();
+    }
+});
+function $getForm() {
+    return jQuery('.docForm');
+};
+function $getFile() {
+    return $getForm().find(':file');
+};
+function updateName() {
+    var file = $getFile().val();
+    var docName = jQuery('[id=aP:aF:aPB:dPBS:docName]');
+    if (docName.val() == '')
+        docName.val(file.substring(file.lastIndexOf('/')+1).substring(file.lastIndexOf('\\')+1));
+}
+function submitClick() {
+    var sfPostbackUrl = window.location.href;
+
+    var $form = $getForm();
+    if (!('{!JSENCODE(recordType)}' == 'Document' && '{!JSENCODE($Request.setSecurity)}' == '')) {
+        $form.attr('action', sfPostbackUrl);
+        return true;
+    }
+
+    var file = $getFile();
+    var filename = jQuery('[id=aP:aF:aPB:dPBS:docName]').val();
+    var folderId = jQuery('[id=aP:aF:aPB:dPBS:docFolder_lkid]').val();
+    var folderName = jQuery('[id=aP:aF:aPB:dPBS:docFolder]').val();
+    if (!file.val() || file.val() == '') {
+        $form.attr('action', sfPostbackUrl);
+        return true;
+    }
+    if ('{!JSENCODE(recordId)}' == '' && (!filename || filename=='')) {
+        file.val(null);
+        $form.attr('action', sfPostbackUrl);
+        return true;
+    }
+    if (folderName != '' && folderId == '') {
+        file.val(null);
+        $form.attr('action', sfPostbackUrl);
+        return true;
+    }
+    jQuery('[id=aP:aE]').addClass('invisible');
+    jQuery('#overlay, #form_loading_img').removeClass('invisible');
+    jQuery('[id=aP:aF:aPB:dPBS:docName]').addClass('relative');
+    //return false;
+    jQuery('[id=aP:aF]').attr('action', '{!actionUrl}').attr('target', 'fileiFrame');
+}
+</script>
+<style type="text/css">
+    .invisible {
+        display: none;
+    }
+    #form_loading_img {
+        position: absolute;
+        text-align: center;
+        width: 95%;
+        z-index: 3;
+        top: 12px;
+    }
+    #form_loading_img img {
+        display: block;
+        margin: auto;
+    }
+    #overlay {
+        height: 250px;
+        width: 100%;
+        position: absolute;
+        opacity: 0.6;
+        filter: alpha(opacity=60);
+        -moz-opacity: 0.6;
+        background-color: #FFF;
+        z-index: 2;
+    }
+    .relative {
+        position: relative;
+        z-index: 1;
+    }
+    .pbFooter.secondaryPalette {
+        position: relative;
+    }
+</style>
+    <apex:sectionHeader title="{!IF(recordType=='Folder', 'Folder Edit', 'Document Edit')}" subtitle="{!IF(docDetail.LStore__File_Name_Calc__c == '', IF(recordType=='Folder', 'New Folder', 'New Document'), docDetail.LStore__File_Name_Calc__c)}" id="sheader" />
+    <apex:pageMessages id="aE" />
+    <apex:form id="aF" styleClass="relative docForm"><!-- target="{!IF(recordType=='Document' && $Request.setSecurity=='', 'fileiFrame', '')}"-->
+        <apex:actionFunction name="deleteAndRedirect" action="{!deleteAndRedirect}" rerender="aF">
+            <apex:param name="delId" assignTo="{!delId}" value="" />
+        </apex:actionFunction>
+        <div id="form_loading_img" class="invisible">
+            <img alt="processing" src="https://apps.drawloop.com/images/widgets/throbber.gif" />
+            processing
+        </div>
+        <div id="overlay" class="invisible"></div>
+        <input type="hidden" name="sessionid" value="{!sessionId}" />
+        <input type="hidden" name="location" value="{!IF(partnerServerUrl='',$Api.Partner_Server_URL_170,partnerServerUrl)}" />
+        <input type="hidden" name="packageId" value="033a0000000kym5iac" />
+        <input type="hidden" name="invisiframe" value="true" />
+        <input type="hidden" name="auto" value="true" />
+        <input type="hidden" name="next" value="{!loopNext}" />
+        <input type="hidden" name="eid" value="{!docDetail.Id}" />
+        <input type="hidden" name="act" id="act" value="upload" />
+        <input type="hidden" name="version" id="version" value="{!IF($Request.version != null, $Request.version, version)}" />
+        <apex:pageBlock title="{!IF(recordType=='Folder', 'Folder', 'Document') + ' Edit'}" mode="edit" id="aPB" rendered="{!AND(allowEdit, $Request.delID=='')}">
+            <apex:pageBlockButtons location="top">
+                <apex:commandButton value="Save" id="saveBtn" onclick="return submitClick();" action="{!saveFile}" />
+                <apex:commandButton value="Cancel" id="cancelBtn" action="{!cancel}" />
+            </apex:pageBlockButtons>
+            <apex:pageBlockSection columns="1" title="Information" collapsible="false" rendered="{!recordId=='' || !hideFilename}" id="dPBS">
+                <apex:inputField value="{!docDetail.LStore__File_Name__c}" required="true" style="width: 53%;" id="docName" label="{!lblFilename}" rendered="{!!hideFilename}" />
+                <apex:inputHidden value="{!docDetail.LStore__Folder__c}" id="docFolder" /><!-- style="width: 53%;"-->
+                <apex:inputField value="{!docDetail.LStore__Description__c}" style="width: 48.5%; height: 62px;" id="docDesc" rendered="{!!hideDescription}" />
+                <apex:inputField value="{!docDetail.LStore__Keywords__c}" style="width: 53%;" id="docKeywords" rendered="{!!hideKeywords}" />
+                <apex:inputHidden value="{!docDetail.RecordTypeId}" id="docRType" />
+                <apex:inputHidden value="{!docDetail.LStore__Related_Object_Id__c}" id="docRelObj" />
+            </apex:pageBlockSection>
+            <apex:pageBlockSection columns="1" rendered="{!recordType=='Document' && $Request.setSecurity=='' && $Request.delID==''}" id="uPBS">
+                <apex:pageBlockSectionItem id="uPBSI">
+                    <apex:outputLabel value="File to upload" for="fileUpload" />
+                    <apex:inputFile value="{!fileData}" fileName="{!fileName}" fileSize="{!fileSize}" id="upload" size="60" onchange="updateName();" />
+                </apex:pageBlockSectionItem>
+                <!--<apex:pageBlockSectionItem helpText="Only one backup is made for each file." rendered="{!recordId!=''}" id="bPBSI">
+                    <apex:outputLabel value="Make a backup" for="backup" />
+                    <apex:inputCheckbox value="{!fileBackup}" id="backup" />
+                </apex:pageBlockSectionItem>-->
+            </apex:pageBlockSection>            
+            <apex:pageBlockSection columns="1" title="Security" id="securityPBS" rendered="{!$Request.setSecurity!=''}">
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Search" for="secType" />
+                    <apex:actionRegion >
+                        <apex:selectList size="1" id="secType" value="{!securityType}">
+                            <apex:selectOption itemLabel="Profiles" itemValue="profiles" />
+                            <apex:selectOption itemLabel="Roles" itemValue="roles" />
+                            <apex:selectOption itemLabel="Users" itemValue="users" />
+                            <apex:selectOption itemLabel="User Groups" itemValue="groups" />
+                        </apex:selectList>
+                        <apex:outputLabel value="for" for="searchFilter" />
+                        <input id="searchFilter" value="{!searchFilter}" />
+                        <input type="submit" class="btn" value="Find" id="searchBtn" />
+                        <apex:actionFunction action="{!returnNull}" name="updateAvailOpts" rerender="duel">
+                            <apex:param name="filter" assignTo="{!searchFilter}" value="" />
+                        </apex:actionFunction>
+                    </apex:actionRegion>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!docDetail.RecordType.Name == 'Folder'}">
+                    <apex:outputLabel value="Apply permissions to subfolders and files" for="selChildPermissions" />
+                    <apex:selectRadio id="selChildPermissions" value="{!selectedChildPermissionOptionStr}" layout="pageDirection">
+                        <apex:selectOptions value="{!childPermissionOptions}" />
+                    </apex:selectRadio>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel />
+                    <apex:outputPanel id="duel" styleClass="duelingListBox">
+                        <apex:outputText id="resultsErrMsg" styleClass="errorMsg" value="{!resultsErrMsg}" />
+                        <table class="layout">
+                        <tr>
+                            <td class="selectCell">
+                                <div class="selectTitle">
+                                    <apex:outputLabel value="Available Security" for="secIds" styleClass="selectTitle" />
+                                </div>
+                                <apex:selectList size="14" multiselect="true" id="secIds" value="{!highlightedIds}">
+                                    <apex:selectOptions value="{!availableSecurity}" />
+                                </apex:selectList>
+                                <script type="text/javascript">
+                                    jQuery(function() {
+                                        var errMsg = '{!resultsErrMsg}';
+                                        if (errMsg) jQuery('[id$=:resultsErrMsg]').text(errMsg);
+                                    });
+                                </script>
+                            </td>
+                            <td class="buttonCell">
+                                <div class="text">Add</div>
+                                <div class="text">
+                                    <apex:commandLink action="{!addSecurity}">
+                                        <apex:image title="Add" styleClass="rightArrowIcon" alt="Add" value="/s.gif" />
+                                    </apex:commandLink>
+                                </div>
+                                <div class="text">
+                                    <apex:commandLink action="{!removeSecurity}">
+                                        <apex:image title="Remove" styleClass="leftArrowIcon" alt="Remove" value="/s.gif" />
+                                    </apex:commandLink>
+                                </div>
+                                <div class="duelingText">Remove</div>
+                            </td>
+                            <td class="selectCell">
+                                <div class="selectTitle">
+                                    <apex:outputLabel value="Selected Security" for="selectedSecIds" styleClass="selectTitle" />
+                                </div>
+                                <apex:selectList size="14" multiselect="true" id="selectedSecIds" value="{!selectedIds}">
+                                    <apex:selectOptions value="{!selectedSecurity}" />
+                                </apex:selectList>
+                            </td>
+                        </tr>
+                        </table>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+    </apex:form>
+    <apex:iframe id="fileiFrame" frameborder="0" height="0" src="https://apps.drawloop.com/blank.html" />
+</apex:page>

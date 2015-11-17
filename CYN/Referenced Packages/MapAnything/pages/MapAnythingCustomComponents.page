@@ -1,0 +1,177 @@
+<apex:page title="Custom Components" controller="sma.MAComponentCon" setup="true">
+
+	<!-- jQuery -->
+    <apex:includeScript value="{!URLFOR($Resource.sma__MapAnything, 'js/jquery-1.7.1.min.js')}"/>
+    
+    <!-- CSS -->
+    <apex:stylesheet value="{!URLFOR($Resource.sma__MapAnything, 'css/style.css')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.sma__MapAnything, 'style.css')}"/>
+    <c:CSSHelperBlue />
+    <style type='text/css'>
+    
+    	/* Component Rows */
+    	.component-row {
+    		cursor: pointer;
+    	}
+    	.component-row:hover td {
+    		filter: progid:DXImageTransform.Microsoft.gradient(startColorstr = '#ccfcff', endColorstr = '#96fff9') !important;
+			-ms-filter: "progid:DXImageTransform.Microsoft.gradient(startColorstr = '#ccfcff', endColorstr = '#96fff9')" !important;
+			background-image: -moz-linear-gradient(top, #ccfcff, #96fff9) !important;
+			background-image: -ms-linear-gradient(top, #ccfcff, #96fff9) !important;
+			background-image: -o-linear-gradient(top, #ccfcff, #96fff9) !important;
+			background-image: -webkit-gradient(linear, center top, center bottom, from(#CCFCFF), to(#96FFF9)) !important;
+			background-image: -webkit-linear-gradient(top, #CCFCFF, #96FFF9) !important;
+			background-image: linear-gradient(top, #ccfcff, #96fff9) !important;
+    	}
+    	.component-row .data {
+    		text-align: center;
+    	}
+    	.component-row .data div {
+    		width: 32px;
+    		height: 32px;
+    		margin: 0 auto;
+    	}
+    	.component-row .data.checked div {
+    		background: transparent url('{!URLFOR($Resource.MapAnything, 'images/checkbox-checked-32.png')}') no-repeat center;
+    	}
+    	.component-row .data.unchecked div {
+    		background: transparent url('{!URLFOR($Resource.MapAnything, 'images/checkbox-unchecked-32.png')}') no-repeat center;
+    	}
+    	.component-row .data.loading div {
+    		background: transparent url('{!URLFOR($Resource.MapAnything, 'images/chatter-loader.gif')}') no-repeat center;
+    	}
+    
+    	/* Temporary fix for header links divider */
+        span.divider {
+        	float: none;
+			display: inline;
+			background: none;
+			margin: 0;
+        }
+        
+    </style>
+
+	<!-- JS -->
+	<c:MA />
+	<script type='text/javascript'>
+	
+		/*************************
+		*	On Load
+		*************************/
+		$(function () {
+		
+			//send a request to get the available components
+			$.ajax({
+				url: MA.resources.Admin+'?core.apexpages.devmode.url=0',
+				type: 'POST',
+				dataType: 'JSON',
+				data: {
+					securityToken: '{!securityToken}',
+					action: 'getCustomComponents'
+				},
+				success: function (response) {
+					if (response.success) {
+					
+						//add each component to the components table
+						var $componentsTable = $('#components');
+						$.each(response.components, function (index, component) {
+						
+							//create a row
+							var $componentRow = $('#templates .component-row').clone().attr('data-id', component.Id);
+							$componentRow.find('.label').text(component.Name);
+							
+							//update the row based on selection status
+							if (component.Selected) {
+								$componentRow.find('.data').addClass('checked');	
+							}
+							else {
+								$componentRow.find('.data').addClass('unchecked');
+							}
+							
+							//add the row
+							$componentRow.appendTo($componentsTable);
+						});
+					}
+					else {
+					}
+				},
+				error: function (response) {
+				}
+			});
+			
+			//handle clicking component rows
+			$('#components').on('click', '.component-row', function () {
+				var $row = $(this);
+			
+				//do nothing if this is currently loading
+				if ($row.find('.data').is('.loading')) {
+					return;
+				}
+				
+				//show loading
+				$row.find('.data').addClass('loading');
+				
+				//figure out the new status
+				var newStatus;
+				if ($row.find('.data').is('.checked')) {
+					$row.find('.data').removeClass('checked');
+					newStatus = 'unchecked';
+				}
+				else if ($row.find('.data').is('.unchecked')) {
+					$row.find('.data').removeClass('unchecked');
+					newStatus = 'checked';
+				}
+				
+				//send request to update the selected components
+				$.ajax({
+					url: MA.resources.Admin+'?core.apexpages.devmode.url=0',
+					type: 'POST',
+					dataType: 'JSON',
+					data: {
+						securityToken: '{!securityToken}',
+						action: 'updateCustomComponent',
+						id: $row.attr('data-id'),
+						status: newStatus
+					},
+					success: function (response)
+					{
+						$row.find('.data').removeClass('loading').addClass(newStatus);
+					},
+					error: function (response){}
+				});
+				
+			});
+		
+		});
+	
+	</script>
+	
+	<!-- Header -->
+	<c:MAAdminHeader PageTitle="Custom Components"/>
+	
+	<!-- Content Wrapper -->
+	<div>
+	
+		<!-- Component List -->
+		<table id='components' class='grid-blue'>
+			<tr>
+				<th colspan='2'>{!$Label.MA_Available_Components}</th>
+			</tr>
+		</table>
+		
+	</div>
+	
+	<!-- Templates -->
+	<div id='templates' style='display: none;'>
+		
+		<!-- Component Row -->
+		<table>
+			<tr class='component-row'>
+				<td class='label'></td>
+				<td class='data'><div></div></td>
+			</tr>
+		</table>
+		
+	</div>
+
+</apex:page>

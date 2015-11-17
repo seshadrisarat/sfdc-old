@@ -1,0 +1,621 @@
+<apex:page title="{!$ObjectType.Loop__DDP__c.label} Deployment Wizard" action="{!onload}" standardController="Loop__DDP__c" extensions="Loop.ddpButtonWizardExt" id="ap"  recordSetVar="ddpRecords">
+    <style>
+        .statusContainer {
+            position: absolute;
+            padding: 1px 0 0 5px;
+        }
+        .status {
+            right: -24px;
+            top: 0;
+        }
+        td.data2Col.first span div.message.infoM3 {
+            width: 690px;
+        }
+        a.btn {
+            text-decoration: none;
+            padding: 4px 3px;
+            position: absolute;
+        }
+        a.btn:hover {
+            text-decoration: none;
+            color: black;
+        }
+    </style>
+    <script type="text/javascript" src="{!$Resource.JQuery}"></script>
+    <script src="{!URLFOR($Resource.Scripts, 'jquery.drawloop.js')}"></script>
+    <script type="text/javascript">
+        jQuery.noConflict();
+        jQuery(function(){
+            jQuery.notifie({
+                allowCompatibilityView: false,
+                requiredVersion: 8,
+                containerSelector: '#ieMsgs',
+                compatibilityViewMessage: '{!JSENCODE($Label.IE_Compatibility_View_Warning)}',
+                versionMessage: '{!JSENCODE($Label.IE_Higher_Version_Required)}'
+            });
+        });
+        
+        function disableForm() {
+            jQuery('[id="ap:myform"]').find('input,select').attr('disabled', 'disabled');
+        }
+        
+        function enableForm() {
+            jQuery('[id="ap:myform"]').find('input,select').removeAttr('disabled');
+            jQuery('[id="ap:myform"] input:focus').select();
+        }
+        function setFocusOnLoad() {
+            // do nothing. We don't want to focus on the first available element here.
+        }
+    </script>
+    <apex:sectionHeader title="{!$ObjectType.Loop__DDP__c.label} Deployment Wizard" subtitle="New {!$ObjectType.Loop__DDP__c.label} Deployment" help="http://support.drawloop.com/lds/#!/lds/button-help/available-commands/#Documentation" />
+    <div id="ieMsgs" />
+    <apex:pageMessages id="pageMessages" />
+    <apex:form id="myform" styleClass="myForm" target="_blank">
+        <apex:inputHidden value="{!ddp.RecordType.Name}" />
+        <apex:pageBlock title="{!$ObjectType.Loop__DDP__c.label} Deployment Wizard" mode="edit">
+            <apex:pageBlockButtons >
+                <apex:outputPanel id="pbbuttons">
+                    <apex:commandButton value="{!generateName} {!deploymentType}" action="{!newButtonAction}" rerender="" disabled="{!newButtonUrl=''}"  /><!--  onclick="generateButton();" -->
+                    <apex:outputLink styleClass="btn" value="{!$Page.Loop__ddpButtonWizard}">Reset Options</apex:outputLink>
+                </apex:outputPanel>
+            </apex:pageBlockButtons>
+            
+            <apex:pageBlockSection title="Code" id="codepbs" columns="1">
+                <apex:pageBlockSectionItem id="msgpbsi" >
+                    <apex:outputPanel />
+                    <apex:outputPanel >
+                        <apex:pageMessage rendered="{!AND(newButtonUrl='',CONTAINS(ddp.Loop__Object_Name__c,'__c'))}" severity="info" strength="2" title="Additional Setup Required">
+                            Select your object from
+                            <a target="_blank" href="/p/setup/custent/CustomObjectsPage?setupid=CustomObjects&retURL=%2Fui%2Fsetup%2FSetup%3Fsetupid%3DDevTools">
+                                Custom Objects
+                            </a>
+                            and click New in the Custom Buttons and Links section.
+                            Copy and paste this code into your custom button or link and
+                            be sure to select the appropriate Display Type and Behavior.
+                        </apex:pageMessage>
+                        <apex:pageMessage rendered="{!AND(newButtonUrl='',NOT(CONTAINS(ddp.Loop__Object_Name__c,'__c')))}" severity="info" strength="2" title="Additional Setup Required">
+                            This object may not allow custom links or buttons.
+                        </apex:pageMessage>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel for="code" value="Code" />
+                    <apex:inputTextArea value="{!code}" id="code" readonly="true" style="width: 700px; height: 150px;" onclick="this.select();" />
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            
+            <apex:pageBlockSection title="Basics" id="basicsBlock">
+                
+                <apex:pageBlockSectionItem helptext="The name of the {!LOWER(deploymentType)} as displayed to DDP users.">
+                    <apex:outputLabel value="{!deploymentType} Name" />
+                    <apex:outputPanel layout="block" styleClass="requiredInput">
+                        <apex:outputPanel layout="block" styleClass="requiredBlock"></apex:outputPanel>
+                        <apex:inputText value="{!buttonName}" id="buttonName">
+                            <apex:actionSupport event="onblur" rerender="pbbuttons" status="buttonNameStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputText>
+                        <apex:actionStatus stopText="" id="buttonNameStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem helptext="Will this deployment be used from the main detail of a single record or from a list view (mass)?">
+                    <apex:outputLabel for="buttonType" value="Type" />
+                    <apex:outputPanel >
+                        <apex:selectList id="buttonType" size="1" value="{!buttonType}">
+                            <apex:selectOption itemLabel="Single Record Button" itemValue="single" />
+                            <apex:selectOption itemLabel="Single Record Link" itemValue="singleLink" />
+                            <apex:selectOption itemLabel="Mass DDP via List View Button" itemValue="mass" />
+                            <apex:selectOption itemLabel="Mass DDP via Report Button" itemValue="massViaReport" />
+                            <apex:selectOption itemLabel="Mass DDP via Report Tab" itemValue="massViaReportTab" rendered="{!NOT(serviceCloud)}" />
+                            <apex:actionSupport event="onchange" rerender="pageMessages,codepbs,pbbuttons,basicsBlock,interfaceBlock,filterListPanel,defaultBlock" status="buttonTypeStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:selectList>
+                        <apex:actionStatus stopText="" id="buttonTypeStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem helpText="What object will this {!$ObjectType.Loop__DDP__c.label} be available from?">
+                    <apex:outputLabel for="ddpRTName" value="{!$ObjectType.Loop__DDP__c.label} Starting Object" />
+                    <apex:outputPanel layout="block" styleClass="requiredInput">
+                        <apex:outputPanel layout="block" styleClass="requiredBlock"></apex:outputPanel>
+                        <apex:selectList value="{!ddpRTName}" id="ddpRTName" size="1">
+                            <apex:selectOptions value="{!ddpStartingObjects}" />
+                            <apex:selectOption itemValue="Custom Object" itemLabel="Other..." />
+                            <apex:actionSupport event="onchange" action="{!changeObject}" rerender="pageMessages,pbbuttons,codepbs,basicsBlock,interfaceBlock,filterListPanel,recipientParamsPanel" status="recordTypeStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:selectList>
+                        <apex:actionStatus stopText="" id="recordTypeStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!BEGINS(buttonType,'single')}" helptext="The location that the user will be returned to when the DDP process has completed.">
+                    <apex:outputLabel for="retURL" value="Return URL" />
+                    <apex:outputPanel id="retUrlPanel">
+                        <apex:selectList value="{!retUrlSel}" id="retUrlSel" size="1">
+                            <apex:selectOption itemValue="" itemLabel="--Starting Object--" />
+                            <apex:selectOptions value="{!retUrls}" />
+                            <apex:selectOption itemValue="other" itemLabel="Other..." />
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons,retUrlPanel" status="retUrlStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:selectList>
+                        <apex:inputText value="{!retUrl}" id="retUrl" rendered="{!retUrlSel='other'}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="retUrlStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputText>
+                        <apex:actionStatus stopText="" id="retUrlStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!NOT(BEGINS(buttonType,'single'))}" />
+                
+                <apex:pageBlockSectionItem rendered="{!ddpRTName='Custom Object'}" id="objectItem" helpText="Standard objects not listed need to be set at the {!$ObjectType.Loop__DDP__c.label} Record Type level.">
+                    <apex:outputLabel for="objectName" value="{!$ObjectType.Loop__DDP__c.fields.Loop__Object_Name_Link__c.label}" />
+                    <apex:outputPanel layout="block" styleClass="requiredInput">
+                        <apex:outputPanel layout="block" styleClass="requiredBlock"></apex:outputPanel>
+                        <apex:selectList rendered="{!ddpRTName='Custom Object'}" id="objectName" value="{!ddp.Loop__Object_Name__c}" size="1">
+                            <apex:selectOptions value="{!ddpCustomObjects}" />
+                            <apex:actionSupport event="onchange" action="{!changeObject}" rerender="pageMessages,codepbs,pbbuttons,basicsBlock,filterListPanel,recipientParamsPanel" status="customObjectStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:selectList>
+                        <apex:actionStatus stopText="" id="customObjectStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!ddpRTName!='Custom Object'}" />
+                
+                <apex:pageBlockSectionItem />
+                
+                <apex:pageBlockSectionItem rendered="{!ddpRTName!='Contact'}" helptext="Select a field on the starting object that points to a Contact Id.">
+                    <apex:outputLabel for="contactIdField" value="{!$ObjectType.Contact.label}" />
+                    <apex:outputPanel >
+                        <apex:selectList id="contactIdField" value="{!contactIdField}" size="1">
+                            <apex:selectOption itemValue="" itemLabel="--None--" />
+                            <apex:selectOptions value="{!objectReferenceFields}" />
+                            <apex:actionSupport event="onchange" action="{!changeRetUrlSel}" rerender="codepbs,pbbuttons,retUrlPanel" status="contactStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:selectList>
+                        <apex:actionStatus stopText="" id="contactStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!AND(BEGINS(buttonType,'single'),ddpRTName!='Account')}" helptext="Select a field on the starting object that points to an Account Id.">
+                    <apex:outputLabel for="accountIdField" value="{!$ObjectType.Account.label}" />
+                    <apex:outputPanel >
+                        <apex:selectList id="accountIdField" value="{!accountIdField}" size="1">
+                            <apex:selectOption itemValue="" itemLabel="--None--" />
+                            <apex:selectOptions value="{!objectReferenceFields}" />
+                            <apex:actionSupport event="onchange" action="{!changeRetUrlSel}" rerender="codepbs,pbbuttons,retUrlPanel" status="accountStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:selectList>
+                        <apex:actionStatus stopText="" id="accountStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!AND(BEGINS(buttonType,'single'),ddpRTName!='Opportunity')}" helptext="Select a field on the starting object that points to an Opportunity Id.">
+                    <apex:outputLabel for="opportunityIdField" value="{!$ObjectType.Opportunity.label}" />
+                    <apex:outputPanel >
+                        <apex:selectList id="opportunityIdField" value="{!opportunityIdField}" size="1">
+                            <apex:selectOption itemValue="" itemLabel="--None--" />
+                            <apex:selectOptions value="{!objectReferenceFields}" />
+                            <apex:actionSupport event="onchange" action="{!changeRetUrlSel}" rerender="codepbs,pbbuttons,retUrlPanel" status="opportunityStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:selectList>
+                        <apex:actionStatus stopText="" id="opportunityStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!AND(BEGINS(buttonType,'single'),ddpRTName!='Case')}" helptext="Select a field on the starting object that points to a Case Id.">
+                    <apex:outputLabel for="caseIdField" value="{!$ObjectType.Case.label}" />
+                    <apex:outputPanel >
+                        <apex:selectList id="caseIdField" value="{!caseIdField}" size="1">
+                            <apex:selectOption itemValue="" itemLabel="--None--" />
+                            <apex:selectOptions value="{!objectReferenceFields}" />
+                            <apex:actionSupport event="onchange" action="{!changeRetUrlSel}" rerender="codepbs,pbbuttons,retUrlPanel" status="caseStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:selectList>
+                        <apex:actionStatus stopText="" id="caseStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!AND(BEGINS(buttonType,'single'),ddpRTName!='Lead')}" helptext="Select a field on the starting object that points to a Lead Id.">
+                    <apex:outputLabel for="leadIdField" value="{!$ObjectType.Lead.label}" />
+                    <apex:outputPanel >
+                        <apex:selectList id="leadIdField" value="{!leadIdField}" size="1">
+                            <apex:selectOption itemValue="" itemLabel="--None--" />
+                            <apex:selectOptions value="{!objectReferenceFields}" />
+                            <apex:actionSupport event="onchange" action="{!changeRetUrlSel}" rerender="codepbs,pbbuttons,retUrlPanel" status="leadStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:selectList>
+                        <apex:actionStatus stopText="" id="leadStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!AND(BEGINS(buttonType,'single'),ddpRTName!='Contract')}" helptext="Select a field on the starting object that points to a Contract Id.">
+                    <apex:outputLabel for="contractIdField" value="{!$ObjectType.Contract.label}" />
+                    <apex:outputPanel >
+                        <apex:selectList id="contractIdField" value="{!contractIdField}" size="1">
+                            <apex:selectOption itemValue="" itemLabel="--None--" />
+                            <apex:selectOptions value="{!objectReferenceFields}" />
+                            <apex:actionSupport event="onchange" action="{!changeRetUrlSel}" rerender="codepbs,pbbuttons,retUrlPanel" status="contractStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:selectList>
+                        <apex:actionStatus stopText="" id="contractStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!AND(quoteLabel!='',BEGINS(buttonType,'single'),ddpRTName!='Quote')}" helptext="Select a field on the starting object that points to a Quote Id.">
+                    <apex:outputLabel for="quoteIdField" value="{!quoteLabel}" />
+                    <apex:outputPanel >
+                        <apex:selectList id="quoteIdField" value="{!quoteIdField}" size="1">
+                            <apex:selectOption itemValue="" itemLabel="--None--" />
+                            <apex:selectOptions value="{!objectReferenceFields}" />
+                            <apex:actionSupport event="onchange" action="{!changeRetUrlSel}" rerender="codepbs,pbbuttons,retUrlPanel" status="quoteStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:selectList>
+                        <apex:actionStatus stopText="" id="quoteStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            
+            <apex:pageBlockSection title="Interface Options" id="interfaceBlock">
+                <apex:pageBlockSectionItem helpText="Hides the breadcrumb and everything above it.">
+                    <apex:outputLabel for="hideHeader" value="Hide Header" />
+                    <apex:outputPanel >
+                        <apex:inputCheckbox id="hideHeader" value="{!hideHeader}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="hideHeaderStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputCheckbox>
+                        <apex:actionStatus stopText="" id="hideHeaderStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!OR(ddpRTName='Custom Object',buttonType='massViaReportTab')}" helpText="Used to override the DDP run interface’s image and style. Typically used when running from a custom object. View the source of a page and look for the body class to get this value.">
+                    <apex:outputLabel for="tabclass" value="Tab Style Class" />
+                    <apex:outputPanel >
+                        <apex:selectList id="tabclass" value="{!tabclass}" size="1">
+                            <apex:selectOption itemValue="" itemLabel="--Default--" />
+                            <apex:selectOptions value="{!tabClasses}" />
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="tabclassStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:selectList>
+                        <apex:actionStatus stopText="" id="tabclassStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!NOT(OR(ddpRTName='Custom Object',buttonType='massViaReportTab'))}" />
+                
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel for="hideSidebar" value="Hide Sidebar" />
+                    <apex:outputPanel >
+                        <apex:inputCheckbox id="hideSidebar" value="{!hideSidebar}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="hideSidebarStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputCheckbox>
+                        <apex:actionStatus stopText="" id="hideSidebarStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem helpText="Changes the height of the DDP selection box. The default is 10.">
+                    <apex:outputLabel for="ddpListHeight" value="DDP List Height" />
+                    <apex:outputPanel >
+                        <apex:inputText id="ddpListHeight" value="{!ddpListHeight}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="ddpListHeightStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputText>
+                        <apex:actionStatus stopText="" id="ddpListHeightStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem helptext="Hide the contact drop down on the DDP selection page to prevent selecting/changing a contact.">
+                    <apex:outputLabel for="hideContact" value="Hide Contact Selection" />
+                    <apex:outputPanel >
+                        <apex:inputCheckbox id="hideContact" value="{!hideContact}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="hideContactStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputCheckbox>
+                        <apex:actionStatus stopText="" id="hideContactStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem helpText="Changes all references of 'DDP' to the specified value on the DDP run page.">
+                    <apex:outputLabel for="ddpLabel" value="DDP Label" />
+                    <apex:outputPanel >
+                        <apex:inputText id="ddpLabel" value="{!ddpLabel}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="ddpLabelStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputText>
+                        <apex:actionStatus stopText="" id="ddpLabelStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem helptext="Hide the DDP select list on the DDP selection page to prevent selecting/changing a DDP.">
+                    <apex:outputLabel for="hideDDP" value="Hide DDP Selection" />
+                    <apex:outputPanel >
+                        <apex:inputCheckbox id="hideDDP" value="{!hideDDP}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="hideDdpStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputCheckbox>
+                        <apex:actionStatus stopText="" id="hideDdpStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!buttonType!='massViaReportTab'}" helptext="Select this option if the button or link will be used in a Service Cloud Console.">
+                    <apex:outputLabel for="serviceCloud" value="In Service Cloud Console" />
+                    <apex:outputPanel >
+                        <apex:inputCheckbox id="serviceCloud" value="{!serviceCloud}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="serviceCloudStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputCheckbox>
+                        <apex:actionStatus stopText="" id="serviceCloudStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            
+            <apex:pageBlockSection title="Default Options" id="defaultBlock">
+                <apex:pageBlockSectionItem helpText="Automatically run with whatever options are defaulted.">
+                    <apex:outputLabel for="autoRun" value="Auto Run" />
+                    <apex:outputPanel >
+                        <apex:inputCheckbox id="autoRun" value="{!autoRun}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="autoRunStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputCheckbox>
+                        <apex:actionStatus stopText="" id="autoRunStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem helpText="Limits DDPs in selection box based on specified value.">
+                    <apex:outputLabel for="filterField" value="Filter" />
+                    <apex:outputPanel id="filterListPanel">
+                        <apex:selectList id="filterField" value="{!filterField}" size="1">
+                            <apex:selectOption itemValue="" itemLabel="--None--" />
+                            <apex:selectOptions value="{!objectAllFields}" />
+                            <apex:selectOption itemValue="other" itemLabel="Other..." />
+                            <apex:actionSupport event="onchange" rerender="codepbs,defaultBlock,pbbuttons" status="filterFieldStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:selectList>
+                        <apex:inputText value="{!filterOtherValue}" rendered="{!filterField='other'}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="filterFieldStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputText>
+                        <apex:actionStatus stopText="" id="filterFieldStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem helpText="If attaching is allowed, this will default the 'attach back' option to checked.">
+                    <apex:outputLabel for="attachBack" value="Attach Back" />
+                    <apex:outputPanel >
+                        <apex:inputCheckbox id="attachBack" value="{!attachBack}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="attachBackStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputCheckbox>
+                        <apex:actionStatus stopText="" id="attachBackStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem helpText="This is the type of comparison to use for the filter value.">
+                    <apex:outputLabel for="filterType" value="Filter Type" />
+                    <apex:outputPanel >
+                        <apex:selectList id="filterType" size="1" value="{!filterType}">
+                            <apex:selectOption itemLabel="equals" itemValue="" />
+                            <apex:selectOption itemLabel="does not equal" itemValue="doesnotequal" />
+                            <apex:selectOption itemLabel="starts with" itemValue="startswith" />
+                            <apex:selectOption itemLabel="ends with" itemValue="endswith" />
+                            <apex:selectOption itemLabel="contains" itemValue="contains" />
+                            <apex:selectOption itemLabel="does not contain" itemValue="doesnotcontain" />
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="filterTypeStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:selectList>
+                        <apex:actionStatus stopText="" id="filterTypeStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!BEGINS(buttonType,'single')}" helpText="Selects specified attachments. Use JavaScript or Apex to dynamically determine Ids.">
+                    <apex:outputLabel for="attachIds" value="Attachment Ids" />
+                    <apex:outputPanel >
+                        <apex:inputText id="attachIds" value="{!attachIds}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="attachIdsStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputText>
+                        <script>jQuery("[id$=:attachIds]").attr('placeholder', 'id1,id2,id3,...');</script>
+                        <apex:actionStatus stopText="" id="attachIdsStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!NOT(BEGINS(buttonType,'single'))}" />
+                
+                <apex:pageBlockSectionItem helpText="Limits DDPs in selection box based on Ids. This will work best when DDPs are not being migrated between orgs.">
+                    <apex:outputLabel for="ddpIds" value="{!$ObjectType.Loop__DDP__c.label} Ids" />
+                    <apex:outputPanel >
+                        <apex:inputText id="ddpIds" value="{!ddpIds}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="ddpIdsStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputText>
+                        <script>jQuery("[id$=:ddpIds]").attr('placeholder', 'id1,id2,id3,...');</script>
+                        <apex:actionStatus stopText="" id="ddpIdsStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!BEGINS(buttonType,'single')}" helpText="Used to pull in attachments from additional records. Use JavaScript or Apex to dynamically determine Ids.">
+                    <apex:outputLabel for="parentIds" value="Parent Ids" />
+                    <apex:outputPanel >
+                        <apex:inputText id="parentIds" value="{!parentIds}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="parentIdsStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputText>
+                        <script>jQuery("[id$=:parentIds]").attr('placeholder', 'id1,id2,id3,...');</script>
+                        <apex:actionStatus stopText="" id="parentIdsStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!NOT(BEGINS(buttonType,'single'))}" />
+                
+                <apex:pageBlockSectionItem helpText="This will default the specified Delivery Option to be selected. This will work best in conjunction with a filter or a specific DDP Id.">
+                    <apex:outputLabel for="deliveryId" value="Delivery Option Id" />
+                    <apex:outputPanel >
+                        <apex:inputText id="deliveryId" value="{!deliveryId}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="deliveryIdStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputText>
+                        <apex:actionStatus stopText="" id="deliveryIdStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem />
+                
+                <apex:pageBlockSectionItem helpText="Default all or certain optional docs to be included.">
+                    <apex:outputLabel for="includedDocs" value="Included Optional Docs" />
+                    <apex:outputPanel >
+                        <apex:inputText id="includedDocs" value="{!includedDocs}">
+                            <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="includedDocsStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                        </apex:inputText>
+                        <script>jQuery("[id$=:includedDocs]").attr('placeholder', 'all or doc1,doc3,doc4...');</script>
+                        <apex:actionStatus stopText="" id="includedDocsStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            
+            <apex:outputPanel id="recipientParamsPanel">
+                <apex:pageBlockSection title="Dynamic E-Signature Recipient Options" columns="3" rendered="{!hasDynamicRecipients}">
+                    <apex:pageBlockSectionItem >
+                        <apex:commandLink value="Add Recipient Parameter" action="{!addRecipientParam}" rerender="recipientParamsPanel" />
+                    </apex:pageBlockSectionItem>
+                    
+                    <apex:pageBlockSectionItem />
+                    <apex:pageBlockSectionItem />
+                    
+                    <apex:repeat value="{!recipientParams}" var="r">
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel for="" value="Param Name" />
+                            <apex:outputPanel >
+                                <apex:selectList size="1" value="{!r.paramName}">
+                                    <apex:selectOption itemValue="" itemLabel="--None--" />
+                                    <apex:selectOptions value="{!recipientParamValues}" />
+                                    <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="paramNameStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                                </apex:selectList>
+                                <apex:actionStatus stopText="" id="paramNameStatus" styleClass="nowrap">
+                                    <apex:facet name="start">
+                                        <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                    </apex:facet>
+                                </apex:actionStatus>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel for="" value="Name Field" />
+                            <apex:outputPanel >
+                                <apex:selectList size="1" value="{!r.nameValue}">
+                                    <apex:selectOption itemValue="" itemLabel="--None--" />
+                                    <apex:selectOptions value="{!objectAllFields}" />
+                                    <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="recipientNameStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                                </apex:selectList>
+                                <apex:actionStatus stopText="" id="recipientNameStatus" styleClass="nowrap">
+                                    <apex:facet name="start">
+                                        <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                    </apex:facet>
+                                </apex:actionStatus>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel for="" value="Email Field" />
+                            <apex:outputPanel >
+                                <apex:selectList size="1" value="{!r.emailValue}">
+                                    <apex:selectOption itemValue="" itemLabel="--None--" />
+                                    <apex:selectOptions value="{!objectAllFields}" />
+                                    <apex:actionSupport event="onchange" rerender="codepbs,pbbuttons" status="recipientEmailStatus" onsubmit="disableForm();" oncomplete="enableForm();" />
+                                </apex:selectList>
+                                <apex:actionStatus stopText="" id="recipientEmailStatus" styleClass="nowrap">
+                                    <apex:facet name="start">
+                                        <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                    </apex:facet>
+                                </apex:actionStatus>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                    </apex:repeat>
+                </apex:pageBlockSection>
+            </apex:outputPanel>
+            
+        </apex:pageBlock>
+    </apex:form>
+</apex:page>

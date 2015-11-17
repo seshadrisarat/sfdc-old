@@ -1,0 +1,940 @@
+<apex:component controller="SLSI.SL_IntranetSearchResultsController" allowDML="true" >
+	 
+<!-- 	<link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/widgetCSS/SL_IntranetSearchResults.css')}" /> -->
+    
+	<apex:attribute assignTo="{!compImpl}" name="aComponentImpl" type="SLSI.WidgetAbstract" description="component implementation object" required="true"/>
+	
+	<link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.SLSI__SL_IntranetHub,'/IntranetHub/css/icons.css')}" />
+    <link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.SLSI__SL_IntranetHub,'/IntranetHub/css/icons-mobile.css')}" />
+    <link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.SLSI__SL_IntranetHub,'/IntranetHub/css/categories.css')}" />
+    
+    <span id="detailwidgetSL_IntranetSearchResults">
+	    <div class="wc-widget SL_IntranetSearchResults" id="widget{!id}" > 
+	    
+			<apex:form >
+				<apex:actionFunction name="widget{!id}.getResults" action="{!getSearchResults}" rerender="EmployeeDirectory, Documents, Posts, Calendars, Sobject, mobSearchResults" status="loader" onComplete="reRenderCss(); ">initAddFocusClass();
+				    <apex:param name="objectAPI" value="" assignTo="{!MyImpl.strSobject}"/>
+				    <apex:param name="objectLabel" value="" assignTo="{!MyImpl.strLabel}"/>
+				    <apex:param name="objectFieldset" value="" assignTo="{!MyImpl.strFieldset}"/>
+				    <apex:param name="txtSearch" value="" assignTo="{!MyImpl.searchText}"/>    
+				</apex:actionFunction>
+				
+				<apex:actionFunction name="widget{!id}getMoreRecords" action="{!getMoreRecords}" rerender="EmployeeDirectory, Documents, Posts, Calendars" status="loader" onComplete="reRenderCss();"/>
+				
+				<apex:actionFunction name="widget{!id}getMoreRecordsForMobile" action="{!getMoreRecordsForMobile}" rerender="mobSearchResults" status="loader" onComplete="reRenderCss();"/>
+				
+				<apex:actionFunction name="postComment" action="{!insertFeedCommemt}" rerender="Posts" status="loader" onComplete="reRenderCss();">
+				    <apex:param name="feedPostId" value=""/>
+				    <apex:param name="feedCommentBody" value=""/> 
+				</apex:actionFunction>
+				
+				<apex:actionFunction name="feedLikeUnlike" action="{!feedLikeUnlike}" rerender="Posts" status="loader" onComplete="reRenderCss();">
+				    <apex:param name="LikeOrUnlike" value=""/>
+				    <apex:param name="Id" value=""/>
+				</apex:actionFunction>
+				
+				<apex:actionFunction name="widget{!id}.deleteFeedPostAF" action="{!deleteFeedPost}" rerender="Posts, leftSideBar" status="loader" onComplete="reRenderCss();">
+				    <apex:param name="feedPostToBeDeleted" value=""/>
+				</apex:actionFunction>
+				
+				<apex:actionFunction name="widget{!id}.deleteFeedPostCommentAF" action="{!deleteFeedPostComment}" rerender="Posts" status="loader" onComplete="reRenderCss();">
+				    <apex:param name="CommentToBeDelete" value=""/>
+				</apex:actionFunction>
+				    
+				<apex:actionFunction name="widget{!id}prev" action="{!prevRecords}" oncomplete="$(window).scrollTop(0);" rerender="Documents" />
+				<apex:actionFunction name="widget{!id}next" action="{!nextRecords}" oncomplete="$(window).scrollTop(0);" rerender="Documents" />
+				<apex:actionFunction name="widget{!id}goToPage" action="{!goToPage}" oncomplete="$(window).scrollTop(0);" rerender="Documents" > 
+				    <apex:param name="pageNo" value=""/> 
+				</apex:actionFunction>
+				
+				<!-- Start : Notification Pagination -->
+			     <apex:actionFunction name="widget{!id}prevSobject" action="{!prevRecords}" oncomplete="$(window).scrollTop(0);" rerender="Sobject" status="loader"/> 
+			     <apex:actionFunction name="widget{!id}nextSobject" action="{!nextRecords}" oncomplete="$(window).scrollTop(0);" rerender="Sobject" status="loader"/>
+			     <apex:actionFunction name="widget{!id}goToPageSobject" action="{!goToPage}" oncomplete="$(window).scrollTop(0);" rerender="Sobject" status="loader"> 
+			         <apex:param name="pageNo" value=""/> 
+			     </apex:actionFunction>
+			     <!-- End : Notification Pagination -->
+			</apex:form>
+		
+		    <!-------------------- page body starts from here  --------------------->
+		    <div id="content" >
+<!-- 		    	strSobject : {!MyImpl.strSobject} -->
+		        <div>
+		            <fieldset>
+		                <!------------------------ Start of employee Directory section  ----------------------->
+		                <apex:outputpanel id="EmployeeDirectory">
+		                    <apex:outputPanel rendered="{!MyImpl.strSobject == 'User' && MyImpl.showComponent}">
+		                        <div class="headline">
+		                            <h2 style="padding-top : 2px;">{!MyImpl.strLabel}</h2>
+		                            <span class="search-for" >Search for: {!MyImpl.searchText}</span>
+		                        </div> 
+		                        <apex:repeat value="{!MyImpl.lstEmployeesSearchresults}" var="emp" rows="{!MyImpl.numOfRecordeToBedisplayed}" rendered="{!MyImpl.lstEmployeesSearchresults.size > 0}"> 
+		                            <div class="feed">
+		                                <apex:outputPanel rendered="{!MyImpl.isSmallPhotoSelected}">
+		                                    <div class="avatar">
+		                                        <a href="/apex/SLSI__SL_Intranet?page=Employee Profile&id={!emp.id}">
+		                                            <img src="{!emp.SmallPhotoUrl}" alt="image description" width="50" height="50" />
+		                                        </a>
+		                                    </div>
+		                                </apex:outputPanel>
+		                                <div class="info">
+		                                    <apex:repeat value="{!MyImpl.lstEmployeesFieldsNeedToDisplay}" var="fldName">
+		                                        <apex:outputPanel rendered="{!IF(fldName == 'Name', true, false)}">
+                                                     <h3><a href="/apex/SLSI__SL_Intranet?page=Employee Profile&id={!emp.id}">{!emp[fldName]}</a></h3>
+                                                </apex:outputPanel>
+	                                                  
+                                                <apex:outputPanel rendered="{!IF(fldName == 'Title' && !ISNULL(emp[fldName]) && !ISBLANK(emp[fldName]), true, false)}">
+                                                    <p><strong class="title"><b>{!emp[fldName]}</b></strong></p>
+                                                </apex:outputPanel>
+	                                                  
+                                                <apex:outputPanel rendered="{!IF(fldName == 'Title' && (ISNULL(emp[fldName]) || ISBLANK(emp[fldName])), true, false)}">
+                                                    <p><strong class="title"><b>&nbsp;</b></strong></p>
+                                                </apex:outputPanel>  
+	                                                  
+                                               	<apex:outputPanel rendered="{!IF((fldName == 'Title' || fldName == 'Name' || fldName == 'SmallPhotoUrl' || fldName == 'SLSI__Office__c' || fldName == 'Extension' || fldName == 'Phone'), false, true)}">
+                                                   	<apex:outputpanel rendered="{!IF(emp[fldName] == '' || emp[fldName] == null, false, true)}">
+                                                        <apex:outputPanel rendered="{!IF(fldName == 'MobilePhone' , true, false)}">
+                                                         	Mobile: 
+                                                         	<a style="font-size: 11px;cursor:pointer;display:{!IF(emp[fldName] == '' || emp[fldName] == null,'none','')};" href="">
+                                                         		{!emp[fldName]}
+                                                         	</a>
+                                                         	
+                                                        </apex:outputPanel>
+                                                        <apex:outputPanel rendered="{!IF(fldName == 'MobilePhone' , false, true)}">
+                                                         	{!MyImpl.mapFldName_FldLabel[fldName]}: {!emp[fldName]}
+                                                         	
+                                                        </apex:outputPanel>
+                                                   	</apex:outputpanel>
+                                                    <apex:outputpanel rendered="{!IF(emp[fldName] == '' || emp[fldName] == null, true, false)}">
+<!--                                                             <p>&nbsp;</p>  -->
+                                                    </apex:outputpanel>
+                                               	</apex:outputPanel>
+	                                                                  
+                                                <apex:outputPanel rendered="{!IF(fldName == 'Phone', true, false)}">
+                                                 	Phone: 
+                                                	<a style="font-size: 11px;cursor:pointer;display:{!IF(emp[fldName] == '' || emp[fldName] == null,'none','')};" href="">
+                                                		{!emp[fldName]} 
+                                                	</a>
+                                                	
+	                                            </apex:outputPanel>
+	                                            <br/>
+		                                    </apex:repeat>
+		                                    
+		                                </div>
+		                            </div>
+		                        </apex:repeat>
+		                                    
+		                        <apex:outputPanel rendered="{!MyImpl.lstEmployeesSearchresults.size == 0}"><br />
+		                            <p class="noResult"> No results found, please try a different search term.</p>
+		                        </apex:outputPanel> 
+		                    
+		                        <apex:outputPanel rendered="{!(MyImpl.lstEmployeesSearchresults.size - MyImpl.numOfRecordeToBedisplayed) > 0}">
+		                            <a href="javascript:widget{!id}getMoreRecords();" class="see-more">{!$Label.SL_Pagination_SeeMore}</a>
+		                        </apex:outputPanel>
+		
+		                    </apex:outputPanel>
+		                </apex:outputpanel>
+		                <!------------------- End of Employee Directory section ------------------->
+		                             
+		                                        
+		                <!------------------- Start of Content Section  ---------------------------->
+		                <apex:outputPanel id="Documents" >
+		                    <apex:outputpanel rendered="{!MyImpl.strSobject == 'ContentVersion' && MyImpl.showComponent}">
+		                        
+		                        <div class="filter-block page-heading search-heading">
+		                            <h2 style="padding-top : 2px;">{!MyImpl.strLabel}</h2>
+		                            <span class="search-for">Search for: {!MyImpl.searchText}</span> 
+		                        </div>
+		                        <apex:variable var="index" value="{!0}" />
+		                        <apex:repeat value="{!MyImpl.lstContentSearchResults}" first="{!MyImpl.startIndex}" rows="{!MyImpl.rowsPerPage}" var="C" rendered="{!MyImpl.lstContentSearchResults.size > 0}">
+		                            <apex:outputPanel rendered="{!C.FileType == 'LINK'}">
+		                                <div class="feed" style="padding: 10px 0px 10px 0px;">
+		                                    <div class="icon" style="float: left;margin-top: 3px;">
+		                                        <span class="{!C.FileType}" style="padding-right: 16px;">&nbsp;</span>
+		                                    </div>
+		                                    <div class="info">
+		                                        <h3><a href="{!C.ContentUrl}" target="_blank">{!C.Title}</a></h3>
+		                                        <div style="word-wrap:break-word;">{!C.Description}</div>
+		                                    
+			                                    <apex:repeat value="{!MyImpl.mapWidget_lstObjectFieldNames[id]}" var="contentField">
+													<apex:outputPanel style="{!If(MyImpl.mapWidget_lstContentVersion[id][index][contentField] != null, 'display:block','display:none')};">
+														<apex:outputText value="{!MyImpl.mapWidget_lstContentVersion[id][index][contentField]}" />
+														<br/>
+													</apex:outputPanel>
+												</apex:repeat>
+											</div>
+		                                </div>
+		                            </apex:outputPanel>
+		                                                
+		                            <apex:outputPanel rendered="{!C.FileType != 'LINK'}">
+		                                <div class="feed" style="padding: 10px 0px 10px 0px;">
+		                                    <div class="icon" style="float:left;">
+	                                            <div class="{!C.FileType}" style="cursor: pointer;height:16px;width:16px;" onclick="javascript:document.getElementById('overlay{!C.Id}').style.display = 'block'; document.documentElement.style.overflow = 'hidden';">&nbsp;</div>
+	                                        </div>
+		                                    <div class="info">
+		                                        <h3><a href="/sfc/servlet.shepherd/version/download/{!C.Id}">{!C.Title}</a></h3>
+		                                        <div style="word-wrap:break-word;">{!C.Description}</div>
+		                                    
+			                                    <apex:repeat value="{!MyImpl.mapWidget_lstObjectFieldNames[id]}" var="contentField">
+													<apex:outputPanel style="{!If(MyImpl.mapWidget_lstContentVersion[id][index][contentField] != null, 'display:block','display:none')};">
+														<apex:outputText value="{!MyImpl.mapWidget_lstContentVersion[id][index][contentField]}" />
+														<br/>
+													</apex:outputPanel>
+												</apex:repeat>
+											</div>
+		                                </div>
+		                            </apex:outputPanel> 
+		                                                
+		                            <div id="overlay{!C.Id}" class="docViewerPanel" style="display: none;position: absolute;">
+		                                <div  role="dialog" aria-live="assetive" aria-describedby="docViewerOverlayTitle" class="overlayDialog docViewerOverlay" style="width: 730px; height: 500px; display: block; visibility: visible; left: 318px; top: 29px;">
+		                                    <div class="topRight">
+		                                        <a title="Start of Dialog" style="width:2px;height:2px;position:absolute;border:0;margin:0;padding:0;background:none;outline:none;z-index:-1;cursor:none;" onclick="return false;" href="javascript:void(0)">Start of Dialog</a>
+		                                        <div class="topLeft">
+		                                            <a class="dialogClose" href="javascript:void(0)" onclick="javascript:document.getElementById('overlay{!C.Id}').style.display = 'none';" onmouseout="this.className = 'dialogClose'" onmouseover="this.className = 'dialogCloseOn'" tabindex="0" title="Close" >Close</a>
+		                                        </div>
+		                                    </div>
+		                                    <div class="middle">
+		                                        <div  class="innerContent" >
+		                                            <div  class="docViewerContainerParent" style="height: 484px;">
+		                                                <div class="docViewerContainer">
+		                                                    <embed  width="100%" height="100%" align="middle" type="application/x-shockwave-flash" wmode="opaque" pluginspage="http://www.adobe.com/go/getflashplayer" allowfullscreen="true" allowscriptaccess="sameDomain" name="renditionLarge" bgcolor="#f3f3f3" quality="high" flashvars="shepherd_prefix=/sfc/servlet.shepherd&v={!C.Id}&mode=chatter_bubble&in_tests=false" src="/_swf/121310/sfc/flex/DocViewer.swf"/>
+		                                                    <noembed>&lt;p&gt;Flash file preview&lt;/p&gt;</noembed>
+		                                                </div>
+		                                            </div>
+		                                        </div>
+		                                    </div>
+		                                    <div class="bottomRight">
+		                                        <input type="text" style="width:2px;height:2px;position:absolute;border:0;margin:0;padding:0;background:none;outline:none;z-index:-1;cursor:none;" />
+		                                        <div class="bottomLeft"/>
+		                                    </div>
+		                                </div>
+		                            </div>
+		                            <apex:variable var="index" value="{!index + 1}"/>                     
+		                        </apex:repeat>
+		                        
+		                        <apex:outputPanel rendered="{!MyImpl.lstContentSearchResults.size == 0}"><br />
+		                            <p class="noResult"> No results found, please try a different search term.</p>
+		                        </apex:outputPanel> 
+		                                        
+		                        <!------------- Display Pagination -------------->
+		                        <apex:outputpanel rendered="{!IF(MyImpl.lstContentSearchResults.size > 0, true, false)}">
+		                            <ul class="paging" id="pagingDiv">
+		                                <li id="fstBtn" class="first"><a href="javascript:widget{!id}prev();">prev</a></li>
+		                                <li id="prevBtn" class="prev"><a href="javascript:widget{!id}prev();">first</a></li>
+		                                <span id="paging"></span>
+		                                <li id="nxtBtn" class="next"><a href="javascript:widget{!id}next();">last</a></li>
+		                                <li id="lstBtn" class="last"><a href="javascript:widget{!id}next();">next</a></li>
+		                            </ul>
+		                        </apex:outputpanel>
+		                        
+		                        <script>
+		                            //To display the page link with numbers
+		                            var additionalLinksContainer = document.getElementById('paging');
+		                            var Pages = '{!MyImpl.totalPages}';
+		                            var pageNo = '{!MyImpl.pageNo}'
+		                            var pageLinksHTML = '';
+		                            //Creating dynamic page Links
+		                            if(Pages == '1' || Pages == '0')
+		                            {
+		                                document.getElementById('prevBtn').style.display = 'none';
+		                                document.getElementById('nxtBtn').style.display = 'none';
+		                                document.getElementById('fstBtn').style.display = 'none';
+		                                document.getElementById('lstBtn').style.display = 'none';
+		                                document.getElementById('pagingDiv').style.display = 'none';
+		                            }
+		                            else
+		                            {
+		                                for( i = 1; i <= Pages ; i++)
+		                                {
+		                                    document.getElementById('prevBtn').style.display = '';
+		                                    document.getElementById('nxtBtn').style.display = '';
+		                                    document.getElementById('fstBtn').style.display = '';
+		                                    document.getElementById('lstBtn').style.display = '';
+		                                    if(pageNo == i)
+		                                        pageLinksHTML += ' <li class="active" id="' + i + '"><span>' + i + '</span>&nbsp;</li>' ;
+		                                    else
+		                                        pageLinksHTML += ' <li id="' + i + '"><a href="javascript:widget{!id}goToPage(' + i + ');">' + i + '</a></li>' ;
+		                                }
+		                                additionalLinksContainer.innerHTML = pageLinksHTML;
+		                            }
+		                            if(pageNo == 1)
+		                            {
+		                                document.getElementById('prevBtn').childNodes[0].href = "javascript:void(0);" ;
+		                                document.getElementById('prevBtn').style.cursor = "text";
+		                                document.getElementById('prevBtn').className = "prev";
+		                                
+		                                document.getElementById('fstBtn').childNodes[0].href = "javascript:void(0);" ;
+		                                document.getElementById('fstBtn').style.cursor = "text";
+		                                document.getElementById('fstBtn').className = "first";  
+		                            }   
+		                            if(pageNo == Pages)
+		                            {
+		                                document.getElementById('nxtBtn').childNodes[0].href = "javascript:void(0);" ;
+		                                document.getElementById('nxtBtn').style.cursor = "text";
+		                                document.getElementById('nxtBtn').className = "next";
+		                                
+		                                document.getElementById('lstBtn').childNodes[0].href = "javascript:void(0);" ;
+		                                document.getElementById('lstBtn').style.cursor = "text";
+		                                document.getElementById('lstBtn').className = "last";
+		                            }       
+		                        </script>
+		                      
+		                    </apex:outputpanel>
+		                </apex:outputPanel>
+		                <!------------------- End of Content Section  ---------------------------->
+		                                        
+		                
+		                <!-- ---------------- Start of Post section  ------------------------------>
+		                <apex:outputPanel id="Posts">
+		                    <apex:outputPanel rendered="{!MyImpl.strSobject == 'FeedItem' && MyImpl.showComponent}">
+		                        <h2>{!MyImpl.strLabel}</h2>
+		                        <span class="search-for">Search for: {!MyImpl.searchText}</span>
+		                        <apex:repeat value="{!MyImpl.lstFeedItemsSearchResults}" var="post" rows="{!MyImpl.numOfRecordeToBedisplayed}" rendered="{!MyImpl.lstFeedItemsSearchResults.size > 0}">
+		                            
+		                            <div class="feed {!IF(MyImpl.mapFeedItemIdToGroupName[post.Id] != 'NG' && CONTAINS(MyImpl.strFeaturedPostsIDs, post.Id), 'feature', '')}" id="postLI{!post.Id}" onmouseover="document.getElementById('deleteBtn{!post.id}').style.display = '';" onmouseout="document.getElementById('deleteBtn{!post.id}').style.display = 'none';">
+		                                 
+		                                <div class="avatar">
+		                                    <a href="SLSI__SL_Intranet?page=Employee Profile&id={!post.CreatedById}">
+		                                        <img src="{!MyImpl.mapFeedIdToUser[post.Id].SmallPhotoUrl}" alt="image description" width="45" height="45" />
+		                                    </a>
+		                                </div>
+		                                            
+		                                <div class="info">
+		                                    <h3>
+		                                    	<!-- Notification -->
+				                            	<apex:outputPanel rendered="{!IF(BEGINS(post.parentId , 'a01') , true, false)}" >
+				                                	<a style="color: #54585c; font-size: 0.85em; cursor: pointer;" href="SLSI__SL_Intranet?page=Home&selNotif={!post.parentId}">
+				                                		{!Myimpl.mapNotificationIdToName[post.parentId]}  
+				                                	</a>
+				                                	-
+				                                </apex:outputPanel>
+				                            	 
+				                            	<!-- Content Chatter -->
+				                            	<apex:outputPanel rendered="{!IF(BEGINS(post.parentId , 'a02') , true, false)}" >
+				                                	<a style="color: #54585c; font-size: 0.85em;" href="/sfc/servlet.shepherd/version/download/{!Myimpl.mapContentChatterIdToContentId[post.parentId]}">
+				                                		{!Myimpl.mapContentChatterIdToContentTitle[post.parentId]}  
+				                                	</a>
+				                                	-
+				                                </apex:outputPanel>
+				                            	
+				                            	<!-- Group -->
+	<!-- 			                            	<apex:outputPanel rendered="{!IF(BEGINS(post.parentId , '0F9') , true, false)}" > -->
+	<!-- 			                                	<a style="color: #54585c; font-size: 0.85em;cursor:pointer;" href="SL_Intranet?page=Home&selGroup={!post.parentId}"> -->
+	<!-- 			                                		{!Myimpl.mapGroupIdToName[post.parentId]}  -->
+	<!-- 			                                	</a> -->
+	<!-- 			                                	-  -->
+	<!-- 			                                </apex:outputPanel> -->
+				                                                                
+				                                                                
+												 <a style="color: #54585c; font-size:{!IF(BEGINS(post.parentId, '005') && post.parentId != post.CreatedById , '0.85em', IF(post.parentId == post.CreatedById , '0.85em' , '0.75em'  ))} ;" href="SLSI__SL_Intranet?page=Employee Profile&id={!post.CreatedById}" >
+				                                 	{!Myimpl.mapFeedIdToUser[post.Id].Name}
+				                                 </a>
+				                                 
+				                                 <apex:outputPanel rendered="{!IF(BEGINS(post.parentId, '005') && post.parentId != post.CreatedById , true, false)}" >
+				                                 	<span style="color: #54585c; font-size: 0.75em;"> to </span>
+				                                 	<a style="color: #54585c; font-size: 0.75em;" href="SLSI__SL_Intranet?Page=Employee Profile&id={!post.parentId}">
+				                                 		{!Myimpl.mapUserIdToUserName[post.parentId]}
+				                                 	</a>
+				                                 </apex:outputPanel>
+				                                 
+		                                        <span id="deleteBtn{!post.id}" style="float:right; display:none;" >
+		                                            <apex:outputPanel rendered="{!IF(MyImpl.hasDeleteAccess || post.CreatedById == $User.Id , true, false)}">
+		                                                <a href="javascript:void(0);" onClick="widget{!id}.deletePost('{!post.id}');" title="Delete this post">x</a>
+		                                            </apex:outputPanel>
+		                                        </span>
+		                                    </h3>
+		                                                            
+		                                    <div id="divShort{!post.id}">
+		                                        <div  style="word-wrap:break-word;"><apex:outputField value="{!post.body}"/></div>
+		                                    </div>
+		                                    <div id="divFull{!post.id}" style="display:none;">  
+		                                        <div  style="word-wrap:break-word;"><apex:outputField value="{!post.body}"/></div>
+		                                    </div>  
+		                                      
+		                                    <div id="togglingSec{!post.id}" style="color: #005595;cursor: pointer;" onclick="javascript: $('#divShort{!post.id}').hide(); $('#divFull{!post.id}').show(); $(this).hide();"></div>
+		                                                        
+		                                    <apex:outputPanel id="FileAttachment" rendered="{!post.Type == 'ContentPost'}"><br/>
+		                                         <table>
+		                                             <tr>
+		                                                 <td style="height:50px;width:65px;">
+		                                                    <div style="cursor: pointer;height:60px;" onmouseover="javascript:document.getElementById('ext{!post.Id}').style.display = 'block';" onmouseout="javascript:document.getElementById('ext{!post.Id}').style.display = 'none';" onclick="javascript:document.getElementById('overlay{!post.Id}').style.display = 'block'; document.documentElement.style.overflow = 'hidden';" >                                                                          
+		                                                        <img style="float:left;" id="previewImg{!post.id}" class="contentThumbnail" alt="Click to preview" 
+		                                                            src="/sfc/servlet.shepherd/version/renditionDownload?rendition=THUMB120BY90&versionId={!post.RelatedRecordId}&operationContext=CHATTER"/>
+		                                                        <div title="Click to preview" class="previewHover" id="ext{!post.Id}" style="width: 65px; margin: 0px auto; height: 50px; position: relative; left: 0px; top: 25%; display: none; padding-top: ($('#previewImg{!post.id}').height()-50)/2;"/>
+		                                                    </div>
+		                                                </td>
+		                                                <td style="vertical-align:top;width: 80%;">
+		                                                    <table class="contentdetails">
+		                                                        <tbody>
+		                                                            <tr>
+		                                                                <td nowrap="nowrap" style="table-layout: fixed !important;width: 100% !important;">
+		                                                                    <div class="contentFileTitle">{!post.ContentFileName}</div> 
+		                                                                </td>
+		                                                            </tr>
+		                                                            <tr>
+		                                                                <td nowrap="nowrap" style="width : 100%;">
+		                                                                    <a class="contentActionLink" href="/sfc/servlet.shepherd/version/download/{!post.RelatedRecordId}?asPdf=false&amp;operationContext=CHATTER">
+		                                                                        <img alt="" src="{!URLFOR($Resource.SLSI__SL_IntranetHub,'/IntranetHub/images/Download.png')}"/>
+		                                                                        <span >Download</span>
+		                                                                        <span class="fileSize" style="color: #B2B2B2;">({!ROUND(post.ContentSize/1024, 0)} &nbsp;KB)</span>
+		                                                                    </a>
+		                                                                    <span class="feeditemseparatingdot">·</span> 
+		                                                                </td>
+		                                                            </tr>       
+		                                                        </tbody>
+		                                                    </table>
+		                                                </td>   
+		                                             </tr>
+		                                         </table>
+		                                         <div id="overlay{!post.Id}" class="docViewerPanel" style="display: none; z-index: 9998;">
+		                                            <div  role="dialog" aria-live="assetive" aria-describedby="docViewerOverlayTitle" class="overlayDialog docViewerOverlay" style="width: 730px; height: 650px; display: block; visibility: visible; left: 318px; top: 29px;position: fixed !important; z-index:9999;">
+		                                                <div class="topRight">
+		                                                    <a title="Start of Dialog" style="width:2px;height:2px;position:absolute;border:0;margin:0;padding:0;background:none;outline:none;z-index:-1;cursor:none;" onclick="return false;" href="javascript:void(0)">Start of Dialog</a>
+		                                                    <div class="topLeft">
+		                                                        <a class="dialogClose" href="javascript:void(0)" onclick="javascript:document.getElementById('overlay{!post.Id}').style.display = 'none'; document.documentElement.style.overflow = 'auto';" onmouseout="this.className = 'dialogClose'" onmouseover="this.className = 'dialogCloseOn'" tabindex="0" title="Close" >Close</a>
+		                                                    </div>
+		                                                </div>
+		                                                <div class="middle">
+		                                                    <div  class="innerContent" >
+		                                                        <div  class="docViewerContainerParent" style="height: 500px;">
+		                                                            <div class="docViewerContainer">
+		                                                                <embed  width="100%" height="480px;" align="middle" type="application/x-shockwave-flash" wmode="opaque" pluginspage="http://www.adobe.com/go/getflashplayer" allowfullscreen="true" allowscriptaccess="sameDomain" name="renditionLarge" bgcolor="#f3f3f3" quality="high" flashvars="shepherd_prefix=/sfc/servlet.shepherd&v={!post.RelatedRecordId}&mode=chatter_bubble&in_tests=false" src="/_swf/121310/sfc/flex/DocViewer.swf"/>
+		                                                                <noembed>&lt;p&gt;Flash file preview&lt;/p&gt;</noembed>
+		                                                                
+		                                                                 <!-- Section added to display the replacement content when flash player is not available -->
+		                                                           <div id="dummyFilePreview{!post.Id}" style="display:none;">
+		                                                           	File preview is not available in this device because of absence of Flash player.<br />
+		                                                           	Download the file via clicking this link : 
+		                                                           	<a class="contentActionLink" href="/sfc/servlet.shepherd/version/download/{!post.RelatedRecordId}?asPdf=false&amp;operationContext=CHATTER">
+		                                                                   <img alt="" src="{!URLFOR($Resource.SLSI__SL_IntranetHub,'/IntranetHub/images/Download.png')}"/>
+		                                                                   <span >Download</span>
+		                                                                   <span class="fileSize" style="color: #B2B2B2;">({!ROUND(post.ContentSize/1024, 0)} &nbsp;KB)</span>
+		                                                               </a> 
+		                                                           </div>
+		                                                           
+		                                                           <script>
+		                                                           	if(!MyImpl.isFilePreviewDisplay)
+		                                                           	{
+		                                                           		$('#actualFilePreview{!post.Id}').hide();
+		                                                           		$('#dummyFilePreview{!post.Id}').show();
+		                                                           	}
+		                                                           </script>
+		                                                           <!-- End -->
+		                                                                
+		                                                            </div>
+		                                                        </div>
+		                                                    </div>
+		                                                </div>
+		                                                <div class="bottomRight">
+		                                                    <input type="text" style="width:2px;height:0px;position:absolute;border:0;margin:0;padding:0;background:none;outline:none;z-index:-1;cursor:none;" />
+		                                                    <div class="bottomLeft"/>
+		                                                </div>
+		                                            </div>
+		                                         </div>
+		                                    </apex:outputPanel>
+		                                                    
+		                                    <apex:outputPanel id="LinkPost" rendered="{!post.type == 'LinkPost'}"><br />
+		                                        <div class="linkPostLinkContainer linkPostLinkTitle">
+		                                            <a target="_blank" class="linkPostLink" href="{!post.LinkUrl}">
+		                                                <img title="{!post.Title}" alt="{!post.Title}" src="{!URLFOR($Resource.SLSI__SL_IntranetHUB,'/IntranetHub/images/icon3.png')}"/>
+		                                                <span title="{!post.LinkUrl}">{!post.Title}</span>
+		                                            </a>
+		                                            <div class="feeditemlinkpost">{!post.LinkUrl}</div>
+		                                        </div>
+		                                    </apex:outputPanel>
+		                                    <div class="bottom">
+		                                        <span class="date">
+		                                            <!---------------- To display the time  --------------->
+		                                            <apex:outputtext value="{0, date, 'Today' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[post.Id]) = TODAY()}">
+		                                                <apex:param value="{!MyImpl.mapFeedIdToCreatedDate[post.Id]}"/>                                                                    
+		                                            </apex:outputtext>
+		                                            <apex:outputText value="{0, date, 'Yesterday' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[post.Id]) = TODAY()-1}">
+		                                                <apex:param value="{!MyImpl.mapFeedIdToCreatedDate[post.Id]}"/>
+		                                            </apex:outputText> 
+		                                            <apex:outputText value="{0, date, 'Two days ago' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[post.Id]) = TODAY()-2}">
+		                                                <apex:param value="{!MyImpl.mapFeedIdToCreatedDate[post.Id]}"/>
+		                                            </apex:outputText> 
+		                                            <apex:outputText value="{0, date, MMMMM dd, yyyy 'at' hh:mm a}" escape="false" rendered="{!(DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[post.Id]) != TODAY()) && (DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[post.Id]) != TODAY()-1) && (DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[post.Id]) != TODAY()-2)}">
+		                                                <apex:param value="{!MyImpl.mapFeedIdToCreatedDate[post.Id]}"/>
+		                                            </apex:outputText> 
+		                                            <apex:outputPanel rendered="{!IF(MyImpl.mapFeedItemIdToGroupName[post.Id] != 'NG' && !CONTAINS(MyImpl.strFeaturedPostsIDs, post.Id) , true, false)}">
+		                                                 &nbsp;<em>in</em>&nbsp; {!MyImpl.mapFeedItemIdToGroupName[post.Id]}
+		                                            </apex:outputPanel>
+		                                            <!---------------- End of display of time  --------------->
+		                                        </span> 
+		                                                    
+		                                        <!------------- Like block  ---------------->
+		                                        <apex:outputPanel rendered="{!IF(MyImpl.mapFeedIdToFeedLikeId[post.Id] == 'No', false, true)}">  
+		                                            <a class="like" href="javascript:feedLikeUnlike('unlike', '{!MyImpl.mapFeedIdToFeedLikeId[post.Id]}');">Unlike ({!MyImpl.mapFeedIdToNumOfLikes[post.Id]})</a>
+		                                        </apex:outputPanel>
+		                                        <apex:outputPanel rendered="{!IF(MyImpl.mapFeedIdToFeedLikeId[post.Id] == 'No', true, false)}">
+		                                            <a class="like" href="javascript:feedLikeUnlike('like', '{!post.Id}');">Like ({!MyImpl.mapFeedIdToNumOfLikes[post.Id]})</a>  
+		                                        </apex:outputPanel>
+		                                        <!------------- End of Like block  --------->
+		                                        
+		                                        <!------------ Comment count and for show-hide comments  ---------------->
+		                                        <a class="comment" href="javascript:showHideComments('{!post.Id}');">Comment <span id="count{!post.Id}">(8)</span></a>
+		                                        <!------------ End of Comment count and for show-hide comments  --------->
+		                                    </div>
+		                                               
+		                                    <div  class="add-feed" style="float:left;">
+		                                        <div id="{!post.Id}">
+		                                             <ul class="feeds">
+		                                                 <apex:repeat value="{!MyImpl.mapFeedItemIdToRelatedlstComments[post.Id]}" var="fc">
+		                                                     <li id="commentLI{!fc.id}" onMouseOver="$('#deleteCommentBtn{!fc .id}').show();" onMouseOut="$('#deleteCommentBtn{!fc .id}').hide();">
+		                                                         
+		                                                         <a href="SLSI__SL_Intranet?page=Employee Profile&id={!fc.CreatedById}">
+		                                                            <img src="{!MyImpl.mapFeedIdToUser[fc.Id].SmallPhotoUrl}" alt="image description" width="35" height="35"/>
+		                                                         </a>
+		                                                         
+		                                                         <div class="info">
+		                                                                
+		                                                             <span id="deleteCommentBtn{!fc.id}" style="float:right; display:none;" >
+		                                                                 <apex:outputPanel rendered="{!IF(MyImpl.hasDeleteAccess || post.CreatedById == $User.Id , true, false)}">
+		                                                                     <a href="javascript:void(0);" title="Delete this comment" onclick="widget{!id}.deleteComment('{!fc.Id}', '{!post.Id}');">x</a>
+		                                                                 </apex:outputPanel>
+		                                                             </span>
+		                                                                                
+		                                                             <div style="padding-right: 8px;">
+		                                                                 <div id="Shortcomment{!fc.Id}">     
+		                                                                     <div  style="word-wrap:break-word;">
+		                                                                         <a href="SLSI__SL_Intranet?page=Employee Profile&id={!fc.CreatedById}">{!MyImpl.mapFeedIdToUser[fc.Id].Name}</a>&nbsp;
+		                                                                         <apex:outputField value="{!fc.CommentBody}"/><br />
+		                                                                         <script>
+		                                                                            var postCommentId = 'Shortcomment{!fc.id}';
+		                                                                            var postCommentText = $('#' + postCommentId).find('span').text();
+		                                                                            $('#' + postCommentId).find('span').innerHTML = postCommentText.substring(0, 364);
+		                                                                        </script>
+		                                                                     </div>
+		                                                                 </div> 
+		                                                                 <div style="display:none;" id="Fullcomment{!fc.Id}">     
+		                                                                     <div  style="word-wrap:break-word;">
+		                                                                         <a href="SLSI__SL_Intranet?page=Employee Profile&id={!fc.CreatedById}">{!MyImpl.mapFeedIdToUser[fc.Id].Name}</a>&nbsp;
+		                                                                         <apex:outputField value="{!fc.CommentBody}"/><br />
+		                                                                     </div>
+		                                                                 </div> 
+		                                                             </div>
+		                                                                                    
+		                                                             <div id="togglingSec{!fc.id}" style="color: #005595;cursor: pointer;" onclick="javascript: $('#Shortcomment{!fc.Id}').hide(); $('#Fullcomment{!fc.Id}').show(); $(this).hide();"></div>
+		                                                                      
+		                                                             <span class="date">
+		                                                                 <apex:outputtext value="{0, date, 'Today' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[fc.Id]) = TODAY()}">
+		                                                                     <apex:param value="{!MyImpl.mapFeedIdToCreatedDate[fc.Id]}"/>                                                                  
+		                                                                 </apex:outputtext>
+		                                                                 <apex:outputText value="{0, date, 'Yesterday' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[fc.Id]) = TODAY()-1}">
+		                                                                     <apex:param value="{!MyImpl.mapFeedIdToCreatedDate[fc.Id]}"/>
+		                                                                 </apex:outputText> 
+		                                                                 <apex:outputText value="{0, date, 'Two days ago' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[fc.Id]) = TODAY()-2}">
+		                                                                     <apex:param value="{!MyImpl.mapFeedIdToCreatedDate[fc.Id]}"/>
+		                                                                 </apex:outputText> 
+		                                                                 <apex:outputText value="{0, date, MMMMM dd, yyyy 'at' hh:mm a}" escape="false" rendered="{!(DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[fc.Id]) != TODAY()) && (DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[fc.Id]) != TODAY()-1) && (DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[fc.Id]) != TODAY()-2)}">
+		                                                                     <apex:param value="{!MyImpl.mapFeedIdToCreatedDate[fc.Id]}"/>
+		                                                                 </apex:outputText>
+		                                                             </span> 
+		                                                     
+		                                                        </div>
+		                                                                            
+		                                                        <script>
+		                                                            /* To show more section for Comment*/
+		                                                            if($(document.getElementById('Fullcomment{!fc.id}')).height() > 92 && !$.browser.chrome)
+		                                                            {   
+		                                                                document.getElementById('Shortcomment{!fc.id}').style.height = 92 + 'px' ; 
+		                                                                document.getElementById('Shortcomment{!fc.id}').style.overflow = 'hidden';
+		                                                                if(document.getElementById('Shortcomment{!fc.id}').style.height != document.getElementById('Shortcomment{!fc.id}').scrollHeight)
+		                                                                    document.getElementById('togglingSec{!fc.id}').innerHTML += '...More';
+		                                                                
+		                                                            }
+		                                                            else if(document.getElementById('Shortcomment{!fc.id}').clientHeight > 90 && $.browser.chrome)
+		                                                            {   
+		                                                                document.getElementById('Shortcomment{!fc.id}').style.height = 90 + 'px' ; 
+		                                                                document.getElementById('Shortcomment{!fc.id}').style.overflow = 'hidden';
+		                                                                if(document.getElementById('Shortcomment{!fc.id}').style.height != document.getElementById('Shortcomment{!fc.id}').scrollHeight)
+		                                                                    document.getElementById('togglingSec{!fc.id}').innerHTML += '...More';
+		                                                            }
+		                                                            else
+		                                                            {
+		                                                                document.getElementById('togglingSec{!fc.id}').onclick = '';
+		                                                                document.getElementById('togglingSec{!fc.id}').style.display = '';
+		                                                            }
+		                                                            /* End of Show more section for Comment*/
+		                                                        </script>
+		                                                                            
+		                                                     </li>                                                                           
+		                                                 </apex:repeat>
+		                                             </ul>
+		                                         </div>        
+		                                         
+		                                         <div class="holder">
+		                                            <label for="comment1" class="hidden">&nbsp;</label>
+		                                            <textarea id="commentBlock{!post.id}" cols="30" rows="5" onblur="if(this.value=='') this.value = 'Comment...';" onfocus="if(this.value=='Comment...') this.value = '';" onkeyup="widget{!id}.checkLength(this.value, '{!post.id}');">Comment...</textarea>
+		                                            <a class="send" id="postBtn{!post.id}" onclick="if($(this).parents('.holder').find('textarea').val() == 'Comment...'){$(this).parents('.holder').find('textarea').focus();}else if($(this).parents('.holder').find('textarea').val().trim() == ''){$(this).parents('.holder').find('textarea').val('Comment...');rerenderAF();}else if($(this).parents('.holder').find('textarea').val().trim() != '' && $(this).parents('.holder').find('textarea').val() != 'Comment...' && $(this).parents('.holder').find('textarea').val().length <= 1000){postComment('{!post.Id}', $(this).parents('.holder').find('textarea').val());}" style="cursor: pointer !important;"><strong>+</strong>Post</a>
+		                                        </div>
+		                    
+		                                        <a id="viewAll{!post.id}" onclick="$('#{!post.Id} > ul > li').show();$(this).hide();" style="display:none;cursor:pointer;">View all 8 Comments</a>
+		                                                        
+		                                        <script>
+		                                            var commentSize = $('#{!post.Id} > ul > li').length;
+		                                            if(commentSize == 0)
+		                                                document.getElementById('{!post.Id}').firstchild = '';
+		                                                
+		                                            document.getElementById('count{!post.Id}').innerHTML = '(' + commentSize + ')';
+		                                            
+		                                            if(commentSize > 3)
+		                                            {
+		                                                document.getElementById('viewAll{!post.id}').style.display = '';
+		                                                document.getElementById('viewAll{!post.id}').innerHTML = 'View all ' + commentSize + ' comments';
+		                                                
+		                                                $('#{!post.Id} > ul > li').each(function (i) {
+		                                                    if(i > 2) $(this).hide();
+		                                                }); 
+		                                            }
+		                                                        
+		                                            //For setting the subject line
+		                                            widget{!id}.setSubjectTag('divShort{!post.id}');
+		                                            widget{!id}.setSubjectTag('divFull{!post.id}');
+		                                                                                
+		                                            /* To show more section for Post*/
+		                                            if(document.getElementById('divShort{!post.id}').clientHeight > 106 && !$.browser.chrome)
+		                                            {   
+		                                                document.getElementById('divShort{!post.id}').style.height = 106 + 'px' ; 
+		                                                document.getElementById('divShort{!post.id}').style.overflow = 'hidden';
+		                                                if(document.getElementById('divShort{!post.id}').style.height != document.getElementById('divShort{!post.id}').scrollHeight)
+		                                                    document.getElementById('togglingSec{!post.id}').innerHTML += '...More';
+		                                            }
+		                                            else if(document.getElementById('divShort{!post.id}').clientHeight > 102 && $.browser.chrome)
+		                                            {   
+		                                                document.getElementById('divShort{!post.id}').style.height = 102 + 'px' ; 
+		                                                document.getElementById('divShort{!post.id}').style.overflow = 'hidden';
+		                                                if(document.getElementById('divShort{!post.id}').style.height != document.getElementById('divShort{!post.id}').scrollHeight)
+		                                                    document.getElementById('togglingSec{!post.id}').innerHTML += '...More';
+		                                            }
+		                                            else
+		                                            {
+		                                                document.getElementById('togglingSec{!post.id}').onclick = '';
+		                                                document.getElementById('togglingSec{!post.id}').style.display = '';
+		                                            }   
+		                                            /* End of Show more section for Post*/
+		                                        </script>  
+		                                                    
+		                                     </div>
+		                                     
+		                                     <div id="commentErr{!post.id}" style="color: red;font-weight: bold;"></div>
+		                                 
+		                                 </div>
+		                                 
+		                                 <span class="notice" style="{!IF(MyImpl.mapFeedItemIdToGroupName[post.Id] != 'NG' && CONTAINS(MyImpl.strFeaturedPostsIDs, post.Id), '', 'display:none;')}">{!MyImpl.mapFeedItemIdToGroupName[post.Id]}</span>
+		                              
+		                             </div>
+		                        </apex:repeat>
+		                                    
+		                        <apex:outputPanel rendered="{!MyImpl.lstFeedItemsSearchResults.size == 0}"><br />
+		                            <p class="noResult"> No results found, please try a different search term.</p>
+		                        </apex:outputPanel>
+		                    
+		                        <apex:outputPanel rendered="{!(MyImpl.lstFeedItemsSearchResults.size - MyImpl.numOfRecordeToBedisplayed) > 0}">
+		                            <a href="javascript:widget{!id}getMoreRecords();" class="see-more">{!$Label.SL_Pagination_SeeMore}</a>
+		                        </apex:outputPanel> 
+		                   
+		                    </apex:outputPanel>
+		                                
+		                    <script>
+		                        function showHideComments(feedCommentsContainerId)
+		                        {
+		                            var feedCommentsContainer = document.getElementById(feedCommentsContainerId);
+		                            
+		                            if(feedCommentsContainer.style.display == 'block')
+		                                feedCommentsContainer.style.display = 'none';
+		                            else
+		                                feedCommentsContainer.style.display = 'block';  
+		                        }
+		                    </script>
+		                </apex:outputPanel>
+		                <!------------------- End of Post section  -------------------------------->
+		                            
+		                            
+		                <!------------------- Start of Calendars Entries section  ------------------> 
+		                <apex:outputPanel id="Calendars">
+		                    <apex:outputPanel rendered="{!MyImpl.strSobject == 'SLSI__Intranet_Event__c' && MyImpl.showComponent}"> 
+		                        
+		                        <div class="filter-block page-heading search-heading">
+		                            <h2 style="padding-top : 2px;">{!MyImpl.strLabel}</h2>
+		                            <span class="search-for">Search for: {!MyImpl.searchText}</span>
+		                        </div>
+		                        
+		                        <apex:variable var="index" value="{!0}" />             
+		                        <apex:repeat value="{!MyImpl.lstCalendarEntries}" rows="{!MyImpl.numOfRecordeToBedisplayed}" var="h" rendered="{!MyImpl.lstCalendarEntries.size > 0}">
+		                            <div class="feed">
+		                             <div class="info">
+		                                     
+		                                 <h3 ><a onclick="widget{!id}.viewIntranetEvents('{!h.Id}',false, '');" style="cursor: pointer;">{!h.Name}</a></h3>
+		                                 
+		                                 <p>{!h.RecordType.Name}</p>
+		                                 
+		                                <apex:repeat value="{!MyImpl.mapWidget_lstObjectFieldNames[id]}" var="eventField">
+											
+											<!-- <apex:outputPanel rendred="{!If(!MyImpl.mapWidget_lstEvent[id][index2][officeField1])}"> -->
+											<apex:outputPanel style="{!If(AND(MyImpl.mapWidget_lstEvent[id][index][eventField] != null,eventField == 'SLSI__Date_of_Event__c'), 'display:block','display:none')};">
+												<em>
+													<apex:outputText value="{0,date,MMMM d, yyyy}">
+														<apex:param value="{!h.SLSI__Date_of_Event__c}" />
+													</apex:outputText>
+												</em>
+											</apex:outputPanel>
+											<apex:outputPanel style="{!If(AND(MyImpl.mapWidget_lstEvent[id][index][eventField] != null,eventField == 'SLSI__End_Date__c'), 'display:block','display:none')};">
+												<em>
+													<apex:outputText value="{0,date, - MMMM d, yyyy}">
+														<apex:param value="{!h.SLSI__End_Date__c}" />
+													</apex:outputText>
+												</em>
+											</apex:outputPanel>
+											<apex:outputPanel style="{!If(AND(MyImpl.mapWidget_lstEvent[id][index][eventField] != null,eventField == 'SLSI__Comments__c'), 'display:block','display:none')};">
+												<p><apex:outputField value="{!h.SLSI__Comments__c}" /></p>
+											</apex:outputPanel>
+											<apex:outputPanel style="{!If(AND(MyImpl.mapWidget_lstEvent[id][index][eventField] != null,eventField != 'SLSI__Date_of_Event__c',eventField == 'SLSI__End_Date__c',eventField == 'SLSI__Comments__c') , 'display:block','display:none')};">
+												<apex:outputText value="{!MyImpl.mapWidget_lstEvent[id][index][eventField]}" />
+											</apex:outputPanel>
+										</apex:repeat>
+										<apex:variable var="index" value="{!index + 1}"/>
+		                           
+		                             </div>
+		                            </div>
+		                        </apex:repeat> 
+		                                    
+		                        <!-- When No results found -->
+		                        <apex:outputPanel rendered="{!MyImpl.lstCalendarEntries.size == 0}"><br />
+		                            <p class="noResult"> No results found, please try a different search term.</p>
+		                        </apex:outputPanel> 
+		                        <!-- End of No results found section -->
+		                    
+		                        <!-- To display more records -->
+		                        <apex:outputPanel rendered="{!(MyImpl.lstCalendarEntries.size - MyImpl.numOfRecordeToBedisplayed) > 0}">
+		                            <a href="javascript:widget{!id}getMoreRecords();" class="see-more">{!$Label.SL_Pagination_SeeMore}</a>
+		                        </apex:outputPanel>
+		                         <!-- End of display more Section -->
+		                    
+		                    </apex:outputPanel>
+		                </apex:outputPanel>
+		                <!------------------- End of Calendars Entries section  -------------------->
+		                
+		                 <!------------------- Start of Sobject section  -------------------->
+		                 <apex:outputPanel id="Sobject">
+		                    <apex:outputPanel rendered="{!If(MyImpl.strSobject != 'FeedItem' && MyImpl.strSobject != 'SLSI__Intranet_Event__c' && MyImpl.strSobject != 'ContentVersion' && MyImpl.strSobject != 'User' && MyImpl.showComponent, true, false)}">
+		                        <h2>{!MyImpl.strLabel}</h2>  
+		                        <span class="search-for">Search for: {!MyImpl.searchText}</span>
+					            <ul style="list-style: none; padding: 0px 0 13px;margin-top: 0px;">
+					            	<apex:variable var="index" value="{!0}" />
+					                 <apex:repeat value="{!MyImpl.lstSobject}" var="obj" first="{!MyImpl.startIndex}" rows="{!MyImpl.rowsPerPage}">
+					                      <li style="border-bottom: 1px solid #ededed;padding: 5px 0px 5px 0px;">
+					                           <h3>
+					                           		<a style="cursor: pointer;" onclick="
+					                           					if('{!myimpl.mapsObjectKeyPrefixTosObjectName[LEFT(obj['Id'],3)]}' == 'SLSI__Notification__c')
+					                           					{
+					                           						widget{!id}.viewNotifications('{!obj['Id']}', false);
+					                           					}
+					                           					else if('{!myimpl.mapsObjectKeyPrefixTosObjectName[LEFT(obj['Id'],3)]}' == 'SLSI__Intranet_Event__c')
+					                           					{
+					                           						widget{!id}.viewIntranetEvents('{!obj['Id']}',false, '');
+					                           					}
+					                           					else
+					                           					{
+					                           						widget{!id}.viewSobject('{!obj['Id']}', '{!myimpl.mapsObjectKeyPrefixTosObjectName[LEFT(obj['Id'],3)]}', false);
+					                           					
+					                           					}
+					                           					" >
+					                           			{!obj['Name']}
+					                           		</a>
+					                           	</h3>
+					                           <p></p>
+					                           	<apex:repeat value="{!MyImpl.mapWidget_lstObjectFieldNames[id]}" var="fieldName">
+													<apex:outputPanel style="{!If(AND(MyImpl.mapWidget_lstSObject[id][index][fieldName] != null,fieldName != 'Name'), 'display:block','display:none')};" >
+														<apex:outputText value="{!MyImpl.mapWidget_lstSObject[id][index][fieldName]}" />
+														<br/>
+													</apex:outputPanel>
+												</apex:repeat>
+												<apex:variable var="index" value="{!index + 1}"/>
+					                      </li>
+					                 </apex:repeat>
+					            </ul>
+					            <apex:outputpanel rendered="{!Myimpl.lstSobject.size == 0}">
+				               		<p class="noResult"> No results found, please try a different search term.</p>
+				           		</apex:outputpanel>
+				            	 
+				            <!-------------Start : Display Pagination for Sobject -------------->
+				            <apex:outputpanel rendered="{!IF(MyImpl.lstSobject.size > 0 , true, false)}">
+				                 <ul class="paging" id="pagingDivSobject">
+				                     <li id="fstBtnSobject" class="first"><a href="javascript:widget{!id}prevSobject();">prev</a></li>
+				                     <li id="prevBtnSobject" class="prev"><a href="javascript:widget{!id}prevSobject();">first</a></li>
+				                     <span id="pagingSobject"></span>
+				                     <li id="nxtBtnSobject" class="next"><a href="javascript:widget{!id}nextSobject();">last</a></li>
+				                     <li id="lstBtnSobject" class="last"><a href="javascript:widget{!id}nextSobject();">next</a></li>
+				                 </ul>
+				             </apex:outputpanel> 
+				             
+				             <script>
+				                 //To display the page link with numbers
+				                 var additionalLinksContainer = document.getElementById('pagingSobject');
+				                 var Pages = '{!MyImpl.totalPages}';
+				                 var pageNo = '{!MyImpl.pageNo}'
+				                 var pageLinksHTML = '';
+				                 
+				                 //Creating dynamic page Links
+				                 if(Pages == '1' || Pages == '0')
+				                 {
+				                     document.getElementById('prevBtnSobject').style.display = 'none';
+				                     document.getElementById('nxtBtnSobject').style.display = 'none';
+				                     document.getElementById('fstBtnSobject').style.display = 'none';
+				                     document.getElementById('lstBtnSobject').style.display = 'none';
+				                     document.getElementById('pagingDivSobject').style.display = 'none';
+				                 }
+				                 else
+				                 {
+				                     for( i = 1; i <= Pages ; i++)
+				                     {
+				                         document.getElementById('prevBtnSobject').style.display = '';
+				                         document.getElementById('nxtBtnSobject').style.display = '';
+				                         document.getElementById('fstBtnSobject').style.display = '';
+				                         document.getElementById('lstBtnSobject').style.display = '';
+				                         if(pageNo == i)
+				                             pageLinksHTML += ' <li class="active" id="Sobject' + i + '"><span>' + i + '</span>&nbsp;</li>' ;
+				                         else
+				                             pageLinksHTML += ' <li id="Sobject' + i + '"><a href="javascript:widget{!id}goToPageSobject(' + i + ');">' + i + '</a></li>' ;
+				                     }
+				                     additionalLinksContainer.innerHTML = pageLinksHTML;
+				                 }
+				                 if(pageNo == 1)
+				                 {
+				                     document.getElementById('prevBtnSobject').childNodes[0].href = "javascript:void(0);" ;
+				                     document.getElementById('prevBtnSobject').style.cursor = "text";
+				                     document.getElementById('prevBtnSobject').className = "prev";
+				                     
+				                     document.getElementById('fstBtnSobject').childNodes[0].href = "javascript:void(0);" ;
+				                     document.getElementById('fstBtnSobject').style.cursor = "text";
+				                     document.getElementById('fstBtnSobject').className = "first";  
+				                 }   
+				                 if(pageNo == Pages)
+				                 {
+				                     document.getElementById('nxtBtnSobject').childNodes[0].href = "javascript:void(0);" ;
+				                     document.getElementById('nxtBtnSobject').style.cursor = "text";
+				                     document.getElementById('nxtBtnSobject').className = "next";
+				                     
+				                     document.getElementById('lstBtnSobject').childNodes[0].href = "javascript:void(0);" ;
+				                     document.getElementById('lstBtnSobject').style.cursor = "text";
+				                     document.getElementById('lstBtnSobject').className = "last";
+				                 }       
+				             </script>
+				             <!-------------End : Display Pagination for Sobject -------------->
+							</apex:outputpanel>
+						</apex:outputPanel>
+						 <!-- End - Sobject -->
+		            </fieldset>
+		        </div>
+		    </div>
+		    <!-- Page body ends here -->
+			<br/>
+		</div>
+		
+		<div class="wc-widget-mobile SL_IntranetSearchResults" >
+			<apex:outputPanel id="mobSearchResults">
+				<div class="content-holder">
+			        <ul class="list links">
+			           <apex:repeat value="{!Myimpl.lstEmployeesSearchresults}" var="emp" rendered="{!$CurrentPage.parameters.type == 'Emp'}" rows="{!Myimpl.numOfRecordsToBedisplayed_Mobile}">
+			               <li style="margin-left:0px;">
+			                   <apex:outputPanel rendered="{!Myimpl.isSmallPhotoSelected}">
+			                       <div class="avatar">
+			                           <a href="/apex/SLSI__SL_Intranet?Page=Employee Profile&id={!emp.id}&searchText={!Myimpl.searchText}"><img src="{!emp.SmallPhotoUrl}" alt="image description" width="66" height="63" /></a>
+			                       </div>
+			                   </apex:outputPanel>
+			                   
+			                   <div class="info">
+			                       <apex:repeat value="{!Myimpl.lstEmployeesFieldsNeedToDisplay}" var="fldName">
+			                           <apex:outputPanel rendered="{!IF(fldName == 'Name', true, false)}">
+			                               <h3><a href="/apex/SLSI__SL_Intranet?Page=Employee Profile&id={!emp.id}&searchText={!Myimpl.searchText}">{!emp[fldName]}</a></h3>
+			                           </apex:outputPanel>
+			                           <apex:outputPanel rendered="{!IF(fldName == 'Title' && !ISNULL(emp[fldName]) && !ISBLANK(emp[fldName]), true, false)}">
+			                               <span class="sub-info">{!emp[fldName]}</span>
+			                           </apex:outputPanel>
+			                           <apex:outputPanel rendered="{!IF(fldName == 'Title' && (ISNULL(emp[fldName]) || ISBLANK(emp[fldName])), true, false)}">
+			                               <span class="sub-info"><b>&nbsp;</b></span>
+			                           </apex:outputPanel>
+			                           <apex:outputPanel rendered="{!IF(fldName == 'Phone', true, false)}">
+			                               <p>Phone: <a style="font-size: 30px;cursor:pointer;display:{!IF(emp[fldName] == '' || emp[fldName] == null,'none','')};" href="">{!emp[fldName]} <img height="25px" width="15px" src="{!URLFOR($Resource.SLSI__SL_IntranetHUB,'/IntranetHub/images/icon-phone.png')}"/></a></p>
+			                           </apex:outputPanel>
+			                           <apex:outputPanel rendered="{!IF(fldName == 'Email', true, false)}">
+			                               <p>Email: {!emp[fldName]}</p>
+			                           </apex:outputPanel>
+			                           
+			                           
+			                           <apex:outputPanel rendered="{!IF((fldName == 'Title' || fldName == 'Name' || fldName == 'SmallPhotoUrl' || fldName == 'Phone' || fldName == 'Email'), false, true)}">
+			                               <apex:outputpanel rendered="{!IF(emp[fldName] == '' || emp[fldName] == null, false, true)}">
+			                                   <p>{!fldName}: {!emp[fldName]}</p>
+			                               </apex:outputpanel>
+			                               <apex:outputpanel rendered="{!IF(emp[fldName] == '' || emp[fldName] == null, true, false)}">
+			                                   <p>{!fldName}:&nbsp;</p>
+			                               </apex:outputpanel>
+			                           </apex:outputPanel>
+			                           
+			                       </apex:repeat>
+			                   </div>
+			               </li>
+			           </apex:repeat>
+			           
+			           <apex:repeat value="{!Myimpl.lstContentSearchResults}" var="C" rendered="{!$CurrentPage.parameters.type == 'Docs'}" rows="{!Myimpl.numOfRecordsToBedisplayed_Mobile}">
+			               <li style="margin-left:0px;">
+			                   <apex:outputPanel rendered="{!C.FileType == 'LINK'}">
+			                       <div class="avatar">
+			                           <div class="{!C.FileType}1" style="height:32px;width:32px;">&nbsp;</div>
+			                       </div>
+			                       <div class="info">
+			                           <h3><a href="{!C.ContentUrl}" target="_blank">{!C.Title}</a></h3>
+			                           <div style="word-wrap:break-word;">{!C.Description}</div>
+			                       </div>
+			                   </apex:outputPanel>
+			                   
+			                   <apex:outputPanel rendered="{!C.FileType != 'LINK'}">
+			                           <div class="avatar">
+			                               <div class="{!C.FileType}1" style="height:32px;width:32px;">&nbsp;</div>
+			                           </div>
+			                           <div class="info">
+			                               <h3><a href="/sfc/servlet.shepherd/version/download/{!C.Id}">{!C.Title}</a></h3>
+			                               <div style="word-wrap:break-word;">{!C.Description}</div>
+			                           </div>
+			                   </apex:outputPanel> 
+			               </li>
+			           </apex:repeat>
+			          
+			           <apex:outputpanel rendered="{!Myimpl.lstEmployeesSearchresults.size == 0 && $CurrentPage.parameters.type == 'Emp' && MyImpl.showComponent}">
+			               <li style="margin-left:0px;"><h3 style="font-weight: bold; padding-top: 10px;">No results found, please try a different search term.</h3></li>
+			           </apex:outputpanel>
+			           
+			           <apex:outputPanel rendered="{!Myimpl.lstContentSearchResults.size == 0 && $CurrentPage.parameters.type == 'Docs' && MyImpl.showComponent}"><br />
+			               <li style="margin-left:0px;"><h3 style="font-weight: bold; padding-top: 10px;">No results found, please try a different search term.</h3></li>
+			           </apex:outputPanel> 
+			           
+			           <apex:outputPanel rendered="{!IF((Myimpl.lstEmployeesSearchresults.size - Myimpl.numOfRecordsToBedisplayed_Mobile) > 0 && $CurrentPage.Parameters.type == 'Emp' && MyImpl.showComponent, true, false)}">
+			               <li style="padding: 0 0 0 0;border-bottom: none;margin-left:0px;"><a onclick="widget{!id}getMoreRecordsForMobile();" style="font-size: 2.4em;color: #a3a3a3;" class="see-more">{!$Label.SL_Pagination_SeeMore}</a></li>
+			           </apex:outputPanel>
+			           
+			           <apex:outputPanel rendered="{!IF((Myimpl.lstContentSearchResults.size - Myimpl.numOfRecordsToBedisplayed_Mobile) > 0 && $CurrentPage.Parameters.type == 'Docs' && MyImpl.showComponent, true, false)}">
+			               <li style="padding: 0 0 0 0;border-bottom: none;margin-left:0px;"><a href="javascript:widget{!id}getMoreRecordsForMobile();" style="font-size: 2.4em;color: #a3a3a3;" class="see-more">{!$Label.SL_Pagination_SeeMore}</a></li>
+			           </apex:outputPanel>
+			       </ul>
+		    	</div>
+			</apex:outputPanel>
+		</div>
+	</span>
+	
+	<script type="text/javascript">
+        /* Closing doc on press of ESC key */
+        $(document).keyup(function(e) 
+        {
+            var code = (e.keyCode ? e.keyCode : e.which);
+            if (code == 27) {
+                $('.docViewerPanel').hide();
+                document.documentElement.style.overflow = 'auto';
+            } 
+        });
+        
+        hideAddressBar1();
+    </script> 
+		    
+</apex:component>

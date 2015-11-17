@@ -1,0 +1,369 @@
+<apex:page controller="hoopla.HooplaSFConfigurationSettingsController" tabStyle="ScoreboardAdmin__tab" standardStylesheets="false" sidebar="false" showHeader="true">
+<apex:stylesheet value="{!URLFOR($Resource.hoopla__toggle_switch_css)}" />  
+<apex:stylesheet value="{!URLFOR($Resource.hoopla__sync, 'sync/css/sync.css')}" />  
+<apex:stylesheet value="{!URLFOR($Resource.hoopla__Scoreboard, 'hoopla__Scoreboard/css/admin.css')}" />  
+<apex:stylesheet value="{!URLFOR($Page.hoopla__AdminCSS)}"/>
+<apex:stylesheet value="{!URLFOR($Page.hoopla__ApplicationCSS)}"/>
+<apex:stylesheet value="//assets.zendesk.com/external/zenbox/v2.5/zenbox.css"/>
+<div class="settings">
+<div class="header admin">  
+    <c:AdminHeader />
+</div>
+<div class="column-wrapper">
+<div id="content">
+    <apex:pageMessages escape="false" rendered="{!licenseKey.Valid}"></apex:pageMessages>
+    <div class="content-wrapper">   
+        <div id="hoopla-scoreboard-admin">
+            
+            
+            <apex:form styleClass="interaction" rendered="{!AND(NOT(licenseKey.Valid), NOT(WSAuthorized))}">
+                <h1>Welcome to Hoopla!</h1>
+                <div id="license" class="box">
+                    <p>Hoopla License Key</p>
+                    <div class="terms">
+                    In order to begin the setup of Hoopla, you must first enter a valid license key.
+                    </div>
+                    <div class="terms">
+                    If you do not have a license, please click on the 'Email License Key' button to request one from Hoopla Support.  
+                    Once you've received this license key, please enter it below and click on 'Validate License Key' in order to proceed to the next step in the setup. 
+                    </div>
+                    <div class="terms">
+                        Select the following check box if your Salesforce user profile has IP restrictions enabled.
+                        <div class="ipRestrictionsCheck"><apex:inputCheckbox value="{!ipRestrictionsEnabled}"></apex:inputCheckbox>&nbsp; IP Restrictions Enabled</div> 
+                        
+                        <div class="ipMessage">(More information can be found here:&nbsp;&nbsp;<apex:outputLink style="color:blue" value="http://help.salesforce.com/help/doc/en/admin_loginrestrict.htm" target="_blank">Setting Login Restrictions in Salesforce.</apex:outputLink>)</div>
+                    </div>
+                    <apex:commandButton value="Email License Key" action="{!generateLicenseKey}" styleClass="generateLicenseButton"/><br/>
+                    <apex:pageMessages ></apex:pageMessages>
+
+                    <div class="validate">
+                        <apex:inputText value="{!enteredKey}" id="theEnteredKey" size="32" styleClass="enteredKey"/>
+                        <apex:commandButton value="Validate License Key" action="{!updateLicenseKey}" styleClass="validateButton"/>
+                    </div>
+                </div>
+            </apex:form>
+
+            <apex:form styleClass="interaction" rendered="{!AND(NOT(WSAuthorized), licenseKey.Valid)}">
+                <h1>You're almost there!</h1>
+                <div id="unauthed" class="box">
+                    <p>Hoopla Application Access</p>
+                    <div class="terms">
+                    In order to be able to access the data needed to allow Hoopla to run, you must grant access using 
+                    Salesforce's OAuth 2.0 security technology by clicking the 'Grant Access' link below.
+                    </div>
+                    <div class="terms">Click here to grant access to your installation of Hoopla:</div>
+
+                    <div class="oauth-link">
+                        <apex:outputLink style="color:blue" value="https://{!HooplaMainBaseURL}/oauth?org_name={!URLENCODE(orgName)}&org_id={!URLENCODE(orgId)}&ipr={!URLENCODE(ipRestrictions)}&sf_namespace={!URLENCODE(pkgNs)}&sf_environment={!URLENCODE(sfEnvironment)}" target="_blank">Grant Access</apex:outputLink>
+                    </div>
+                    <br/>
+                </div>
+            </apex:form>
+
+          <apex:outputPanel rendered="{! WSAuthorized}" >
+          <p>If you are installing Hoopla, please configure which SFDC Objects you want to be able to access from within Hoopla in the <b>Configure Salesforce Objects</b> section below before proceeding to the <b>Configure Hoopla</b> section.</p>
+            <apex:form styleClass="object-grids-form">
+                <br/>                
+                <div id="object-grids">
+                    <div class="title">Configure Salesforce Objects</div>
+                    <p>Before configuring Hoopla you must select the objects from Salesforce that you want to track in Hoopla and click "Save".  You can also use the "Enable All Triggers" to turn off Hoopla real-time processing if needed.&nbsp;&nbsp;
+                    <a href="http://hoopla.helpdocsonline.com/#hoopla-setup-tab-selecting-objects-to-track">Click here for more information</a>.</p>
+                    <div class="objects-header">
+                        <div class="master-switch">
+                            <div class="sub-title">Enable All Triggers</div>
+                            <label class="checkbox toggle candy blue unchanged" onclick="" style="width:300px;float:right">
+                                <apex:inputCheckbox value="{!masterTriggerSwitch}"></apex:inputCheckbox>
+                                <p>
+                                    <span>Enabled</span>
+                                    <span>Disabled</span>
+                                </p>
+                                
+                                <a class="slide-button"></a>
+                            </label>
+                            <div style="clear:both"></div>
+                        </div>
+                        <apex:inputHidden value="{!objectToRefresh}" id="fieldForObjectRefresh"/>
+                        <div style="float:right">
+                            <apex:commandButton styleClass="save" value="Save" action="{!save}" />
+                        </div>
+                        <div style="clear:both"></div>
+                    </div>
+                    <div class="object-container">
+                        <table border="0" cellpadding="15" cellspacing="4" class="object-table">
+                            <tr>
+                                <th>Use</th>
+                                <th>Resync</th>
+                                <th style="text-align:left">Standard Objects</th>
+                                <th>Trigger Installed</th>
+                                <th>Trigger Enabled</th>
+                            </tr>
+                        <apex:repeat value="{!sfObjectList}" var="sfObject">
+                             <tr>
+                                <td style="width:40px">
+                                    <div class="check-holder">
+                                        <apex:inputCheckbox styleClass="{!HTMLENCODE(sfObject.name)} includeStandardObject {!HTMLENCODE(sfObject.name)}_includeStandardObject {!sfObject.hasAssociation}" 
+                                            value="{!sfObject.includeInScoreboard}" disabled="{!OR(sfObject.hasAssociation, sfObject.Name == 'User')}"/>
+                                    </div>      
+                                </td>
+                                <td style="width:40px">
+                                    <apex:commandLink value="" action="{!refreshObject}" onclick="update_hidden_field('{!$Component.fieldForObjectRefresh}', '{!sfObject.name}')" rendered="{!sfObject.includeInScoreboard}"><apex:image styleClass="resync-link" value="{!$Resource.hoopla__replayPng}" width="16" height="16"></apex:image></apex:commandLink>
+                                </td>
+                                <td style="width:180px;text-align:left"><apex:outputText value="{!sfObject.label}"></apex:outputText></td>
+                                <td><div class="trigger-installed">Installed</div></td>
+                                <td style="width:160px">
+                                    <label class="checkbox toggle candy blue unchanged" onclick="" style="width:150px">
+                                        <apex:inputCheckbox styleClass="{!HTMLENCODE(sfObject.name)} includeStandardTrigger {!HTMLENCODE(sfObject.name)}_includeStandardTrigger" value="{!sfObject.includeTrigger}"></apex:inputCheckbox>
+                                            <p>
+                                                <span>Enable</span>
+                                                <span>Disable</span>
+                                            </p>
+                            
+                                        <a class="slide-button"></a>
+                                    </label>
+                                </td>
+                             </tr>
+                        </apex:repeat>
+                        <tr>
+                          <th>Use</th>
+                          <th>Resync</th>
+                          <th style="text-align:left">Custom Objects</th>
+                          <th>Trigger Installed</th>
+                          <th>Trigger Enabled</th>
+                        </tr>
+                        <apex:inputHidden value="{!triggerToRedeploy}" id="fieldForTrigger"/>
+                        <apex:repeat value="{!sfCustomObjectList}" var="sfObject">
+                             <tr>
+                                <td style="width:40px">
+                                    <div class="check-holder">
+                                        <apex:inputCheckbox styleClass="{!HTMLENCODE(sfObject.name)} includeCustomObject {!HTMLENCODE(sfObject.name)}_includeCustomObject {!sfObject.hasAssociation}" 
+                                            value="{!sfObject.includeInScoreboard}" disabled="{!sfObject.hasAssociation}"/>
+                                    </div>
+                                </td>
+                                <td style="width:40px;">
+                                    <apex:commandLink value="" action="{!refreshObject}" onclick="update_hidden_field('{!$Component.fieldForObjectRefresh}', '{!sfObject.name}')" rendered="{!sfObject.includeInScoreboard}"><apex:image styleClass="resync-link" value="{!$Resource.hoopla__replayPng}" width="16" height="16"></apex:image></apex:commandLink>
+                                </td>
+                                <td style="width:180px;text-align:left"><apex:outputText value="{!sfObject.label}"></apex:outputText></td>
+                                <td style="width:170px">
+                                    <apex:outputPanel rendered="{!sfObject.hooplaTriggerExists}">
+                                        <div class="trigger-installed">Installed</div>
+                                    </apex:outputPanel>
+                                    <apex:outputPanel rendered="{! !sfObject.hooplaTriggerExists}">  
+                                        <label class="checkbox toggle candy blue unchanged" onclick="" style="width:175px">
+                                            <apex:inputCheckbox styleClass="{!HTMLENCODE(sfObject.name)} installCustomTrigger {!HTMLENCODE(sfObject.name)}_installCustomTrigger" value="{!sfObject.hooplaTriggerExists}"></apex:inputCheckbox>
+                                                <p>
+                                                    <span>Install</span>
+                                                    <span>Uninstalled</span>
+                                                </p>
+                                            <a class="slide-button"></a>
+                                        </label>
+                                    </apex:outputPanel>
+                                </td>
+                                <td style="width:160px">
+                                    <label class="checkbox toggle candy blue unchanged" onclick="" style="width:150px">
+                                        <apex:inputCheckbox styleClass="{!HTMLENCODE(sfObject.name)} includeCustomTrigger {!HTMLENCODE(sfObject.name)}_includeCustomTrigger" value="{!sfObject.includeTrigger}"></apex:inputCheckbox>
+                                            <p>
+                                                <span>Enable</span>
+                                                <span>Disable</span>
+                                            </p>
+                            
+                                        <a class="slide-button"></a>
+                                    </label>
+                                </td>
+                             </tr>
+                        </apex:repeat>
+                                                
+                        </table>
+                    </div>
+                </div>
+                
+                <apex:outputPanel rendered="{! hasBrokenTriggers }">
+                    <p style="font-style: italic;font-size: 12px">*Hoopla was unable to create a trigger for some custom objects.&nbsp;&nbsp;  <a target="_blank" href="http://hoopla.helpdocsonline.com/#hoopla-setup-tab-custom-object-errors">More Information is available here</a>.</p>
+                    <br/>
+                </apex:outputPanel>
+                
+                <apex:commandButton styleClass="save" value="Save" action="{!save}" style="float:right"/>
+                <div style="clear:both"></div>
+            </apex:form>
+
+                <br/>
+                <apex:form styleClass="configurePlayers">
+                    <div class="title">Configure Hoopla </div>
+                    <p>When installing Hoopla, please ensure you've configured which SFDC Objects you want to be able to access from Hoopla 
+                    before clicking the <b>Configure Hoopla</b> button below.  Once you click this, you will be redirected to the Hoopla Admin Interface 
+                    where you can add Users, Teams, Leaderboards, TV Channels, etc. and complete the installation of Hoopla for your organization.</p>
+                    <div>
+                        <div style="float:left;margin-right:10px">
+                            <apex:commandLink styleClass="save" value="Configure Hoopla" action="{!goToHooplaAdminUI}">
+                                <apex:param name="serverURL" value="{!$Api.Partner_Server_URL_180}"/>
+                            </apex:commandLink>
+                        </div>
+                        <div style="clear:both"></div>
+                    </div>
+                    <br/>  
+                </apex:form>
+                
+          </apex:outputPanel>
+
+            <apex:form rendered="{!AND((WSAuthorized), licenseKey.Valid)}">
+                <div id="authed">
+                  <h3>&nbsp;</h3>
+                      <div class="content">
+                        <h2>Hoopla Re-Authorization</h2>
+                        <div class="terms">If Hoopla Support has contacted you because we are unable to connect with your organization, this is the place for you.</div>
+                        <div class="terms">Clicking below will get us talking again, but you should ONLY do so if told to by Hoopla Support and ONLY if you have the <b>System Administrator</b> profile in Salesforce!</div>
+                        <div class="terms">Click here to grant access to Hoopla:</div>
+                        <apex:outputLink styleClass="danger" value="https://{!HooplaMainBaseURL}/oauth?org_name={!URLENCODE(orgName)}&org_id={!URLENCODE(orgId)}&ipr={!URLENCODE(ipRestrictions)}&sf_namespace={!URLENCODE(pkgNs)}&sf_environment={!URLENCODE(sfEnvironment)}" target="_blank">Grant Access</apex:outputLink>
+                    </div>
+                </div>
+            </apex:form>
+
+
+
+        </div>
+    </div>
+</div>
+<div class="clear"></div>
+</div>
+</div>
+<script type="text/javascript" src="{!URLFOR($Resource.Scoreboard, 'hoopla__Scoreboard/js/lib/jquery-1.4.2-min.js')}"></script>
+<script type="text/javascript" src="{!URLFOR($Resource.Scoreboard, 'hoopla__Scoreboard/js/lib/underscore-1.0.4-min.js')}"></script>
+<script type="text/javascript" src="{!URLFOR($Resource.Scoreboard, 'hoopla__Scoreboard/js/lib/jquery.query-2.1.7.js')}"></script>
+<script type="text/javascript" src="{!URLFOR($Resource.adminJS)}"></script>
+<script type="text/javascript" src="{!URLFOR($Resource.jquery_dirtyFields_js)}"></script>
+
+<script type="text/javascript" src="//assets.zendesk.com/external/zenbox/v2.5/zenbox.js"></script>
+<script type="text/javascript">
+  if (typeof(Zenbox) !== "undefined") {
+    Zenbox.init({
+      dropboxID:   "20106373",
+      url:         "https://hooplasoftware.zendesk.com",
+      tabID:       "Help",
+      tabColor:    "#566EAE",
+      tabPosition: "Right"
+    });
+  }
+</script>
+<script type="text/javascript"><!--
+
+    var update_hidden_field = function(hiddenId, objectName) {
+        document.getElementById(hiddenId).value = objectName;       
+    };
+
+
+    $(function () {
+
+    var refreshForm = function($this) {
+       var form = $this.closest('form');
+       $.fn.dirtyFields.updateFormState(form);
+    };
+
+    var dirtySettings= {
+        denoteDirtyForm: true,
+        denoteDirtyOptions:true,
+        dirtyOptionClass:"dirtyChoice",
+        trimText:true,
+        fieldChangeCallback: function(originalValue,result) {
+           if(result) {
+              $(this).parent().addClass('changed');
+              $(this).parent().removeClass('unchanged');
+           }
+           else {
+              $(this).parent().addClass('unchanged');
+              $(this).parent().removeClass('changed');
+           }
+        },
+    };
+
+    $('.object-grids-form').dirtyFields(dirtySettings);
+
+
+      $(".clickable").click(function() {
+        window.location.href = $(this).find("a").attr('href');
+        return false;
+      });
+
+      $(".includeStandardObject").change(function() {
+            var classNames = $(this).attr('class');
+            var st = classNames.split(' ');
+            var firstClass = st[0];
+            var newClassToFind = firstClass + '_includeStandardTrigger';
+            $("." + newClassToFind).attr('checked', $(this).attr('checked'));
+            refreshForm($(this)); 
+      });
+
+      $(".includeStandardTrigger").click(function() {
+        $('.check-trigger-standard').attr('checked', false);
+        var classNames = $(this).attr('class');
+        if ($(this).attr('checked')) {
+            var st = classNames.split(' ');
+            var firstClass = st[0];
+            var newClassToFind = firstClass + '_includeStandardObject';
+            $("." + newClassToFind).attr('checked', 'checked'); 
+        }
+        refreshForm($(this)); 
+      });
+      
+      $('.check-trigger-standard').click(function(evt) {
+        var checked = $('.check-trigger-standard').attr('checked');
+        if(checked) {
+            $('.includeStandardTrigger').each(function(idx, ele) {
+                var classNames = $(ele).attr('class');
+                var st = classNames.split(' ');
+                var firstClass = st[0];
+                var newClassToFind = firstClass + '_includeStandardObject';
+                if($("." + newClassToFind).attr('checked')) {
+                    $(ele).attr('checked', true);
+                }
+            });
+        }
+        else {
+            $('.includeStandardTrigger').attr('checked', checked);
+        }
+        refreshForm($(this)); 
+      });
+
+
+      $(".includeCustomObject").change(function() {
+        $('.check-all-custom').attr('checked', false);
+        var classNames = $(this).attr('class');
+        var st = classNames.split(' ');
+        var firstClass = st[0];
+        var newClassToFind = firstClass + '_includeCustomTrigger';
+        $("." + newClassToFind).attr('checked', $(this).attr('checked')); 
+        newClassToFind = firstClass + '_installCustomTrigger';
+        $("." + newClassToFind).attr('checked', $(this).attr('checked')); 
+        refreshForm($(this)); 
+      });
+
+      $(".includeCustomTrigger").click(function() {
+        var classNames = $(this).attr('class');
+        if ($(this).attr('checked')) {
+            var st = classNames.split(' ');
+            var firstClass = st[0];
+            var newClassToFind = firstClass + '_includeCustomObject';
+            $("." + newClassToFind).attr('checked', 'checked'); 
+            newClassToFind = firstClass + '_installCustomTrigger';
+            $("." + newClassToFind).attr('checked', $(this).attr('checked')); 
+        }
+        refreshForm($(this)); 
+      });
+      
+      $(".installCustomTrigger").click(function() {
+        var classNames = $(this).attr('class');
+        if ($(this).attr('checked')) {
+            var st = classNames.split(' ');
+            var firstClass = st[0];
+            var newClassToFind = firstClass + '_includeCustomObject';
+            $("." + newClassToFind).attr('checked', 'checked'); 
+            newClassToFind = firstClass + '_includeCustomTrigger';
+            $("." + newClassToFind).attr('checked', $(this).attr('checked')); 
+        }
+        refreshForm($(this)); 
+      });
+      
+
+
+
+     });
+</script> 
+</apex:page>

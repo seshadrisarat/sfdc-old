@@ -1,0 +1,167 @@
+<apex:page controller="CORECONNECT.CC_ManageUserPermissionsController">
+<style>
+.homeTab .tertiaryPalette, .individualPalette .homeBlock .tertiaryPalette, .layoutEdit .individualPalette .homeBlock .tertiaryPalette {
+    background-color: #383690;
+    border-color: #383690;
+}
+.userTable {
+	width: 100%;	
+}
+.userTable .dataRows td {
+	padding: 4px 2px 4px 5px;
+    color: #333;
+    border-bottom: 1px solid #e3deb8;
+    background-color: white;
+}
+.userTable caption{
+	font-weight: bold;
+	text-align: left;
+	padding-top: 5px;
+	padding-bottom: 5px;
+	padding-left: 5px;
+	background-color: #5F5DC3;
+    border-color: #5F5DC3;
+    color: white;
+}
+.userTable .columnHeader {
+	font-weight: bold;
+	border-bottom: 3px #8583DE solid;
+}
+</style>
+
+	<apex:pageBlock id="userPermissions">
+		<apex:form id="filtersForm">
+			
+				<apex:outputPanel id="filtersPanel" style="margin-right: 50px;">
+					Keyword: <apex:inputText value="{!searchFilter}" onkeypress="return handlerKeyPress(event);" html-placeholder="User Name or Email or Username..." style="width: 200px; margin-right: 50px; margin-left: 10px;"/>
+					
+					Profile: <apex:selectList size="1" value="{!selectedProfileId}" style="margin-right: 50px; margin-left: 10px;">
+						<apex:selectOptions value="{!ProfileItems}"/>
+					</apex:selectList>
+					
+					Per Page: <apex:selectList size="1" value="{!PAGE_SIZE}" style="margin-right: 50px; margin-left: 10px;">
+						<apex:selectOption itemValue="5" itemLabel="5"/>
+						<apex:selectOption itemValue="20" itemLabel="20"/>
+						<apex:selectOption itemValue="50" itemLabel="50"/>
+						<apex:selectOption itemValue="100" itemLabel="100"/>
+						<apex:selectOption itemValue="150" itemLabel="150"/>
+						<apex:selectOption itemValue="200" itemLabel="200"/>
+					</apex:selectList>
+					<apex:commandButton id="resetFiltersButton" value="Filter" action="{!resetFilters}" rerender="profilePanel,paginationTop,paginationBottom"/>
+				</apex:outputPanel>
+				
+				<apex:actionFunction name="resetFilters" action="{!resetFilters}" rerender="profilePanel,paginationTop,paginationBottom"/>
+				
+		</apex:form>
+		
+		<br/>
+		
+		<apex:form >		
+		          <apex:outputPanel id="paginationTop" style="margin-bottom: 50px; margin-top: 50px;">
+                  
+                  <apex:outputPanel layout="none" rendered="{!isPermissionSetsForUserLicense}">
+                  	<apex:outputPanel layout="none" rendered="{!hasPrevSet==true}">
+                    	<apex:commandButton value="Previous" action="{!prevSet}" rerender="profilePanel,paginationTop,paginationBottom" status="rerenderPeople"></apex:commandButton>  
+                    </apex:outputPanel>
+                          <apex:outputPanel layout="none">
+                          	<label for="page">Page</label>
+                          	<input type="text" style="width: 20px;" id="page" name="page" value="{!pageNumber}" onchange="goToPage(this.value);onScreenResize(determineBreakpoint());" />
+                      	  	<span>&nbsp;of {!IF(TotalPages == 0,"1", TotalPages)}</span>
+                      	  </apex:outputPanel>
+                      	  <apex:outputPanel layout="none" rendered="{!hasNextSet==true}">
+	                          <apex:commandButton value="Next" action="{!nextSet}" rerender="profilePanel,paginationTop,paginationBottom" status="rerenderPeople"></apex:commandButton>
+                          </apex:outputPanel>
+                        
+                        <apex:actionFunction action="{!GoToPage}" name="goToPage" reRender="profilePanel,paginationTop,paginationBottom" >
+                             <apex:param name="param" assignTo="{!SpecifiedPageNumber}" value="param" />
+                        </apex:actionFunction>
+                        
+                  	</apex:outputPanel>
+                  </apex:outputPanel>
+           </apex:form>
+           <br/>
+           
+           <apex:outputPanel id="messages">
+           	<apex:pageMessages rendered="{!isApexMessages}"/>
+           </apex:outputPanel>
+           
+           <br/>
+           <apex:form >  
+			<apex:outputPanel id="profilePanel" style="width: 100%;">	
+				
+				<apex:outputPanel layout="none" rendered="{!NOT(isPermissionSetsForUserLicense)}">
+					<apex:outputText >No User Permission Sets found that match selected Profile User License.</apex:outputText>
+				</apex:outputPanel>
+				
+				<apex:outputPanel layout="none" rendered="{!isPermissionSetsForUserLicense}">
+				<table class="userTable">
+				<caption>{!selectedProfileName}</caption>
+				<tr>
+					<td class="columnHeader">Name</td><td class="columnHeader">Username</td><td class="columnHeader">Email</td><apex:repeat value="{!permissionSetList}" var="permSet"><apex:outputPanel layout="none" rendered="{! selectedProfileLicenseName == permSet.UserLicense.Name || permSet.UserLicense.Name == NULL }"><td class="columnHeader">{!permSet.Label}</td></apex:outputPanel></apex:repeat>
+				</tr>
+				<apex:repeat value="{!userList}" var="user">
+				<tr class="dataRows">
+					<td>
+						<apex:outputText value="{!user.Name}" rendered="{!user.profileId == selectedProfileId}"/>
+					</td>
+					<td>
+						<apex:outputText value="{!user.Username}" rendered="{!user.profileId == selectedProfileId}" />
+					</td>
+					<td>
+						<apex:outputText value="{!user.Email}" rendered="{!user.profileId == selectedProfileId}"/>
+					</td>
+					<apex:repeat value="{!permissionSetList}" var="permSet">
+						
+						<apex:outputText rendered="{!(user.profileId == selectedProfileId && (selectedProfileLicenseName == permSet.UserLicense.Name || permSet.UserLicense.Name == NULL))}" escape="false"><td><apex:inputCheckbox value="{!userPermissionSetMap[user.Id][permSet.Id]}"/></td></apex:outputText>
+						
+					</apex:repeat>
+				</tr>
+				</apex:repeat>
+				</table>
+				
+				<apex:commandButton value="Save" action="{!saveUserPermissions}" />
+				
+				</apex:outputPanel>
+				
+			</apex:outputPanel>	
+			
+			</apex:form>
+			<br/><br/>
+			<apex:form >		
+		          <apex:outputPanel id="paginationBottom" style="margin-bottom: 50px; margin-top: 50px;">
+                  
+                  <apex:outputPanel layout="none" rendered="{!isPermissionSetsForUserLicense}">
+                  	<apex:outputPanel layout="none" rendered="{!hasPrevSet==true}">
+                    	<apex:commandButton value="Previous" action="{!prevSet}" rerender="profilePanel,paginationTop,paginationBottom" status="rerenderPeople"></apex:commandButton>  
+                    </apex:outputPanel>
+                          <apex:outputPanel layout="none">
+                          	<label for="page">Page</label>
+                          	<input type="text" style="width: 20px;" id="page" name="page" value="{!pageNumber}" onchange="goToPage(this.value);onScreenResize(determineBreakpoint());" />
+                      	  	<span>&nbsp;of {!IF(TotalPages == 0,"1", TotalPages)}</span>
+                      	  </apex:outputPanel>
+                      	  <apex:outputPanel layout="none" rendered="{!hasNextSet==true}">
+	                          <apex:commandButton value="Next" action="{!nextSet}" rerender="profilePanel,paginationTop,paginationBottom" status="rerenderPeople"></apex:commandButton>
+                          </apex:outputPanel>
+                        
+                        <apex:actionFunction action="{!GoToPage}" name="goToPage" reRender="profilePanel,paginationTop,paginationBottom" >
+                             <apex:param name="param" assignTo="{!SpecifiedPageNumber}" value="param" />
+                        </apex:actionFunction>
+                        
+                  </apex:outputPanel>
+                  </apex:outputPanel>
+           </apex:form>
+			
+	</apex:pageBlock>
+
+<script>
+    function handlerKeyPress(ev) {
+        if (window.event && window.event.keyCode == 13 || ev.which == 13) {
+        	resetFilters();
+            return false;
+        } else {
+            return true;
+        }
+    }
+</script>
+
+</apex:page>

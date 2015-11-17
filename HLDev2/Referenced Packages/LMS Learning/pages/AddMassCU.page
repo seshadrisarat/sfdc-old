@@ -1,0 +1,118 @@
+<apex:page Controller="lmscons.AddMassCU" tabStyle="LMS_Consumer_Settings__tab" Action="{!init}">
+
+	<apex:includeScript value="{!URLFOR($Resource.lmscons__LMSSource, 'js/jquery.js')}"/>
+
+
+		<apex:pageBlock >
+			<apex:form >
+				<apex:pageMessages id="pageMessages"/>
+
+				<apex:actionStatus startText=""  id="busyStatus"
+					onStart="document.body.style.cursor = 'wait';return true;"
+					onStop="document.body.style.cursor = 'default';return true;" >
+				</apex:actionStatus>
+				<apex:pageBlockSection columns="1" title="{!$Label.Adding_of_multiple_users_according_to_their_profiles}" rendered="{!isAdminSecurity}">
+					<apex:outputPanel >
+						<apex:outputLabel value="{!$Label.Create_Consumer_Users_as_Admin}" />
+						<apex:inputCheckbox value="{!isAdmin}" id="isAdmin"/>
+					</apex:outputPanel>
+					<apex:outputPanel >
+						<apex:outputLabel value="{!$Label.Number_of_users_added_per_batch}" />
+						<apex:inputText value="{!UsersCreated}" id="UsersCreated"/>
+					</apex:outputPanel>
+					<apex:outputPanel >
+						<apex:selectList id="Profiles" value="{!SelectedProfilesList}" size="15" multiselect="true">
+							<apex:selectOptions value="{!ProfilesList}"></apex:selectOptions>
+						</apex:selectList>
+					</apex:outputPanel>
+					<apex:outputPanel rendered="{!isAdminSecurity}" >
+						<apex:outputLink value="javascript:void(0);"
+									onclick="if(confirmCreate(this)) {createUsers()} else {return false;}"
+									styleClass="btn"
+									id="btnStart"
+									style="text-decoration:none">
+									{!$Label.Create_Users_from_Profiles}
+						</apex:outputLink>
+					</apex:outputPanel>
+				</apex:pageBlockSection>
+				<apex:actionFunction action="{!createUsers}" name="createUsers" status="busyStatus"   oncomplete="checkStatus()" rerender="pageMessages, aPoll"/>
+
+
+				<apex:outputPanel id="aPoll" rendered="{!isAdminSecurity}">
+					<apex:actionPoller action="{!checkBatchStatus}" rerender="isStarted, pageMessages, aPoll" interval="5" enabled="{!isStarted}" oncomplete="checkStatus()"/>
+					<apex:inputHidden value="{!isStarted}" id="isStarted"/>
+				</apex:outputPanel>
+
+			</apex:form>
+			<apex:form >
+			<apex:actionFunction action="{!createFromCsv}" name="createFromCsv" />
+			<apex:pageBlockSection columns="1" title="{!$Label.Create_Consumer_Users_from_CSV_file}">
+				<!-- <apex:outputPanel >
+					<apex:outputLabel value="{!$Label.Ignore_first_row_of_csv}" />
+					<apex:inputCheckbox value="{!skipHeader}" id="skipHeader"/>
+				</apex:outputPanel>
+				-->
+				<apex:outputPanel >
+					<apex:outputLabel value="{!$Label.Select_File}" />
+					<apex:inputFile value="{!d.body}" filename="{!d.name}"/>
+					<a href="{!URLFOR($Resource.lmscons__CSV_example, 'example.csv')}">{!$Label.CSV_Example}</a>
+				</apex:outputPanel>				
+				<apex:outputPanel rendered="{!isAdminSecurity}">
+					<apex:outputLink value="javascript:void(0);"
+								onclick="createFromCsv()"
+								styleClass="btn"
+								id="createFromCsv"
+								style="text-decoration:none">
+								{!$Label.Create_Users_from_CSV}
+					</apex:outputLink>
+				</apex:outputPanel>
+			</apex:pageBlockSection>
+			</apex:form>
+		</apex:pageBlock>
+
+
+
+<script>
+
+	jQuery.noConflict();
+
+	function checkStatus() {
+		if(jQuery('[id$=isStarted]').val() == 'false') {
+			jQuery('[id$=btnStart]').removeAttr('disabled').attr('class', 'btn');
+			jQuery('[id$=createFromCsv]').removeAttr('disabled').attr('class', 'btn');
+		}
+	}
+
+	function confirmCreate(o) {
+
+		var Info = '{!$Label.Please_confirm}' + '\n\n' + '{!$Label.Create_Consumer_Users_as_Admin}' + ' ';
+		Info = Info + jQuery('[id$=isAdmin]').prop("checked") + '\n';
+		Info = Info + '{!$Label.Number_of_users_added_per_batch}' +' ';
+		Info = Info + jQuery('[id$=UsersCreated]').val() + '\n';
+		Info = Info + '{!$Label.Filter_by_Profiles} \n';
+
+		var str = "-- {!$Label.AddMassCU_ALL} --";
+
+		jQuery("[id$=Profiles] option:selected").each(function () {
+				if(str == '-- {!$Label.AddMassCU_ALL} --') {str = '';}
+				str += '- '+jQuery(this).text() + " \n";
+			});
+			
+		if(str.indexOf('{!JSENCODE($Label.None)}') !== -1){
+			alert('{!$Label.NONE_value_has_been_selected}' + '\n' + '{!$Label.Please_specify_the_appropriate}');
+			return false;
+		}
+
+		Info = Info + str;
+
+		if(confirm(Info)) {
+			jQuery(o).attr('disabled', 'disabled').attr('class', 'btnDisabled');
+			jQuery('[id$=createFromCsv]').attr('disabled', 'disabled').attr('class', 'btnDisabled');
+			return true;
+		} else {
+			return false;
+		}
+	}
+</script>
+
+</apex:page>

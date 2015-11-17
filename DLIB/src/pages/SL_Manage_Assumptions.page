@@ -1,0 +1,340 @@
+<apex:page controller="SL_Manage_Assumptions_Controller" sidebar="false" tabStyle="Assumption__c" id="thePage">
+    
+    <apex:includeScript value="{!URLFOR($Resource.jQuerySL_Assumptions, '/js/jquery-1.9.1.js')}"></apex:includeScript>
+    <apex:includeScript value="{!URLFOR($Resource.jQuerySL_Assumptions, '/js/jquery-ui-1.10.3.custom.min.js')}"></apex:includeScript>
+    <apex:stylesheet value="{!URLFOR($Resource.jQuerySL_Assumptions, '/css/smoothness/jquery-ui-1.10.3.custom.min.css')}"></apex:stylesheet>
+    <style>
+        .bCrumb:hover
+        { 
+        text-decoration:none;
+        }
+        .bCrumb
+        {
+        font-family: 'Verdana','Geneva',sans-serif;
+        font-size:11px;
+        color:#015ba7;
+        text-decoration:none;
+        }
+        .bCrumbWrapper
+        {
+        margin-top:-13px;
+        padding-bottom:5px;
+        }
+    </style>
+    <script>
+    $j = jQuery.noConflict();
+    /** Helper Methods to open/close dialog boxes dynamically.**/
+    function openModal(name){$j("#"+name).dialog("open");} 
+    function closeModal(name){$j("#"+name).dialog("close");}
+    
+    /** Helper method to add click events to line item checkboxes **/ 
+    function addCheckBoxClickEvents(divId,checkId){
+        // Add the click event for the checkall checkbox.
+        $j("[id$='" + checkId+"']").click(function(){$j("div#"+divId+" input:checkbox:not('#"+ checkId+"')").prop('checked', this.checked);});
+        
+        // Add the click events for the line item checkboxes.
+        $j("div#"+divId+" input:checkbox:not('#" + checkId + "')").click(
+            function(){
+                var uncheckedLength = $j("div#"+divId+" input:checkbox:not('#" + checkId + "')").length;
+                var checkedLength = $j("div#"+divId+" input:checkbox:not('#" + checkId + "'):checked").length;
+                if(uncheckedLength == checkedLength){
+                    $j("[id$='" + checkId+"']").prop("checked", "checked");}
+                else{
+                    $j("[id$='" + checkId+"']").removeAttr("checked");}
+            });
+    }
+    
+    /** When the document is ready **/
+    $j(document).ready(function() {
+        /** Modal Window definitions **/
+        $j("#industryFilter" ).dialog({width:610, modal:true, autoOpen:false, title:"Select Industries to Filter records:"});
+        $j("#taskTypeFilter" ).dialog({width:610, modal:true, autoOpen:false, title:"Select Task Types to Filter records:"});
+        $j("#componentFilter").dialog({width:610, modal:true, autoOpen:false, title:"Select Components to Filter records:"});
+        $j("#newAssumption").dialog({width:610, modal:true, autoOpen:false, resizable: true,title:"Create a New Assumption"});
+        $j("#adHoc").dialog({width:450, modal:true, autoOpen:false, resizable: true, title:"Create a New Project Assumption"});
+        
+        /** Add the appropriate click event handlers for line item checkboxes as well as the check-all boxes**/
+        addCheckBoxClickEvents('rightDiv','checkboxHeader');
+        addCheckBoxClickEvents('lftDiv','checkboxHeader1');
+        
+    });
+    
+    function confirmPADeletion(aId,paId)
+    {
+        var r=confirm("Are you sure you want to remove this Project Assumption?");
+        if (r==true)
+        {
+            afRemoveSelected(aId,paId);
+        }
+        else
+        {
+            return;
+        }
+    }
+    
+    function catchEnter(e){
+        if (!e) e = window.event; 
+        var code = (e.keyCode) ? e.keyCode : e.which;
+        if (code == 13){afRefresh();return false;}
+        else{return true;}
+    }
+    </script>
+    <apex:messages />
+    <apex:form >
+        <apex:actionFunction name="afRefresh"        action="{!refresh}"                    status="loading" rerender="pbAvail,searchPanel" />
+        <apex:actionfunction name="afNewAssumption"  action="{!createNewAssumption}"        status="loading" rerender="pbExist,pbAvail,pbNewAssumption"/>
+        <apex:actionfunction name="afnewAdHocAssump" action="{!createNewAdHocAssumption}"   status="loading" rerender="pbExist,pbAdHoc"/>
+        <apex:actionfunction name="afAddSelected"    action="{!addSelected}"                status="loading" rerender="pbExist,pbAvail">
+            <apex:param name="selectedId" value="" assignTo="{!strAssumptionId}" />
+        </apex:actionfunction>
+        <apex:actionfunction name="afRemoveSelected" action="{!removeSelected}" status="loading" rerender="pbExist,pbAvail">
+            <apex:param name="selectedAssumId"  value="" assignTo="{!strAssumptionId}"/>
+            <apex:param name="selectedPAssumId" value="" assignTo="{!strPAId}" />
+        </apex:actionfunction>
+        
+        <div style="width:100%; height:400px;min-width:1150px;">
+            <apex:sectionHeader title="{!IF(isOppty,'Opportunity','Change Order')}" subtitle="{!IF(isOppty,ClientName+': '+OpptyName,ClientName+': '+ProjectName+': '+ChangeOrderName)}"/>
+            <div id="backLink" class="bCrumbWrapper bCrumb" >
+                &nbsp;«<apex:commandLink action="{!back}" value="Back to {!IF(isOppty,'Opportunity','Change Order')}" styleClass="bCrumb" />
+            </div>
+            <div id="lftDiv" style="width:40%;float:left;" >
+                <apex:pageBlock id="pbExist" title="Existing Assumptions" >
+                    <script>
+                    addCheckBoxClickEvents('lftDiv','checkboxHeader1');
+                    </script>
+                    <apex:pageBlockButtons location="top">
+                        <apex:commandButton action="{!removeSelected}" status="loading" value="Remove Selected" rerender="pbExist,pbAvail" />
+                        <apex:commandButton onclick="openModal('adHoc')"  value="Ad-hoc Assumption" rerender="pbExist,pbAvail"/>
+                    </apex:pageBlockButtons>
+                    <apex:outputText id="pbExistNoRecords" title="Existing Assumptions" rendered="{!IF((lstExistingAssumptionWrapper==null || lstExistingAssumptionWrapper.size==0),true,false)}">
+                        No Records
+                    </apex:outputText>
+                    <apex:pageBlockTable value="{!lstExistingAssumptionWrapper}" var="exAssumption" styleclass="scrollContent" rendered="{!IF((lstExistingAssumptionWrapper!=null && lstExistingAssumptionWrapper.size>0),true,false)}">
+                        <apex:column width="25px">
+                            <apex:facet name="header" >  
+                                <input type="checkbox" id="checkboxHeader1" />
+                            </apex:facet>
+                            <apex:inputCheckbox value="{!exAssumption.isSelected}" disabled="{!exAssumption.isDisabled}"></apex:inputCheckbox>
+                        </apex:column>
+                        <apex:column style="width:68px;" headerValue="{!$ObjectType.Project_Assumption__c.Fields.View_Edit__c.Label}" value="{!exAssumption.projectAssumption.View_Edit__c}" />
+                        <apex:column ondblclick="return confirmPADeletion('{!exAssumption.projectAssumption.Assumption__c}','{!exAssumption.projectAssumption}');">
+                            <apex:facet name="header" >
+                                <apex:outputText value="{!$ObjectType.Project_Assumption__c.Fields.Assumption_Detail__c.Label}"></apex:outputText>
+                            </apex:facet>
+                            <apex:outputText value="{!exAssumption.projectAssumption.Assumption_Detail__c}" ></apex:outputText>
+                        </apex:column>
+                    </apex:pageBlockTable>
+                </apex:pageBlock>
+            </div>
+            <div style="width:59%;float:right;padding-left:10px;" id="rightDiv" >
+                <apex:pageBlock id="pbAvail" title="Available Assumptions" >
+                    <script>
+                    addCheckBoxClickEvents('rightDiv','checkboxHeader');
+                    </script>
+                    <apex:pageBlockButtons location="top">
+                        <apex:commandButton action="{!addSelected}" status="loading" value="Add Selected" rerender="pbExist,pbAvail" />
+                        <apex:commandButton onclick="openModal('newAssumption')" value="Create New Assumption" rerender="pbExist,pbAvail"/>
+                        <apex:inputText value="{!strSearchText}" styleClass="searchbox" onkeydown="return catchEnter(event);"/>
+                        <apex:commandButton action="{!refresh}"  value="Search" rerender="pbAvail,searchPanel" status="loading"/>
+                    </apex:pageBlockButtons>
+                    
+                    <apex:pageBlockSection collapsible="true" columns="1" showHeader="true" title="Filtered by:" rendered="{!If(OR(filterAssumption.Industries__c != null,filterAssumption.Task_Type__c != null, filterAssumption.Component__c != null,AND(strSearchText != null,strSearchText != '')),true,false)}">
+                        <apex:outputPanel layout="block" style="float:left;" rendered="{!If(filterAssumption.Industries__c != null,true,false)}">
+                            <span style="padding-right:5px; font-weight:bold"> Industries </span> equals <apex:outputText style="padding-left:5px;font-weight:bold" value="{!filterAssumption.Industries__c}"> </apex:outputText>
+                            <apex:commandlink action="{!removeFiltersAndSearchText}" value="Clear" style="text-decoration: none;padding-left:10px;color:blue;" rerender="pbAvail,industryFilterForm"  status="loading">
+                                <apex:param name="paramIndustry" value="industries" assignTo="{!strFilterText}"></apex:param>
+                            </apex:commandlink>
+                        </apex:outputPanel>
+                        <apex:outputPanel layout="block" style="float:left;" rendered="{!If(filterAssumption.Task_Type__c != null,true,false)}">
+                            <span style="padding-right:5px;font-weight:bold">  Task Type    </span> equals <apex:outputText style="padding-left:5px;font-weight:bold" value="{!filterAssumption.Task_Type__c}">  </apex:outputText>
+                            <apex:commandlink action="{!removeFiltersAndSearchText}" value="Clear" style="text-decoration: none;padding-left:10px;color:blue;" rerender="pbAvail,taskTypeForm"  status="loading">
+                                <apex:param name="paramTaskType" value="taskType" assignTo="{!strFilterText}"></apex:param>
+                            </apex:commandlink>
+                        </apex:outputPanel>
+                        <apex:outputPanel layout="block" style="float:left;" rendered="{!If(filterAssumption.Component__c != null,true,false)}">
+                            <span style="padding-right:5px;font-weight:bold">  Components   </span> equals <apex:outputText style="padding-left:5px;font-weight:bold" value="{!filterAssumption.Component__c}">  </apex:outputText>
+                            <apex:commandlink action="{!removeFiltersAndSearchText}" value="Clear" style="text-decoration: none;padding-left:10px;color:blue;" rerender="pbAvail,componentFilterForm"  status="loading">
+                                <apex:param name="paramComponents" value="components" assignTo="{!strFilterText}"></apex:param>
+                            </apex:commandlink>
+                        </apex:outputPanel>
+                        <apex:outputPanel layout="block" style="float:left;" rendered="{!If(AND(strSearchText != null,strSearchText != ''),true,false)}">
+                            <span style="padding-right:5px; font-weight:bold"> Assumption Name/Details </span> contains <apex:outputText style="padding-left:5px;font-weight:bold" value="{!strSearchText}"> </apex:outputText>
+                            <apex:commandlink action="{!removeFiltersAndSearchText}" value="Clear" style="text-decoration: none;padding-left:10px;color:blue;" rerender="pbAvail,searchPanel"  status="loading">
+                                <apex:param name="paramSearch" value="search" assignTo="{!strFilterText}"></apex:param>
+                            </apex:commandlink>
+                        </apex:outputPanel>   
+                        <br/>
+                    </apex:pageBlockSection>
+                    <apex:outputPanel layout="block">
+                        <apex:outputText id="pbAvailNoRecords" title="Existing Assumptions" rendered="{!IF((myData==null || myData.size==0),true,false)}">
+                            No Records
+                        </apex:outputText>
+                        <apex:pageBlockTable value="{!myData}" var="a" styleclass="scrollContent" rendered="{!IF((myData!=null && myData.size>0),true,false)}">>
+                            <apex:column width="25px">
+                                <apex:facet name="header" >
+                                    <input type="checkbox" id="checkboxHeader"/>
+                                </apex:facet>
+                                <apex:inputCheckbox value="{!a.selected}" disabled="{!a.disabled}"></apex:inputCheckbox>
+                            </apex:column>
+                            <apex:column style="width:68px;" headerValue="{!$ObjectType.Project_Assumption__c.Fields.View_Edit__c.Label}" value="{!a.assumption.View_Edit__c}" />
+                            <apex:column width="35%" ondblclick="afAddSelected('{!a.assumption.Id}');">
+                                <apex:facet name="header" >
+                                    <apex:commandLink action="{!refresh}">
+                                        <apex:outputText value="{!$ObjectType.Assumption__c.Fields.Name.Label}" />
+                                        <apex:outputText escape="false" rendered="{!sortBy=='Name'&&sortDir=='ASC'}">
+                                            <img src="/s.gif" alt="Sorted Ascending" class="sortAsc" title="Sorted Ascending" />
+                                        </apex:outputText>
+                                        <apex:outputText escape="false" rendered="{!sortBy=='Name'&&sortDir=='DESC'}">
+                                            <img src="/s.gif" alt="Sorted Descending" class="sortDesc" title="Sorted Descending" />
+                                        </apex:outputText>
+                                        <apex:param value="Name" name="column" assignTo="{!sortBy}"></apex:param>
+                                        <apex:param value="{!IF(sortDir=='ASC'&&sortBy=='Name', 'DESC', 'ASC')}" name="direction" assignTo="{!sortDir}"></apex:param>
+                                    </apex:commandLink>
+                                </apex:facet>
+                                <apex:outputText title="{!a.assumption.Assumption_Detail__c}" value="{!a.assumption.Name}"></apex:outputText>
+                            </apex:column>
+                            <apex:column >
+                                <apex:facet name="header" >
+                                    <apex:commandLink action="{!refresh}">
+                                        <apex:outputText value="Times Used"></apex:outputText>
+                                        <apex:outputText escape="false" rendered="{!sortBy=='Number_of_Times_Used__c'&&sortDir=='ASC'}">
+                                            <img src="/s.gif" class="sortAsc" />
+                                        </apex:outputText>
+                                        <apex:outputText escape="false" rendered="{!sortBy=='Number_of_Times_Used__c'&&sortDir=='DESC'}">
+                                            <img src="/s.gif" class="sortDesc" />
+                                        </apex:outputText>
+                                        <apex:param value="Number_of_Times_Used__c" name="column" assignTo="{!sortBy}"></apex:param>
+                                        <apex:param value="{!IF(sortDir=='ASC'&&sortBy=='Number_of_Times_Used__c', 'DESC', 'ASC')}" name="direction" assignTo="{!sortDir}"></apex:param>
+                                    </apex:commandLink>
+                                </apex:facet>
+                                <apex:outputText value="{!a.assumption.Number_of_Times_Used__c}" />
+                            </apex:column>
+                            <apex:column >
+                                <apex:facet name="header" >
+                                    <apex:outputPanel >
+                                        <apex:outputText value="{!$ObjectType.Assumption__c.Fields.Industries__c.Label}"></apex:outputText>
+                                        <apex:outputLink onclick="openModal('industryFilter')" value="#">&nbsp;[Filter]</apex:outputLink>
+                                    </apex:outputPanel>
+                                </apex:facet>
+                                <apex:outputText value="{!a.assumption.Industries__c}"></apex:outputText>
+                            </apex:column>
+                            <apex:column >
+                                <apex:facet name="header" >
+                                    <apex:outputPanel >
+                                        <apex:outputText value="{!$ObjectType.Assumption__c.Fields.Task_Type__c.Label}"></apex:outputText>
+                                        <apex:outputLink onclick="openModal('taskTypeFilter')" value="#">&nbsp;[Filter]</apex:outputLink>
+                                    </apex:outputPanel>
+                                </apex:facet>
+                                <apex:outputText value="{!a.assumption.Task_Type__c}"></apex:outputText>
+                            </apex:column>
+                            <apex:column >
+                                <apex:facet name="header" >
+                                    <apex:outputPanel >
+                                        <apex:outputText value="{!$ObjectType.Assumption__c.Fields.Component__c.Label}"></apex:outputText>
+                                        <apex:outputLink onclick="openModal('componentFilter')" value="#">&nbsp;[Filter]</apex:outputLink>
+                                    </apex:outputPanel>
+                                </apex:facet>
+                                <apex:outputText value="{!a.assumption.Component__c}"></apex:outputText>
+                            </apex:column>
+                        </apex:pageBlockTable>
+                    </apex:outputPanel>
+                    <apex:panelGrid columns="3" width="100%" columnClasses="paginationBar">
+                        <apex:panelGroup layout="block" style="text-align:left;">
+                            <apex:selectList value="{!showSize}" size="1" onchange="afRefresh()" >
+                                <apex:selectOptions value="{!showSizeOptions}"/>
+                            </apex:selectList>
+                            <apex:outputText >{!displayPagination}</apex:outputText>
+                        </apex:panelGroup>
+                        <apex:panelGroup layout="block" style="text-align:center;">
+                            <apex:commandButton status="loading" reRender="pbAvail" value="|<< First" action="{!first}" disabled="{!!hasPrevious}" title="First Page"/>
+                            <apex:commandButton status="loading" reRender="pbAvail" value="< Previous"  action="{!prev}" disabled="{!!hasPrevious}" title="Previous Page"/>
+                            <apex:commandButton status="loading" reRender="pbAvail" value="Next >"  action="{!next}" disabled="{!!hasNext}" title="Next Page"/>
+                            <apex:commandButton status="loading" reRender="pbAvail" value="Last >>|" action="{!last}" disabled="{!!hasNext}" title="Last Page"/>
+                        </apex:panelGroup>
+                        <apex:panelGroup layout="block" style="text-align:right;">
+                            <apex:outputPanel >
+                                Page&nbsp;<apex:inputText value="{!pageNumInput}" onchange="afRefresh()" onkeydown="return catchEnter(event);" style="width:20px;"/> of {!pageNumCount}
+                            </apex:outputPanel>
+                        </apex:panelGroup>
+                    </apex:panelGrid>
+                    <apex:outputPanel style="color:#4AA02C;font-weight:bold; text-align:center;">
+                        <apex:actionStatus id="fetchStatus" startText="Refreshing..." stopText=""></apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlock>
+            </div>
+        </div>
+        <c:ActionStatusLoading />
+    </apex:form>
+    <div id="industryFilter" >
+        <apex:form id="industryFilterForm">
+            <apex:pageBlock >
+                <apex:pageBlockButtons location="bottom">
+                    <apex:commandButton action="{!refresh}" onclick="closeModal('industryFilter');" value="Filter" rerender="pbAvail,filterPanel" status="loading" />
+                    <apex:commandButton action="{!resetFilter}" onclick="closeModal('industryFilter');" value="Cancel" rerender="pbAvail" />
+                </apex:pageBlockButtons>
+                <apex:pageBlockSection >
+                    <apex:inputField value="{!filterAssumption.Industries__c}"/>
+                </apex:pageBlockSection>
+            </apex:pageBlock>
+        </apex:form>
+    </div>
+    <div id="taskTypeFilter" >
+        <apex:form id="taskTypeFilterForm">
+            <apex:pageBlock >
+                <apex:pageBlockButtons location="bottom">
+                    <apex:commandButton action="{!refresh}" onclick="closeModal('taskTypeFilter');" value="Filter" rerender="pbAvail,filterPanel" status="loading"/>
+                    <apex:commandButton action="{!resetFilter}" onclick="closeModal('taskTypeFilter');" value="Cancel" rerender="pbAvail"></apex:commandButton>
+                </apex:pageBlockButtons>
+                <apex:pageBlockSection >
+                    <apex:inputField value="{!filterAssumption.Task_Type__c}"></apex:inputField>
+                </apex:pageBlockSection>
+            </apex:pageBlock> 
+        </apex:form>
+    </div>
+    <div id="componentFilter" >
+        <apex:form id="componentFilterForm">
+            <apex:pageBlock >
+                <apex:pageBlockButtons location="bottom">
+                    <apex:commandButton action="{!refresh}" onclick="closeModal('componentFilter');" value="Filter"  rerender="pbAvail,filterPanel" status="loading"/>
+                    <apex:commandButton action="{!resetFilter}" onclick="closeModal('componentFilter');" value="Cancel" rerender="pbAvail"/>
+                </apex:pageBlockButtons>
+                <apex:pageBlockSection >
+                    <apex:inputField id="id1" value="{!filterAssumption.Component__c}"/>
+                </apex:pageBlockSection>
+            </apex:pageBlock>
+        </apex:form>
+    </div>
+    <!-- code for Creating a new Assumption goes here -->
+    <div id="newAssumption">
+        <apex:form id="formNewAssumption">
+            <apex:messages />
+            <apex:pageBlock id="pbNewAssumption" >
+                <apex:pageBlockButtons location="bottom">
+                    <apex:commandButton action="{!createNewAssumption}" onclick="closeModal('newAssumption');" value="Create" rerender="pbExist,pbAvail,pbNewAssumption" status="loading"/>
+                    <apex:commandButton action="{!createAndAddNewAssumption}" onclick="closeModal('newAssumption');" value="Create & Add" rerender="pbExist,pbAvail,pbNewAssumption" status="loading"/>
+                    <apex:commandButton action="{!resetFilter}" onclick="closeModal('newAssumption');" value="Cancel" rerender="pbAvail,pbNewAssumption"/>
+                </apex:pageBlockButtons>
+                <apex:pageBlockSection columns="1">
+                    <apex:inputField required="true" value="{!newAssumption.Name}" label="Assumption Name" style="width:200px;"/>
+                    <apex:inputField required="true" value="{!newAssumption.Assumption_Detail__c}" label="Assumption Details" style="width:300px;height:100px;"/>
+                    <apex:inputField required="true" value="{!newAssumption.Task_Type__c}" label="Task Types" />
+                    <apex:inputField required="true" value="{!newAssumption.Industries__c}" label="Industries" />
+                    <apex:inputField required="true" value="{!newAssumption.Component__c}" label="Components" />
+                </apex:pageBlockSection> 
+            </apex:pageBlock>
+        </apex:form>
+    </div>
+    <div id="adHoc">
+        <apex:form id="formAdHoc">
+            <apex:pageBlock id="pbAdHoc" >
+                <apex:pageBlockButtons location="bottom">
+                    <apex:commandButton action="{!createNewAdHocAssumption}" onclick="closeModal('adHoc');" value="Create" rerender="pbExist,pbAvail,pbAdHoc" status="loading"/>
+                    <apex:commandButton action="{!resetFilter}" onclick="closeModal('adHoc');" value="Cancel" rerender="pbAdHoc"></apex:commandButton>
+                </apex:pageBlockButtons>
+                <apex:pageBlockSection columns="1">
+                    <apex:inputField required="true" value="{!objProjectAssumption.Assumption_Detail_One_time_use__c}" label="Assumption Details" style="width:250px;height:100px;"/>
+                </apex:pageBlockSection>
+            </apex:pageBlock>
+        </apex:form>
+    </div>
+</apex:page>

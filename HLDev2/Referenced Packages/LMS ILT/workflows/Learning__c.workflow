@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workflow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fieldUpdates>
+        <fullName>Update_Sequence</fullName>
+        <description>Update Sequence</description>
+        <field>Sequence__c</field>
+        <formula>1</formula>
+        <name>Update Sequence</name>
+        <notifyAssignee>false</notifyAssignee>
+        <operation>Formula</operation>
+        <protected>false</protected>
+    </fieldUpdates>
+    <rules>
+        <fullName>Update Sequence Learning</fullName>
+        <actions>
+            <name>Update_Sequence</name>
+            <type>FieldUpdate</type>
+        </actions>
+        <active>false</active>
+        <formula>OR(ISNULL(Sequence__c ), Sequence__c &lt; 1)</formula>
+        <triggerType>onCreateOrTriggeringUpdate</triggerType>
+    </rules>
+</Workflow>

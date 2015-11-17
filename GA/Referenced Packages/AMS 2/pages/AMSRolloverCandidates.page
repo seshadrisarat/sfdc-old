@@ -1,0 +1,105 @@
+<apex:page controller="ts2extams.AMSMassActionController" showHeader="false" sideBar="false" action="{!SetSelectedRecords}">
+<apex:includeScript value="{!URLFOR($Resource.ts2extams__UIRes, 'res/js/jquery-1.6.min.js')}" />
+<apex:stylesheet value="{!URLFOR($Resource.ts2extams__UIRes, 'res/css/std_style.css')}"/>
+
+<script>
+function closeWin(refresh) {
+	if (refresh) {
+		parent.opener.top.location="{!JSENCODE(RefreshUrl)}";
+	}
+	parent.window.opener = self;
+	parent.window.close();
+}
+</script>
+
+<style>
+td.pbTitle {width:50% !important;}
+</style>
+
+<body width="100%" style="margin:10px;">
+<apex:form id="frm">
+	<apex:pageMessages id="pageMessages" />
+	<apex:pageBlock title="{!$Label.AMS_LABEL_Rollover}" mode="edit" rendered="{!NOT($Setup.ts2__ApplicantManagementSystem__c.Rollover_Button__c)}">
+		<apex:pageMessage summary="{!$Label.AMS_ERROR_Privileges}" severity="warning" strength="2" />
+	</apex:pageBlock>
+
+	<apex:outputPanel rendered="{!$Setup.ts2__ApplicantManagementSystem__c.Rollover_Button__c}">
+		<apex:outputPanel rendered="{!NOT(IsRolloverEnabled)}">
+			<apex:pageBlock title="{!$Label.AMS_LABEL_Rollover}" mode="edit">
+				<apex:pageMessage summary="{!$Label.ts2__RO_Not_Enabled}" severity="warning" strength="2" />
+				<apex:pageBlockButtons style="text-align: right;" location="bottom">
+					<apex:commandButton value="{!$Label.AMS_BTN_Close}" onclick="closeWin(false);" />
+				</apex:pageBlockButtons>
+			</apex:pageBlock>
+		</apex:outputPanel>
+
+		<apex:outputPanel rendered="{!IsRolloverEnabled}">
+			<apex:pageBlock title="{!$Label.AMS_LABEL_Rollover}" mode="details" rendered="{!NOT(HasFatalMessages)}" >
+				<apex:pageBlockButtons id="pbbsMainButtons" style="text-align: right;" location="bottom">
+					<span id="pbsMainButtons_spinner" class="spinner_indicator">&nbsp;</span>
+					<apex:commandButton value="{!$Label.AMS_BTN_Rollover}" title="{!$Label.AMS_BTN_Rollover}" rendered="{!NOT(Completed) && NOT(RolloverQSNotTheSameFlag)}" action="{!RolloverCandidatesAction}" onclick="jQuery('#pbsMainButtons_spinner').addClass('spinner_on');jQuery('[id*=pbbsMainButtons] input.btn').attr('disabled','disabled').addClass('btnDisabled');" rerender="frm" />
+					<apex:commandButton value="{!$Label.AMS_BTN_InviteToApply}" title="{!$Label.AMS_BTN_InviteToApply}" rendered="{!NOT(Completed) && RolloverQSNotTheSameFlag && Step!=1}" action="{!RolloverInviteToApplyAction}" onclick="jQuery('#pbsMainButtons_spinner').addClass('spinner_on');jQuery('[id*=pbbsMainButtons] input.btn').attr('disabled','disabled').addClass('btnDisabled');" rerender="frm" />
+					<apex:commandButton value="{!$Label.AMS_BTN_Save}" title="{!$Label.AMS_BTN_Save}" rendered="{!NOT(Completed) && Step=1}" action="{!RolloverInviteToApplyAction}" onclick="jQuery('#pbsMainButtons_spinner').addClass('spinner_on');jQuery('[id*=pbbsMainButtons] input.btn').attr('disabled','disabled').addClass('btnDisabled');" rerender="frm" />
+					<apex:commandButton value="{!$Label.AMS_BTN_Cancel}" title="{!$Label.AMS_BTN_Cancel}" rendered="{!NOT(Completed)}" onclick="closeWin(false);return(false);" />
+					<apex:commandButton value="{!$Label.AMS_BTN_Close}" title="{!$Label.AMS_BTN_Close}" rendered="{!Completed}" onclick="closeWin(true);return(false);" />
+				</apex:pageBlockButtons>
+				<apex:pageBlockSection id="pbsMain" columns="1" rendered="{!NOT(Completed)}">
+					<apex:pageMessage rendered="{!Step!=1 && RolloverQSNotTheSameFlag}" summary="{!$Label.ts2__RO_Requirement}" severity="warning" strength="2" />
+					<apex:pageBlockSectionItem dataStyle="width:40%" rendered="{!Step=0 && NOT(RolloverQSNotTheSameFlag)}">
+						<apex:outputLabel value="{!$ObjectType.ts2__Job__c.Fields.Name.Label}:" for="jobIf" />
+						<apex:outputPanel layout="block" styleClass="requiredInput" rendered="{!Step=0}" >
+							<apex:outputPanel layout="block" styleClass="requiredBlock" />
+							<apex:inputField id="jobIf" value="{!JobApp.ts2__Job__c}" rendered="{!Step=0}" required="false" />
+						</apex:outputPanel>
+					</apex:pageBlockSectionItem>
+					<apex:pageBlockSectionItem rendered="{!Step=1}">
+						<apex:outputLabel value="{!$Label.AMS_LABEL_Folder}" for="pbsi_EmailFolder" />
+						<apex:selectlist id="pbsi_EmailFolder" value="{!SelectedEmailFolder}" size="1" style="width:100%">
+							<apex:selectOptions value="{!EmailFoldersList}" />
+							<apex:actionSupport event="onchange" action="{!ChangeEmailFolder}" rerender="EmailList,ecndSubject,ecndMessage" status="EmailListLoading" />
+						</apex:selectlist>
+					</apex:pageBlockSectionItem>
+					<apex:pageBlockSectionItem rendered="{!Step=1}">
+						<apex:outputLabel value="{!$Label.AMS_LABEL_Template}" for="EmailList" />
+						<apex:actionStatus id="EmailListLoading">
+							<apex:facet name="start">
+								<apex:outputText style="font-weight:bold;color:red;" value="{!$Label.AMS_LABEL_Loading}" />
+							</apex:facet>
+							<apex:facet name="stop">
+								<apex:selectlist id="EmailList" value="{!SelectedEmailTemplate}" size="1" style="width:100%">
+									<apex:selectOptions value="{!EmailTemplatesList}" />
+									<apex:actionSupport event="onchange" action="{!ChangeEmailTemplate}" rerender="ecndSubject,ecndMessage" status="TemplateLoading" />
+								</apex:selectlist>
+							</apex:facet>
+						</apex:actionStatus>
+					</apex:pageBlockSectionItem>
+					<apex:pageBlockSectionItem rendered="{!Step=1}">
+						<apex:outputLabel value="{!$Label.AMS_LABEL_RolloverCustomMessage}" for="pbsi_CustomMessage" />
+						<apex:inputTextArea id="pbsi_CustomMessage" style="width:100%;height:110px;" value="{!CustomMessage}" />
+					</apex:pageBlockSectionItem>
+				</apex:pageBlockSection>
+				<apex:pageBlockSection id="pbsCompleted" columns="1" rendered="{!Completed}" >
+					<apex:pageMessage summary="{!$Label.AMS_LABEL_RolloverSave}" severity="confirm" strength="2" />
+					<apex:pageBlockSectionItem labelStyle="width:50%">
+						<apex:outputLabel value="{!$Label.AMS_LABEL_RolloverRolled}" for="conRej" />
+						<apex:outputText id="conRej" value="{!ApplicationsRolledOverCount}" />
+					</apex:pageBlockSectionItem>
+				</apex:pageBlockSection>
+			</apex:pageBlock>
+		</apex:outputPanel>
+	</apex:outputPanel>
+</apex:form>
+</body>
+
+<script type="text/javascript">
+	jQuery.noConflict();
+	jQuery(document).ready(function() {
+		jQuery('.mainTitle').css({"padding":"5px 30px", "white-space":"nowrap"});
+		gfxInit();
+	});
+	function gfxInit() {
+		a1=new Image; a1.src="{!URLFOR($Resource.UIRes, 'res/img/spinner.gif')}";
+	}
+</script>
+
+</apex:page>

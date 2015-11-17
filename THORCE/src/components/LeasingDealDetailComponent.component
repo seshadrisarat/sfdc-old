@@ -1,0 +1,822 @@
+<apex:component allowDML="true" >
+<apex:attribute name="MyController" description="The leasingdealdetailcontroller instance" type="LeasingDealDetailController" assignTo="{!MyController}" required="true" />
+
+<apex:includeScript value="{!$Resource.jQuery}" />
+
+<script>
+$(document).keydown( function(e){  
+  var target = $( e.target );
+  if(e.which == 8 && target.is("body") ) {  
+    e.preventDefault();  
+    return false;   
+  } 
+});
+
+$(document).ready(function() { var startYear=(new Date).getFullYear(); var endYear=startYear+30; var optionsString=''; if(startYear<endYear){ for(i=startYear;i<endYear+1;i++){ optionsString += "<option value=\""+i+"\">"+i+"</option>"; } $('#calYearPicker').html(optionsString); } } );
+</script>
+
+<apex:form >
+    <apex:outputPanel id="detailPanel" >
+
+    <apex:actionFunction name="computeRent" action="{!MyController.computeRent}" rerender="termPanel, rentPanel, messages" status="myStatus" />
+    <apex:actionFunction name="reComputeRent" action="{!MyController.reComputeRent}" rerender="rentIncreasePanel, rentPanel, messages" status="myStatus" >
+   		<apex:param name="reComputeRentStartIndex" value="" assignTo="{!MyController.reComputeRentStartIndex}" />
+    </apex:actionFunction>
+    <apex:actionFunction name="updateRentfields" action="{!MyController.nothing}" rerender="termPanel, rentPanel, messages" />
+    
+    <!-- new action functions for Option Term calculator -->
+    <apex:actionFunction name="computeOptionRent" action="{!MyController.computeOptionRent}" rerender="optionTermPanel, optionRentPanel, messages" status="myStatus" />
+    <apex:actionFunction name="reComputeOptionRent" action="{!MyController.reComputeOptionRent}" rerender="optionRentIncreasePanel, optionRentPanel, messages" status="myStatus" >
+   		<apex:param name="reComputeOptionRentStartIndex" value="" assignTo="{!MyController.reComputeOptionRentStartIndex}" />
+    </apex:actionFunction>
+    <apex:actionFunction name="updateOptionRentfields" action="{!MyController.nothing}" rerender="optionTermPanel, optionRentPanel, messages" />
+    
+    <apex:actionFunction name="updateCamfields" action="{!MyController.nothing}" rerender="camPanel, messages" />
+    <apex:actionFunction name="updateRetaxesfields" action="{!MyController.nothing}" rerender="retaxesPanel, messages"/>
+    <apex:actionFunction name="updateInsurancefields" action="{!MyController.nothing}" rerender="insurancePanel, messages"/>
+    <apex:actionFunction name="updateHVACfields" action="{!MyController.nothing}" rerender="HVACPanel, messages"/>
+    <apex:actionFunction name="updateWaterfields" action="{!MyController.nothing}" rerender="waterPanel, messages"/>
+    <apex:actionFunction name="updateElectricfields" action="{!MyController.nothing}" rerender="electricPanel, messages"/>
+    <apex:actionFunction name="updateTrashfields" action="{!MyController.nothing}" rerender="trashPanel, messages"/>
+    
+    <apex:outputPanel id="messages">
+        <apex:pageMessages escape="false" />
+    </apex:outputPanel>
+    
+    <apex:pageBlock title="Deal Detail" mode="{!IF(MyController.isEditMode, 'edit', 'mainDetail')}"> <!-- inlineEdit -->
+
+        <apex:pageBlockButtons id="pageButtons">
+            <apex:outputPanel rendered="{!MyController.deal.Id <> null}" >
+            <apex:commandButton action="{!MyController.editMe}" id="editButton" value="Edit" rerender="detailPanel" style="display: {!IF(NOT(MyController.isEditMode), 'inline', 'none')}" status="myStatus" />
+            <input type="button" id="submitApproval" title="Submit for Approval" class="btn" style="display: {!IF(NOT(MyController.isEditMode), 'inline', 'none')}" value="Submit for Approval" onclick="if ((Modal.confirm && Modal.confirm('Once you submit this record for approval, you might not be able to edit it or recall it from the approval process depending on your settings. Continue?')) || (!Modal.confirm && window.confirm('Once you submit this record for approval, you might not be able to edit it or recall it from the approval process depending on your settings. Continue?'))) navigateToUrl('{!URLFOR($Action.Deal__c.Submit, MyController.deal.Id)}','DETAIL','submit');" />
+           
+            <apex:commandButton style="display: {!IF(NOT(MyController.isEditMode), 'inline', 'none')}" action="{!URLFOR($Action.Deal__c.Generate_Term_Sheet, MyController.deal.Id)}" id="genTermSheetButton" value="Generate Term Sheet"/>
+            <apex:commandButton style="display: {!IF(NOT(MyController.isEditMode), 'inline', 'none')}" action="{!URLFOR($Action.Deal__c.Generate_Amendment, MyController.deal.Id)}" id="genAmendButton" value="Generate Amendment"/>
+            <apex:commandButton style="display: {!IF(NOT(MyController.isEditMode), 'inline', 'none')}" action="{!URLFOR($Action.Deal__c.Generate_Office_Term_Sheet, MyController.deal.Id)}" id="genOfficeTermSheet" value="Generate Office Term Sheet"/>
+            <apex:commandButton style="display: {!IF(NOT(MyController.isEditMode), 'inline', 'none')}" action="{!URLFOR($Action.Deal__c.Deal_Memo, MyController.deal.Id)}" id="genDealMemo" value="Generate Deal Memo"/>
+            <!--<apex:commandButton style="display: {!IF(NOT(MyController.isEditMode), 'inline', 'none')}" action="{!URLFOR($Action.Deal__c.Generate_Residential_Deal_Sheet, MyController.deal.Id)}" id="genResidentialDealSheet" value="Generate Residential Deal Sheet"/>-->
+            </apex:outputPanel>
+            <apex:commandButton action="{!MyController.saveMe}" id="saveButton" value="Save" rerender="detailPanel" style="display: {!IF(MyController.isEditMode, 'inline', 'none')}" status="myStatus" />
+            <apex:commandButton action="{!MyController.cancelMe}" id="cancelButton" value="Cancel" rerender="detailPanel" style="display: {!IF(MyController.isEditMode, 'inline', 'none')}" status="myStatus" immediate="true" />
+            <apex:actionStatus id="myStatus" stopText="" startText=" processing" onstart="$('body').css('cursor', 'wait');" onstop="$('body').css('cursor', 'default');">
+                <apex:facet name="start">
+                    <img src="/img/loading.gif" />
+                </apex:facet>
+                <apex:facet name="stop" />
+            </apex:actionStatus>
+        </apex:pageBlockButtons>
+
+
+        <apex:pageBlockSection title="{!IF(MyController.isEditMode, 'Information', '')}" columns="2" collapsible="true" >
+            <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+            <apex:repeat value="{!$ObjectType.Deal__c.FieldSets.LD_Information}" var="fld">
+                <apex:outputField value="{!MyController.deal[fld]}" rendered="{!NOT(MyController.isEditMode)}"/>
+                <apex:inputField value="{!MyController.deal[fld]}" rendered="{!MyController.isEditMode}" required="{!fld.required}"/>
+            </apex:repeat>
+        </apex:pageBlockSection>
+    
+        <apex:pageBlockSection title="Tenant Information" columns="2" collapsible="true" >
+            <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+            <apex:repeat value="{!$ObjectType.Deal__c.FieldSets.LD_Tenant_Information}" var="fld">
+                <apex:outputField value="{!MyController.deal[fld]}" rendered="{!NOT(MyController.isEditMode)}"/>
+                <apex:inputField value="{!MyController.deal[fld]}" rendered="{!MyController.isEditMode}" required="{!fld.required}"/>
+            </apex:repeat>
+        </apex:pageBlockSection>
+    
+        <apex:pageBlockSection title="Space" columns="2" collapsible="true" >
+            <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+            <apex:repeat value="{!$ObjectType.Deal__c.FieldSets.LD_Space}" var="fld">
+                <apex:outputField value="{!MyController.deal[fld]}" rendered="{!NOT(MyController.isEditMode)}"/>
+                <apex:inputField value="{!MyController.deal[fld]}" rendered="{!MyController.isEditMode}" required="{!fld.required}"/>
+            </apex:repeat>
+        </apex:pageBlockSection>
+
+		<apex:outputPanel layout="block" id="termPanel">
+        <apex:pageBlockSection title="Term" columns="2" collapsible="true" >
+            <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+            
+            <!-- 
+            <apex:outputField value="{!MyController.deal.Initial_Term__c}" rendered="{!NOT(MyController.isEditMode)}"/>
+            <apex:inputField value="{!MyController.deal.Initial_Term__c}" rendered="{!MyController.isEditMode}" onchange="computeRent();"/>
+			-->
+
+			<apex:outputField value="{!MyController.deal.Commencement_Date__c}" rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit))}"/>
+            <apex:inputField id="commDate" value="{!MyController.deal.Commencement_Date__c}" rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" onchange="computeRent();" >
+            	<apex:message for="commDate" />
+            </apex:inputField>
+			
+			<apex:outputField label="Space - Estimated (Squared {!MyController.labelFootage})" value="{!MyController.deal.Estimated_Square_Footage__c}" rendered="{!NOT(MyController.isEditMode)}" />
+            <apex:inputField label="Space - Estimated (Squared {!MyController.labelFootage})" value="{!MyController.deal.Estimated_Square_Footage__c}" rendered="{!MyController.isEditMode}" onchange="computeRent();" />
+			
+			<apex:outputField value="{!MyController.deal.Expiration_Date__c}" rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit))}"/>
+            <apex:inputField id="expDate" value="{!MyController.deal.Expiration_Date__c}" rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" onchange="computeRent();" >
+				<apex:message for="expDate" />
+			</apex:inputField>
+			
+            <apex:outputField value="{!MyController.deal.Measurement_Unit__c}" rendered="{!NOT(MyController.isEditMode)}" />
+            <apex:inputField value="{!MyController.deal.Measurement_Unit__c}" rendered="{!MyController.isEditMode}" onchange="updateRentfields();"/>
+            		
+            <apex:outputField value="{!MyController.deal.Options__c}" rendered="{!NOT(MyController.isEditMode)}"/>
+            <apex:inputField value="{!MyController.deal.Options__c}" rendered="{!MyController.isEditMode}" />
+            		
+            <apex:outputField value="{!MyController.deal.Special_Notes__c}" rendered="{!NOT(MyController.isEditMode)}"/>
+            <apex:inputField value="{!MyController.deal.Special_Notes__c}" rendered="{!MyController.isEditMode}" />
+            
+        </apex:pageBlockSection>
+        </apex:outputPanel>
+        
+        <apex:pageBlockSection title="Rent" columns="2" collapsible="true" >
+            <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+            
+            <apex:pageBlockSectionItem rendered="{!NOT(MyController.isEditMode)}" helpText="{!$ObjectType.Deal__c.Fields.Security_Deposit__c.inlineHelpText}">
+            	<apex:outputLabel value="Security Deposit" for="securityDeposit" />
+            	<apex:outputText id="securityDeposit" value="{!MyController.deal.Currency_Symbol__c}{0,number,#,##,##0.00}" rendered="{!NOT(MyController.isEditMode)}"><apex:param value="{!MyController.deal.Security_Deposit__c}"/></apex:outputText>
+            </apex:pageBlockSectionItem>
+            <apex:inputField value="{!MyController.deal.Security_Deposit__c}" rendered="{!MyController.isEditMode}" />  <!-- onchange="computeRent();"/>-->
+          
+          	<apex:pageBlockSectionItem rendered="{!NOT(MyController.isEditMode)}" helpText="{!$ObjectType.Deal__c.Fields.Base_Rent__c.inlineHelpText}">
+            	<apex:outputLabel value="Base Rent" for="baseRent" />
+            	<apex:outputText id="baseRent" value="{!MyController.deal.Currency_Symbol__c}{0,number,#,##,##0.00}" rendered="{!NOT(MyController.isEditMode)}"><apex:param value="{!MyController.deal.Base_Rent__c}"/></apex:outputText>
+            </apex:pageBlockSectionItem>
+            <apex:inputField value="{!MyController.deal.Base_Rent__c}" rendered="{!MyController.isEditMode}" onchange="computeRent();"/>
+            
+            <apex:outputField value="{!MyController.deal.Security_Deposit_TBD__c}" rendered="{!NOT(MyController.isEditMode)}"/>
+            <apex:inputField value="{!MyController.deal.Security_Deposit_TBD__c}" rendered="{!MyController.isEditMode}" />  <!-- onchange="computeRent();"/>-->
+           
+            <apex:outputField value="{!MyController.deal.Currency_ISO__c}" rendered="{!NOT(MyController.isEditMode)}"/>
+            <apex:inputField value="{!MyController.deal.Currency_ISO__c}" rendered="{!MyController.isEditMode}" onchange="updateRentfields();"/>
+            
+            <apex:outputField value="{!MyController.deal.Percentage_Rent__c}" rendered="{!NOT(MyController.isEditMode)}"/>
+            <apex:inputField value="{!MyController.deal.Percentage_Rent__c}" rendered="{!MyController.isEditMode}" onchange="computeRent(); computeOptionRent();"/>
+           
+            <apex:outputField value="{!MyController.deal.Currency_Symbol__c}" rendered="{!NOT(MyController.isEditMode)}" />
+            <apex:pageBlockSectionItem rendered="{!MyController.isEditMode}" />
+           
+            <apex:outputField value="{!MyController.deal.Percentage_Rent_Comments__c}" rendered="{!NOT(MyController.isEditMode)}"/>
+            <apex:inputField value="{!MyController.deal.Percentage_Rent_Comments__c}" rendered="{!MyController.isEditMode}" />
+            
+           <apex:outputPanel layout="block" id="rentIncreasePanel" style="margin:10px 150px 10px 10px;" styleClass="listViewport">
+            <apex:pageBlockSection columns="2" collapsible="true" >
+                <!-- BUG - the inline edit support does not work if initially no rows in the table -->
+                <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+                
+                <apex:pageBlockSectionItem >
+                    <apex:pageBlockTable value="{!MyController.rentIncreaseDetails}" var="item">
+                        <apex:column headerValue="Inc Start" >
+                            <apex:outputField value="{!item.record.Start_Period__c}" rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit))}" />
+                            <apex:inputField id="incStartDt" required="true" value="{!item.record.Start_Period__c}" rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" onchange="reComputeRent(-1);" >
+                            	<apex:message for="incStartDt" />
+                            </apex:inputField>
+                        </apex:column>
+                        <apex:column headerValue="Inc End" >
+                            <apex:outputField value="{!item.record.End_Period__c}" rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit))}" />
+                            <apex:inputField id="incEndDt" required="true" value="{!item.record.End_Period__c}" rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" onchange="reComputeRent(-1);" >
+                            	<apex:message for="incEndDt" />
+                            </apex:inputField>
+                        </apex:column>
+                        <apex:column headerValue="Inc Type" >
+                            <apex:outputField value="{!item.record.Base_Rent_Increase_Type__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                            <apex:inputField required="true" value="{!item.record.Base_Rent_Increase_Type__c}" rendered="{!MyController.isEditMode}" onchange="reComputeRent(-1);" />
+                        </apex:column>
+                        <apex:column headerValue="Inc Amt" >
+                            <apex:outputField value="{!item.record.Base_Rent_Increase_Amount__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                            <apex:inputField required="true" value="{!item.record.Base_Rent_Increase_Amount__c}" rendered="{!MyController.isEditMode}" style="width:50px" onchange="reComputeRent(-1);" />
+                        </apex:column>
+                        <apex:column headerValue="Freq Amt" >
+                            <apex:outputField value="{!item.record.Base_Rent_Increase_Frequency_Amount__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                            <apex:inputField required="false" value="{!item.record.Base_Rent_Increase_Frequency_Amount__c}" rendered="{!MyController.isEditMode}" style="width:30px" onchange="reComputeRent(-1);" />
+                        </apex:column>  
+                        <apex:column headerValue="Freq unit" >
+                            <apex:outputField value="{!item.record.Base_Rent_Increase_Frequency_Unit__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                            <apex:inputField required="true" value="{!item.record.Base_Rent_Increase_Frequency_Unit__c}" rendered="{!MyController.isEditMode}" onchange="reComputeRent(-1);" />
+                        </apex:column>  
+                        <apex:column >
+                        	<apex:image rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" url="{!$Resource.trash}" width="16" height="16"/>
+                        	<apex:actionSupport event="onclick" action="{!MyController.trashRentIncreaseRow}" rerender="rentIncreasePanel" oncomplete="reComputeRent(-1);" status="myStatus" immediate="true">
+                        		<apex:param name="trashRentInc" value="{!item.indx}" assignTo="{!MyController.trashRentIncreaseIndx}" />
+                        	</apex:actionSupport>
+                        </apex:column>
+                        <apex:facet name="footer" >
+                        	<apex:outputPanel >
+	                        	<apex:outputText rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit)) && MyController.rentIncreaseDetailsSize == 0}" value="No Rent Increase to display" />
+    	        				<apex:commandLink rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" action="{!MyController.addNewRentIncreaseRow}" value="Add new row" id="addNewRentIncreaseRowLink" reRender="rentIncreasePanel" status="myStatus"/>
+            				</apex:outputPanel>
+                        </apex:facet>
+                    </apex:pageBlockTable>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+        </apex:outputPanel>
+             
+             <apex:pageBlockSectionItem />
+              <apex:pageBlockSectionItem />
+            
+                <apex:outputField value="{!MyController.deal.Form_of_Security__c}" rendered="{!NOT(MyController.isEditMode)}"/>
+            <apex:inputField value="{!MyController.deal.Form_of_Security__c}" rendered="{!MyController.isEditMode}" />
+            
+                <apex:outputField value="{!MyController.deal.Late_Charges__c}" rendered="{!NOT(MyController.isEditMode)}"/>
+            <apex:inputField value="{!MyController.deal.Late_Charges__c}" rendered="{!MyController.isEditMode}" />
+            
+                <apex:outputField value="{!MyController.deal.First_Month_s_Rent_Rec_d__c}" rendered="{!NOT(MyController.isEditMode)}"/>
+            <apex:inputField value="{!MyController.deal.First_Month_s_Rent_Rec_d__c}" rendered="{!MyController.isEditMode}" />
+            
+                <apex:outputField value="{!MyController.deal.Security_Burn_Off__c}" rendered="{!NOT(MyController.isEditMode)}"/>
+            <apex:inputField value="{!MyController.deal.Security_Burn_Off__c}" rendered="{!MyController.isEditMode}" />
+            
+                        <apex:outputField value="{!MyController.deal.Holdover__c}" rendered="{!NOT(MyController.isEditMode)}"/>
+            <apex:inputField value="{!MyController.deal.Holdover__c}" rendered="{!MyController.isEditMode}" />
+                     
+        </apex:pageBlockSection>
+                
+        <apex:outputPanel layout="block" id="rentPanel" style="margin:10px 150px 10px 10px;" styleClass="listViewport">
+            <apex:pageBlockSection columns="1" collapsible="true" >
+                <!-- BUG - the inline edit support does not work if initially no rows in the table -->
+                <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+<!-- for debug testing - remove -->
+<apex:pageBlockSectionItem >
+<apex:outputText value="{!MyController.debugstring}" id="debugstring" />
+</apex:pageBlockSectionItem>
+
+                  <apex:pageBlockSectionItem >
+                <!-- commented out the refresh button 
+                    <apex:commandButton rendered="true" action="{!MyController.computeRent}" title="Refresh" rerender="rentPanel, pageButtons, messages" styleClass="refreshListButton" />
+                -->
+                <apex:variable value="{!0}" var="rowNum"/>
+                    <apex:pageBlockTable value="{!MyController.rentDetails}" var="item">
+                    	<apex:column headerValue="Period" style="text-align:center;">
+                    		<apex:variable var="rowNum" value="{!rowNum + 1}"/>
+                    		<apex:outputText value="{!rowNum}" />
+                    	</apex:column>
+                        <apex:column headerValue="Start Period" >
+                            <apex:outputField value="{!item.record.Start_Period__c}" rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit))}" />
+                            <apex:inputField id="rentStartDt" required="true" value="{!item.record.Start_Period__c}" rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" onchange="reComputeRent({!item.Indx});" >
+                            	<apex:message for="rentStartDt" />
+                            </apex:inputField> 
+                        </apex:column>
+                        <apex:column headerValue="End Period" >
+                            <apex:outputField value="{!item.record.End_Period__c}" rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit))}" />
+                            <apex:inputField id="rentEndDt" required="true" value="{!item.record.End_Period__c}" rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" onchange="reComputeRent({!item.Indx});" >
+                            	<apex:message for="rentEndDt" />
+                            </apex:inputField> 
+                        </apex:column>
+                        <apex:column headerValue="{!MyController.columnHeaderAnnualAmount}" >
+                            <apex:outputText value="{!MyController.deal.Currency_Symbol__c}{0,number,#,##,##0.00}" rendered="{!NOT(MyController.isEditMode)}"><apex:param value="{!item.record.Annual_Rent_Amount__c}"/></apex:outputText>
+                            <apex:inputField required="true" value="{!item.record.Annual_Rent_Amount__c}" rendered="{!MyController.isEditMode}" onchange="reComputeRent({!item.Indx});" /> 
+                        </apex:column>
+                        <apex:column headerValue="{!MyController.columnHeaderUnitPeriodlyAmount}" >
+                            <apex:outputText value="{!MyController.deal.Currency_Symbol__c}{0,number,#,##,##0.00}" ><apex:param value="{!item.record.Unit_Periodly_Rent_Amount__c}"/></apex:outputText>
+                        </apex:column>
+                        <apex:column headerValue="{!MyController.labelPSF} Amount" >
+                            <apex:outputText value="{!MyController.deal.Currency_Symbol__c}{0,number,#,##,##0.00}" ><apex:param value="{!item.psfAmt}"/></apex:outputText>
+                        </apex:column>
+                        <apex:column headerValue="Natural Break" >
+                            <apex:outputText value="{!MyController.deal.Currency_Symbol__c}{0,number,#,##,##0.00}"> <apex:param value="{!item.naturalBreak}"/></apex:outputText>
+                        </apex:column>                        
+                        <apex:column headerValue="Unnatural Break" >
+                            <apex:outputField value="{!item.record.Unnatural_Break__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                            <apex:inputField value="{!item.record.Unnatural_Break__c}" rendered="{!MyController.isEditMode}" />
+                        </apex:column>              
+                        <apex:column >
+                        	<apex:image rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" url="{!$Resource.trash}" width="16" height="16"/>
+                        	<apex:actionSupport event="onclick" action="{!MyController.trashRentRow}" rerender="rentPanel" status="myStatus"  immediate="true"> 
+                        		<apex:param name="trashRent" value="{!item.indx}" assignTo="{!MyController.trashRentIndx}" />
+                        	</apex:actionSupport>
+                        </apex:column>          
+                        <apex:facet name="footer">
+                        	<apex:outputPanel >
+                     			<apex:outputText rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit)) && MyController.rentDetailsSize == 0}" value="No Rent roll to display" />
+            					<apex:commandLink rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" action="{!MyController.addNewRentRow}" value="Add new row" id="addNewRentRowLink" reRender="rentPanel" status="myStatus"/>
+            				</apex:outputPanel>
+                        </apex:facet>
+                    </apex:pageBlockTable>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>     
+        </apex:outputPanel>
+        
+        
+        <!-- New Option Term calculator panels -->
+        <apex:outputPanel layout="block" id="optionTermPanel">
+        <apex:pageBlockSection title="Option Term" columns="2" collapsible="true" >
+            <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+            
+            <!-- 
+            <apex:outputField value="{!MyController.deal.Initial_Term__c}" rendered="{!NOT(MyController.isEditMode)}"/>
+            <apex:inputField value="{!MyController.deal.Initial_Term__c}" rendered="{!MyController.isEditMode}" onchange="computeRent();"/>
+			-->
+
+			<apex:outputField value="{!MyController.deal.Option_Start_Date__c}" rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit))}"/>
+            <apex:inputField id="optionStartDate" value="{!MyController.deal.Option_Start_Date__c}" rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" onchange="computeOptionRent();" >
+            	<apex:message for="optionStartDate" />
+            </apex:inputField>
+			
+			<apex:pageBlockSectionItem />
+			
+            <apex:outputField value="{!MyController.deal.Option_End_Date__c}" rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit))}"/>
+            <apex:inputField id="optionEndDate" value="{!MyController.deal.Option_End_Date__c}" rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" onchange="computeOptionRent();" >
+            	<apex:message for="optionEndDate" />
+            </apex:inputField>
+            
+        </apex:pageBlockSection>
+        </apex:outputPanel>
+        
+        <apex:pageBlockSection title="Option Rent" columns="2" collapsible="true" >
+            <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+            
+            <apex:pageBlockSectionItem rendered="{!NOT(MyController.isEditMode)}" helpText="{!$ObjectType.Deal__c.Fields.Option_Base_Rent__c.inlineHelpText}">
+            	<apex:outputLabel value="Option Base Rent" for="optionBaseRent" />
+            	<apex:outputText id="optionBaseRent" value="{!MyController.deal.Currency_Symbol__c}{0,number,#,##,##0.00}" rendered="{!NOT(MyController.isEditMode)}"><apex:param value="{!MyController.deal.Option_Base_Rent__c}"/></apex:outputText>
+            </apex:pageBlockSectionItem>
+            <apex:inputField value="{!MyController.deal.Option_Base_Rent__c}" rendered="{!MyController.isEditMode}" onchange="computeOptionRent();"/>
+            
+            <apex:outputPanel layout="block" id="optionRentIncreasePanel" style="margin:10px 150px 10px 10px;" styleClass="listViewport">
+            <apex:pageBlockSection columns="1" collapsible="true" >
+                <!-- BUG - the inline edit support does not work if initially no rows in the table -->
+                <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+                
+                <apex:pageBlockSectionItem >
+                    <apex:pageBlockTable value="{!MyController.optionRentIncreaseDetails}" var="item">
+                        <apex:column headerValue="Inc Start" >
+                            <apex:outputField value="{!item.record.Start_Period__c}" rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit))}" />
+                            <apex:inputField id="incStartDt" required="true" value="{!item.record.Start_Period__c}" rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" onchange="reComputeOptionRent(-1);" >
+                            	<apex:message for="incStartDt" />
+                            </apex:inputField>
+                        </apex:column>
+                        <apex:column headerValue="Inc End" >
+                            <apex:outputField value="{!item.record.End_Period__c}" rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit))}" />
+                            <apex:inputField id="incEndDt" required="true" value="{!item.record.End_Period__c}" rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" onchange="reComputeOptionRent(-1);" >
+                            	<apex:message for="incEndDt" />
+                            </apex:inputField>
+                        </apex:column>
+                        <apex:column headerValue="Inc Type" >
+                            <apex:outputField value="{!item.record.Base_Rent_Increase_Type__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                            <apex:inputField required="true" value="{!item.record.Base_Rent_Increase_Type__c}" rendered="{!MyController.isEditMode}" onchange="reComputeOptionRent(-1);" />
+                        </apex:column>
+                        <apex:column headerValue="Inc Amt" >
+                            <apex:outputField value="{!item.record.Base_Rent_Increase_Amount__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                            <apex:inputField required="true" value="{!item.record.Base_Rent_Increase_Amount__c}" rendered="{!MyController.isEditMode}" style="width:50px" onchange="reComputeOptionRent(-1);" />
+                        </apex:column>
+                        <apex:column headerValue="Freq Amt" >
+                            <apex:outputField value="{!item.record.Base_Rent_Increase_Frequency_Amount__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                            <apex:inputField required="false" value="{!item.record.Base_Rent_Increase_Frequency_Amount__c}" rendered="{!MyController.isEditMode}" style="width:30px" onchange="reComputeOptionRent(-1);" />
+                        </apex:column>  
+                        <apex:column headerValue="Freq unit" >
+                            <apex:outputField value="{!item.record.Base_Rent_Increase_Frequency_Unit__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                            <apex:inputField required="true" value="{!item.record.Base_Rent_Increase_Frequency_Unit__c}" rendered="{!MyController.isEditMode}" onchange="reComputeOptionRent(-1);" />
+                        </apex:column>  
+                        <apex:column >
+                        	<apex:image rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" url="{!$Resource.trash}" width="16" height="16"/>
+                        	<apex:actionSupport event="onclick" action="{!MyController.trashOptionRentIncreaseRow}" rerender="optionRentIncreasePanel" oncomplete="reComputeOptionRent(-1);" status="myStatus" immediate="true">
+                        		<apex:param name="trashOptionRentInc" value="{!item.indx}" assignTo="{!MyController.trashOptionRentIncreaseIndx}" />
+                        	</apex:actionSupport>
+                        </apex:column>
+                        <apex:facet name="footer" >
+                        	<apex:outputPanel >
+	                        	<apex:outputText rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit)) && MyController.optionRentIncreaseDetailsSize == 0}" value="No Option Rent Increase to display" />
+    	        				<apex:commandLink rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" action="{!MyController.addNewOptionRentIncreaseRow}" value="Add new row" id="addNewOptionRentIncreaseRowLink" reRender="optionRentIncreasePanel" status="myStatus"/>
+            				</apex:outputPanel>
+                        </apex:facet>
+                    </apex:pageBlockTable>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+        </apex:outputPanel>
+             
+             <apex:pageBlockSectionItem />
+              <apex:pageBlockSectionItem />
+            
+        </apex:pageBlockSection>
+        
+        <apex:outputPanel layout="block" id="optionRentPanel" style="margin:10px 150px 10px 10px;" styleClass="listViewport">
+            <apex:pageBlockSection columns="1" collapsible="true" >
+                <!-- BUG - the inline edit support does not work if initially no rows in the table -->
+                <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+<!-- for debug testing - remove
+<apex:pageBlockSectionItem >
+<apex:outputText value="{!MyController.debugstring}" id="debugstring" />
+</apex:pageBlockSectionItem>
+-->                 
+                <apex:pageBlockSectionItem >
+                <!-- commented out the refresh button 
+                    <apex:commandButton rendered="true" action="{!MyController.computeOptionRent}" title="Refresh" rerender="optionRentPanel, pageButtons, messages" styleClass="refreshListButton" />
+                -->
+                <apex:variable value="{!0}" var="rowNum"/>
+                    <apex:pageBlockTable value="{!MyController.optionRentDetails}" var="item">
+                    	<apex:column headerValue="Period" style="text-align:center;">
+                    		<apex:variable var="rowNum" value="{!rowNum + 1}"/>
+                    		<apex:outputText value="{!rowNum}" />
+                    	</apex:column>
+                        <apex:column headerValue="Start Period" >
+                            <apex:outputField value="{!item.record.Start_Period__c}" rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit))}" />
+                            <apex:inputField id="optionRentStartDt" required="true" value="{!item.record.Start_Period__c}" rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" onchange="reComputeOptionRent({!item.Indx});" >
+                            	<apex:message for="optionRentStartDt" />
+                            </apex:inputField> 
+                        </apex:column>
+                        <apex:column headerValue="End Period" >
+                            <apex:outputField value="{!item.record.End_Period__c}" rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit))}" />
+                            <apex:inputField id="optionRentEndDt" required="true" value="{!item.record.End_Period__c}" rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" onchange="reComputeOptionRent({!item.Indx});" >
+                            	<apex:message for="optionRentEndDt" />
+                            </apex:inputField> 
+                        </apex:column>
+                        <apex:column headerValue="{!MyController.columnHeaderAnnualAmount}" >
+                            <apex:outputText value="{!MyController.deal.Currency_Symbol__c}{0,number,#,##,##0.00}" rendered="{!NOT(MyController.isEditMode)}"><apex:param value="{!item.record.Annual_Rent_Amount__c}"/></apex:outputText>
+                            <apex:inputField required="true" value="{!item.record.Annual_Rent_Amount__c}" rendered="{!MyController.isEditMode}" onchange="reComputeOptionRent({!item.Indx});" /> 
+                        </apex:column>
+                        <apex:column headerValue="{!MyController.columnHeaderUnitPeriodlyAmount}" >
+                            <apex:outputText value="{!MyController.deal.Currency_Symbol__c}{0,number,#,##,##0.00}" ><apex:param value="{!item.record.Unit_Periodly_Rent_Amount__c}"/></apex:outputText>
+                        </apex:column>
+                        <apex:column headerValue="{!MyController.labelPSF} Amount" >
+                            <apex:outputText value="{!MyController.deal.Currency_Symbol__c}{0,number,#,##,##0.00}" ><apex:param value="{!item.psfAmt}"/></apex:outputText>
+                        </apex:column>
+                        <apex:column headerValue="Natural Break" >
+                            <apex:outputText value="{!MyController.deal.Currency_Symbol__c}{0,number,#,##,##0.00}"> <apex:param value="{!item.naturalBreak}"/></apex:outputText>
+                        </apex:column>                        
+                        <apex:column headerValue="Unnatural Break" >
+                            <apex:outputField value="{!item.record.Unnatural_Break__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                            <apex:inputField value="{!item.record.Unnatural_Break__c}" rendered="{!MyController.isEditMode}" />
+                        </apex:column>              
+                        <apex:column >
+                        	<apex:image rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" url="{!$Resource.trash}" width="16" height="16"/>
+                        	<apex:actionSupport event="onclick" action="{!MyController.trashOptionRentRow}" rerender="optionRentPanel" status="myStatus" immediate="true"> 
+                        		<apex:param name="trashOptionRent" value="{!item.indx}" assignTo="{!MyController.trashOptionRentIndx}" />
+                        	</apex:actionSupport>
+                        </apex:column>          
+                        <apex:facet name="footer">
+                        	<apex:outputPanel >
+                     			<apex:outputText rendered="{!NOT(AND(MyController.isEditMode,MyController.canEdit)) && MyController.optionRentDetailsSize == 0}" value="No Option Rent roll to display" />
+            					<apex:commandLink rendered="{!AND(MyController.isEditMode,MyController.canEdit)}" action="{!MyController.addNewOptionRentRow}" value="Add new row" id="addNewOptionRentRowLink" reRender="optionRentPanel" status="myStatus"/>
+            				</apex:outputPanel>
+                        </apex:facet>
+                    </apex:pageBlockTable>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>            
+        </apex:outputPanel>
+        
+        
+        <apex:outputPanel layout="block" id="camPanel">
+            <apex:pageBlockSection title="CAM" columns="2" collapsible="true" >
+                <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+                
+                <apex:outputText value="{!MyController.deal.Cam_Type__c}" rendered="{!NOT(MyController.isEditMode)}"/>
+                <apex:inputField value="{!MyController.deal.Cam_Type__c}" rendered="{!MyController.isEditMode}" onchange="updateCamfields();"/>
+                
+                <apex:pageBlockSectionItem />
+                
+                <apex:outputField value="{!MyController.deal.CAM_Pro_Rata_Share__c}" rendered="{!AND(NOT(MyController.isEditMode), MyController.deal.Cam_Type__c=MyController.proRataShare)}" />
+                <apex:inputField value="{!MyController.deal.CAM_Pro_Rata_Share__c}" rendered="{!AND(MyController.isEditMode, MyController.deal.Cam_Type__c=MyController.proRataShare)}" />
+                
+                <apex:outputField value="{!MyController.deal.Fixed_CAM_Charge_PSF__c}" rendered="{!AND(NOT(MyController.isEditMode), MyController.deal.Cam_Type__c=MyController.fixedCAM)}" />
+                <apex:inputField value="{!MyController.deal.Fixed_CAM_Charge_PSF__c}" rendered="{!AND(MyController.isEditMode, MyController.deal.Cam_Type__c=MyController.fixedCAM)}" />
+                
+                <apex:pageBlockSectionItem rendered="{!NOT(OR(MyController.deal.Cam_Type__c=MyController.proRataShare, MyController.deal.Cam_Type__c=MyController.fixedCAM))}" />
+                    
+                <apex:outputField value="{!MyController.deal.CAM_Increases__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.Cam_Type__c=MyController.proRataShare, MyController.deal.Cam_Type__c=MyController.fixedCAM))}" />
+                <apex:inputField value="{!MyController.deal.CAM_Increases__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.Cam_Type__c=MyController.proRataShare, MyController.deal.Cam_Type__c=MyController.fixedCAM))}" />
+
+                <apex:pageBlockSectionItem rendered="{!NOT(OR(MyController.deal.Cam_Type__c=MyController.proRataShare, MyController.deal.Cam_Type__c=MyController.fixedCAM))}" />
+
+                <apex:outputField value="{!MyController.deal.CAM_Estimate_to_go_into_Lease__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.CAM_Estimate_to_go_into_Lease__c}" rendered="{!MyController.isEditMode}" />
+                
+                <apex:outputField value="{!MyController.deal.CAM_Cap__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.CAM_Cap__c}" rendered="{!MyController.isEditMode}" />
+                
+<apex:outputField value="{!MyController.deal.in_Lieu_of_Operating_Expenses__c}" rendered="{!NOT(MyController.isEditMode)}" />
+<apex:inputField value="{!MyController.deal.in_Lieu_of_Operating_Expenses__c}" rendered="{!MyController.isEditMode}" />
+
+<apex:outputField value="{!MyController.deal.Operating_expenses__c}" rendered="{!NOT(MyController.isEditMode)}" />
+<apex:inputField value="{!MyController.deal.Operating_expenses__c}" rendered="{!MyController.isEditMode}" />
+
+<apex:outputField value="{!MyController.deal.CAM_Proportioned_Share__c}" rendered="{!NOT(MyController.isEditMode)}" />
+<apex:inputField value="{!MyController.deal.CAM_Proportioned_Share__c}" rendered="{!MyController.isEditMode}" />
+
+
+            </apex:pageBlockSection>
+        </apex:outputPanel>
+        
+        <apex:outputPanel layout="block" id="retaxesPanel" >
+            <apex:pageBlockSection title="RE Taxes" columns="2" collapsible="true" >
+                <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+                
+                <apex:outputText value="{!MyController.deal.RE_Taxes_Type__c}" rendered="{!NOT(MyController.isEditMode)}" />                
+                <apex:inputField value="{!MyController.deal.RE_Taxes_Type__c}" rendered="{!MyController.isEditMode}" onchange="updateRetaxesfields();"/>                
+
+                <apex:pageBlockSectionItem />
+
+                <apex:outputField value="{!MyController.deal.Base_Year__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.RE_Taxes_Type__c=MyController.proRataShare))}" />
+                <apex:inputField value="{!MyController.deal.Base_Year__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.RE_Taxes_Type__c=MyController.proRataShare))}" />  
+    
+                <apex:outputField value="{!MyController.deal.Cap__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.RE_Taxes_Type__c=MyController.proRataShare))}" />
+                <apex:inputField value="{!MyController.deal.Cap__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.RE_Taxes_Type__c=MyController.proRataShare))}" />  
+    
+                <apex:outputField value="{!MyController.deal.Frequency__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.RE_Taxes_Type__c=MyController.proRataShare))}" />
+                <apex:inputField value="{!MyController.deal.Frequency__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.RE_Taxes_Type__c=MyController.proRataShare))}" />     
+    
+                <apex:outputField value="{!MyController.deal.Pro_rata_Share__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.RE_Taxes_Type__c=MyController.proRataShare))}" />
+                <apex:inputField value="{!MyController.deal.Pro_rata_Share__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.RE_Taxes_Type__c=MyController.proRataShare))}" />
+
+                
+                <apex:pageBlockSectionItem rendered="{!NOT(OR(MyController.deal.RE_Taxes_Type__c=MyController.proRataShare, MyController.deal.RE_Taxes_Type__c=MyController.proRataOverYear))}" />
+                
+                <apex:outputField value="{!MyController.deal.Tax_Pro_Rata_Share_Based_On__c}" rendered="{!AND(NOT(MyController.isEditMode), MyController.deal.RE_Taxes_Type__c=MyController.proRataOverYear)}" />
+                <apex:inputField value="{!MyController.deal.Tax_Pro_Rata_Share_Based_On__c}" rendered="{!AND(MyController.isEditMode, MyController.deal.RE_Taxes_Type__c=MyController.proRataOverYear)}" />
+                
+                <apex:pageBlockSectionItem rendered="{!NOT(MyController.deal.RE_Taxes_Type__c=MyController.proRataOverYear)}" />
+                    
+                <apex:outputField value="{!MyController.deal.RE_Taxes_Estimate_to_go_into_Lease__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.RE_Taxes_Estimate_to_go_into_Lease__c}" rendered="{!MyController.isEditMode}" />
+                
+                <apex:outputField value="{!MyController.deal.RE_Taxes_Estimate__c}" rendered="{!AND(NOT(MyController.isEditMode), MyController.deal.RE_Taxes_Type__c='')}" />
+                <apex:inputField value="{!MyController.deal.RE_Taxes_Estimate__c}" rendered="{!AND(MyController.isEditMode, MyController.deal.RE_Taxes_Type__c='')}" />
+                
+                <apex:outputField value="{!MyController.deal.RE_Taxes_Estimate_PSF__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.RE_Taxes_Estimate_PSF__c}" rendered="{!MyController.isEditMode}" />
+
+            </apex:pageBlockSection>
+        </apex:outputPanel>
+        
+        <apex:outputPanel layout="block" id="insurancePanel">
+            <apex:pageBlockSection title="Insurance" columns="2" collapsible="true" >
+                <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+                
+                <apex:outputText value="{!MyController.deal.Insurance_Type__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.Insurance_Type__c}" rendered="{!MyController.isEditMode}" onchange="updateInsurancefields();"/>
+                
+                <apex:pageBlockSectionItem />
+
+                <apex:outputField value="{!MyController.deal.Office_Base_Year__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.Insurance_Type__c=MyController.proRataShare))}" />
+                <apex:inputField value="{!MyController.deal.Office_Base_Year__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.Insurance_Type__c=MyController.proRataShare))}" />
+
+                <apex:outputField value="{!MyController.deal.Office_Cap__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.Insurance_Type__c=MyController.proRataShare))}" />
+                <apex:inputField value="{!MyController.deal.Office_Cap__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.Insurance_Type__c=MyController.proRataShare))}" />
+
+                <apex:outputField value="{!MyController.deal.Office_Frequency__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.Insurance_Type__c=MyController.proRataShare))}" />
+                <apex:inputField value="{!MyController.deal.Office_Frequency__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.Insurance_Type__c=MyController.proRataShare))}" />
+   
+                <apex:outputField value="{!MyController.deal.Office_Pro_rata_Share__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.Insurance_Type__c=MyController.proRataShare))}" />
+                <apex:inputField value="{!MyController.deal.Office_Pro_rata_Share__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.Insurance_Type__c=MyController.proRataShare))}" />
+  
+                <apex:outputField value="{!MyController.deal.Insurance_Pro_Rata_Share__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.Insurance_Type__c=MyController.proRataShare, MyController.deal.Insurance_Type__c=MyController.proRataOverYear))}" />
+                <apex:inputField value="{!MyController.deal.Insurance_Pro_Rata_Share__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.Insurance_Type__c=MyController.proRataShare, MyController.deal.Insurance_Type__c=MyController.proRataOverYear))}" />
+
+                <apex:pageBlockSectionItem rendered="{!NOT(OR(MyController.deal.Insurance_Type__c=MyController.proRataShare, MyController.deal.Insurance_Type__c=MyController.proRataOverYear))}" />
+                
+                <apex:outputField value="{!MyController.deal.Insurance_Pro_Rata_Share_Based_on__c}" rendered="{!AND(NOT(MyController.isEditMode), MyController.deal.Insurance_Type__c=MyController.proRataOverYear)}" />
+                <apex:inputField value="{!MyController.deal.Insurance_Pro_Rata_Share_Based_on__c}" rendered="{!AND(MyController.isEditMode, MyController.deal.Insurance_Type__c=MyController.proRataOverYear)}" />
+                
+                <apex:pageBlockSectionItem rendered="{!NOT(MyController.deal.Insurance_Type__c=MyController.proRataOverYear)}" />
+                    
+                <apex:outputField value="{!MyController.deal.Insurance_Estimate_to_go_into_Lease__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.Insurance_Estimate_to_go_into_Lease__c}" rendered="{!MyController.isEditMode}" />
+                
+                <apex:outputField value="{!MyController.deal.Insurance_Estimate_PSF__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.Insurance_Estimate_PSF__c}" rendered="{!MyController.isEditMode}" />
+            </apex:pageBlockSection>
+        </apex:outputPanel>
+        
+        <apex:outputPanel layout="block" id="HVACPanel">
+            <apex:pageBlockSection title="HVAC" columns="2" collapsible="true" >
+                <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+                
+                <apex:outputText value="{!MyController.deal.HVAC_Energy__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.HVAC_Energy__c}" rendered="{!MyController.isEditMode}" onchange="updateHVACfields();"/>
+                
+                <apex:outputField value="{!MyController.deal.HVAC_Condition_Requirement__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.HVAC_Condition_Requirement__c}" rendered="{!MyController.isEditMode}" />
+                
+                <apex:outputField value="{!MyController.deal.HVAC_Pro_Rata_Share__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.HVAC_Energy__c=MyController.proRataShare, MyController.deal.HVAC_Energy__c=MyController.proRataOverYear))}" />
+                <apex:inputField value="{!MyController.deal.HVAC_Pro_Rata_Share__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.HVAC_Energy__c=MyController.proRataShare, MyController.deal.HVAC_Energy__c=MyController.proRataOverYear))}" />
+
+                <apex:outputField value="{!MyController.deal.Base_Year_HVAC__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.HVAC_Energy__c=MyController.proRataShare, MyController.deal.HVAC_Energy__c=MyController.proRataOverYear))}" />
+                <apex:inputField value="{!MyController.deal.Base_Year_HVAC__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.HVAC_Energy__c=MyController.proRataShare, MyController.deal.HVAC_Energy__c=MyController.proRataOverYear))}" />              
+                
+                <apex:pageBlockSectionItem rendered="{!NOT(OR(MyController.deal.HVAC_Energy__c=MyController.proRataShare, MyController.deal.HVAC_Energy__c=MyController.proRataOverYear))}" />
+                
+                <apex:outputField value="{!MyController.deal.HVAC_Pro_Rata_Share_Based_On__c}" rendered="{!AND(NOT(MyController.isEditMode), MyController.deal.HVAC_Energy__c=MyController.proRataOverYear)}" />
+                <apex:inputField value="{!MyController.deal.HVAC_Pro_Rata_Share_Based_On__c}" rendered="{!AND(MyController.isEditMode, MyController.deal.HVAC_Energy__c=MyController.proRataOverYear)}" />
+                
+                <apex:pageBlockSectionItem rendered="{!NOT(MyController.deal.HVAC_Energy__c=MyController.proRataOverYear)}" />
+
+                <apex:outputField value="{!MyController.deal.HVAC_Estimate_to_go_into_Lease__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.HVAC_Estimate_to_go_into_Lease__c}" rendered="{!MyController.isEditMode}" />
+                
+                <apex:outputField value="{!MyController.deal.HVAC_Energy_Est__c}" rendered="{!NOT(MyController.isEditMode)}" />     
+                <apex:inputField value="{!MyController.deal.HVAC_Energy_Est__c}" rendered="{!MyController.isEditMode}" />    
+                 
+				<apex:outputField value="{!MyController.deal.HVAC_Notes__c}" rendered="{!NOT(MyController.isEditMode)}" />     
+				<apex:inputField value="{!MyController.deal.HVAC_Notes__c}" rendered="{!MyController.isEditMode}" />      
+ 
+ 				<!-- Requested to add HVAC Equipment Charge where HVAC Energy = -None-  -->                  
+                <apex:outputField value="{!MyController.deal.HVAC_Equipment_Charge__c}" rendered="{!AND(NOT(MyController.isEditMode), MyController.deal.HVAC_Energy__c='')}" />
+                <apex:inputField value="{!MyController.deal.HVAC_Equipment_Charge__c}" rendered="{!AND(MyController.isEditMode, MyController.deal.HVAC_Energy__c='')}" />
+                <!-- -->
+                           
+            </apex:pageBlockSection>
+        </apex:outputPanel>
+        
+        <apex:outputPanel layout="block" id="waterPanel">
+            <apex:pageBlockSection title="Water" columns="2" collapsible="true" >
+                <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+                
+                <apex:outputText value="{!MyController.deal.Water_Sewer__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.Water_Sewer__c}" rendered="{!MyController.isEditMode}" onchange="updateWaterfields();"/>
+                
+                <apex:pageBlockSectionItem rendered="{!NOT(OR(MyController.deal.Water_Sewer__c=MyController.specificCharge))}" />
+
+                <apex:outputField value="{!MyController.deal.Specific_Water_Sewer_Charge__c}" rendered="{!AND(NOT(MyController.isEditMode), MyController.deal.Water_Sewer__c=MyController.specificCharge)}" />
+                <apex:inputField value="{!MyController.deal.Specific_Water_Sewer_Charge__c}" rendered="{!AND(MyController.isEditMode, MyController.deal.Water_Sewer__c=MyController.specificCharge)}" />
+                    
+                <apex:outputField value="{!MyController.deal.Sprinkler_Charge__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.Sprinkler_Charge__c}" rendered="{!MyController.isEditMode}" />
+                
+                <apex:outputField value="{!MyController.deal.Sprinkler_Equipment_Maintenance__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.Sprinkler_Equipment_Maintenance__c}" rendered="{!MyController.isEditMode}" />
+                
+<apex:outputField value="{!MyController.deal.Water_Sprinkler_Notes__c}" rendered="{!NOT(MyController.isEditMode)}" />
+<apex:inputField value="{!MyController.deal.Water_Sprinkler_Notes__c}" rendered="{!MyController.isEditMode}" />
+
+            </apex:pageBlockSection>
+        </apex:outputPanel>
+        
+        <apex:outputPanel layout="block" id="electricPanel">
+            <apex:pageBlockSection title="Electricity" columns="2" collapsible="true" >
+                <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+                
+                <apex:outputText value="{!MyController.deal.Electric__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.Electric__c}" rendered="{!MyController.isEditMode}" onchange="updateElectricfields();"/>
+                
+                <apex:pageBlockSectionItem />
+  
+                <apex:pageBlockSectionItem rendered="{!NOT(OR(MyController.deal.Electric__c=MyController.includedInbaseRent))}" />
+
+                <apex:outputField value="{!MyController.deal.Electric_Rate__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.Electric__c=MyController.includedInbaseRent))}" />
+                <apex:inputField value="{!MyController.deal.Electric_Rate__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.Electric__c=MyController.includedInbaseRent))}" />
+
+                <apex:outputField value="{!MyController.deal.Electric_SPF__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.Electric__c=MyController.includedInbaseRent))}" />
+                <apex:inputField value="{!MyController.deal.Electric_SPF__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.Electric__c=MyController.includedInbaseRent))}" />
+
+ 
+                <apex:pageBlockSectionItem rendered="{!NOT(OR(MyController.deal.Electric__c=MyController.submeteredElectric))}" />
+
+                <apex:outputField value="{!MyController.deal.Submetered__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.Electric__c=MyController.submeteredElectric))}" />
+                <apex:inputField value="{!MyController.deal.Submetered__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.Electric__c=MyController.submeteredElectric))}" />
+ 
+                
+                <apex:outputField value="{!MyController.deal.Electric_Pro_Rata_Share__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.Electric__c=MyController.proRataShare, MyController.deal.Electric__c=MyController.proRataOverYear))}" />
+                <apex:inputField value="{!MyController.deal.Electric_Pro_Rata_Share__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.Electric__c=MyController.proRataShare, MyController.deal.Electric__c=MyController.proRataOverYear))}" />
+
+                <apex:outputField value="{!MyController.deal.Base_Year_Elect__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.Electric__c=MyController.proRataShare, MyController.deal.Electric__c=MyController.proRataOverYear))}" />
+                <apex:inputField value="{!MyController.deal.Base_Year_Elect__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.Electric__c=MyController.proRataShare, MyController.deal.Electric__c=MyController.proRataOverYear))}" />                
+  
+                <apex:pageBlockSectionItem rendered="{!NOT(OR(MyController.deal.Electric__c=MyController.proRataShare, MyController.deal.Electric__c=MyController.proRataOverYear))}" />
+                
+                <apex:outputField value="{!MyController.deal.Electric_Pro_Rata_Share_Based_on__c}" rendered="{!AND(NOT(MyController.isEditMode), MyController.deal.Electric__c=MyController.proRataOverYear)}" />
+                <apex:inputField value="{!MyController.deal.Electric_Pro_Rata_Share_Based_on__c}" rendered="{!AND(MyController.isEditMode, MyController.deal.Electric__c=MyController.proRataOverYear)}" />
+                
+                <apex:pageBlockSectionItem rendered="{!NOT(MyController.deal.Electric__c=MyController.proRataOverYear)}" />
+                    
+                <apex:outputField value="{!MyController.deal.Electric_Estimate_to_go_into_Lease__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.Electric_Estimate_to_go_into_Lease__c}" rendered="{!MyController.isEditMode}" />
+                
+                <apex:outputField value="{!MyController.deal.Electric_Estimate_PSF__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.Electric_Estimate_PSF__c}" rendered="{!MyController.isEditMode}" />
+
+                <apex:outputField value="{!MyController.deal.Electric_Flat_Fee__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.Electric_Flat_Fee__c}" rendered="{!MyController.isEditMode}" />
+
+<apex:outputField value="{!MyController.deal.Electric_Notes__c}" rendered="{!NOT(MyController.isEditMode)}" />
+<apex:inputField value="{!MyController.deal.Electric_Notes__c}" rendered="{!MyController.isEditMode}" />
+                
+            </apex:pageBlockSection>
+        </apex:outputPanel>
+        
+        
+        <apex:outputPanel layout="block" id="trashPanel">
+            <apex:pageBlockSection title="Trash" columns="2" collapsible="true" >
+                <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+                
+                <apex:outputText value="{!MyController.deal.Trash__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.Trash__c}" rendered="{!MyController.isEditMode}" onchange="updateTrashfields();"/>
+                
+                <apex:pageBlockSectionItem />
+                
+                <apex:outputField value="{!MyController.deal.Trash_Pro_Rata_Share__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.Trash__c=MyController.proRataShare, MyController.deal.Trash__c=MyController.proRataOverYear))}" />
+                <apex:inputField value="{!MyController.deal.Trash_Pro_Rata_Share__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.Trash__c=MyController.proRataShare, MyController.deal.Trash__c=MyController.proRataOverYear))}" />
+ 
+                <apex:outputField value="{!MyController.deal.Base_Year_Trash__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.Trash__c=MyController.proRataShare, MyController.deal.Trash__c=MyController.proRataOverYear))}" />
+                <apex:inputField value="{!MyController.deal.Base_Year_Trash__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.Trash__c=MyController.proRataShare, MyController.deal.Trash__c=MyController.proRataOverYear))}" />  
+      
+                <apex:outputField value="{!MyController.deal.Base_Year_Ins__c}" rendered="{!AND(NOT(MyController.isEditMode), OR(MyController.deal.Trash__c=MyController.proRataShare, MyController.deal.Trash__c=MyController.proRataOverYear))}" />
+                <apex:inputField value="{!MyController.deal.Base_Year_Ins__c}" rendered="{!AND(MyController.isEditMode, OR(MyController.deal.Trash__c=MyController.proRataShare, MyController.deal.Trash__c=MyController.proRataOverYear))}" />
+                
+                <apex:pageBlockSectionItem rendered="{!NOT(OR(MyController.deal.Trash__c=MyController.proRataShare, MyController.deal.Trash__c=MyController.proRataOverYear))}" />
+                
+                <apex:outputField value="{!MyController.deal.Trash_Pro_Rata_Share_Based_on__c}" rendered="{!AND(NOT(MyController.isEditMode), MyController.deal.Trash__c=MyController.proRataOverYear)}" />
+                <apex:inputField value="{!MyController.deal.Trash_Pro_Rata_Share_Based_on__c}" rendered="{!AND(MyController.isEditMode, MyController.deal.Trash__c=MyController.proRataOverYear)}" />
+                
+                <apex:pageBlockSectionItem rendered="{!NOT(MyController.deal.Trash__c=MyController.proRataOverYear)}" />
+                    
+                <apex:outputField value="{!MyController.deal.Trash_Estimate_to_go_into_Lease__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.Trash_Estimate_to_go_into_Lease__c}" rendered="{!MyController.isEditMode}" />
+                
+                <apex:outputField value="{!MyController.deal.Trash_Estimate_PSF__c}" rendered="{!NOT(MyController.isEditMode)}" />
+                <apex:inputField value="{!MyController.deal.Trash_Estimate_PSF__c}" rendered="{!MyController.isEditMode}" />
+                
+<apex:outputField value="{!MyController.deal.Trash_Notes__c}" rendered="{!NOT(MyController.isEditMode)}" />
+<apex:inputField value="{!MyController.deal.Trash_Notes__c}" rendered="{!MyController.isEditMode}" />
+
+            </apex:pageBlockSection>
+        </apex:outputPanel>
+        
+        
+        <apex:pageBlockSection title="Other Charges" columns="2" collapsible="true" >
+            <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+            <apex:repeat value="{!$ObjectType.Deal__c.FieldSets.LD_Other_Charges}" var="fld">
+                <apex:outputField value="{!MyController.deal[fld]}" rendered="{!NOT(MyController.isEditMode)}"/>
+                <apex:inputField value="{!MyController.deal[fld]}" rendered="{!MyController.isEditMode}" required="{!fld.required}"/>
+            </apex:repeat>
+        </apex:pageBlockSection>
+    
+        <apex:pageBlockSection title="Possession of Property" columns="2" collapsible="true" >
+            <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+            <apex:repeat value="{!$ObjectType.Deal__c.FieldSets.LD_Possession_of_Property}" var="fld">
+                <apex:outputField value="{!MyController.deal[fld]}" rendered="{!NOT(MyController.isEditMode)}"/>
+                <apex:inputField value="{!MyController.deal[fld]}" rendered="{!MyController.isEditMode}" required="{!fld.required}"/>
+            </apex:repeat>
+        </apex:pageBlockSection>
+    
+        <apex:pageBlockSection title="Key Terms" columns="2" collapsible="true" >
+            <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+            <apex:repeat value="{!$ObjectType.Deal__c.FieldSets.LD_Key_Terms}" var="fld">
+                <apex:outputField value="{!MyController.deal[fld]}" rendered="{!NOT(MyController.isEditMode)}"/>
+                <apex:inputField value="{!MyController.deal[fld]}" rendered="{!MyController.isEditMode}" required="{!fld.required}"/>
+            </apex:repeat>
+        </apex:pageBlockSection>
+
+        <apex:pageBlockSection title="Asset Management" columns="1" collapsible="true" >
+            <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+            <apex:repeat value="{!$ObjectType.Deal__c.FieldSets.LD_Asset_Management}" var="fld">
+                <apex:outputField value="{!MyController.deal[fld]}" rendered="{!NOT(MyController.isEditMode)}"/>
+                <apex:inputField value="{!MyController.deal[fld]}" rendered="{!MyController.isEditMode}" required="{!fld.required}"/>
+            </apex:repeat>
+        </apex:pageBlockSection>
+    
+    
+        <!-- NEW -->
+        <apex:pageBlockSection title="Checklists" columns="1" collapsible="true" rendered="{!MyController.deal.Id <> null}" >
+            <iframe width="100%" scrolling="no" height="350px" frameborder="no" title="DueDiligenceChecklistPage" name="{!MyController.inlineVFExpanderForDueDiligencePage}" marginwidth="0" marginheight="0" id="{!MyController.inlineVFExpanderForDueDiligencePage}" src="/apex/DueDiligenceChecklistPage?id={!MyController.deal.Id}"></iframe>
+        </apex:pageBlockSection>
+        <!-- ORIGINAL 
+        <apex:pageBlockSection title="Checklists" columns="1" collapsible="true" rendered="{!MyController.deal.Id <> null}" >
+            <!-- TODO - deployment note...the apex page SF id 066E00000010e0I below must be updated to corresponding production id value 
+            <iframe width="100%" scrolling="no" height="350px" frameborder="no" title="DueDiligenceChecklistPage" name="066E00000010e0I" marginwidth="0" marginheight="0" id="066E00000010e0I" src="/apex/DueDiligenceChecklistPage?id={!MyController.deal.Id}"></iframe>
+        </apex:pageBlockSection>-->
+        
+         <apex:pageBlockSection title="Tenant Health Ratio (Renewal Only)" columns="2" collapsible="true" rendered="{!MyController.deal.Id <> null}" >
+            <apex:repeat value="{!$ObjectType.Deal__c.FieldSets.LD_Tenant_Health_Ratio_Renewal_Only}" var="fld">
+                <apex:outputField value="{!MyController.deal[fld]}" rendered="{!NOT(MyController.isEditMode)}"/>
+                <apex:inputField value="{!MyController.deal[fld]}" rendered="{!MyController.isEditMode}" required="{!fld.required}"/>
+            </apex:repeat>
+        </apex:pageBlockSection>
+        
+         <apex:pageBlockSection title="Rent Relief | (ADJUST RENTAL BELOW AND ATTACH APPROVED WORKSHEET) (Renewal Only)" columns="2" collapsible="true" rendered="{!MyController.deal.Id <> null}" >
+            <apex:repeat value="{!$ObjectType.Deal__c.FieldSets.LD_Rent_Relief_ADJUST_RENTAL_BELOW_AND}" var="fld">
+                <apex:outputField value="{!MyController.deal[fld]}" rendered="{!NOT(MyController.isEditMode)}"/>
+                <apex:inputField value="{!MyController.deal[fld]}" rendered="{!MyController.isEditMode}" required="{!fld.required}"/>
+            </apex:repeat>
+        </apex:pageBlockSection>
+    
+        <apex:pageBlockSection title="FOR FINANCIAL ANALYSIS - Terms - 2010 Budget" columns="2" collapsible="true" >
+            <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+            <apex:repeat value="{!$ObjectType.Deal__c.FieldSets.LD_Terms_2010_Budget}" var="fld">
+                <apex:outputField value="{!MyController.deal[fld]}" rendered="{!NOT(MyController.isEditMode)}"/>
+                <apex:inputField value="{!MyController.deal[fld]}" rendered="{!MyController.isEditMode}" required="{!fld.required}"/>
+            </apex:repeat>
+        </apex:pageBlockSection>
+    
+        <apex:pageBlockSection title="FOR FINANCIAL ANALYSIS - Prior Tenant Analysis" columns="2" collapsible="true" >
+            <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+            <apex:repeat value="{!$ObjectType.Deal__c.FieldSets.LD_Prior_Tenant_Analysis}" var="fld">
+                <apex:outputField value="{!MyController.deal[fld]}" rendered="{!NOT(MyController.isEditMode)}"/>
+                <apex:inputField value="{!MyController.deal[fld]}" rendered="{!MyController.isEditMode}" required="{!fld.required}"/>
+            </apex:repeat>
+        </apex:pageBlockSection>
+    
+        <apex:pageBlockSection title="FOR FINANCIAL ANALYSIS - New Deal" columns="2" collapsible="true" >
+            <!--<apex:inlineEditSupport showOnEdit="saveButton, cancelButton" hideOnEdit="editButton" event="ondblclick" changedStyleClass="myBoldClass" resetFunction="resetInlineEdit"/>-->
+            <apex:repeat value="{!$ObjectType.Deal__c.FieldSets.LD_New_Deal}" var="fld">
+                <apex:outputField value="{!MyController.deal[fld]}" rendered="{!NOT(MyController.isEditMode)}"/>
+                <apex:inputField value="{!MyController.deal[fld]}" rendered="{!MyController.isEditMode}" required="{!fld.required}"/>
+            </apex:repeat>
+        </apex:pageBlockSection>
+    
+        <apex:pageBlockSection title="System Information" columns="2" collapsible="true" >
+            <apex:repeat value="{!$ObjectType.Deal__c.FieldSets.LD_System_Information}" var="fld">
+                <apex:outputField value="{!MyController.deal[fld]}" rendered="{!NOT(MyController.isEditMode)}"/>
+                <apex:inputField value="{!MyController.deal[fld]}" rendered="{!MyController.isEditMode}" required="{!fld.required}"/>
+            </apex:repeat>
+        </apex:pageBlockSection>
+    
+    </apex:pageBlock>
+    </apex:outputPanel>
+
+</apex:form>
+
+</apex:component>

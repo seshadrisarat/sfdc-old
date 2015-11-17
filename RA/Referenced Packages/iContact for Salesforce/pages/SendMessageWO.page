@@ -1,0 +1,420 @@
+<apex:page standardController="Campaign" extensions="iContactforSF.SendMessageControllerWO" action="{!initSendMessage}">
+	<script type='text/javascript' src='https://www.google.com/jsapi'></script>
+	<script type='text/javascript' src='http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js'></script>
+	<apex:form id="wholeForm" >
+    
+            <apex:pageBlock title="Spam Check Score" id="spamBlock" rendered="{!confirmSpam}">
+                <apex:messages style="color:red;font-weight:bold;"/>
+                <p>Click the <strong>Continue</strong> button if you wish to send your message.<br/></p>
+                <apex:pageBlockButtons id="spamButtonBlock" location="top">
+                    <apex:commandButton action="{!spamContinue}" value="Continue" id="spamContinue"  />
+                    <apex:commandButton action="{!cancel}" value="Cancel" />
+                </apex:pageBlockButtons>
+            </apex:pageBlock>
+            
+            <apex:pageBlock title="Send iContact Message" id="sendBlock" rendered="{!IF(confirmSpam == false, true, false)}">
+                <apex:pageMessages />
+                <apex:pageBlockButtons id="buttonBlock">
+                    <apex:commandButton onclick="checkMessage(); return false;" value="Send to Campaign Members" id="sendToCampaignMembers"/>
+                    <apex:commandButton action="{!cancel}" value="Cancel" id="cancelSend"/>
+                    <apex:commandButton onclick="window.open('http://salesforce.icontact.com/node/318', '_blank', 'iContact Help')" value="iContact Help" />
+                    <apex:image value="{!$Resource.iContactforSF__StatusImage}" id="statusImg0" style="visibility:hidden;margin-left:10px;"/>
+                    <apex:commandButton action="{!sendMessage}" style="visibility:hidden;" id="submitButton"/>
+                </apex:pageBlockButtons>
+                
+                <apex:pageBlockSection columns="3" title="Select Email Template" id="selectTemplate">
+                    <apex:outputPanel ><b>Campaign Name</b></apex:outputPanel>
+                    <apex:outputPanel ><a href="/{!selectedCampaign.Id}"><apex:outputText value="{!selectedCampaign.Name}"/></a></apex:outputPanel>
+                    <apex:outputPanel >&nbsp;</apex:outputPanel>
+    
+                    <apex:outputPanel ><b>Folder</b></apex:outputPanel>
+                    <apex:outputPanel >
+                        <table border="0" cellpadding="0" cellspacing="0">
+                            <tr><td >
+                                <apex:selectList value="{!folderId}" size="1" onchange="changeTemplates();" >
+                                    <apex:selectOptions value="{!TemplateFolders}"/>
+                                </apex:selectList>
+                            </td><td style="width:30px;padding-top:1px;padding-left:4px;">  
+                                <apex:actionStatus id="statusImgFolder">
+                                    <apex:facet name="start">&nbsp;<apex:image value="{!$Resource.iContactforSF__StatusImage}"/></apex:facet>
+                                    <apex:facet name="stop" />
+                                </apex:actionStatus>
+                            </td></tr>
+                        </table>
+                    </apex:outputPanel>
+                    <apex:outputPanel >&nbsp;</apex:outputPanel>
+                    
+                    <apex:outputPanel ><b>Template</b></apex:outputPanel>
+                    <apex:outputPanel >
+                        <apex:selectList id="templateOptions" value="{!templateId}" size="1" onchange="preview();" style="width:300px" >
+                            <apex:selectOptions value="{! TemplatesByFolder}"/>
+                        </apex:selectList>
+                        <apex:outputPanel id="templateOkMessage">
+                        	<apex:pageMessage rendered="{! IF(previewOn && !messageHasTags, true, false)}" 
+	                    			severity="info" strength="1"
+	                    			summary="This template has no merge fields." />
+	                        <apex:pageMessage rendered="{! IF(previewOn && messageHasTags && !messageHasUncheckedTags && !messageHasBadTags, true, false)}" 
+	                    			severity="info" strength="1"
+	                    			summary="This template's merge fields are supported." />
+	                    		<apex:pageMessage rendered="{! IF(previewOn && messageHasTags && !messageHasUncheckedTags && messageHasBadTags, true, false)}" 
+	                    			severity="Warning" strength="1" escape="false"
+	                    			summary="Unsupported merge fields detected.">
+	                    				<p>The unsupported fields have been highlighted in the preview below.</p><p>For a list of supported merge fields, please see the list of <a href='http://salesforce.icontact.com/email_merge_fields'>iContact merge fields</a>.</p>
+	                    		</apex:pageMessage>
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                    <apex:outputPanel >
+                        <table border="0" cellpadding="0" cellspacing="0">
+                            <tr><td >
+                                <apex:commandButton action="{! EditTemplate}" value="Edit" id="editButton" />
+                                <apex:commandButton action="{! createNewTemplate}" value="Create" />
+                            </td><td style="width:30px;padding-top:1px;padding-left:4px;">
+                                <apex:actionStatus id="statusImg1">
+                                    <apex:facet name="start">&nbsp;<apex:image value="{! $Resource.StatusImage}"/></apex:facet>
+                                    <apex:facet name="stop" />
+                                </apex:actionStatus>
+                            </td></tr>
+                        </table>
+                    </apex:outputPanel>
+                </apex:pageBlockSection>
+                <apex:outputPanel id="templateErrorMessage">
+							<apex:pageMessage rendered="{! messageHasUncheckedTags}" 
+                    		severity="warning" strength="2"
+                    		summary="Unfortunately, we encountered a problem when attempting to validate the merge fields for this template." 
+                    		escape="false">
+                    		<button onclick="preview();return false;">Retry Merge Field Validation</button>
+                    		If this issue persists, please contact <a href="salesforce@icontact.com">salesforce@icontact.com</a> or call (866) 331-3208.
+	                    </apex:pageMessage>
+                    </apex:outputPanel>
+                <apex:pageBlockSection columns="3" title="Sending Options" id="sendingOptions">
+                    <apex:outputPanel >
+                        <b>From Option</b>
+                    </apex:outputPanel>
+                    <apex:outputPanel >
+                        <apex:outputPanel styleClass="requiredInput" layout="block">
+                            <apex:outputPanel styleClass="requiredBlock" layout="block"/>
+                            <table border="0" cellpadding="0" cellspacing="0">
+                                <tr><td>
+                                    <apex:selectList id="SendingOptions0" value="{!selectedIcCampaignId}" size="1" onchange="selectCampaign();">
+                                        <apex:selectOptions value="{!allIcCampaigns}"/>
+                                    </apex:selectList>
+                                </td><td style="padding-left:10px;">
+                                    <apex:commandButton action="{!createNewCampaign}" onclick="document.getElementById('{!$Component.sendBlock.sendingOptions.SendingOptions0}').value = 'new';" value="Create" reRender="SendingOptions0,sendingOptions1,sendingOptions2,sendingOptions3,sendingOptions4,sendingOptions5,sendingOptions6,sendingOptions7" status="statusImg2"/>
+                                </td><td style="width:30px;padding-top:3px;padding-left:4px;">
+                                    <apex:actionStatus id="statusImg2">
+                                        <apex:facet name="start">&nbsp;<apex:image value="{!$Resource.iContactforSF__StatusImage}"/></apex:facet>
+                                        <apex:facet name="stop" />
+                                    </apex:actionStatus>
+                                </td></tr>
+                             </table>
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                    <apex:outputPanel >&nbsp;</apex:outputPanel>
+    
+                    <apex:outputPanel >
+                        <b>From Name</b>
+                    </apex:outputPanel>
+                    <apex:outputPanel id="sendingOptions1">
+                        <apex:outputPanel styleClass="requiredInput" layout="block">
+                            <apex:outputPanel styleClass="requiredBlock" layout="block"/>
+                            <apex:inputText value="{!myIcCampaign.fromName}" onkeypress="if(event.keyCode=='13'){ checkMessage(); }"/>
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                    <apex:outputPanel >&nbsp;</apex:outputPanel>
+    
+                    <apex:outputPanel >
+                        <b>From Email</b>
+                    </apex:outputPanel>
+                    <apex:outputPanel id="sendingOptions2">
+                        <apex:outputPanel styleClass="requiredInput" layout="block">
+                            <apex:outputPanel styleClass="requiredBlock" layout="block"/>
+                            <apex:inputText value="{!myIcCampaign.fromEmail}" onkeypress="if(event.keyCode=='13'){ checkMessage(); }"/>
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                    <apex:outputPanel >&nbsp;</apex:outputPanel>
+    
+                    <apex:outputPanel >
+                        <b>Address</b>
+                    </apex:outputPanel>
+                    <apex:outputPanel >&nbsp;</apex:outputPanel>
+                    <apex:outputPanel >&nbsp;</apex:outputPanel>
+    
+                    <apex:outputPanel >
+                        Street
+                    </apex:outputPanel>
+                    <apex:outputPanel id="sendingOptions3" >
+                        <apex:outputPanel styleClass="requiredInput" layout="block">
+                            <apex:outputPanel styleClass="requiredBlock" layout="block"/>
+                            <apex:inputText value="{!myIcCampaign.street}" onkeypress="if(event.keyCode=='13'){ checkMessage(); }"/>
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                    <apex:outputPanel >&nbsp;</apex:outputPanel>
+    
+                    <apex:outputPanel >
+                        City
+                    </apex:outputPanel>
+                    <apex:outputPanel id="sendingOptions4" >
+                        <apex:outputPanel styleClass="requiredInput" layout="block">
+                            <apex:outputPanel styleClass="requiredBlock" layout="block"/>
+                            <apex:inputText value="{!myIcCampaign.city}" onkeypress="if(event.keyCode=='13'){ checkMessage(); }"/>
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                    <apex:outputPanel >&nbsp;</apex:outputPanel>
+    
+                    <apex:outputPanel >
+                        State
+                    </apex:outputPanel>
+                    <apex:outputPanel id="sendingOptions5" >
+                        <apex:outputPanel styleClass="requiredInput" layout="block">
+                            <apex:outputPanel styleClass="requiredBlock" layout="block"/>
+                            <apex:inputText value="{!myIcCampaign.state}" onkeypress="if(event.keyCode=='13'){ checkMessage(); }"/>
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                    <apex:outputPanel >&nbsp;</apex:outputPanel>
+    
+                    <apex:outputPanel >
+                        Zip
+                    </apex:outputPanel>
+                    <apex:outputPanel id="sendingOptions6" >
+                        <apex:outputPanel styleClass="requiredInput" layout="block">
+                            <apex:outputPanel styleClass="requiredBlock" layout="block"/>
+                            <apex:inputText value="{!myIcCampaign.zip}" onkeypress="if(event.keyCode=='13'){ checkMessage(); }"/>
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                    <apex:outputPanel >&nbsp;</apex:outputPanel>
+    
+                    <apex:outputPanel >
+                        Country
+                    </apex:outputPanel>
+                    <apex:outputPanel id="sendingOptions7" >
+                        <apex:outputPanel styleClass="requiredInput" layout="block">
+                            <apex:outputPanel styleClass="requiredBlock" layout="block"/>
+                            <apex:inputText value="{!myIcCampaign.country}" onkeypress="if(event.keyCode=='13'){ checkMessage(); }"/>
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                    <apex:outputPanel >&nbsp;</apex:outputPanel>
+                </apex:pageBlockSection>
+                
+                <apex:pageBlockSection columns="1" title="Version" id="versionSection">
+                    <apex:outputPanel >
+                        <apex:inputCheckbox id="storeResults" value="{!storeResults}" />&nbsp;&nbsp;Store email statistics from this email to your contacts and leads
+                    </apex:outputPanel>
+                </apex:pageBlockSection>
+                
+                <apex:pageBlockSection columns="1" title="Accept Terms and Conditions" id="acceptTerms">
+                    <apex:outputPanel >
+                        <b>I certify with my initials that all recipients granted their permission to be sent this email. (Initials Required)</b>
+                    </apex:outputPanel>
+                    <apex:outputPanel styleClass="requiredInput" layout="block">
+                        <apex:outputPanel styleClass="requiredBlock" layout="block"/>
+                        <apex:inputText value="{!initials}" size="3" maxlength="3" id="initials" onkeypress="if(event.keyCode=='13'){ checkMessage(); }"/>
+                    </apex:outputPanel>
+                </apex:pageBlockSection>
+                
+                <apex:pageBlockSection columns="1" title="Scheduling" id="schedulingSection">
+                    <apex:outputPanel id="sendlaterpanel"> 
+                        <apex:selectRadio id="sendlater" value="{!sendLater}" onclick="toggleScheduler(this.value);">
+                            <apex:selectOption itemValue="false" itemLabel="Send Immediately"/>
+                            <apex:selectOption itemValue="true" itemLabel="Send Later (specify date/time below)"/>
+                        </apex:selectRadio>
+                    </apex:outputPanel>
+                    <apex:outputPanel style="visibility:hidden;" id="scheduledTime">
+                        <apex:inputField value="{!message.iContactforSF__Scheduled_Time__c}" id="scheduleInput"/>
+                    </apex:outputPanel>
+                </apex:pageBlockSection>
+                
+			<apex:pageBlockSection title="HTML Version" columns="1" id="htmlPreview" >
+				<apex:outputPanel rendered="{!hasHtml}"><b>Subject:</b>&nbsp;<apex:outputText escape="false" value="{!subjectPreview}" /></apex:outputPanel>
+				<apex:outputPanel rendered="{!hasHtml}" ><span id="htmlPreviewSpan"></span>
+					<script>
+					$(function() {
+						var $frame = $('<iframe style="width:100%; height:600px;" frameborder="0"></iframe>');
+						$('#htmlPreviewSpan').html( $frame );
+						setTimeout( function() {
+							var doc = $frame[0].contentWindow.document;
+							var $body = $('body',doc);
+							$body.html('<apex:outputText escape="true" value="{!JSENCODE(htmlPreview)}" />');
+						}, 1 );
+					});
+					</script>
+				</apex:outputPanel>
+			</apex:pageBlockSection>
+                
+			<apex:pageBlockSection title="Text Version" columns="1" id="textPreview">
+				<apex:outputPanel rendered="{!If(textPreview != '', true, false)}"><b>Subject:</b>&nbsp;<apex:outputText escape="false" value="{!subjectPreview}"/></apex:outputPanel>
+				<apex:outputPanel rendered="{!If(textPreview != '', true, false)}"><apex:outputText escape="false" value="{!textPreview}" /></apex:outputPanel>
+			</apex:pageBlockSection>
+		</apex:pageBlock>
+		
+		<apex:outputPanel id="scriptBlock">
+			<script>
+                if (!{!campaignHasMembers}) {
+                	  // different messaging for non-targeted sends.
+                    if('{!JSENCODE(targetedSendOption)}' == '') {
+                        alert("\nThe selected campaign has no members.\n\nPlease add campaign members to your campaign before attempting an iContact Send.");
+                    } else {
+                        alert("\nThis targeted send has no recipients.\n\nPlease select a targeted message and send option that has recipients.");
+                    }
+                    history.back();
+                }
+                if ({!isFirstRender}) {
+                    var msg = '';
+                    if('{!JSENCODE(targetedSendOption)}' == '') { // only check for dupes for non-targeted sends.
+                        if ({!duplicateEmails} > 0) {
+                            msg = 'Your campaign has {!duplicateEmails} member';
+                            if ({!duplicateEmails} == 1) {
+                                msg += ' with a duplicate email address';
+                            } else {
+                                msg += 's with duplicated email addresses';
+                            }
+                        }
+                    }
+                    
+                    if ({!blankEmails} > 0) {
+                        if (msg != '') { // append
+                            msg += ' and {!blankEmails} member';
+                        } else {
+                            msg = 'Your campaign has {!blankEmails} member';
+                        }
+                        if ({!blankEmails} == 1) {
+                            msg += ' without an associated email address. ';
+                        } else {
+                            msg += 's without associated email addresses. ';
+                        }
+                    } else {
+                        if (msg != '') {
+                            msg += '. ';
+                        }
+                    }
+                    
+                    if (msg != '') {
+                        if ({!campaignSize} == 0) {
+                            alert(msg + 'No email messages will be sent. Please add campaign members with valid email addresses to continue.');
+                            history.back();
+                        } else {
+                            msg += 'Only {!campaignSize} email message';
+                            if ({!campaignSize} == 1) {
+                                msg += ' will be sent.';
+                            } else {
+                                msg += 's will be sent.';
+                            }
+                            if (!confirm(msg)) history.back();
+                        }
+                    }
+                }
+                
+                function toggleScheduler(showMode) {
+                    if (showMode == 'true') {
+                        document.getElementById('{!$Component.sendBlock.schedulingSection.scheduledTime}').style.visibility = 'visible'; // hide the scheduler
+                    } else {
+                        document.getElementById('{!$Component.sendBlock.schedulingSection.scheduledTime}').style.visibility = 'hidden'; // hide the scheduler
+                        document.getElementById('{!$Component.sendBlock.schedulingSection.scheduleInput}').value = ''; // clear the scheduler
+                    }
+                }
+                
+                function send() {
+                    document.getElementById('{!$Component.sendBlock.buttonBlock.submitButton}').click(); // for some reason an actionFunction was not working under FF
+                    document.getElementById('{!$Component.sendBlock.buttonBlock.statusImg0}').style.visibility = 'visible'; // show the spinner
+                }
+                
+					function checkMessage() {
+						togglePageActions(false); //to prevent user clicking multiple times
+
+                    var templateOptions = jQuery(document.getElementById('{!$Component.sendBlock.selectTemplate.templateOptions}'));
+                    if (templateOptions.val() == 'none') {
+                        alert("Please select a template.");
+                        togglePageActions(true);
+                        return;
+                    }
+                    
+                    if ({!messageTooBig}){
+                        alert("This email template is over the 275KB limit allowed by iContact. Please choose another template.");
+                        togglePageActions(true);
+                        return;
+                    }
+                    
+                    var warningMessage = '';
+                    
+                    if ({!messageHasBadTags}) {
+                        warningMessage += "* The email template you selected contains Salesforce.com merge fields that are not supported by iContact. They are highlighted in red text in the preview section.\n";
+                    }
+                    
+                    if ({!messageHasAttachments}){
+                        warningMessage += "* The email template you selected contains a Salesforce.com attachment. Attachments are not supported by iContact at this time.\n";
+                    }
+                    
+                    var origVer = '{!originalVersion}';
+                    if ((document.getElementById('{!$Component.sendBlock.versionSection.storeResults}').checked == true && origVer == 'Lite')){
+                        warningMessage += "* You have changed the version of this message from \"Lite\" to \"Normal\". This will result in storing email statistics on your contacts and leads.\n";
+                    } else if ((document.getElementById('{!$Component.sendBlock.versionSection.storeResults}').checked == false && origVer == 'Normal')) {
+                        warningMessage += "* You have changed the version of this message from \"Normal\" to \"Lite\". This will result in not storing email statistics on your contacts and leads. You will not be able to do a Targeted Send from this message.\n"
+                    }
+            
+                    if (warningMessage != ''){
+                        warningMessage = 'Warning!\n\n' + warningMessage + "\nPress 'OK' if you are sure you wish to send this message, or 'Cancel' to change this setting.";
+                        if (confirm(warningMessage)) {
+                            send();
+                        } else {
+                        	togglePageActions(true);
+                        }
+                    } else {
+                        send();
+                    }
+                }
+
+				//disables/enables the action buttons on the page
+				function togglePageActions(enable) {
+					var sendButton = jQuery(document.getElementsByName('{!$Component.sendBlock.buttonBlock.sendToCampaignMembers}'));
+					var cancelButton = jQuery(document.getElementsByName('{!$Component.sendBlock.buttonBlock.cancelSend}'));
+					var disabledClass = 'btnDisabled';
+					if (!enable) {
+						sendButton.attr('disabled', 'disabled').addClass(disabledClass);
+						cancelButton.attr('disabled', 'disabled').addClass(disabledClass);
+					} else {
+						sendButton.removeClass(disabledClass).removeAttr('disabled');
+						cancelButton.removeClass(disabledClass).removeAttr('disabled');
+					}
+				}
+				
+				function enableEditButton() {
+					var templateOptions = jQuery(document.getElementById('{!$Component.sendBlock.selectTemplate.templateOptions}'));
+					var editButton = jQuery(document.getElementById('{!$Component.sendBlock.selectTemplate.editButton}'));
+					
+					if(templateOptions.val() == 'none') {
+						editButton.attr('disabled', 'disabled');
+						editButton.addClass('btnDisabled');
+					} else {
+						editButton.removeAttr('disabled');
+						editButton.removeClass('btnDisabled');
+					}
+				}
+
+				// This function is only called once on pageload, not on every refresh of scriptBlock because there's only one onLoad event for the page
+				function initFields() {
+					document.getElementById('{!$Component.sendBlock.buttonBlock.sendToCampaignMembers}').disabled = false;
+					document.getElementById('{!$Component.sendBlock.buttonBlock.sendToCampaignMembers}').focus();
+					
+					if ({!sendLater}) {
+						toggleScheduler('true'); // run at init, to show the scheduler after a page validation error etc.
+					}
+					initSchemaCache();
+				}
+				google.setOnLoadCallback(initFields);
+				
+				// When the template changes, hide messages and previews so that what is shown is always what is selected
+				jQuery(document.getElementById('{!$Component.sendBlock.selectTemplate.templateOptions}'))
+					.change(enableEditButton)
+					.change(function() {
+						jQuery(document.getElementById('{!$Component.sendBlock.selectTemplate.templateOkMessage}')).hide();
+						jQuery(document.getElementById('{!$Component.sendBlock.textPreview}')).hide();
+						jQuery(document.getElementById('{!$Component.sendBlock.htmlPreview}')).hide();
+					});
+				enableEditButton();
+			</script>
+		</apex:outputPanel>
+		<apex:actionFunction name="preview" action="{!preview}" reRender="templateErrorMessage,templateOkMessage,htmlPreview,textPreview,scriptBlock" status="statusImg1"/>
+		<apex:actionFunction name="selectCampaign" action="{!selectCampaign}" reRender="sendingOptions1,sendingOptions2,sendingOptions3,sendingOptions4,sendingOptions5,sendingOptions6,sendingOptions7" status="statusImg2"/>
+		<apex:actionFunction name="changeTemplates" action="{!changeTemplates}" reRender="templateErrorMessage,templateOkMessage,templateOptions,htmlPreview,textPreview,scriptBlock,htmlFrame" status="statusImgFolder"/>
+		<apex:actionFunction name="initSchemaCache" action="{!initializeCachedSchema}" reRender=""/>
+	</apex:form>
+</apex:page>

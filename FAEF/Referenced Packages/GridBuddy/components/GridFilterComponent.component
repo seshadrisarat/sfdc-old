@@ -1,0 +1,186 @@
+<!-- Copyright © 2010-2014 Primal Cause, Inc. All rights reserved. -->
+<apex:component >
+	<apex:attribute name="loadUserFilter" type="Boolean" required="true" description=""/>
+	<apex:attribute name="launchGridURL" type="String" required="true" description=""/>
+	<apex:attribute name="gridHasValidObjects" type="Boolean" required="true" description=""/>
+	<apex:attribute name="saveAndRefreshPage3" type="ApexPages.Action" required="true" description=""/>
+	<apex:attribute name="saveAndBackPage3" type="ApexPages.Action" required="true" description=""/>
+	<apex:attribute name="saveAndRefreshUDFPage" type="ApexPages.Action" required="true" description=""/>
+	<apex:attribute name="resetForm" type="ApexPages.Action" required="true" description=""/>
+	<apex:attribute name="deleteUDFFilter" type="ApexPages.Action" required="true" description=""/>
+	<apex:attribute name="lang" type="GBLite.GridLang" required="true" description=""/>
+	<apex:attribute name="wrapper" type="GBLite.GridConfigWrapper" required="true" description=""/>
+	<apex:attribute name="ownershipOptions" type="GBLite.SelectOptionWrapper" required="true" description="" />
+	<apex:attribute name="operators" type="GBLite.SelectOptionWrapper" required="true" description="" />
+	<apex:attribute name="orderByOptions" type="GBLite.SelectOptionWrapper" required="true" description="" />
+	<apex:attribute name="filterParentByChildOptions" type="GBLite.SelectOptionWrapper" required="true" description="" />
+	<apex:attribute name="errors" type="GBLite.ErrorHandler" required="false" description="" />
+
+	<apex:form styleClass="gbwForm">
+		<!-- use inline style to hide content to prevent it from flashing before page is done loading -->
+		<div class="gbwSteps" style="display:{!IF(loadUserFilter = true, 'none', 'block')};">
+			<span class="gbwOtherStep">{!lang.CreateGridLabel}&nbsp;&nbsp;&gt;&nbsp;</span>
+			<span class="gbwOtherStep">{!lang.SelectFieldsLabel}&nbsp;&nbsp;&gt;&nbsp;</span>
+			<span>{!lang.DefineFiltersLabel}</span>
+		</div>
+			
+		<apex:pageblock title="{!IF(loadUserFilter = true, '', lang.DefineFiltersTitle+wrapper.gridConfig.Name)}">
+			<apex:pageBlockButtons >
+				<!-- Save GW3 -->
+				<c:EmptyComponent rendered="{!gridHasValidObjects && NOT(loadUserFilter)}">
+					<apex:commandButton action="{!saveAndRefreshPage3}" value="{!lang.SaveBtnLbl}" styleClass="saveBtn"/>
+					<input type="button" class="btnDisabled none" value="{!lang.SaveBtnLbl}" disabled="disabled" />
+				</c:EmptyComponent>
+				<!-- Save and Back GW3 -->
+				<c:EmptyComponent rendered="{!gridHasValidObjects && NOT(loadUserFilter)}">
+					<apex:commandButton action="{!saveAndBackPage3}" value="{!lang.BackBtnLabel}" styleClass="saveBtn" />
+					<input type="button" class="btnDisabled none" value="{!lang.BackBtnLabel}" disabled="disabled" />
+				</c:EmptyComponent>
+				<!-- Save UDF -->
+				<c:EmptyComponent rendered="{!gridHasValidObjects && loadUserFilter}">
+					<apex:commandButton id="saveUDFBtn" action="{!saveAndRefreshUDFPage}" value="{!lang.SaveBtnLbl}" styleClass="saveUDFBtn none" 
+						reRender="saveErrors" status="refreshStatus" />
+					<input id="saveUDFAction" type="button" class="btn saveUDFAction" value="{!lang.SaveBtnLbl}" />	
+					<input type="button" class="btnDisabled none" value="{!lang.SaveBtnLbl}" disabled="disabled" />
+				</c:EmptyComponent>
+				<!-- Refresh -->
+				<apex:commandButton action="{!resetForm}" value="{!lang.RefreshBtnLbl}" immediate="true"/>
+				<input type="button" class="btnDisabled none" value="{!lang.RefreshBtnLbl}" disabled="disabled" />
+				<!-- Revert -->
+				<c:EmptyComponent rendered="{!NOT(wrapper.gridConfig.isLoadedFromDefaultFilterRecord) && loadUserFilter}">
+					<apex:commandButton id="revertActionHidden" action="{!deleteUDFFilter}" value="{!lang.RevertBtnLbl}" styleClass="revertActionHidden none" 
+						immediate="true" reRender="saveErrors" status="refreshStatus" />
+					<input id="revertActionBtn" type="button" class="btn revertAction" value="{!lang.RevertBtnLbl}" title="{!lang.UDFRevertBtnTitle}"/>
+					<input type="button" class="btnDisabled none" value="{!lang.RevertBtnLbl}" disabled="disabled" />
+				</c:EmptyComponent>
+				<!-- Launch Grid Link -->
+				<c:EmptyComponent rendered="{!gridHasValidObjects && NOT(loadUserFilter)}">
+					<a href="{!launchGridURL}" class="launchGridLink" target="_blank" title="{!lang.LaunchGridTitle}">{!lang.LaunchGridLabel}</a>
+				</c:EmptyComponent>
+			</apex:pageBlockButtons>
+			
+			<apex:actionStatus id="refreshStatus" onStop="refreshParentPage()"/>
+			<apex:actionStatus id="fastFilterStatus" onStop="fastFilterRefreshParentPage()"/>
+			<apex:actionFunction name="saveFastFilters" action="{!saveAndRefreshUDFPage}" reRender="fastFilterSaveErrors" status="fastFilterStatus" /> 
+			
+			<apex:outputPanel id="saveErrors" styleClass="none" rendered="{!loadUserFilter}">
+				<c:GridFilterErrorComponent errors="{!errors}" customErrorId="postSaveErrors"/>
+			</apex:outputPanel>
+			<apex:outputPanel id="fastFilterSaveErrors" styleClass="none" rendered="{!loadUserFilter}">
+				<c:GridFilterErrorComponent errors="{!errors}" customErrorId="fastFilterPostSaveErrors"/>
+			</apex:outputPanel>
+			
+			<c:EmptyComponent rendered="{!NOT(loadUserFilter)}">
+				<div class="instr">
+					<apex:outputText value="{!lang.FilterInstr1}" escape="false"/><br/>
+					<apex:outputText value="{!lang.FilterInstr2}" escape="false"/><br/>
+					<apex:outputText value="{!lang.FilterInstr3}" escape="false"/><br/>
+					<apex:outputText value="{!lang.FilterInstr4}" escape="false"/><br/>
+				</div>
+			</c:EmptyComponent>
+			
+			<div id="parentChildFields">
+				<apex:repeat value="{!wrapper.gridObjectList}" var="gridObject">
+					<apex:pageBlockSection title="{!gridObject.objectLabel}{!lang.RecordsLbl}" columns="5">
+						<c:EmptyComponent rendered="{!NOT(gridObject.supportsUserDefinedFilters)}">
+							<br/>
+							<b>{!gridObject.FilterNotAvailableMsg}</b>
+						</c:EmptyComponent>
+						<c:EmptyComponent rendered="{!gridObject.supportsUserDefinedFilters}">
+							<table class="objectFilters" width="auto" name="{!gridObject.objectName}{!IF(gridObject.isParent, '', ':' + gridObject.foreignKeyToParent)}">
+								<tr>
+									<td colspan="3" class="filterType"><span>{!lang.FilterByOwnershipLbl}</span></td>
+								</tr>
+								<tr class="nowrap {!IF(gridObject.isDetail, 'none', '')}">
+									<td colspan="3">
+										<apex:selectRadio value="{!gridObject.filterByOwnership}" rendered="{!NOT(gridObject.isDetail)}">
+											<apex:selectOptions value="{!ownershipOptions.options}" />
+										</apex:selectRadio>
+									</td>
+								</tr>
+								<tr class="{!IF(gridObject.isDetail, '', 'none')}">
+									<td colspan="3">
+										<div class="instr">
+										{!lang.NotAvailableForMasterDetail}
+										</div>
+									</td>
+								</tr>									
+								<tr>
+									<td colspan="3" class="filterType"><span>{!lang.FilterByFieldLbl}</span></td>
+								</tr>
+								<tr class="nowrap vmid">
+									<td colspan="3">
+									<apex:repeat value="{!gridObject.filters}" var="filter">
+										<c:WizardFilterComponent filterField="{!filter.filterFieldValue}"
+											filterByFields="{!gridObject.selectOptions}"
+											operator="{!filter.filterOperatorValue}"
+											operators="{!operators}"
+											filterValue="{!filter.filterValueValue}" 
+											filterNumber="{!TEXT(filter.filterNumber)}"
+											lastFilter="{!(filter.filterNumber == gridObject.filters.size)}"	
+											lang="{!lang}"/>					
+									</apex:repeat>
+									</td>
+								</tr>
+								<tr>
+									<td colspan="3">
+										<span class="addFilterCondition none" title="{!lang.AddFilterCondition}">{!lang.AddFilter}</span>
+									</td>
+								</tr>
+								<tr>
+									<td colspan="3" class="filterType"><span>{!lang.AdvFilterLbl}</span></td>
+								</tr>
+								<tr>
+									<td colspan="3">
+										<apex:inputText value="{!gridObject.advancedFilter}" styleClass="advFilter" />&nbsp;
+										<span class="clearAdvFilter" title="{!lang.ClearAdvFilter}">{!lang.ClearLink}</span>&nbsp;
+										<span class="spanLink" title="{!lang.OpenTipsInNewWin}">{!lang.FilterTipsLink}</span>
+									</td>
+								</tr>
+								<tr class="{!IF(gridObject.isParent && wrapper.hasSubQueryableChildren, '', 'none')}">
+									<td colspan="3" class="filterType"><span>{!gridObject.FilterByRelObjMsg}</span></td>
+								</tr>
+								<tr class="{!IF(gridObject.isParent && wrapper.hasSubQueryableChildren, '', 'none')}">
+									<td colspan="3">
+										<apex:repeat value="{!wrapper.filterParentByChildObjectList}" var="filterByChild" rendered="{!gridObject.isParent && wrapper.hasSubQueryableChildren}">
+											<div class="tr">
+												<apex:selectList value="{!filterByChild.filterByOption}" multiselect="false" size="1" styleClass="filterByOption">
+													<apex:selectOptions value="{!filterParentByChildOptions.options}" />
+												</apex:selectList>
+												<span>&nbsp;{!filterByChild.ResultLbl}</span>
+											</div>
+										</apex:repeat>
+									</td>
+								</tr>
+								<tr>
+									<td colspan="3" class="filterType"><span>{!lang.OrderByFieldLbl}</span></td>
+								</tr>
+								<tr class="nowrap vmid">
+									<td colspan="3">
+									<apex:repeat value="{!gridObject.sortOrderConditions}" var="sortCondition">
+										<c:WizardSortOrderComponent sortCondition="{!sortCondition}"
+											selectOptions="{!gridObject.selectOptionsForSort}"
+											orderByOptions="{!orderByOptions}"
+											lang="{!lang}"/>
+									</apex:repeat>	
+									</td>
+								</tr>
+								<tr>
+									<td colspan="3">
+										<span class="addSortCondition none" title="{!lang.AddSortCondition}">{!lang.AddSortLink}</span>
+									</td>
+								</tr>
+								<tr>
+									<td colspan="3" class="filterType"><span>{!lang.MaxRecordLimitLbl}</span></td>
+								</tr>
+								<tr class="vmid">								
+									<td colspan="3"><apex:inputText value="{!gridObject.objectLimit}" styleClass="recordLimitValue"/>{!lang.MaxRecordLbl}</td>
+								</tr>
+							</table>
+						</c:EmptyComponent>
+					</apex:pageBlockSection>
+				</apex:repeat>
+			</div>
+		</apex:pageblock>
+	</apex:form>
+</apex:component>

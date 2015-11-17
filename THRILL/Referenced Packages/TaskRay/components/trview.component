@@ -1,0 +1,834 @@
+<apex:component controller="TASKRAY.trController" allowDml="true" extensions="TASKRAY.trControllerWithoutSharing">
+<!-- Attributes -->
+<apex:attribute name="vfBoardId" description="determines which view layout to display" type="string" required="true" assignTo="{!currentBoardId}"/>
+<!-- /Attributes -->
+
+<link href="{!URLFOR($Resource.trplugins, 'jquery/custom-theme/jquery-ui-1.8.17.custom.css')}" rel="stylesheet" type="text/css" />
+<link href="{!URLFOR($Resource.trplugins, 'jquery/plugins/jquery.qtip.min.css')}" rel="stylesheet" type="text/css" />
+
+<link href="{!URLFOR($Resource.trplugins, 'jquery/plugins/jquery.noty.css')}" rel="stylesheet" type="text/css" />
+<link href="{!URLFOR($Resource.trplugins, 'jquery/plugins/noty_theme_twitter.css')}" rel="stylesheet" type="text/css" />
+
+
+<link href="{!URLFOR($Resource.trplugins, 'jquery/plugins/jquery.gantt.style.css')}" rel="stylesheet" type="text/css" />
+<link href="{!URLFOR($Resource.trsharedcss)}" rel="stylesheet" type="text/css" />
+<link href="{!URLFOR($Resource.trbootstrap, 'bootstrap/css/bootstrap.css')}" rel="stylesheet" type="text/css" />
+<link href="{!URLFOR($Resource.trplugins, 'glyphicons_old/css/glyphicons.css')}" rel="stylesheet" type="text/css" />
+<link href="{!URLFOR($Resource.trplugins, 'glyphicons_old/css/halflings.css')}" rel="stylesheet" type="text/css" />
+<link href="{!URLFOR($Resource.trplugins, 'jquery/plugins/jquery.loadmask.css')}" rel="stylesheet" type="text/css" />
+
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/jquery-1.7.1.min.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/jquery-ui-1.8.17.custom.min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/jquery.framedialog-1.1.2.min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/jquery.loadmask.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/jquery.cookie.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/jquerytemplate.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/canvasloadermin.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/jquery.qtip.min.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/jquery.noty.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/jquery.placeholder.min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/jquery.mousewheel.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/jquery.fn.gantt.custom.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/jquery-scrolltofixed.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/handlebars.1.0.0-rc3.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/jquery.timeago.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/iso8601.min.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/moment.min.js')}" />
+
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trbootstrap, 'bootstrap/js/bootstrap-collapse.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trbootstrap, 'bootstrap/js/bootstrap-modal.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trbootstrap, 'bootstrap/js/bootstrap-tooltip.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trbootstrap, 'bootstrap/js/bootstrap-popover.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trbootstrap, 'bootstrap/js/bootstrap-typeahead.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trbootstrap, 'bootstrap/js/bootstrap-tab.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'glyphicons_old/scripts/modernizr.js')}" />
+
+<apex:includeScript value="{!URLFOR($Resource.TASKRAY__trsharedjs)}" />
+
+<script type="text/javascript">
+	// Get a reference to jQuery that we can work with 
+	var $j = jQuery.noConflict();
+	var trProjectPage = '{!URLFOR($Page.trproject)}';
+	var trProjectTaskPage = '{!URLFOR($Page.trprojecttask)}';
+	var currentUserId = '{!JSENCODE(userId)}';
+	var currentBoardId = '{!JSENCODE(currentBoardId)}'; //sets the board in javascript for this component
+	var currentProjectId = '';
+	var feedbackURL = '{!URLFOR($Page.trfeedback)}';
+	var prefURL = '{!URLFOR($Page.trprefs)}';
+	var myNotificationsURL = '{!URLFOR($Page.trnotifications)}';
+	var displaySetupWizard = '{!displaySetupWizard}'; 
+	var displaySetupWizardCookieHide=$j.cookie('apex_bltrSetupWizardHide');
+	var setupWizardPage = '{!URLFOR($Page.trsetupwizard)}?setupWizardPage=1';
+	var setupWizardPage2Url = '{!URLFOR($Page.trsetupwizard)}?setupWizardPage=2';
+	var followIconURL = '{!URLFOR($Resource.trplugins, 'images/follow_icon.png')}';
+	var unFollowIconURL = '{!URLFOR($Resource.trplugins, 'images/unfollow_icon.png')}';
+	var myBoardUrl = '{!URLFOR($Page.trmyboard)}';
+	var tagInput = null; //variable for storing project task tags as an intermediary while new project tasks are being created
+	var chatterGroupIds = [] //variable for storing chatter group ids as an intermediary while a new project is created
+	var trProjectBoardPage = '{!URLFOR($Page.trprojectboard)}';
+	var projectFileIconURL = '{!URLFOR($Resource.trplugins, 'images/file.gif')}';
+	var projectFileIconArtURL = '{!URLFOR($Resource.trplugins, 'images/art.gif')}';
+	var projectFileIconPDFURL = '{!URLFOR($Resource.trplugins, 'images/pdf.gif')}';
+	var projectFileIconZIPURL = '{!URLFOR($Resource.trplugins, 'images/zip.gif')}';
+	var projectFileIconSearchURL = '{!URLFOR($Resource.trplugins, 'images/search.gif')}';
+	var taskCardFileIcon = '{!URLFOR($Resource.trplugins, 'images/paperclip.png')}';
+	var helpTextIconURL = '{!URLFOR($Resource.trplugins, 'images/xs_info.png')}';
+	var ajaxloader = '{!URLFOR($Resource.trplugins, 'images/ajax.gif')}'; 
+	var ajaxLoaderCircleURL = '{!URLFOR($Resource.trplugins, 'images/ajax-loader.gif')}'; 
+	
+	var ownerName = '';	// stores the owners name when posting back without making a change in the project-task dialog
+	
+	var columnsViewURL = '{!URLFOR($Resource.trplugins,'images/column-view.png')}';
+	var columnsViewActiveURL = '{!URLFOR($Resource.trplugins,'images/column-view-active.png')}'
+	var deadlineViewURL = '{!URLFOR($Resource.trplugins,'images/deadline-view.png')}';
+	var deadlineViewActiveURL = '{!URLFOR($Resource.trplugins,'images/deadline-view-active.png')}';
+	var groupIconImgURL = '{!URLFOR($Resource.trplugins,'images/groupicon.png')}';
+	var currentUserId = '{!$User.Id}';
+	var currentUserFullName= '{!JSENCODE(userFullname)}';
+	var smallPhotoUrl = '{!JSENCODE(smallPhotoUrl)}';
+	var viewAsUserFullName='{!JSENCODE(viewAsUserFullName)}';
+	var viewAsUserId='{!JSENCODE(viewAsUserId)}';
+	var displayUnassignedTasks='{!displayUnassignedTasks}';
+
+	//String Labels 
+	var labels={};
+	labels['TaskRay_Sidebar_DisplayPersonalTasks']= '{!JSENCODE($Label.TaskRay_Sidebar_DisplayPersonalTasks)}';
+	labels['TaskRay_Sidebar_ProjectsLabel']= '{!JSENCODE($Label.TaskRay_Sidebar_ProjectsLabel)}';
+	labels['TaskRay_Sidebar_ContributorsLabel']= '{!JSENCODE($Label.TaskRay_Sidebar_ContributorsLabel)}';
+	labels['TaskRay_Sidebar_NewButton']= '{!JSENCODE($Label.TaskRay_Sidebar_NewButton)}';
+	labels['TaskRay_Sidebar_SearchButton']= '{!JSENCODE($Label.TaskRay_Sidebar_SearchButton)}';
+	labels['TaskRay_Sidebar_ChatterGroupLabel']= '{!JSENCODE($Label.TaskRay_Sidebar_ChatterGroupLabel)}';
+	labels['TaskRay_Sidebar_ContributorsShowMoreLink']= '{!JSENCODE($Label.TaskRay_Sidebar_ContributorsShowMoreLink)}';
+	labels['TaskRay_Sidebar_ContributorsShowLessLink']= '{!JSENCODE($Label.TaskRay_Sidebar_ContributorsShowLessLink)}';
+	labels['TaskRay_Sidebar_ContributorsGroupMemberLabel']= '{!JSENCODE($Label.TaskRay_Sidebar_ContributorsGroupMemberLabel)}';
+	labels['TaskRay_Toolbar_NewTaskButton']= '{!JSENCODE($Label.TaskRay_Toolbar_NewTaskButton)}';
+	labels['TaskRay_Toolbar_QuickAddPlaceholder']= '{!JSENCODE($Label.TaskRay_Toolbar_QuickAddPlaceholder)}';
+	labels['TaskRay_Toolbar_NotificationsLink']= '{!JSENCODE($Label.TaskRay_Toolbar_NotificationsLink)}';
+	labels['TaskRay_Toolbar_PreferencesLink']= '{!JSENCODE($Label.TaskRay_Toolbar_PreferencesLink)}';
+	labels['TaskRay_Toolbar_FeedbackLink']= '{!JSENCODE($Label.TaskRay_Toolbar_FeedbackLink)}';
+	labels['TaskRay_Toolbar_ColumnView']= '{!JSENCODE($Label.TaskRay_Toolbar_ColumnView)}';
+	labels['TaskRay_Toolbar_DeadlineView']= '{!JSENCODE($Label.TaskRay_Toolbar_DeadlineView)}';
+	labels['TaskRay_Toolbar_PlanView']= '{!JSENCODE($Label.TaskRay_Toolbar_PlanView)}';
+	labels['TaskRay_DeadlineView_OverdueLabel']= '{!JSENCODE($Label.TaskRay_DeadlineView_OverdueLabel)}';
+	labels['TaskRay_DeadlineView_TodayLabel']= '{!JSENCODE($Label.TaskRay_DeadlineView_TodayLabel)}';
+	labels['TaskRay_DeadlineView_ThisWeekLabel']= '{!JSENCODE($Label.TaskRay_DeadlineView_ThisWeekLabel)}';
+	labels['TaskRay_DeadlineView_LaterLabel']= '{!JSENCODE($Label.TaskRay_DeadlineView_LaterLabel)}';
+	labels['TaskRay_PlanView_TodayButton']= '{!JSENCODE($Label.TaskRay_PlanView_TodayButton)}';
+	labels['TaskRay_PlanView_TodayButtonHover']= '{!JSENCODE($Label.TaskRay_PlanView_TodayButtonHover)}';
+	labels['TaskRay_PlanView_ZoomOutHover']= '{!JSENCODE($Label.TaskRay_PlanView_ZoomOutHover)}';
+	labels['TaskRay_PlanView_ZoomInHover']= '{!JSENCODE($Label.TaskRay_PlanView_ZoomInHover)}';
+	labels['TaskRay_PlanView_AddATaskPlaceholder']= '{!JSENCODE($Label.TaskRay_PlanView_AddATaskPlaceholder)}';
+	labels['TaskRay_Undo_DeleteTask_Text']= '{!JSENCODE($Label.TaskRay_Undo_DeleteTask_Text)}';
+	labels['TaskRay_Undo_DeleteTasks_Text']= '{!JSENCODE($Label.TaskRay_Undo_DeleteTasks_Text)}';
+	labels['TaskRay_Undo_TaskListChanged_Text']= '{!JSENCODE($Label.TaskRay_Undo_TaskListChanged_Text)}';
+	labels['TaskRay_Undo_TasksListChanged_Text']= '{!JSENCODE($Label.TaskRay_Undo_TasksListChanged_Text)}';
+	labels['TaskRay_Undo_TaskOwnerChanged_Text']= '{!JSENCODE($Label.TaskRay_Undo_TaskOwnerChanged_Text)}';
+	labels['TaskRay_Undo_TasksOwnerChanged_Text']= '{!JSENCODE($Label.TaskRay_Undo_TasksOwnerChanged_Text)}';
+	labels['TaskRay_Undo_TaskProjectChanged_Text']= '{!JSENCODE($Label.TaskRay_Undo_TaskProjectChanged_Text)}';
+	labels['TaskRay_Undo_TasksProjectChanged_Text']= '{!JSENCODE($Label.TaskRay_Undo_TasksProjectChanged_Text)}';
+	labels['TaskRay_Delete_Failure_Message']= '{!JSENCODE($Label.TaskRay_Delete_Failure_Message)}';
+	labels['TaskRay_TaskModal_NoRepeatAvailable']= '{!JSENCODE($Label.TaskRay_TaskModal_NoRepeatAvailable)}';
+	labels['TaskRay_TaskModal_NoRepeatAvailableLinkText']= '{!JSENCODE($Label.TaskRay_TaskModal_NoRepeatAvailableLinkText)}';
+	labels['TaskRay_Sidebar_ChatterCommentShowAllPrefix']= '{!JSENCODE($Label.TaskRay_Sidebar_ChatterCommentShowAllPrefix)}';
+	labels['TaskRay_Sidebar_ChatterCommentShowAllSuffix']= '{!JSENCODE($Label.TaskRay_Sidebar_ChatterCommentShowAllSuffix)}';
+	labels['TaskRay_Sidebar_ChatterLoadingLabel']= '{!JSENCODE($Label.TaskRay_Sidebar_ChatterLoadingLabel)}';
+	
+	
+	
+
+	//GlobalSettings
+	
+	var globalListColors=JSON.parse("{!JSENCODE(global_listColorsJSON)}");
+	var global_runConcurrency = {!global_runConcurrency};
+	var global_pollingInterval = {!IF(global_pollingInterval>0,global_pollingInterval, 0.00)}; 
+	global_pollingInterval=global_pollingInterval*1000;
+	
+	if(global_pollingInterval<5000){global_pollingInterval=5000;}
+	if(global_pollingInterval>99000){global_pollingInterval=99000;}
+
+	var listNameArr=JSON.parse("{!JSENCODE(listNamesJson)}");
+	var listNameMap=JSON.parse("{!JSENCODE(listNamesMapJson)}");
+
+	var defaultListObj=JSON.parse("{!JSENCODE(getDefaultList)}");
+	var defaultListIndex=defaultListObj['index'];
+	var defaultListName=defaultListObj['name'];
+
+	var lastListColId='column-'+(listNameArr.length-1)
+	var lastListColName=listNameArr[listNameArr.length-1];
+	var firstListColId='column-0';
+</script>
+
+<script type="text/javascript">
+    // Include the UserVoice JavaScript SDK (only needed once on a page)
+    UserVoice=window.UserVoice||[];(function(){var uv=document.createElement('script');uv.type='text/javascript';uv.async=true;uv.src='//widget.uservoice.com/u7F1mkEtnHSiWHnPEvWCw.js';var s=document.getElementsByTagName('script')[0];s.parentNode.insertBefore(uv,s)})();
+
+    //
+    // UserVoice Javascript SDK developer documentation:
+    // https://www.uservoice.com/o/javascript-sdk
+    //
+
+    // Set colors
+    UserVoice.push(['set', {
+      accent_color: '#448dd6',
+      trigger_color: 'white',
+      trigger_background_color: 'rgba(46, 49, 51, 0.6)'
+    }]);
+
+    // Identify the user and pass traits
+    // To enable, replace sample data with actual user traits and uncomment the line
+    UserVoice.push(['identify', {
+      email:'{!JSENCODE($User.Email)}', // User’s email address
+      name:'{!JSENCODE($User.FirstName)} {!JSENCODE($User.LastName)}' // User’s real name
+    }]);
+
+
+    // Or, use your own custom trigger:
+    UserVoice.push(['addTrigger', '#bracket-labs-feedback', { mode: 'contact' }]);
+    UserVoice.push(['autoprompt', {}]);
+</script>
+
+<!-- start Mixpanel --><script type="text/javascript">(function(f,b){if(!b.__SV){var a,e,i,g;window.mixpanel=b;b._i=[];b.init=function(a,e,d){function f(b,h){var a=h.split(".");2==a.length&&(b=b[a[0]],h=a[1]);b[h]=function(){b.push([h].concat(Array.prototype.slice.call(arguments,0)))}}var c=b;"undefined"!==typeof d?c=b[d]=[]:d="mixpanel";c.people=c.people||[];c.toString=function(b){var a="mixpanel";"mixpanel"!==d&&(a+="."+d);b||(a+=" (stub)");return a};c.people.toString=function(){return c.toString(1)+".people (stub)"};i="disable track track_pageview track_links track_forms register register_once alias unregister identify name_tag set_config people.set people.set_once people.increment people.append people.track_charge people.clear_charges people.delete_user".split(" ");
+for(g=0;g<i.length;g++)f(c,i[g]);b._i.push([a,e,d])};b.__SV=1.2;a=f.createElement("script");a.type="text/javascript";a.async=!0;a.src="//cdn.mxpnl.com/libs/mixpanel-2-latest.min.js";e=f.getElementsByTagName("script")[0];e.parentNode.insertBefore(a,e)}})(document,window.mixpanel||[]);
+mixpanel.init("ec1307c86f23aa7b8c66951a12a65303");</script><!-- end Mixpanel -->
+    <script type="text/javascript">
+      mixpanel.identify('{!JSENCODE($User.Id)}');
+      mixpanel.register({
+        "userId": '{!JSENCODE($User.Id)}',
+        "orgId": '{!JSENCODE($Organization.Id)}',
+        "orgName": '{!JSENCODE($Organization.Name)}'
+      });
+	  mixpanel.track(
+	    "Deprecated Board Load",
+	    { "Deprecated Board Name": currentBoardId }
+	  );
+    </script>
+
+<style type="text/css">
+    .ui-datepicker-calendar {display: none;}​
+    .ui-datepicker button.ui-datepicker-current { display: none; }
+    
+</style>
+
+<style type="text/css">
+	.sprite-columns-view-active{background:url({!URLFOR($Resource.trplugins,'images/view-icons-sprite_v2.png')}); background-position: 0 0 !important; width: 32px; height: 32px; } 
+	.sprite-columns-view{background:url({!URLFOR($Resource.trplugins,'images/view-icons-sprite_v2.png')}); background-position: 0 -82px; width: 32px; height: 32px; }  
+	.sprite-deadline-view-active{background:url({!URLFOR($Resource.trplugins,'images/view-icons-sprite_v2.png')}); background-position: 0 -164px !important; width: 32px; height: 32px; }  
+	.sprite-deadline-view{background:url({!URLFOR($Resource.trplugins,'images/view-icons-sprite_v2.png')}); background-position: 0 -246px; width: 32px; height: 32px; }  
+	.sprite-planning-view-active{background:url({!URLFOR($Resource.trplugins,'images/view-icons-sprite_v2.png')}); background-position: 0 -320px !important; width: 32px; height: 32px; }  
+	.sprite-planning-view{background:url({!URLFOR($Resource.trplugins,'images/view-icons-sprite_v2.png')}); background-position: 0 -384px; width: 32px; height: 32px; }  
+	/*Bootstrap addons */
+	.icon-unlock{
+		background-image: url({!URLFOR($Resource.trbootstrap,'bootstrap/img/glyphicons_204_unlock_halfling.png')});
+		background-position: 0 0;
+    	margin-top: 4px;
+	}
+	.icon-prolock{
+		background-image: url({!URLFOR($Resource.trbootstrap,'bootstrap/img/glyphicons_204_lock_halfling.png')});
+		background-position: 0 0;
+    	margin-top: 4px;
+	}
+
+
+
+	/* Planning view classes with custom gradients */
+	<apex:variable var="colInt" value="{!0}" /> 
+	<apex:repeat value="{!global_listColors}" var="listColorMap">
+		.progress-div-{!colInt}{
+			color: #ffffff;
+			text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
+			background-color: {!listColorMap['color']};
+			*background-color: {!listColorMap['gradient']};
+			background-image: -moz-linear-gradient(top, {!listColorMap['color']}, {!listColorMap['gradient']});
+			background-image: -webkit-gradient(linear, 0 0, 0 100%, from({!listColorMap['color']}), to({!listColorMap['gradient']}));
+			background-image: -webkit-linear-gradient(top, {!listColorMap['color']}, {!listColorMap['gradient']});
+			background-image: -o-linear-gradient(top, {!listColorMap['color']}, {!listColorMap['gradient']});
+			background-image: linear-gradient(to bottom, {!listColorMap['color']}, {!listColorMap['gradient']});
+			background-repeat: repeat-x;
+			filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='{!listColorMap['color']}', endColorstr='{!listColorMap['gradient']}', GradientType=0);
+			filter: progid:DXImageTransform.Microsoft.gradient(enabled=false);
+		}
+
+		.planning-view-list-{!colInt} i:before{
+			color: {!listColorMap['color']} !important;
+		}
+
+		.deadline-view-list-{!colInt} {
+			background-color: {!listColorMap['color']} !important;
+		}
+
+		<apex:variable var="colInt" value="{!colInt+1}"/>
+	</apex:repeat>
+	
+	
+	}
+</style>
+<div id="container-fluid">
+	<div class="row-fluid">
+		<div id="taskboard-header">
+		<!-- Begin Header -->
+		<div id="header" class="navbar" style="margin-bottom:0px;">
+			<div class="container-fluid">
+				<div class="row-fluid">
+					<div class="span4">
+			 			<apex:sectionHeader title="TaskRay" subtitle="{!currentBoardName}" />
+			 		</div>
+			 		<div class="span4" id="view-select-container">
+			 			<ul class="nav pointer">
+			 				<li class="nav-view-element" id="columns"><img class="view-icon-img sprite-columns-view" src="/s.gif"/><br />{!HTMLENCODE($Label.TaskRay_Toolbar_ColumnView)}</li>
+			 				<li class="nav-view-element" id="deadline"><img class="view-icon-img sprite-deadline-view" src="/s.gif"/><br />{!HTMLENCODE($Label.TaskRay_Toolbar_DeadlineView)}</li>
+			 				<li class="nav-view-element" id="planning"><img class="view-icon-img sprite-planning-view" src="/s.gif"/><br />{!HTMLENCODE($Label.TaskRay_Toolbar_PlanView)}</li>
+			 			</ul>
+			 		</div>
+					<div id="header-links-wrapper" class="span4">
+						<div class="row-fluid">
+							<div style="float:right;">
+								<!-- <div class="pointer">
+									<i class="icon-envelope"></i>&nbsp;<a id="my-notifications" rel="tooltip" data-original-title="">{!HTMLENCODE($Label.TaskRay_Toolbar_NotificationsLink)}</a>
+								</div> -->
+								<div class="pointer">
+									<i class="icon-user"></i>&nbsp;<a id="task-ray-preferences" rel="tooltip" data-original-title="">{!HTMLENCODE($Label.TaskRay_Toolbar_PreferencesLink)}</a>
+								</div>
+								<div class="pointer">
+									<i class="icon-question-sign"></i>&nbsp;<a id="bracket-labs-feedback" rel="tooltip" data-original-title="<div style='width:100%; text-align: left !important;'><i><strong>TaskRay:</strong></i> Bracket Labs would <i>love</i> to hear your feedback on the product!</div>">{!HTMLENCODE($Label.TaskRay_Toolbar_FeedbackLink)}</a>
+			        			</div>
+			        		</div>
+	        			</div>
+		        	</div>
+				</div>
+			</div>
+		</div>		
+		<div class="navbar">
+			<div class="navbar-inner-grey">
+				<div class="container-fluid">
+					<div class="row-fluid">
+			  			<div id="quick-add-text-wrapper" class="span4 form-inline control-group">	
+			  				<apex:outputPanel layout="none" rendered="{!$ObjectType.TASKRAY__Project_Task__c.createable}">
+			  				<div class="input-append"> 
+		 						<input class="nav-bar-input" id="quick-add-text" type="text" placeholder="{!HTMLENCODE($Label.TaskRay_Toolbar_QuickAddPlaceholder)}"/><a id="quick-add-text-btn" class="btn-bs btn-bs-warning" data-content="Your task title must be less than 80 Characters." rel="popover" data-original-title="Warning">{!HTMLENCODE($Label.TaskRay_Toolbar_NewTaskButton)}</a>		
+							</div>
+							</apex:outputPanel>
+						</div>	
+						<div class="span8" style="margin-left:0px;">
+							<ul id="action-bar-button-container" class="nav">
+							  <!-- <li id="action-bar-button-holding" class="action-bar-button pointer"><a href="#" style="text-shadow: none;">Holding</a></li>
+							  <li id="action-bar-button-prioritized" class="action-bar-button pointer"><a href="#" style="text-shadow: none;">Prioritized</a></li>
+							  <li id="action-bar-button-started" class="action-bar-button pointer"><a href="#" style="text-shadow: none;">Started</a></li>
+							  <li id="action-bar-button-finished" class="action-bar-button pointer"><a href="#" style="text-shadow: none;">Finished</a></li> -->
+							</ul>
+						</div>	
+						
+					</div>
+				</div>	
+			</div> 
+		</div>
+		</div>
+		<div id="header-sidebar-buttons">
+		<div id="toggle-header-container" class="floating-sidebar-container"><a id="toggle-header" href="" class="floating-sidebar-anchor glyphicons resize_full"><i class="right-sidebar-icon"></i></a></div>
+		</div>
+		<!-- End Header -->
+		<div id="inner-container">
+			<div id="viewport-container" class="span12" style="">
+				<!-- Begin TaskBoard -->
+			    <div id="view" class="" style="">
+				    <div id="columns-view" class="view">
+				    	<div id="column-container" class="">
+						    	<!-- Begin main area -->
+						    <!-- <div id="task-list-holding" class="task-column">
+						    	<div class="taskboard-column-header row-fluid"><h4>Holding</h4><span id="taskboard-header-count-holding" class="taskboard-column-header-count badge badge-info" ></span></div>
+								<div id="holding" class="sortable-list well well-no-background"></div> 
+						    </div>
+						    <div id="task-list-prioritized" class="task-column">
+						    	<div class="taskboard-column-header row-fluid"><h4>Prioritized</h4><span id="taskboard-header-count-prioritized" class="taskboard-column-header-count badge badge-info" ></span></div>
+						    	<div id="prioritized" class="sortable-list well well-no-background"></div>			    	
+						    </div>
+						    <div id="task-list-started" class="task-column">
+						    	<div class="taskboard-column-header row-fluid"><h4>Started</h4><span id="taskboard-header-count-started" class="taskboard-column-header-count badge badge-info" ></span></div> 
+						    	<div id="started" class="sortable-list well well-no-background"></div>
+						    </div>
+						    <div id="task-list-finished" class="task-column">
+						    	<div class="taskboard-column-header row-fluid"><h4>Finished</h4><span id="taskboard-header-count-finished" class="taskboard-column-header-count badge badge-info" ></span></div>
+						    	<div id="finished" class="sortable-list  well well-no-background"></div>
+						    </div> -->
+					    </div>
+					</div><!-- /column-view -->
+					<div id="deadline-view" class="view">
+						<div class="row-fluid ">
+							<div class="accordion" id="accordion2">
+								<div class="accordion-group">
+									<div id="overdue" class="accordion-heading">
+										<a class="accordion-toggle" data-toggle="collapse" href="#deadline-view-overdue">{!HTMLENCODE($Label.TaskRay_DeadlineView_OverdueLabel)}
+										<span id="deadline-header-count-overdue" class="deadline-header-count badge badge-info" ></span></a>
+									</div>
+									<div id="deadline-view-overdue" class="accordion-body collapse in container-fluid">
+										<div id="overdue-row" class="row-fluid"></div>
+									</div>
+								</div>
+								<div class="accordion-group">
+									<div id="today" class="accordion-heading">
+										<a class="accordion-toggle" data-toggle="collapse" href="#deadline-view-today">{!HTMLENCODE($Label.TaskRay_DeadlineView_TodayLabel)}
+										<span id="deadline-header-count-today" class="deadline-header-count badge badge-info" ></span></a>
+									</div>
+									<div id="deadline-view-today" class="accordion-body collapse in container-fluid">
+										<div id="today-row" class="row-fluid"></div>
+									</div>
+								</div>
+								<div class="accordion-group">	
+									<div id="week" class="accordion-heading">
+										<a class="accordion-toggle" data-toggle="collapse" href="#deadline-view-week">{!HTMLENCODE($Label.TaskRay_DeadlineView_ThisWeekLabel)}
+										<span id="deadline-header-count-week" class="deadline-header-count badge badge-info" ></span></a>
+									</div>
+									<div id="deadline-view-week" class="accordion-body collapse in container-fluid">
+											<div id="week-row" class="row-fluid"></div>
+									</div>
+								</div>
+								<div class="accordion-group">	
+									<div id="later" class="accordion-heading">
+										<a class="accordion-toggle" data-toggle="collapse" href="#deadline-view-later">{!HTMLENCODE($Label.TaskRay_DeadlineView_LaterLabel)}
+										<span id="deadline-header-count-later" class="deadline-header-count badge badge-info" ></span></a>
+									</div>
+									<div id="deadline-view-later" class="accordion-body collapse in container-fluid">
+										<div id="later-row" class="row-fluid"></div>
+									</div>
+								</div><!-- /accordion-group -->
+							</div><!-- /accordion --> 
+						</div><!-- /row-fluid -->
+					</div>    <!-- /deadline-view -->
+
+					<div id="planning-view" class="view well" style="display:none">
+						<div id="gantt-chart"></div>
+					</div>
+					<!-- End TaskBoard -->
+				</div>
+			</div>
+		</div>
+    <!-- Begin Sidebar -->
+	<div id="sidebar" class="well">
+		<ul class="nav nav-tabs" id="myTab">
+			<li class="active"><a class="pointer sidebar-view-toggle" data-target="#sidebar-list" data-toggle="tab">{!HTMLENCODE($Label.TaskRay_Sidebar_NavLabel)}</a></li>
+			<li><a data-toggle="tab" class="pointer sidebar-view-toggle" data-target="#sidebar-chatter">{!HTMLENCODE($Label.TaskRay_Sidebar_ChatterLabel)}</a></li>
+		</ul>
+		<div class="tab-content">
+		<div id="sidebar-list" class="tab-pane active sidebar-body-option">
+			<apex:form styleClass="sidebar-form" rendered="{!currentBoardId == 'my'}" > 
+	    		<ul class="nav nav-list" style="padding-right: 0px; margin-left: 0px;">
+	    			<li class="nav-header">
+		                <apex:inputCheckbox value="{!displayUnassignedTasks}" styleClass="display-unassigned-tasks"/> {!HTMLENCODE($Label.taskray__TaskRay_Sidebar_DisplayPersonalTasks)}
+	    			</li>
+	    		</ul>
+			</apex:form>				    		
+			<!-- Display list of groups that current user is a member of -->
+	        <apex:outputPanel id="groupselectchoices" rendered="{!(currentBoardId == 'group')}">
+	        <apex:form >
+	        </apex:form>
+	        	<ul class="nav nav-list"> 
+			        	<li><span id="groups-sidebar-header" class="nav-header pointer" rel="tooltip" data-original-title="<div style='width:100%; text-align: left !important;'><strong>Chatter Groups:</strong> List of Chatter Groups that I am a member of.</div>">{!HTMLENCODE($Label.TaskRay_Sidebar_ChatterGroupLabel)}</span><img id="groups-sidebar-header-info" class="infoButton pointer" src="{!URLFOR($Resource.trplugins, 'images/xs_info.png')}" title="Using Chatter Groups with Group Board" data-content="Group Board displays projects and tasks shared with the selected Chatter Group.<br /><br />The Chatter Group drop-down box allows you to select one Chatter Group at a time from the list of groups that you belong to. You must first create or join a Chatter Group to have a selection available. Once a selection is made, the Group Board will show all projects and their Tasks that have been shared with the selected group.<br /><br />To share a Project and its Tasks with a Chatter Group, you must Edit a Project and select the desired Chatter Group. You can share a Project with multiple Chatter Groups.<br /><br />The Projects sidebar will display the list of Projects that are shared with the selected Group.<br /><br />NOTE: Sharing a Project with a Chatter Group will allow the Group to see the project on Group Board but will not prevent non-group members from finding it. If you need to make a project private, discuss security with your Salesforce administrator." /></li>
+	            	<select id="chatter-group-dropdown">
+	                	
+	            	</select>
+	            </ul>
+	            <ul class="nav nav-list">
+	            	<li class="nav-header pointer"><span id="group-members-sidebar-header" rel="tooltip" data-original-title="<div style='width:100%; text-align: left !important;'>Contributors include:<br />&#149; Task owners<br />&#149; Project owner<br />&#149; Users added to Project Contributors in Project Settings<br />&#149; Users granted sharing access in organizations with security enabled. Sharing access can be managed by project owners and system administrators.</div>" style="float:left;">Contributors</span><img id="groups-sidebar-members-info" class="infoButton pointer" src="{!URLFOR($Resource.trplugins, 'images/xs_info.png')}" title="Group Board Contributors" data-content="The Contributors section of the Group Board sidebar is divided into two sections:<br /><br /> 	&#149; Group Members of the selected Chatter Group are contained in the grey box.<br />  	&#149; Non-Group Members who are Project Contributors are displayed below the grey box. <br /><br />In organizations with security enabled, Group Members will also need sharing access to view and/or edit projects shared to groups. Sharing access can be managed by project owners and system administrators." /></li>
+	            								    <div style="clear:both;"></div>
+	            								    <div id="group-members-photos" class="members-photos members-outline"></div>
+			    <div id="additional-members" class="members-photos"></div>
+	            </ul>
+	        </apex:outputPanel>
+			<apex:outputPanel rendered="{!(currentBoardId != 'group')}">
+	    		<ul id="projects-sidebar" class="nav nav-list">
+			   		<li id="project-sidebar-header" class="nav-header pointer" rel="tooltip" data-original-title='<div style="width:100%; text-align: left !important;"><strong>{!HTMLENCODE($Label.TaskRay_Sidebar_ProjectsLabel)}</strong> List of Projects containing tasks that you own or Projects you follow. Filter Projects by "clicking" them on/off below. Drag-and-drop a project onto any task card to reassign the task.</div>' style="margin-bottom:5px;">Projects <button id="search-projects" class="btn-bs btn-bs-mini pull-right">{!HTMLENCODE($Label.TaskRay_Sidebar_SearchButton)}</button>  
+			   		
+			   		<apex:outputPanel layout="none" rendered="{!$ObjectType.TASKRAY__Project__c.createable}">
+			   			<button id="new-project-btn" class="btn-bs btn-bs-mini pull-right">{!HTMLENCODE($Label.TaskRay_Sidebar_NewButton)}</button>
+			   		</apex:outputPanel>
+			   		</li>
+			   		<apex:outputPanel rendered="{!(currentBoardId == 'my')}">
+			   			
+			   			<div class="bulk-project-select-container">
+			   				<a class="bulk-project-select">{!HTMLENCODE($Label.taskray__TaskRay_Sidebar_SelectAllProjects)}</a>
+			   				/ 
+			   				<a class="bulk-project-deselect">{!HTMLENCODE($Label.taskray__TaskRay_Sidebar_DeselectAllProjects)}</a>
+			   			</div>
+			   		</apex:outputPanel>
+			    </ul>
+		    </apex:outputPanel>
+		    <apex:outputPanel rendered="{!(currentBoardId == 'group')}"> 
+	    		<ul id="projects-sidebar" class="nav nav-list">
+			   		<li id="project-sidebar-header" class="nav-header pointer" rel="tooltip" data-original-title='<div style="width:100%; text-align: left !important;"><strong>{!HTMLENCODE($Label.TaskRay_Sidebar_ProjectsLabel)}</strong> List of Projects shared to the selected Chatter Group. Filter Projects by "clicking" them on/off below. Drag-and-drop a project onto any task card to reassign the task.</div>' style="margin-bottom:5px;">Projects <button id="search-projects" class="btn-bs btn-bs-mini pull-right">{!HTMLENCODE($Label.TaskRay_Sidebar_SearchButton)}</button>  
+			   			
+			   		<apex:outputPanel layout="none" rendered="{!$ObjectType.TASKRAY__Project__c.createable}">
+			   			<button id="new-project-btn" class="btn-bs btn-bs-mini pull-right">{!HTMLENCODE($Label.TaskRay_Sidebar_NewButton)}</button>
+			   		</apex:outputPanel>
+			   		</li>
+
+		   			<div class="bulk-project-select-container">
+		   				<a class="bulk-project-select">{!HTMLENCODE($Label.taskray__TaskRay_Sidebar_SelectAllProjects)}</a>
+		   				/ 
+		   				<a class="bulk-project-deselect">{!HTMLENCODE($Label.taskray__TaskRay_Sidebar_DeselectAllProjects)}</a>
+		   			</div>
+			    </ul>    
+		    </apex:outputPanel>
+	    	<apex:outputPanel rendered="{!(currentBoardId != 'group')}">
+	        	<ul class="nav nav-list topic-widget-header pointer" id="groupmem-header">
+	            	<li id="group-members-sidebar-header" class="nav-header pointer" rel="tooltip" data-original-title="<div style='width:100%; text-align: left !important;'>Contributors include:<br />&#149; Task owners<br />&#149; Project owner<br />&#149; Users added to Project Contributors in Project Settings<br />&#149; Users granted sharing access in organizations with security enabled. Sharing access can be managed by project owners and system administrators.</div>" style="width:100%;">
+	            		{!HTMLENCODE($Label.TaskRay_Sidebar_ContributorsLabel)}<apex:outputPanel rendered="{!(currentBoardId == 'project')}"><i id="modify-contributors" class="icon-plus pull-right" title="Add Contributors"></i></apex:outputPanel>
+	        		</li>
+	        		<div id="group-members-photos" class="members-photos"></div> 
+	            </ul>
+	    	</apex:outputPanel>
+	       <apex:outputPanel rendered="{!(currentBoardId == 'project')}">
+				<!-- Display the files related to a particular project -->
+	            <ul id="project-files-list" class="nav nav-list">
+	                <li class="nav-header pointer">Project Files</li>
+	            </ul> 
+		 	</apex:outputPanel>
+		 	<span class="sidebar-bin-icon glyphicons bin pull-right" title="{!HTMLENCODE($Label.TaskRay_Sidebar_DeleteHoverText)}"><i></i></span>
+	 	</div> <!-- /sidebar list -->
+
+	 	<div id="sidebar-chatter" class="tab-pane sidebar-body-option">
+	 	<span class="sidebar-chatter-header pull-left">{!HTMLENCODE($Label.TaskRay_Sidebar_ChatterActivityHeader)}</span><span id="sidebar-chatter-refresh" class="glyphicons refresh pointer"><i></i></span>
+	 	<div class="clear"></div>
+	 		<div id="sidebar-chatter-activity-container">
+
+	 		</div>
+	 	</div>
+	 	</div>
+	</div> <!-- /sidebar -->
+	<div id="sidebar-placeholder">
+		<div id="toggle-sidebar-container" class="floating-sidebar-container"><a id="toggle-sidebar" href="" class="floating-sidebar-anchor glyphicons chevron-right"><i class="right-sidebar-icon"></i></a></div>
+		
+	</div>
+    </div><!-- /row-fluid -->
+    
+</div>  <!-- /container-fluid -->
+<div id="canvasloader-container" class="wrapper"></div>
+
+<div id="task-modal" class="modal big-modal" style="display:none;">
+   	<button class="close" data-dismiss="modal">×</button>
+  	<div id="task-modal-body" class="modal-body big-modal-body">	
+  		<iframe id="task-frame" class="modal-frame" src=""></iframe>
+	</div>
+</div>
+
+<div id="notifications-modal" class="modal big-modal" style="display:none;">
+   	<button class="close" data-dismiss="modal">×</button>
+  	<div class="modal-body big-modal-body">	
+  		<iframe id="notifications-frame" class="modal-frame" src=""></iframe>
+	</div>
+</div>
+
+<div id="preferences-modal" class="modal big-modal" style="display:none;">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+		<h3 id="prefModalLabel">My Preferences</h3>
+	</div>
+  	<div class="modal-body big-modal-body">	
+  		<iframe id="preferences-frame" class="modal-frame" src=""></iframe>
+	</div>
+</div>
+
+<div id="project-modal" class="modal big-modal" style="display:none;">
+<button id="project-modal-close" class="close" data-dismiss="modal">×</button>
+  	<div id="project-modal-body" class="modal-body big-modal-body">	
+  		<iframe id="project-frame" class="modal-frame" src=""></iframe>
+	</div>
+</div>
+
+<div id="setup-wizard-modal" class="modal big-modal" style="display:none;">
+<button id="setup-wizard-close" class="close" data-dismiss="modal">×</button>
+  	<div id="setup-wizard-modal-body" class="modal-body big-modal-body">	
+  		<iframe id="setup-wizard-frame" class="modal-frame" src=""></iframe>
+	</div>
+</div>
+
+<div id="last-list-archive-confirm" class="modal" style="display:none;">
+    <div class="modal-header"><b>Archive Tasks in Last Column</b></div>
+    <div class="modal-body">
+        This action will archive the tasks in the last column for this project.<br /><br />
+        You will still be able to access the archived tasks using the Archived checkbox as a filter in reports and dashboards.
+    </div>
+    <div class="modal-footer">
+        <a id="last-list-archive-confirm-btn" href="#" class="btn-bs btn-bs-warning">Archive</a>
+        <a onclick="$j('#last-list-archive-confirm').modal('hide');" href="#" class="btn-bs">Cancel</a>
+    </div>
+</div>
+
+<div id="search-projects-modal" class="modal small-modal" style="display:none;">
+    <button class="close" data-dismiss="modal">×</button>
+    <h4 id='search-projects-header'>Project Search</h4><img id="search-modal-info" class="pointer infoButton" src="{!URLFOR($Resource.trplugins, 'images/xs_info.png')}" title="Using Project Search" data-content="Project Search can be used to quickly locate projects and save them for future reference.<br /><br />In the Search Results, click on the Chatter plus icon to follow a project. Following a Project will also add the Project to your Projects sidebar on both My Board and Project Board. A blue checkmark indicates that you are already following that Project.<br /><br />If you are searching on the Group Board, a Group icon will be available in the Search Results.<br /><br />Click on the Group icon to share that Project to a Chatter Group on Group Board. This will add that Project to the Projects section of your sidebar on Group Board. If the Group icon is unavailable, then that Project has already been shared to the currently selected Chatter Group."/>
+    <div class="clear"></div>
+    <div id="search-projects-modal-body" class="modal-body small-modal-body">
+    	<input type="checkbox" name="searchArchivedInput" value="false" id ="searchArchivedInput"/>
+    	<label id="label-searchArchivedInput" for="searchArchivedInput">Search Archived Projects</label> 
+	    <input id="projectSearchTermInput" type="text" placeholder="Project search term..." /><button id="searchProjectsBtn">Search</button>
+	    <div style="clear:both;"></div>
+	    <ul id="projectSearchResults" class="nav nav-list"></ul>
+    </div>
+</div>
+
+<div id="addProjectToGroup-confirm" class="modal" style="display:none;">
+	<div class="modal-body">
+		
+	</div>
+	<div class="modal-footer">
+		<a id="addProjectToGroup-confirm-btn" href="#" class="btn-bs btn-bs-warning">Add Project to Group</a>
+		<a onclick="$j('#addProjectToGroup-confirm').modal('hide');" href="#" class="btn-bs">Cancel</a>
+	</div>
+</div>
+
+<div id="memberAssignment-warning" class="modal" style="display:none;">
+	<div class="modal-body">
+		
+	</div>
+	<div class="modal-footer">
+		<a onclick="$j('#memberAssignment-warning').modal('hide');" id="memberAssignment-warning-btn" href="#" class="btn-bs btn-bs-primary">OK</a>
+	</div>
+</div>
+
+<!-- jQuery Templates -->
+
+<script id="taskTemplate-deadline" type="text/x-jquery-tmpl">
+     <div class="well deadline-view-task ${task.TASKRAY__Project__c} {{if task.TASKRAY__Project__c == null}} unassigned-task {{/if}} deadline-status-${task.TASKRAY__List__c}" id="${task.Id}" style="{{if !display}}display:none;{{/if}}">
+		<div class="row-fluid">
+        	{{if task.TASKRAY__Project__r}}
+            	<div class="pull-left task-deadline-project" style="background-color:${task.TASKRAY__Project__r.TASKRAY__ProjectColor__c}"></div>
+        	{{else}}
+            	<div class="task-deadline-project" style="background-color:#ccc"></div>
+        	{{/if}}
+			{{if smallPhotoUrl != ''}}
+                <div class="pull-left"><img class="task-deadline-photo" src="${smallPhotoUrl}" alt="${smallPhotoText}" title="${smallPhotoText}"/></div>
+            {{/if}}
+			{{if task.Tags}}
+                <div class="task-deadline-tags span0 task-deadline-text"> {{each task.Tags}} <span class="label label-info">${Name}</span> {{/each}} </div>
+			{{/if}}
+				<div id="${task.Id}-name" class="span5 task-deadline-name task-deadline-text">${task.Name}</div>
+            	<div id="${task.Id}-deadline" class="span1 task-deadline-date task-deadline task-deadline-text">${deadlineString}</div>
+			{{if task.buttonType == 'Start'}}
+                  	<a {{if editable != true}}disabled="disabled"{{/if}} class="{{if editable != true}}start-finish-inactive{{/if}} start-finish start-button font-fix btn-bs btn-bs-success btn-bs-small pull-right" id="${task.Id}-start-finish" value="${task.Id}"><span class="start-finish-text" id="${task.Id}-task-start-finish-txt">Start</span></a>
+			{{/if}}
+            {{if task.buttonType == 'Finish'}}
+                    <a {{if editable != true}}disabled="disabled"{{/if}} class="{{if editable != true}}start-finish-inactive{{/if}} start-finish finish-button font-fix btn-bs btn-bs-info btn-bs-small pull-right" id="${task.Id}-start-finish" value="${task.Id}"><span class="start-finish-text" id="${task.Id}-task-start-finish-txt">Finish</span></a>
+            {{/if}}
+        </div>   
+     </div>
+</script>
+
+<script id="projectTemplate-sidebar" type="text/x-jquery-tmpl">
+<li class="project-select ${projectViewStatus}" id="${project.Id}" style="padding-left: ${hierarchyLevel*15}px" child-of-node="${project.TASKRAY__Project_Parent__c}">
+	<div class="project-collapse-container" hasChildren="${hasChildren}"></div>
+	<input type="hidden" id="${project.Id}-color" class="project-color-input" value="${project.TASKRAY__ProjectColor__c}" />
+	<input type="hidden" id="${project.Id}-text-color" class="project-text-input" value="${project.TASKRAY__TextColor__c}" />
+	<input type="hidden" id="${project.Id}-shared-chatter-groups" value="<input type="hidden" id="${project.Id}-shared-chatter-groups" value="{{if project.TASKRAY__ChatterGroupSharingIds__c != null}}${project.TASKRAY__ChatterGroupSharingIds__c}{{else}}{{/if}}" />
+	<div class="project-actions">	
+	{{if showChatterGroupAdd}}
+		<img src="${groupIconImgURL}" class="addProjectToChatterGroup" />
+	{{/if}}
+		<span class="project-action-icon project-action-icon-go pull-right glyphicons share"  title="Go to Project Board"><i class="project-action-icon"></i></span>
+		<span class="project-action-icon project-action-icon-edit pull-right glyphicons cogwheel"  title="Edit"><i class="project-action-icon"></i></span>
+	</div>	
+	<div id="${project.Id}" class="project-list-square">
+	{{if orgSharingEnabled == true && sharedWithAllInternalUsers != true}}
+		<div class="project-action-icon-editContribs-tooltip" rel="tooltip" data-original-title="<div style='width:100%; text-align: left !important;'>This project is PRIVATE. Contributors and sharing access can be managed from project settings.</div>">
+			<!-- <i class="project-action-icon project-action-icon-editContribs icon-prolock pull-left" ></i> -->
+			<div href="" class="project-lock-icon-div glyphicons lock project-lock-icon-div-${getContrastYIQ(project.TASKRAY__ProjectColor__c)}"><i class="project-lock-icon"></i></div>
+		</div>
+	{{/if}}
+	</div>
+
+	{{if orgSharingEnabled == true && sharedWithAllInternalUsers == true}}
+		<!-- Removing the unlock icon
+		<div class="project-action-icon-editContribs-tooltip" rel="tooltip" data-original-title="<div style='width:100%; text-align: left !important;'>This project is PUBLIC. Contributors and sharing access can be managed from project settings.</div>">
+			<i class="project-action-icon project-action-icon-editContribs icon-unlock pull-left" ></i>
+		</div>-->
+	{{/if}}
+	<a href="#"><span>${wbr(project.Name,9)}</span></a>
+</li>
+</script>
+
+<script id="kanbanColumnTemplate" type="text/x-jquery-tmpl">
+	<div id="task-list-${index}" class="task-column" colnum="${index}">
+		<div class="taskboard-column-header row-fluid"><h4>${listName}</h4><span id="taskboard-header-count-${index}" class="taskboard-column-header-count badge badge-info" ></span>
+		{{if archiveButton}}
+			<span class="pull-right last-column-archive glyphicons inbox_in" title="Archive tasks in this column"><i></i></span>
+		{{/if}}
+		</div>
+		<div id="column-${index}" class="kanban-column sortable-list well well-no-background"></div> 
+	</div>
+</script>
+
+<script id="newTaskCardTemplate" type="text/x-handlebars-template">
+
+	<div id="{{task.Id}}" class="task {{task.TASKRAY__Project__c}} {{#unless task.TASKRAY__Project__c}} unassigned-task {{/unless}} {{#unless editable}}sort-disabled{{/unless}} {{#if task.TASKRAY__Blocked__c}}blocked-task{{/if}}" projectId="{{task.TASKRAY__Project__c}}">
+
+		<div class="taskcard-wrapper" style="border-left: 12px solid; border-left-color:{{#if task.TASKRAY__Project__r.TASKRAY__ProjectColor__c}} {{task.TASKRAY__Project__r.TASKRAY__ProjectColor__c}}  {{else}} #cccccc {{/if}};">
+			<div class="taskcard-action-icon"><div class="glyphicons"><i></i></div></div>
+			<div class="taskcard-top-container taskcard-full-width pull-left">
+				<div class="pull-right taskcard-photo-container">
+					{{#if smallPhotoUrl}}
+	    	            <img title="{{smallPhotoText}}" alt="{{smallPhotoText}}" src="{{smallPhotoUrl}}" class="task-card-photo" />
+	    	        {{else}}
+	    	        	<img title="" alt="" src="/s.gif" class="task-card-photo" />
+	        	    {{/if}}
+				</div>
+				<div class="taskcard-top-left-container">
+					<div class="taskcard-tag-container ">
+					{{#if task.Tags}}
+					        {{#each task.Tags}}
+					        	<div class="taskcard-tag label-info label">{{Name}}</div>
+				            {{/each}}
+			        {{/if}}
+					</div>
+					<div style="clear:left;"></div>
+					<div class="taskcard-task-name-container pull-left {{#unless task.Tags}} taskcard-padding-between-name-and-tags {{/unless}}">
+						<span class="taskcard-task-name pull-left">{{{task.Name}}}</span>
+					</div>
+					<div style="clear:left;"></div>
+
+					<div class="taskcard-project-name-container pull-left">
+						{{#if task.TASKRAY__Project__c}}
+						<span class="taskcard-project-name pull-left">{{{task.TASKRAY__Project__r.Name}}}</span>
+						{{/if}}
+					</div>
+					<div style="clear:left;"></div>
+				</div>
+			</div>
+
+			<div class="clear"></div>
+
+			<div class="taskcard-bottom-toolbar-container">
+				
+
+				<div class="taskcard-deadline-container pull-left">
+					{{#if deadline}}
+						<span class="taskcard-bottom-toolbar-icon taskcard-deadline-icon glyphicons {{#if isRepeating}} repeat {{else}} clock {{/if}} pull-left"><i></i></span>
+						{{#if isOverdue}}
+							<span class="taskcard-deadline-text taskcard-deadline-text-overdue pull-left">{{deadlineReadable}}</span>
+						{{else}}
+							<span class="taskcard-deadline-text pull-left">{{deadlineReadable}}</span>
+						{{/if}}
+					{{/if}}
+				</div>
+
+				<div class="taskcard-link-container pull-left">
+					{{#if task.Feeds}}
+						<span class="taskcard-bottom-toolbar-icon taskcard-link-icon glyphicons paperclip pull-left"><i></i></span>
+					{{/if}}
+				</div>
+
+				<div class="taskcard-chatter-container pull-left">
+					{{#if taskHasChat}}
+						<span class="taskcard-bottom-toolbar-icon-big taskcard-chatter-icon glyphicons conversation pull-left"><i></i></span>
+						{{#compare feedItemCount ">" 0}}
+							<span class="new-feed-notifcations label">{{feedItemCount}}</span>
+						{{/compare}}
+					{{/if}}
+				</div>	
+
+				<div class="taskcard-next-container pull-right">
+					{{#compare task.buttonType 'Next'}}
+						<span class="{{#unless editable}}button-disabled {{/unless}}taskcard-bottom-toolbar-icon taskcard-next-icon glyphicons right_arrow" title="Advance"><i></i></span>
+					{{/compare}}
+				</div>
+
+				<div class="taskcard-cog-container pull-right">
+					<span class="taskcard-bottom-toolbar-icon taskcard-cog-icon glyphicons cogwheel pull-right" title="Open"><i></i></span>
+				</div>
+
+				<div class="taskcard-chatter-follow-toggle pull-right">
+					{{#if following}}
+						<div class="taskcard-unfollow-task pull-right"><span class="taskcard-bottom-toolbar-icon taskcard-unfollow-check glyphicons ok_2 pull-left"><i></i></span><span class="taskcard-follow-toggle taskcard-unfollow-x taskcard-bottom-toolbar-icon-small glyphicons circle_remove pull-right" title="Unfollow this Task"><i></i></span></div>
+					{{else}}
+						<span class="taskcard-follow-toggle taskcard-bottom-toolbar-icon taskcard-follow-task glyphicons circle_plus pull-right" title="Follow this Task"><i></i></span>
+					{{/if}}
+				</div>
+				<div class="clear"></div>	
+			</div>
+		</div>
+		
+		<div class="clear"></div>
+	</div>
+</script>
+
+<script id="newTaskTemplate-deadline" type="text/x-handlebars-template">
+     <div class="well deadline-view-task {{task.TASKRAY__Project__c}} {{#unless task.TASKRAY__Project__c }} unassigned-task {{/unless}} deadline-status-{{colnum}}" id="{{task.Id}}" style="{{#unless display}}display:none;{{/unless}}">
+		<div class="row-fluid">
+        	<div class="span2">
+        	{{#if task.TASKRAY__Project__r}}
+            	<div class="pull-left task-deadline-project" style="background-color:{{task.TASKRAY__Project__r.TASKRAY__ProjectColor__c}}"></div>
+        	{{else}}
+            	<div class="task-deadline-project" style="background-color:#ccc"></div>
+        	{{/if}}
+			{{#if smallPhotoUrl}}
+                <div class="pull-left"><img class="task-deadline-photo" src="{{smallPhotoUrl}}" alt="{{smallPhotoText}}" title="{{smallPhotoText}}"/></div>
+            {{/if}}
+
+			<div id="{{task.Id}}-deadline" class="task-deadline-date">
+	    		<span class="taskcard-bottom-toolbar-icon taskcard-deadline-icon glyphicons clock pull-left"><i></i></span>
+				{{#if isOverdue}}
+					<span class="taskcard-deadline-text taskcard-deadline-text-overdue pull-left">{{deadlineReadable}}</span>
+				{{else}}
+					<span class="taskcard-deadline-text pull-left">{{deadlineReadable}}</span>
+				{{/if}}
+			</div>
+			</div>
+
+			<div class="span2">
+			{{#if task.Tags}}
+                <div class="task-deadline-tags span0 task-deadline-text"> {{#each task.Tags}} <span class="label label-info">{{Name}}</span> {{/each}} </div>
+			{{/if}}
+			</div>
+				<div id="{{task.Id}}-name" class="span4 task-deadline-name task-deadline-text">{{{task.Name}}}</div>
+            	
+
+			<div class="deadline-task-list-container span4">
+				<span class="taskcard-project-name pull-left">{{task.TASKRAY__Project__r.Name}}</span>
+				
+				{{#compare task.buttonType 'Next'}}
+					<span title="Advance" class="{{#unless editable}}button-disabled {{/unless}}taskcard-bottom-toolbar-icon taskcard-next-icon glyphicons right_arrow" colnum="{{colNum}}"><i></i></span>
+				{{/compare}}
+				<span class="badge deadline-view-list-{{colNum}} pull-right">{{task.TASKRAY__List__c}}</span>
+			</div>
+        </div>   
+     </div>
+</script>
+
+<script id="sidebar-chatter-post-template" type="text/x-handlebars-template">
+	<div class="sidebar-chatter-post">
+		<div class="row-fluid">
+			<div class="span2"><img class="sidebar-chatter-user-image" src="{{smallPhotoUrl}}" alt="{{smallPhotoText}}" title="{{smallPhotoText}}" /></div>
+			<div class="span10"><a class="sidebar-chatter-record-name pointer" href="/{{ParentId}}" target="_blank">{{Parent.Name}}</a><br /><span class="sidebar-chatter-timeago timeago" title="{{CreatedDate}}"></span>
+			<div class="sidebar-chatter-post-content-span">{{Body}}
+				{{#compare Type 'ContentPost'}}
+					(<a class="sidebar-chatter-file-link pointer" href="/{{RelatedRecordId}}" target="_blank">{{ContentFileName}}</a>)
+				{{/compare}}
+			</div></div>
+		</div>
+		<div class="clear"></div>
+			
+			<div class="sidebar-chatter-comments-container">
+			{{#if FeedComments}}
+				{{#each FeedComments.records}}
+					<div class="row-fluid sidebar-chatter-comment">
+						<div class="span1"></div>
+						<div class="span11">
+							<div class="row-fluid">
+								<div class="span2"><img class="sidebar-chatter-user-image-comment" src="{{smallPhotoUrl}}" alt="{{smallPhotoText}}" title="{{smallPhotoText}}" /></div>
+								<div class="span10">
+									<!-- <span class="sidebar-chatter-comment-author">{{smallPhotoText}}</span> -->
+									<a class="sidebar-chatter-record-name pointer" href="/{{CreatedById}}" target="_blank">{{smallPhotoText}}</a>
+									<br />
+									<span class="sidebar-chatter-timeago timeago" title="{{CreatedDate}}"></span>
+									<br />
+									<div class="sidebar-chatter-comment-content">{{CommentBody}}</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				{{/each}}
+			{{/if}}
+			</div>
+	</div>
+	<div class="clear"></div>
+	<hr />
+</script>
+
+</apex:component>

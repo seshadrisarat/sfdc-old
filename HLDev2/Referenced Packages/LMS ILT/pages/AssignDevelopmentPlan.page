@@ -1,0 +1,182 @@
+<apex:page standardController="lmsilt__Development_Plan__c" extensions="lmsilt.AssignDevPlanExt">
+
+	<apex:sectionHeader title="{!$ObjectType.lmsilt__Development_Plan__c.label}" subtitle="{!lmsilt__Development_Plan__c.Name}"/>
+	<apex:includeScript value="{!URLFOR($Resource.lmsilt__jquery, 'jquery-1.7.min.js')}" />
+
+	<script>
+		jQuery.noConflict();
+				var intSelectedItemsCount = 0;
+	</script>
+	<apex:pageMessages id="pageMessages" />
+	<!-- Enhanced Action Status -->
+	<apex:actionStatus id="loadStatus">
+	<apex:facet name="start">
+		<c:EnhancedActionStatus BackColor="#efefef" borderColor="#336699"
+						borderSize="1" height="50px" width="120px" ImageUrl="/img/loading.gif"
+						Message="{!$Label.Loading}" messageStyle="color:darkred;font-size:11pt;font-weight:bold;"/>
+	</apex:facet>
+	</apex:actionStatus>
+
+	<apex:form id="DevPlanForm">
+
+	<apex:actionfunction name="doSearchGroup" action="{!resetGroups}" status="loadStatus" rerender="Groups,pageMessages" />
+	<apex:actionfunction name="doSearchTrainee" action="{!resetTraineeSearch}" status="loadStatus" rerender="pageblocksectionId,pageControls1,pageControls2,pageMessages" />
+
+	<apex:pageBlock title="{!$ObjectType.lmsilt__Development_Plan__c.label}">
+		<apex:pageBlockSection columns="1" showHeader="false">
+			<apex:outputField value="{!lmsilt__Development_Plan__c.Name}" />
+		</apex:pageBlockSection>
+
+	</apex:pageBlock>
+
+	<apex:outputPanel id="outputpanelId">
+		<apex:pageBlock title="{!$Label.ilt_AssignPages_Select_Trainees}" id="pageblockId">
+			<apex:pageBlockSection columns="1" showHeader="false">
+				<apex:pageBlockSectionItem >
+					<apex:outputPanel >
+						<apex:inputText id="SearchKeyWord" onkeypress="return handleKeyPressForTrainee(event)" value="{!searchKeyWord}" maxlength="200" style="width:400px;font-size:8pt"></apex:inputText>
+						&nbsp;&nbsp;
+						<apex:commandButton value="{!$Label.Search}" status="loadStatus" id="goSearch" action="{!resetTraineeSearch}" rerender="pageblocksectionId,pageControls1,pageControls2" />
+					</apex:outputPanel>
+				</apex:pageBlockSectionItem>
+			</apex:pageBlockSection>
+
+			<apex:outputPanel style="float:right;font-size:85%;"  rendered="{!IF((hasPrevious)||(hasNext), true, false)}" id="pageControls1">
+				<apex:commandLink action="{!previous}" rendered="{!hasPrevious}" status="busyStatus" onclick="if(intSelectedItemsCount!=0) return confirm('{!$Label.lost_selection}');"><apex:outputText value="{!$Label.Pagination_Previous}"/></apex:commandLink>
+				<apex:outputText rendered="{!NOT(hasPrevious)}"><apex:outputText value="{!$Label.Pagination_Previous}"/></apex:outputText>
+				&nbsp;|&nbsp;
+				<apex:commandLink action="{!next}" rendered="{!hasNext}" status="busyStatus" onclick="if(intSelectedItemsCount!=0) return confirm('{!$Label.lost_selection}');"><apex:outputText value="{!$Label.Pagination_Next}"/></apex:commandLink>
+				<apex:outputText rendered="{!NOT(hasNext)}"><apex:outputText value="{!$Label.Pagination_Next}"/></apex:outputText>
+			</apex:outputPanel>
+
+		<apex:pageBlockSection title="{!$Label.ilt_AssignPages_Trainees}" id="pageblocksectionId" showHeader="true" collapsible="false" columns="1">
+			<apex:pageBlockTable id="pageblocktableid" value="{!Trainees}" var="trainee">
+				<apex:column >
+					<apex:facet name="header" >
+						<apex:outputPanel >
+							<apex:inputCheckbox id="selectall" selected="false" onclick="jQuery('[id*=pageblocktableid]').find(':checkbox').attr('checked', jQuery(this).prop('checked')==true?'checked':false)"/>
+							{!$Label.Select_All}
+						</apex:outputPanel>
+					</apex:facet>
+					<apex:inputCheckbox value="{!trainee.selected}" id="selected" onclick="javascript:CheckUncheckFacet(this)"/>
+				</apex:column>
+				<apex:column >
+					<apex:facet name="header">
+						<apex:commandLink value="Name" action="{!doSort}" rerender="outputpanelId" status="loadStatus">
+							<apex:image url="/img/sort_desc_arrow.gif" rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(sortOrderSaved=='desc',true,false),IF(sortField=='Name',true,false))}" width="21" height="12" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}"/>
+							<apex:image url="/img/sort_asc_arrow.gif"  rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(sortOrderSaved!='desc',true,false),IF(sortField=='Name',true,false))}" width="21" height="12" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}"/>
+							<apex:image url="/s.gif" rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(sortOrderSaved=='desc',true,false),IF(sortField=='Name',true,false))}" styleClass="sortDesc" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}" />
+							<apex:image url="/s.gif"  rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(sortOrderSaved!='desc',true,false),IF(sortField=='Name',true,false))}" styleClass="sortAsc" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}" />
+							<apex:param name="sortField" value="Name" assignTo="{!sortField}"/>
+						</apex:commandLink>
+					</apex:facet>
+
+					<apex:OutputLink target="_blank" value="/{!trainee.User.Id}">{!trainee.User.Name}</apex:OutputLink>
+				</apex:column>
+				<apex:column >
+			<apex:facet name="header">
+				<apex:commandLink value="{!$Label.Role}" action="{!doSort}" rerender="outputpanelId" status="loadStatus">
+						<apex:image url="/img/sort_desc_arrow.gif" rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(sortOrderSaved=='desc',true,false),IF(sortField=='UserRole.Name',true,false))}" width="21" height="12" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}"/>
+						<apex:image url="/img/sort_asc_arrow.gif"  rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(sortOrderSaved!='desc',true,false),IF(sortField=='UserRole.Name',true,false))}" width="21" height="12" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}"/>
+						<apex:image url="/s.gif" rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(sortOrderSaved=='desc',true,false),IF(sortField=='UserRole.Name',true,false))}" styleClass="sortDesc" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}" />
+						<apex:image url="/s.gif"  rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(sortOrderSaved!='desc',true,false),IF(sortField=='UserRole.Name',true,false))}" styleClass="sortAsc" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}" />
+						<apex:param name="sortField" value="UserRole.Name" assignTo="{!sortField}"/>
+				</apex:commandLink>
+			</apex:facet>
+					<apex:outputText value="{!trainee.User.UserRole.Name}" />
+				</apex:column>
+			</apex:pageBlockTable>
+		</apex:pageBlockSection>
+
+		<apex:outputPanel style="float:right;font-size:85%;"  rendered="{!IF((hasPrevious)||(hasNext), true, false)}" id="pageControls2">
+			<apex:commandLink action="{!previous}" rendered="{!hasPrevious}" status="busyStatus" onclick="if(intSelectedItemsCount!=0) return confirm('{!$Label.lost_selection}');"><apex:outputText value="{!$Label.Pagination_Previous}"/></apex:commandLink>
+			<apex:outputText rendered="{!NOT(hasPrevious)}"><apex:outputText value="{!$Label.Pagination_Previous}"/></apex:outputText>
+			&nbsp;|&nbsp;
+			<apex:commandLink action="{!next}" rendered="{!hasNext}" status="busyStatus" onclick="if(intSelectedItemsCount!=0) return confirm('{!$Label.lost_selection}');"><apex:outputText value="{!$Label.Pagination_Next}"/></apex:commandLink>
+			<apex:outputText rendered="{!NOT(hasNext)}"><apex:outputText value="{!$Label.Pagination_Next}"/></apex:outputText>
+		</apex:outputPanel><br/>
+
+		<apex:pageBlockSection title="{!$Label.ilt_AssignPages_Groups}" id="pageblocksectionId2" showHeader="true" collapsible="false" columns="1" rendered="{!AND(NOT(isPortalUser),NOT(SFDCDemo))}">
+			<apex:pageBlockSectionItem >
+				<apex:outputPanel >
+					<apex:inputText id="SearchKeyWordGroup" value="{!groupSearchText}" onkeypress="return handleKeyPressForGroup(event)" maxlength="200" style="width:400px;font-size:8pt"></apex:inputText>
+					<apex:commandButton value="{!$Label.Search}" action="{!resetGroups}" rerender="Groups,pageMessages" status="loadStatus"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+
+			<apex:outputPanel id="Groups">
+			<apex:pageBlockTable id="page2blocktableid2" value="{!LMSGroups}" var="Group">
+				<apex:column width="10%">
+					<apex:facet name="header" >
+						<apex:outputPanel >
+							<apex:inputCheckbox id="selectall2" selected="false" onclick="jQuery('[id*=page2blocktableid2]').find(':checkbox').attr('checked', jQuery(this).prop('checked')==true?'checked':false)" />
+							{!$Label.Select_All}
+						</apex:outputPanel>
+					</apex:facet>
+					<apex:inputCheckbox value="{!Group.selected}" id="selected2" onclick="javascript:CheckUncheckFacet(this)"/>
+				</apex:column>
+				<apex:column >
+					<apex:facet name="header">
+						<apex:commandLink value="Name" action="{!doGroupSort}" rerender="page2blocktableid2" status="loadStatus">
+							<apex:image url="/img/sort_desc_arrow.gif" rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(groupAsc,true,false))}" width="21" height="12" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}"/>
+							<apex:image url="/img/sort_asc_arrow.gif"  rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(NOT(groupAsc),true,false))}" width="21" height="12" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}"/>
+							<apex:image url="/s.gif" rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(groupAsc,true,false))}" styleClass="sortDesc" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}" />
+							<apex:image url="/s.gif"  rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(NOT(groupAsc),true,false))}" styleClass="sortAsc" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}" />
+						</apex:commandLink>
+					</apex:facet>
+
+					<apex:OutputLink target="_blank" value="/setup/own/groupdetail.jsp?id={!Group.GroupId}&setupid=PublicGroups">{!Group.GroupName}</apex:OutputLink>
+				</apex:column>
+			</apex:pageBlockTable>
+			</apex:outputPanel>
+		</apex:pageBlockSection>
+		</apex:pageBlock>
+
+		<apex:pageBlock title="{!$Label.Assignment_Information}">
+			<apex:pageBlockButtons location="bottom">
+				<apex:commandButton id="AssignBtn" value="{!$Label.ilt_AssignPages_Assign_Button}" action="{!assign}" onclick="disableAssignBtn()" oncomplete="enableAssignBtn();" reRender="pageMessages"/>
+				<apex:commandButton id="CancelBtn" value="{!$Label.Cancel}" action="{!cancel}"/>
+			</apex:pageBlockButtons>
+		</apex:pageBlock>
+
+	</apex:outputPanel>
+
+	</apex:form>
+	<script  type="text/javascript">
+
+	jQuery.noConflict();
+
+	function disableAssignBtn() {
+		if (jQuery('input[id*=AssignBtn]').prop("disabled")) {
+			return false;
+		}
+		else {
+			jQuery('input[id*= AssignBtn],[id*=CancelBtn]').attr('class', 'btnDisabled').prop('disabled', 'disabled');
+			return true;
+		}
+	}
+
+	function enableAssignBtn() {
+		jQuery('input[id*=AssignBtn],[id*=CancelBtn]').attr('class', 'btn').removeProp('disabled');
+	}
+
+
+	function handleKeyPressForGroup(e){
+		var eventInstance = window.event ? event : e;
+		var keyCode = eventInstance.charCode ? eventInstance.charCode : eventInstance.keyCode;
+		if (keyCode == 13) {
+			doSearchGroup();
+			return false;
+		}
+	}
+
+	function handleKeyPressForTrainee(e){
+		var eventInstance = window.event ? event : e;
+		var keyCode = eventInstance.charCode ? eventInstance.charCode : eventInstance.keyCode;
+		if (keyCode == 13) {
+			doSearchTrainee();
+			return false;
+		}
+	}
+	</script>
+</apex:page>

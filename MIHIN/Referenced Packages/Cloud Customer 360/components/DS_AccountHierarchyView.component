@@ -1,0 +1,547 @@
+<!--
+	This component displays a java script account hierarchy for a selected account.
+	The selected account can be set with the attribute 'accountId'.   
+	
+	Example:
+	    <c:AccountHierarchy accountPage="/apex/Custom_Account"
+	        accountId="{!$CurrentPage.parameters.id}"/>
+	-->
+<apex:component controller="DSE.DS_AccountHierarchyController">
+	<script src="/soap/ajax/15.0/connection.js" type="text/javascript"></script>
+	<script src="/soap/ajax/15.0/apex.js" type="text/javascript"></script>
+	<apex:attribute name="accountPage" description="The base url to the account detail page."
+		type="String" required="false" assignTo="{!cAccountPage}"/>
+	<apex:attribute name="accountId" description="The account id to be selected."
+		type="String" required="true" assignTo="{!cAccountId}"/>
+	<apex:attribute name="hierarchyType" description="The hierarchy type to be shown."
+		type="String" required="true" assignTo="{!hierarchyType}"/>
+	<apex:includeScript value="{!URLFOR($Resource.DSE__DS_Hierarchy_Resources, 'jquery.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.DSE__DS_Hierarchy_Resources, 'jquery.jstree.js')}" />
+	<!-- Required to block div during loading  -->
+	<apex:includeScript value="{!URLFOR($Resource.DSE__DS_Hierarchy_Resources, 'jquery.blockUI.js')}" />
+	<apex:actionStatus id="searchingStatus" onstart="blockDiv('#searchForNodeDiv');" onstop="unblockDiv('#searchForNodeDiv');"/>
+	<apex:actionStatus id="pagingNodeStatus" onstart="blockDiv('#jsTreeDivMain');" onstop="unblockDiv('#jsTreeDivMain');"/>
+	<apex:actionStatus id="changingHierarchyTypeStatus" onstart="blockDiv('#jsTreeDivMain');" onstop="unblockDiv('#jsTreeDivMain');"/>
+	<script type="text/javascript">
+		function setFocusOnLoad() {}
+		
+		function blockDiv(divId) {
+		    $(divId).block({ 
+		        message: '<br/><apex:image value="/img/loading.gif"/> {!$Label.DS_Message_LoadingResults}', 
+		        css: { height: '50px', width: '20%' },
+		        overlayCSS: { opacity: .2 }
+		    });
+		}
+		
+		function unblockDiv(divId) {
+		    $(divId).unblock();
+		}
+		
+	</script>
+	<!-- Start Account Hierarchy Component -->
+	<!-- BUG - This outer pageBlock and pageBlockSection is needed for the inner pageBlockSections
+		in "Show Details" section to be collapsible -->
+	<apex:pageBlock >
+		<apex:pageBlockSection title="{!$Label.dse__DS_Hierarchy_Scout_Hierarchy_Tree}" collapsible="true" columns="1" showHeader="true">
+			<!-- BUG END -->
+			<!-- Used for all pages; never rerendered. -->
+			<script type="text/javascript">
+				var g_treeObj;
+				var g_centralNodeId = '{!centralNodeId}'; // id of node at center of view.
+				var g_centralNodeBeanId = '{!beanId}'; // bean id of node at center of view.
+				var g_parentNodeObj;
+				
+				var g_parentTitle;
+				var loadedChildrenJSON;
+				   var editHierarchyPageUrlPrefix = '';
+				    
+				
+				      var hierarchyString = '{!hierarchyAsJson}';
+				      
+				      var loadTree=false;
+				      // This function gets called only once when page is first loaded.
+				      $(function() {
+				          loadHierarchy('{!hierarchyAsJson}');
+				          loadTree=true;
+				      });
+						
+				// jstree configuration - START		        
+				      $.jstree._themes = '{!URLFOR($Resource.DS_Hierarchy_Resources, '')}/themes/';
+				      
+				          function JsTreeConfig() {
+				              this.core = { animation: 100, open_parents: true };
+				              this.json_data = { data: '' };
+				              this.plugins = [ "json_data", "types", "themes", "contextmenu", "crrm", "ui" ];
+				              this.ui = {
+				                          "select_limit" : 1
+				                          ,"selected_parent_close" : "false"
+				                          //,"initially_select" : [ "{!cAccountId}" ]
+				              };
+				              this.types = { "types" : {
+				                               "rootNode" : {
+				                                  "icon" : {
+				                                      "image" : "{!URLFOR($Resource.DS_Hierarchy_Resources, '/img/base.gif')}"
+				                                  }
+				                               },
+				                               "parentNode" : {
+				                                  "icon" : {
+				                                      "image" : "{!URLFOR($Resource.DS_Hierarchy_Resources, '/img/folder.gif')}"
+				                                  }
+				                               },
+				                               "childNode" : {
+				                                  "icon" : {
+				                                      "image" : "{!URLFOR($Resource.DS_Hierarchy_Resources, '/img/nolines_minus.gif')}"
+				                                  }
+				                               },
+				                               "selectedNode" : {
+				                                  "icon" : {
+				                                      "image" : "{!URLFOR($Resource.DS_Hierarchy_Resources, '/img/star.gif')}"
+				                                  }
+				                               }
+				                            }
+				              };
+				              
+				              this.contextmenu = {
+				              "select_node" : false,
+				              "items" : function ($node) {
+				                            return {
+				                                      "loadNodesPrev" : {
+				                                          "label"             : "{!$Label.DS_Hierarchy_Scout_See_Prev_Children}",
+				                                          "action"            : function (obj) {
+				                                                                    loadPrevNodes(obj);
+				                                          },
+				                                          "_disabled"         : $node.attr('beanid')!= g_centralNodeBeanId
+				                                      },
+				                                      "loadNodesNext" : {
+				                                          "label"             : "{!$Label.DS_Hierarchy_Scout_See_Next_Children}",
+				                                          "action"            : function (obj) {
+				                                                                    loadNextNodes(obj);
+				                                          },
+				                                          "_disabled"         : $node.attr('beanid')!= g_centralNodeBeanId
+				                                      },
+				                                      "goToPage" : {
+				                                          "label"             : "{!$Label.DS_Hierarchy_Scout_Goto_Page}",
+				                                          "action"            : function (obj) {
+				  						                                         var goToPage=prompt("{!$Label.DS_Hierarchy_Scout_Goto_Page_Prompt}","1");
+				  						                                         if(goToPage) {
+				                                                                   	loadPage(obj, goToPage);
+				                                                                   }
+				                                          },
+				                                          "_disabled"         : $node.attr('beanid')!= g_centralNodeBeanId
+				                                      },
+				                                      "orderAsc" : {
+				                                          "label"             : "{!$Label.DS_Hierarchy_Scout_Order_Ascending}",
+				                                          "separator_before"  : true,
+				                                          "action"            : function (obj) {
+				                                                                    orderNodes(obj, true);
+				                                          },
+				                                          "_disabled"         : $node.attr('beanid')!= g_centralNodeBeanId
+				                                      },
+				                                      "orderDesc" : {
+				                                          "label"             : "{!$Label.DS_Hierarchy_Scout_Order_Descending}",
+				                                          "action"            : function (obj) {
+				                                                                    orderNodes(obj, false);
+				                                          },
+				                                          "_disabled"         : $node.attr('beanid')!= g_centralNodeBeanId
+				                                      },
+				                                      "goToAccountPage" : {
+				                                          "label"             : "{!$Label.DS_Hierarchy_Scout_Goto_Account_Page}",
+				                                          "separator_before"  : true,
+				                                          "action"            : function (obj) {
+				                                          						  redirectToUrl(getNodeHref(obj));
+				                                          },
+				                                          "_disabled"         : !getNodeHref($node) || getNodeHref($node)=='#'
+				                                      }
+				                              };
+				              }
+				      };
+				          }
+				// jstree configuration - END		        
+				
+				
+				      function loadHierarchy(hierarchyString) {
+				          var config = new JsTreeConfig();
+				          var hierarchyData = [];
+				          hierarchyData.push(JSON.parse(hierarchyString));
+				          config.json_data.data = hierarchyData;
+				          $("#dsTree").jstree(config).bind("select_node.jstree", function (e, data) {
+				          	goToSelectedNode(e, data);
+				          }).bind("loaded.jstree", function (event, data) {
+				      			// you get two params - event & data - check the core docs for a detailed description
+				      		$(this).jstree("open_all");
+				      		g_treeObj = $.jstree._reference("#dsTree");
+				     			//$.jstree._reference("#dsTree").select_node('#' + g_centralNodeId);
+				          }); 
+				      }
+				
+				      function getNodeHref(obj) {
+				          //var href = data.rslt.obj.children("a").attr("href");
+				          //var href = obj.children("a").attr("href");
+					//alert('href='+href);
+				          return obj.children("a").attr("href");
+				      }
+				          
+				      function getSelectedNode() {
+				          var selectedNodes = $("#dsTree").jstree("get_selected");
+				          if (selectedNodes.length < 1) {
+				              return;
+				          }
+				          return $(selectedNodes[0]);
+				      }
+				
+				function loadPrevNodes(obj) {
+					g_parentNodeObj = obj;
+					loadPrevChildrenJson(obj.attr('beanid'));
+				}
+				
+				function loadNextNodes(obj) {
+					g_parentNodeObj = obj;
+					loadNextChildrenJson(obj.attr('beanid'));
+				}
+				
+				function loadPage(obj, pageNum) {
+					g_parentNodeObj = obj;
+					loadChildrenPageJson(obj.attr('beanid'), pageNum);
+				}
+				
+				      function orderNodes(obj, sortAsc) {
+				      	g_parentNodeObj = obj;
+				      	if(sortAsc) {
+				      		orderChildNodes(obj.attr('beanid'), 'ASC');
+				      	} else {
+				      		orderChildNodes(obj.attr('beanid'), 'DESC');
+				      	}
+				      }
+				
+				/*        
+				      function getCentralNode() {
+				     		return $.jstree._reference("#dsTree")._get_node('#'+g_centralNodeId);
+				      }
+				*/
+				      
+				      function redirectToEditPage() {
+				       	redirectToUrl(editHierarchyPageUrlPrefix + '{!cAccountId}');
+				}
+				
+				      function redirectToUrl(url) {
+				      	if(!url || url=='#') return;
+				      	try {
+				      		window.top.location.href = url;
+				      		return;
+				      	} catch(err) {
+				      		try {
+				      			window.location.assign(url);
+				      			return;
+				      		} catch (err) {
+				      			//alert('unable to redirect to ' + url);
+				      		}
+				      	}
+				}
+				          
+				      function addNodeToTree(treeObj, parentNodeObj, nodeJSON){
+				          treeObj.clean_node(parentNodeObj);
+				          treeObj.create_node(parentNodeObj, "inside", nodeJSON);
+				 	        return;
+				     	}
+				
+				      function goToSelectedNode(e, data) {
+					var clickedObj = data.rslt.obj;
+					var clickedObjId = clickedObj.attr('id');
+					if(g_centralNodeId!=clickedObjId) {
+				           g_centralNodeId = clickedObjId
+				  	        g_centralNodeBeanId = clickedObj.attr('beanid');
+				      	    rerenderTree(g_centralNodeBeanId);
+				      	}
+				      }
+				
+				function removeChildren() {
+					if(g_treeObj) {
+						var childArray = g_treeObj._get_children(g_parentNodeObj);
+						if(childArray) {
+							for(i=0; i<childArray.length; i++) {
+								g_treeObj.remove(childArray[i]);
+							}
+						}
+					}
+				}
+				
+				function openLoadedNode() {
+					if(g_parentNodeObj && g_parentNodeObj.length) {
+				         		g_treeObj.open_node(g_parentNodeObj, false, false);
+				         	}
+				}
+					
+			</script>
+			<apex:outputPanel id="loadChildrenNode">
+				<script type="text/javascript">
+					removeChildren();
+					   loadedChildrenJSON = '{!loadedChildrenJSON}';
+					   g_parentTitle = '{!pagedLabelEscaped}';
+					   
+					   if(loadedChildrenJSON) {
+					    var loadedChildrenObj = eval('(' + loadedChildrenJSON + ')');
+					    //alert('loadedChildrenObj='+loadedChildrenObj);
+					if(loadedChildrenJSON && loadedChildrenObj) {
+					for(i=(loadedChildrenObj.children.length)-1; i>=0; i--) {
+					//alert('inside loop...'+i+'-'+loadedChildrenObj.children[i]);
+					if(loadedChildrenObj.children[i]) {
+					  					addNodeToTree(g_treeObj, g_parentNodeObj, loadedChildrenObj.children[i]);
+					  					//alert('adding child ' + i);
+					   			}
+					   		}
+					   		//alert('all children added.');
+					    }
+					    g_treeObj.rename_node(g_parentNodeObj, g_parentTitle);
+					    //alert('tree renamed');
+					}
+					
+					openLoadedNode();
+				</script>
+			</apex:outputPanel>
+			<apex:form >
+				<apex:actionFunction name="rerenderTree" action="{!dummyCall}" rerender="dsTreeRerenderPanel" status="pagingNodeStatus">
+					<apex:param name="beanId" assignTo="{!beanId}" value="" />
+				</apex:actionFunction>
+				<apex:actionFunction name="loadPrevChildrenJson" action="{!loadPrevChildrenJson}" rerender="loadChildrenNode" status="pagingNodeStatus">
+					<apex:param name="selectedId" assignTo="{!selectedId}" value="" />
+				</apex:actionFunction>
+				<apex:actionFunction name="loadNextChildrenJson" action="{!loadNextChildrenJson}" rerender="loadChildrenNode" status="pagingNodeStatus">
+					<apex:param name="selectedId" assignTo="{!selectedId}" value="" />
+				</apex:actionFunction>
+				<apex:actionFunction name="loadChildrenPageJson" action="{!loadChildrenPageJson}" rerender="loadChildrenNode" status="pagingNodeStatus">
+					<apex:param name="selectedId" assignTo="{!selectedId}" value="" />
+					<apex:param name="goToPage" assignTo="{!goToPageNumber}" value="" />
+				</apex:actionFunction>
+				<apex:actionFunction name="orderChildNodes" action="{!loadChildrenJson}" rerender="loadChildrenNode" status="pagingNodeStatus">
+					<apex:param name="selectedId" assignTo="{!selectedId}" value="" />
+					<apex:param name="sortOrder" assignTo="{!sortOrder}" value="" />
+				</apex:actionFunction>
+			</apex:form>
+			<apex:outputPanel id="dummyRerenderPanel" rendered="false"/>
+			<apex:outputPanel id="mainHierarchyPanel" rendered="{!isEnabled}">
+				<apex:form >
+					<div id="jsTreeDivMain">
+						<apex:pageBlock >
+							<apex:pageBlockButtons >
+								<apex:commandButton value="{!$Label.dse__DS_ButtonEditHierarchy}" onclick="redirectToEditPage();" rendered="{!showEditButton}" rerender="dummyRerenderPanel"/>
+								<!--    <apex:commandButton value="{!$Label.DS_ButtonRefresh}" action="{!refreshTree}" oncomplete="window.top.location.href='/{!cAccountId}';"/> -->  
+							</apex:pageBlockButtons>
+							<apex:pageMessages id="errorMessages"/>
+							<apex:selectList id="hierarchyTypeSelectList" onchange="selectHierarchyType(this.options[this.selectedIndex].value);" multiselect="false" size="1">
+								<apex:selectOptions value="{!hierarchyTypeOptions}"/>
+							</apex:selectList>
+							<p/>
+								<apex:outputPanel id="hierarchyHeaderInfo">
+									<apex:outputText id="ultimateParentNameLabel" value="{!ultimateParentNameLabelValue}"></apex:outputText>
+									<br/>
+									<apex:outputText value="{!hierarchyStatusLabelValue}"></apex:outputText>
+								</apex:outputPanel>
+								<br/>
+								<br/>
+								<apex:actionFunction name="selectHierarchyType" action="{!selectHierarchyType}" reRender="mainHierarchyPanel" status="changingHierarchyTypeStatus">
+									<apex:param name="hierarchyType" assignTo="{!hierarchyType}" value="" />
+								</apex:actionFunction>
+							<div id="dsTree"></div>
+							<br/>
+							<apex:outputPanel id="dsTreeRerenderPanel">
+								{!$Label.DS_Hierarchy_Scout_Total_Accounts} {!nodeCountLabel}
+								<script type="text/javascript">
+									editHierarchyPageUrlPrefix = '{!hierarchyEditPageUrlNoId}';
+									//alert('treeLoaded='+loadTree);
+									//alert('hJson=' + '{!hierarchyAsJson}');
+									   if(loadTree) loadHierarchy('{!hierarchyAsJson}');
+									   //alert('treeLoadedpost='+loadTree);
+									g_centralNodeBeanId = '{!beanId}';
+								</script>
+							</apex:outputPanel>
+							<br/><br/>
+							
+							<!-- Inclusion of Show Details -->
+							<div id="detailsDivision" >
+								<apex:outputPanel id="hierarchyDetails" >
+									<apex:outputText value="{!$Label.dse__DS_Hierarchy_Scout_Show_Details}" style="float:left;"/>
+									<br/>
+									<apex:selectList value="{!detailsCategory}" multiselect="false" size="1" style="float:left;" >
+										<apex:selectOptions value="{!detailCategoryOptions}" />
+										<apex:actionSupport event="onchange" action="{!changeDetailsCategory}" reRender="hierarchyDetailsTables" status="showStatus" />
+									</apex:selectList>
+									<br/>
+									<apex:actionStatus id="showStatus" onstart="blockDiv('#detailsDivision');" onstop="unblockDiv('#detailsDivision');"/>
+									<br/>
+									<apex:outputPanel id="hierarchyDetailsTables" >
+									
+										<!-- Detail Records - Contact, Lead, Opportunity --> 
+										<apex:pageBlockSection title="{!detailsPage.detailType}" collapsible="false" columns="1" rendered="{!detailsPage.showing}" />
+										<apex:OutputPanel layout="block" style="overflow:auto;width:100%" id="DetailsPanel" rendered="{!detailsPage.showing}" >
+											<apex:pageBlockTable value="{!detailsPage.records}" var="r_details" >
+												<apex:repeat value="{!detailsPage.FSFields}" var="detail_fieldset_field" >
+													<apex:column value="{!r_details[detail_fieldset_field]}" />
+												</apex:repeat>
+												<br/><br/>
+											</apex:pageBlockTable>
+										</apex:OutputPanel>
+										<br/>
+										<apex:outputPanel id="detailsButtonPannel" rendered="{!detailsPage.showing}" >
+											<apex:outputPanel style="float:left">
+												<apex:commandButton action="{!detailsPage.goFirst}" disabled="{!NOT(detailsPage.showPrevButton)}" value="<< First" reRender="DetailsPanel,detailsButtonPannel" status="updateStatusDetails"/>
+												<apex:commandButton action="{!detailsPage.goPrevious}" disabled="{!NOT(detailsPage.showPrevButton)}" value=" < Previous" reRender="DetailsPanel,detailsButtonPannel" status="updateStatusDetails"/>
+												<apex:commandButton action="{!detailsPage.goNext}" disabled="{!NOT(detailsPage.showNextButton)}" value=" Next >" reRender="DetailsPanel,detailsButtonPannel" status="updateStatusDetails"/>
+												&nbsp;&nbsp;
+												<apex:outputText ><b>{!detailsPage.paginationText}</b>&nbsp;&nbsp;{!detailsPage.detailRangeText}</apex:outputText>
+												&nbsp;&nbsp;
+											</apex:outputPanel>
+											<apex:outputPanel style="float:left">
+												<apex:actionStatus id="updateStatusDetails" onstart="blockDiv('#detailsDivision');" onstop="unblockDiv('#detailsDivision');"/>
+											</apex:outputPanel>
+											<apex:outputPanel style="float:right" rendered="{!NOT(detailsPage.hideTable)}">
+												<b>{!detailsPage.footerDetailPrefix}</b>
+												&nbsp;
+												<apex:outputText >{!detailsPage.footerDetailText}</apex:outputText>
+												&nbsp;&nbsp;
+											</apex:outputPanel>
+											<apex:outputPanel style="float:right" rendered="{!detailsPage.hideTable}">
+												<b>{!detailsPage.errorMsg}</b>
+											</apex:outputPanel>
+										</apex:outputPanel>
+										<br/>   
+										<br/>
+										<br/>
+										<br/>
+									</apex:outputPanel>
+								</apex:outputPanel>
+							</div>
+						</apex:pageBlock>
+					</div>
+				</apex:form>
+			</apex:outputPanel>
+			<!-- BUG - This outer pageBlock and pageBlockSection is needed for the inner pageBlockSections
+				in "Show Details" section to be collapsible -->
+		</apex:pageBlockSection>
+	</apex:pageBlock>
+	<!-- BUG END -->
+	<apex:outputPanel rendered="{!NOT(isEnabled)}">
+		<apex:pageMessage severity="info" summary="{!$Label.dse__DS_Hierarchy_Scout_Disabled}"/>
+	</apex:outputPanel>
+	<!-- </apex:pageBlock> -->
+	<!-- End Account Hierarchy Component -->
+	<!-- Start - Lazy Loading Search Panel for Account Hierarchy -->
+	<div id="searchForNodeDiv">
+		<apex:outputPanel id="searchForNodePanel">
+			<apex:form id="searchForNodeForm">
+				<apex:pageBlock id="searchForNodeFormInputBlock" title="{!$Label.dse__DS_TextAccountScout_PB2_Title}">
+					<apex:pageBlockButtons >
+						<apex:commandButton id="searchButton" value="{!$Label.dse__DS_ButtonSearchInPool}" action="{!runSearch}" immediate="false" oncomplete="selectedRecordId='';" rerender="searchResultPanel, searchPageMessages" status="searchingStatus"/>
+					</apex:pageBlockButtons>
+					<apex:pageMessages id="searchPageMessages" />
+					<!-- shows search result count -->
+					<!-- Search Criteria Inputs -->
+					<apex:pageBlockSection id="searchInputSection" title="{!$Label.dse__DS_TextAccountScout_PB2_Section1}" collapsible="true" columns="1" rendered="{!NOT(lib.isPersonAccount)}">
+						<apex:pageBlockSectionItem id="modeItem">
+							<apex:outputLabel value="{!$Label.dse__DS_Label_SearchMode} " />
+							<apex:selectList value="{!searchHierarchyMode}" multiselect="false" size="1">
+								<apex:selectOptions value="{!searchHierarchyModes}" />
+							</apex:selectList>
+						</apex:pageBlockSectionItem>
+						<apex:repeat value="{!$ObjectType.Account.FieldSets.DSE__DS_HierarchyEditSearchFields}" var="f">
+							<apex:inputField value="{!lib.acct[f]}" required="{!AND(f.required,lib.showRequiredFields)}"/>
+						</apex:repeat>
+					</apex:pageBlockSection>
+				</apex:pageBlock>
+			</apex:form>
+		</apex:outputPanel>
+	</div>
+	<div id="searchResultPanelDiv">
+		<apex:form >
+			<apex:outputPanel id="searchResultPanel">
+				<div class="searchResultPanelDivClass">
+					<apex:pageBlock title="Search Results" rendered="{!showResults}">
+						<apex:pageBlockButtons >
+							<input class="btn" type="button" value="{!$Label.DS_Hierarchy_Scout_Button_View_Node}" id="viewNodeBtnAccount" onclick="rerenderTree(selectedRecordId);" rerender="dsTreeRerenderPanel"/>
+						</apex:pageBlockButtons>
+						<apex:pageBlockSection title="{!accountHType}" collapsible="true" columns="1" rendered="{!showAccountResults}">
+							<div class="searchResultPanelDivClassTemp">
+								<apex:pageBlockTable value="{!accountResults}" var="r">
+									<apex:column >
+										<!-- Radio Button -->
+										<apex:outputPanel rendered="{!r.selected}">
+											<input type="radio" name="recordSelector" onclick="setSelectedResultBeanId('{!r.bean.ID}');toggleCloneButton('{!JSENCODE(accountHType)}');"></input>
+										</apex:outputPanel>
+										<apex:outputPanel rendered="{!NOT(r.selected)}">
+											<span style="padding-left:10px"/>
+										</apex:outputPanel>
+									</apex:column>
+									<!-- For debugging only   
+										<apex:column headerValue="Bean Id">
+										    <apex:outputText value="{!r.bean.ID}"></apex:outputText>
+										</apex:column>
+										-->
+									<apex:repeat value="{!$ObjectType.DSE__DS_Bean__c.FieldSets.DSE__DS_HierarchyEditSearchResultsFields}" var="f" >
+										<apex:column value="{!r.bean[f]}" />
+									</apex:repeat>
+									<apex:column headerValue="{!$Label.dse__DS_TextAccountScout_TableColumnDetaillink}" >
+										<apex:outputLink value="#" onclick="window.open('{!r.dmLink}','beansWindow','width=1000,height=800,scrollbars=yes,resizable=yes')" >
+											{!$Label.dse__DS_TextAccountScout_TableColumnDetaillink}
+										</apex:outputLink>
+									</apex:column>
+									<apex:column headerValue="{!$Label.dse__DS_TextAccountScout_TableColumnScore}" rendered="{!lib.showScore}">
+										<apex:outputText value="{!r.totalScore}"/>
+									</apex:column>
+								</apex:pageBlockTable>
+							</div>
+						</apex:pageBlockSection>
+						<apex:repeat value="{!otherResults}" var="or" >
+							<apex:pageBlockSection title="{!or.hType}" columns="1" collapsible="true">
+								<div class="searchResultPanelDivClassTemp">
+									<apex:pageBlockTable value="{!or.results}" var="r">
+										<apex:column >
+											<!-- Radio Button -->
+											<apex:outputPanel rendered="{!r.selected}">
+												<input type="radio" name="recordSelector" onclick="setSelectedResultBeanId('{!r.bean.ID}');toggleCloneButton('{!JSENCODE(or.hType)}');"></input>
+											</apex:outputPanel>
+											<apex:outputPanel rendered="{!NOT(r.selected)}">
+												<span style="padding-left:10px"/>
+											</apex:outputPanel>
+										</apex:column>
+										<!-- For debugging only   
+											<apex:column headerValue="Bean Id">
+											    <apex:outputText value="{!r.bean.ID}"></apex:outputText>
+											</apex:column>
+											-->
+										<apex:repeat value="{!$ObjectType.DSE__DS_Bean__c.FieldSets.DSE__DS_HierarchyEditSearchResultsFields}" var="f" >
+											<apex:column value="{!r.bean[f]}" />
+										</apex:repeat>
+										<apex:column headerValue="{!$Label.dse__DS_TextAccountScout_TableColumnDetaillink}" >
+											<apex:outputLink value="#" onclick="window.open('{!r.dmLink}','beansWindow','width=1000,height=800,scrollbars=yes,resizable=yes')" >
+												{!$Label.dse__DS_TextAccountScout_TableColumnDetaillink}
+											</apex:outputLink>
+										</apex:column>
+										<apex:column headerValue="{!$Label.dse__DS_TextAccountScout_TableColumnScore}" rendered="{!lib.showScore}">
+											<apex:outputText value="{!r.totalScore}"/>
+										</apex:column>
+									</apex:pageBlockTable>
+								</div>
+							</apex:pageBlockSection>
+						</apex:repeat>
+					</apex:pageBlock>
+				</div>
+			</apex:outputPanel>
+		</apex:form>
+	</div>
+	<script type="text/javascript">
+		var selectedRecordId = '';
+		function setSelectedResultBeanId(beanId) {
+		    selectedRecordId = beanId;
+		}
+		
+		function toggleCloneButton(hType) {
+		    if(hType=='{!JSENCODE(hierarchyType)}') {
+		        // Disable the clone button; cloning bean of same hierarchy type is not allowed.
+		        $("input.dsCloneButtonClass").removeClass("btn").addClass("btnDisabled").attr("disabled", "disabled");
+		    } else {
+		        // Enable the clone button
+		        $("input.dsCloneButtonClass").addClass("btn").removeClass("btnDisabled").removeAttr("disabled");
+		    }
+		}
+	</script>
+	<!-- End - Lazy Loading Search Panel for Account Hierarchy -->
+</apex:component>

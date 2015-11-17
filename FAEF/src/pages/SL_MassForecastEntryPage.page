@@ -1,0 +1,156 @@
+<apex:page controller="SL_MassForecastEntryPage" showheader="true" sidebar="true">
+
+<link href="{!URLFOR($Resource.SL_MassForecastEntryPage, 'SL_MassForecastEntryPage/style/sl-bootstrap.css')}" rel="stylesheet" />
+<script src="{!URLFOR($Resource.SL_MassForecastEntryPage, 'SL_MassForecastEntryPage/script/jquery.min.js')}" type="text/javascript"></script>
+<script src="{!URLFOR($Resource.SL_MassForecastEntryPage, 'SL_MassForecastEntryPage/script/sl-bootstrap.js')}" type="text/javascript"></script>
+<script src="{!URLFOR($Resource.SL_MassForecastEntryPage, 'SL_MassForecastEntryPage/script/moment.js')}" type="text/javascript"></script>
+<script src="{!URLFOR($Resource.SL_MassForecastEntryPage, 'SL_MassForecastEntryPage/script/main.js')}" type="text/javascript"></script>
+
+<style>
+    .borderless th
+    {
+        border-top: none!important;
+    }
+</style>
+
+    <apex:form id="formId">
+        
+       <c:SL_ActionStatusLoading />
+        
+        <div id ="sl">
+            <div id= "sl-body">
+                <div class="row">
+                    <div class="col-xs-offset-5 col-sm-offset-5 col-md-offset-5 col-lg-offset-5"> 
+                        <apex:commandbutton styleClass="btn btn-success" value="Save" action="{!Save3}"></apex:commandbutton>&nbsp;&nbsp; 
+                        <apex:commandbutton styleClass="btn btn-danger" value="Cancel" action="{!Cancel}"></apex:commandbutton> 
+                    </div>
+                </div>
+                <br></br>
+                    
+                <apex:outputpanel id="MainTable">
+                    
+                    <table class="table table-bordered table-striped" id="mainTable" style="width:100%; border:none!important">
+                        <thead>
+                            <tr style="border:none!important">
+                                <th class="col-xs-1 col-sm-1 col-md-1 col-lg-1"  style="border:none!important;text-align:center;vertical-align:middle;"> <!-- style="width:100px" -->
+                                    Forecast Year:
+                                </th>
+                                <th  style="border:none!important;" id="yearSelectWrapper"> 
+                                    <apex:selectList styleClass="form-control" id="fcYearId" value="{!strSelectedForecastYear}"  onChange="saveChanges(this.value);" size="1" style="width:100px;"> <!-- onchange="showSelectedYearForecasts(this.value);" -->
+                                            <apex:selectOptions value="{!ForeCastYears}"/>
+                                    </apex:selectList>
+                                </th>
+                                <th  colspan="3" class="col-xs-4 col-sm-4 col-md-4 col-lg-4"  style="border:none!important"></th>
+                                <th colspan="2"  style="border:none!important">
+                                    Annual<br></br><span id="annualId">0.0</span>
+                                </th>
+                                <th  style="border:none!important">
+                                    Q1<br></br><span id="Q1Id">0.0</span>
+                                </th >
+                                <th  style="border:none!important">
+                                    Q2<br></br><span id="Q2Id">0.0</span>
+                                </th>
+                                <th style="border:none!important">
+                                    Q3<br></br><span id="Q3Id">0.0</span>
+                                </th>
+                                <th style="border:none!important">
+                                    Q4<br></br><span id="Q4Id">0.0</span>
+                                </th>
+                            </tr>
+                            <tr >
+                                <apex:repeat value="{!lstHeaders}" var="headerName">
+                                    <th><apex:outputText value="{!headerName}" escape="false"/></th>
+                                </apex:repeat>
+                            </tr>
+                        </thead>
+                       
+                        <tbody> 
+                            <apex:repeat value="{!lstForeCastWrapper}" var="forecast">
+                                <tr id="{!forecast.objSchedule.Id}">  
+                                    <td style="width:10%;">
+                                        <apex:outputLink target="_blank" value="/{!forecast.objSchedule.Account_Lookup__r}">{!forecast.objSchedule.Account_Lookup__r.Name}</apex:outputLink>
+                                        <span class="currentChanged"><apex:inputHidden value="{!forecast.currentChanged}"/></span>
+                                        <span class="futureChanged"><apex:inputHidden value="{!forecast.futureChanged}"/></span>
+                                    </td>
+                                    <td style="width:25%;"><apex:outputLink target="_blank" value="/{!forecast.objSchedule.Id}">{!forecast.objSchedule.Name}</apex:outputLink></td>
+                                    <td class="amountCell" style="width:5%;">
+                                        <span>${!forecast.objSchedule.Total_Equipment_Cost__c}</span>
+                                        <input type="hidden" value="{!forecast.objSchedule.Payment_Amount__c}" id="{!forecast.objSchedule.Id}_PA"/>
+                                    </td>
+                                    <td class="expirationCell" style="width:5%;">
+                                        <apex:outputText value="{0,date,MM/dd/yyyy}"><apex:param value="{!forecast.objSchedule.Base_Lease_Termination_Date__c}"/></apex:outputText>
+                                    </td>
+                                    <td id="forecastOutcome" style="width:9%;">{!forecast.objSchedule.Forecast_Outcome__c}</td>
+                                    
+                                    <td style="width:3%;" class="percentCell"> 
+                                        <apex:inputtext styleClass="form-control" value="{!forecast.decPercent}" onkeyPress="return isNumberKey(event);" onfocus="this.oldvalue = this.value;" onchange="markChange(this);markFutureChange(this);updatePercent(this); this.oldvalue = this.value;"/>
+                                    </td>
+                                    <td style="width:3%;" class="cycleCell"> 
+                                        <apex:inputtext styleClass="form-control" value="{!forecast.objSchedule.Forecast_Renewal_Cycles__c}" onkeyPress="return isNumberKey(event);" onfocus="this.oldvalue = this.value;" onchange="markChange(this); markFutureChange(this);updateCycle(this, 'onchange'); this.oldvalue = this.value;"/>
+                                        <input type="hidden" value="{!forecast.objSchedule.Forecast_Renewal_Cycles__c}" id="{!forecast.objSchedule.Id}_RC"/>
+                                        <input type="hidden" value="{!forecast.objSchedule.Extension_Period_Months__c}" id="{!forecast.objSchedule.Id}_EM"/>
+                                        <input type="hidden" value="{!forecast.objSchedule.Payment_Frequency__c}" id="{!forecast.objSchedule.Id}_PF"/>
+                                        <apex:inputHidden value="{!forecast.strEndForecast}"/>
+                                    </td>
+                                    <td id="{!forecast.objSchedule.Id}_Q1" style="width:10%">
+                                        <apex:outputtext title="Q1"  value="{0, number, Currency}">
+                                            <apex:param value="{!forecast.decQ1}"/>
+                                        </apex:outputtext>
+                                        <div style="display:flex;" class="quarterInputWrapper">
+                                            <apex:inputtext title="Q1" styleClass="form-control" value="{!forecast.decQ1}"  onkeyPress="return isNumberKey(event);" onkeyup="markChange(this); setAnnualForeCast();"/>
+                                            <input type="hidden"/>
+                                            <input type="hidden" value = "{!forecast.decQ1}"/>
+                                         </div>
+                                    </td>
+                                     <td id="{!forecast.objSchedule.Id}_Q2" style="width:10%">
+                                            <apex:outputtext title="Q2" value="{0, number, Currency}" >
+                                                <apex:param value="{!forecast.decQ2}"/>
+                                            </apex:outputtext>
+                                        <div style="display:flex;" class="quarterInputWrapper">
+                                            <apex:inputtext title="Q2" styleClass="form-control" value="{!forecast.decQ2}"  onkeyPress="return isNumberKey(event);" onkeyup="markChange(this); setAnnualForeCast();"/>
+                                            <input type="hidden"/>
+                                            <input type="hidden" value = "{!forecast.decQ2}"/>
+                                        </div>
+                                    </td>
+                                    <td id="{!forecast.objSchedule.Id}_Q3" style="width:10%">
+                                        <apex:outputtext title="Q3" value="{0, number, Currency}" >
+                                            <apex:param value="{!forecast.decQ3}"/>
+                                        </apex:outputtext>
+                                        <div style="display:flex;" class="quarterInputWrapper">
+                                            <apex:inputtext title="Q3"  styleClass="form-control"  value="{!forecast.decQ3}"  onkeyPress="return isNumberKey(event);" onkeyup="markChange(this); setAnnualForeCast();"/>
+                                            <input type="hidden" />
+                                            <input type="hidden" value = "{!forecast.decQ3}"/>
+                                        </div>
+                                    </td>
+                                    <td id="{!forecast.objSchedule.Id}_Q4" style="width:10%">
+                                        <apex:outputtext title="Q4" value="{0, number, Currency}" > 
+                                            <apex:param value="{!forecast.decQ4}"/>
+                                        </apex:outputtext>
+                                        <div style="display:flex;" class="quarterInputWrapper"> 
+                                            <apex:inputtext title="Q4" styleClass="form-control" value="{!forecast.decQ4}"  onkeyPress="return isNumberKey(event);" onkeyup="markChange(this); setAnnualForeCast();"/>  
+                                            <input type="hidden"/>
+                                            <input type="hidden" value = "{!forecast.decQ4}"/>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </apex:repeat>
+                        </tbody>
+                        
+                    </table>
+                    
+                    <script type="text/javascript">
+                        setQuarterForecast({!strSelectedForecastYear});
+                        setAnnualForeCast();
+                    </script>
+                    
+                </apex:outputpanel>
+                <apex:actionfunction action="{!showSelectedYearForecasts}" name="showSelectedYearForecasts" status="loading" rerender="MainTable"> 
+                    <apex:param name="fcYear" value="" assignTo="{!strSelectedForecastYear}"/>
+                    <apex:param name="saveOrCancel" value="" assignTo="{!saveChanges}"/>
+                </apex:actionfunction>
+            </div>
+        </div>
+        
+
+    </apex:form>
+</apex:page>

@@ -1,0 +1,215 @@
+<apex:component controller="SL_TransactionDocumentController" allowDML="true">
+	<apex:attribute name="repGenId" description="This parameter is used to fetch the transaction document records" type="String" required="true" assignTo="{!ReportGeneratorId}"/>
+	<base target = "_blank"/>
+	<head>
+	<style>
+		.transactionDocumentTable  
+        {
+            border:2;
+            font-size: 12px;
+            table-layout:fixed;
+        }
+        .transactionDocumentTable td
+        {
+            border-width: 1px 1px 1px 1px;
+            border-style:solid;
+            border-color:#D2DAE0;
+            font-size:0.9em;
+            font-weight:bold;
+            background: none repeat scroll 0% 0% #F2F3F3;
+            padding:5px 5px 5px;
+        }
+        .transactionDocumentTable td span
+        {
+        	cursor: pointer;
+        }
+        .transactionDocumentTable .transactionDocumentRecords td
+        {
+            font-weight:normal;
+            background:white;
+            font-size:1.0em;
+            border-width: 0px 0px 0px;
+            padding-top:4px;
+        }
+        .transactionDocumentTable .transactionDocumentRecords td span
+        {
+        	cursor:auto;
+        }
+        .transactionDocumentRecords a
+        {
+        	color:blue;
+        }
+		.actionStatusDiv
+		{
+			margin-top:2px;
+			text-align:center;
+			font-weight:bold;
+			font-size:1.0em;
+			background: none repeat scroll 0% 0% #F2F3F3;
+		}
+        #pageNumberDiv
+        {
+        	float:right;        	
+        }
+        .actionStatusTable .paginatorSymbols
+        {
+        	text-decoration:none;
+        	font-size:1.8em;
+        	font-weight: bold;
+        }
+	</style>
+	</head>
+	<apex:form id="formId">
+		<apex:actionFunction name="fetchRecordsAF" action="{!fetchRecords}" rerender="showRecords,showMessage" status="loading"/>
+		<apex:actionFunction name="goToPageAF" action="{!goToPage}" rerender="paginationPanel,showRecords" status="processing"/>
+		<apex:actionFunction name="sortRecordsAF" action="{!sortRecords}" rerender="showRecords" status="processing">
+			<apex:param value="" name="sortExpression" assignTo="{!strSortExpresion}"/>
+		</apex:actionFunction>
+		<apex:actionFunction name="approveOrRejectRecordAF" action="{!approveOrRejectRecord}" rerender="paginationPanel,showRecords" status="processing">
+			<apex:param value="" name="statusValue" assignTo="{!strStatus}"/>
+		</apex:actionFunction>
+		<center>
+			<apex:commandButton value="Approve All" onclick="return approveOrRejectRecord('Approved');"  style="margin-bottom:12px;"/>
+			<apex:commandButton value="Reject All" onclick="return approveOrRejectRecord('Rejected');"  style="margin-bottom:12px;"/>
+		</center>
+		<apex:outputPanel id="showRecords">
+			<table width = "100%" cellspacing="0" cellpadding="0" class="transactionDocumentTable">
+				<tr>
+					<apex:repeat value="{!lstHeaders}" var="headerName">
+						<td width="{!IF(mapFieldLabelToFieldAPI[headerName] == 'Additional_Recipients__c','20%','7%')}">
+							<span onclick="return sortRecords(this);" >
+								{!headerName}
+							</span>
+							<span>
+								{!IF(strSortExpresion == mapFieldLabelToFieldAPI[headerName],IF(strSortDirection == 'ASC','▼','▲'),'')}
+							</span>
+						</td>
+					</apex:repeat>
+				</tr>
+				<tbody class="transactionDocumentRecords">
+					<apex:repeat value="{!lstTransactionDocument}" var="objTransactionDocument" rendered="{!lstTransactionDocument.size > 0}">
+						<tr>
+							<apex:repeat value="{!lstFieldAPINames}" var="fieldAPIName">
+								<td>
+									<apex:outputPanel rendered="{!IF(fieldAPIName == 'Document_Link__c',true,false)}">
+										<a href="{!objTransactionDocument[fieldAPIName]}">Amazon S3</a>
+									</apex:outputPanel>
+									<apex:outputPanel rendered="{!IF(fieldAPIName == 'CreatedDate',true,false)}">
+										<apex:outputText value="{0,date,MMM dd yyyy}">
+											<apex:param value="{!objTransactionDocument[fieldAPIName]}" name="createdDate"/>
+										</apex:outputText>									
+									</apex:outputPanel>	
+									<apex:inputField value="{!objTransactionDocument[fieldAPIName]}" onChange="updateTransactionRecord('{!objTransactionDocument['Id']}',this);" rendered="{!IF(fieldAPIName == 'Status__c',true,false)}"/>							
+									<apex:outputField value="{!objTransactionDocument[fieldAPIName]}" rendered="{!IF(fieldAPIName != 'CreatedDate' && fieldAPIName != 'Document_Link__c' && fieldAPIName != 'Status__c',true,false)}"/>
+								</td>
+							</apex:repeat>
+						</tr>
+					</apex:repeat>
+				</tbody>
+			</table>
+			<apex:outputPanel id="paginationPanel" rendered="{!If(lstTransactionDocument.size > 0, true, false)}">
+                 	<table width="100%" class="actionStatusTable">
+                     	<tr width="100%">
+                     	  <td width="25%"></td>
+                          <td width="8%">
+                              <apex:outputPanel rendered="{!(page==1 || page == 0 || page < 1)}">
+	                              	<span style="font-size: 1.8em;font-weight: bold;">
+		                          		&laquo;
+		                      		</span>
+		                      		<span style="font-size: 1.8em;font-weight: bold;">
+		                          		&lsaquo; 
+		                      		</span>
+                              </apex:outputPanel>
+                              <apex:outputPanel rendered="{!!(page==1 || page == 0 || page < 1)}">
+                                  <apex:commandLink action="{!goToFirstPage}" rerender="paginationPanel, showRecords" status="processing" styleClass="paginatorSymbols"> 
+                                      &laquo;
+                                  </apex:commandLink>&nbsp; 
+                                  <apex:commandLink action="{!goToPreviousPage}" rerender="paginationPanel,showRecords" status="processing" styleClass="paginatorSymbols"> 
+                                      &lsaquo; 
+                                  </apex:commandLink>
+                              </apex:outputPanel>
+                          </td>
+                         	<td width="8%">
+	                          	<apex:outputPanel rendered="{!IF(lastPage == 1,true,false)}">
+	                          		<input type="text" value="{!page}" style="margin-top:5px;width:30px;height:15px;border:0.1em solid gray;" disabled="disabled"/>
+	                          	</apex:outputPanel>
+                            	<apex:inputText rendered="{!IF(lastPage > 1,true,false)}" value="{!page}" onKeyPress="return onlyNum(event,'{!$Component.pageNumberId}');" id="pageNumberId" size="1" style="margin-top:5px;width:30px;height:15px;border:0.1em solid gray;"/>&nbsp;of {!LastPage}
+                             </td>
+                             <td width="8%">
+                               <apex:outputPanel rendered="{!(page == lastPage)}">
+                                	<span style="font-size: 1.8em;font-weight: bold;">
+                       					&rsaquo;
+                   					</span>
+                   					<span style="font-size: 1.8em;font-weight: bold;">
+                       					&raquo; 
+                   					</span>
+                               </apex:outputPanel>
+                               <apex:outputPanel rendered="{!!(page == lastPage)}"> 
+                                  <apex:commandLink action="{!goToNextPage}" rerender="paginationPanel,showRecords" status="processing" styleClass="paginatorSymbols"> 
+                                   		&rsaquo;
+                               	 </apex:commandLink>&nbsp;
+                               	 <apex:commandLink action="{!goToLastPage}" rerender="paginationPanel,showRecords" status="processing" styleClass="paginatorSymbols"> 
+                                     &raquo;
+                                 </apex:commandLink> 
+                              </apex:outputPanel>
+                         	</td>
+                         	<td width="30%"></td>
+                     	</tr>
+                 	</table>
+              </apex:outputPanel>
+		</apex:outputPanel>
+		<div class="actionStatusDiv">
+			<apex:actionStatus startText="Loading..." id="loading"/>
+		</div>
+		<apex:pageMessages id="showMessage"/>
+		<c:SL_ActionStatusComponent />
+	</apex:form>
+	<script>
+		window.onload=function(){
+			fetchRecordsAF()
+		};
+		
+		function sortRecords(headerName)
+		{
+			sortRecordsAF(headerName.innerHTML);
+			return false;
+		}
+		
+		function onlyNum(evt, pageNoId) 
+        {
+        	var pageNumber = document.getElementById(pageNoId);
+            evt = (evt) ? evt : window.event;
+            var charCode = (evt.which) ? evt.which : evt.keyCode; 
+            if (charCode > 31 && (charCode < 48 || charCode > 57)) 
+            {
+                return false;
+            }
+            else 
+            {
+                if(charCode == 13 &&  pageNumber.value != '') 
+                {
+                    goToPageAF();
+                    return false;
+                }
+                return true; 
+            }
+		}
+		
+		function updateTransactionRecord(recordId, recordStatus)
+		{
+			Visualforce.remoting.Manager.invokeAction(
+				'{!$RemoteAction.SL_TransactionDocumentController.updateTransactionDocument}',recordId,recordStatus.value,function(result,event){
+					if(event.status)
+						alert('Record Updated Successfully');
+				}
+			);
+	
+		}
+		function approveOrRejectRecord(statusValue)
+		{
+			if (confirm("Are you sure you want to mark all related documents as "+ statusValue+"?"))
+		    	approveOrRejectRecordAF(statusValue);
+		    return false;
+		}
+	</script>
+</apex:component>

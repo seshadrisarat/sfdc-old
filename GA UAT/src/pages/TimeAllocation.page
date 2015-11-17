@@ -1,0 +1,268 @@
+<apex:page controller="TimeAllocationController" tabStyle="My_Time_Allocation__tab">
+    <apex:includeScript value="{!URLFOR($Resource.jquery, '/js/jquery-1.4.2.min.js')}"/>
+
+    <script type="text/javascript">
+    $(function() {
+        sumAll();
+    });
+
+    function isNumber(n, e) {
+        var charCode = e.which ? e.which : e.keyCode;
+        var charString = String.fromCharCode(charCode);
+        switch(charCode) {
+        case 8:
+        case 37:
+        case 39:
+            return true;
+        case 46:
+            return false;
+        default:
+            return !isNaN(n + charString);
+        }
+    };
+    function sum(vId, tId) {
+        var total = 0;
+        $('[id$='+vId+'Value]').each(function() {
+            if ($(this).val() > 0) {
+                total += parseFloat($(this).val());
+            }
+        });
+        $('span[id$='+tId+'Total]').contents().replaceWith(total+'%');
+    };
+    function sumAll() {
+        sum('Estimate','summaryEstimate');
+        sum('Actual','summaryActual');
+    };
+    </script>
+
+    <apex:sectionHeader title="Time Allocation" subtitle="{!employeeName}"/>
+
+    <apex:outputPanel id="messages">
+        <apex:pageMessages />
+        {!dmessage}
+    </apex:outputPanel>   
+
+    <apex:form rendered="{!NOT(ISBLANK(employeeName))}" >
+        <apex:actionStatus id="loadingStatus">
+            <apex:facet name="start">
+                <apex:pageBlock >
+                    <c:loadingStatus />
+                </apex:pageBlock>
+            </apex:facet>
+            <apex:facet name="stop">
+            <apex:outputPanel >
+                <div class="bFilterView">
+                    <span class="bFilter">
+                        <span class="fBody">
+                            <h2><apex:outputLabel for="filterOptions" value="View:" styleClass="filterOptions"/></h2>
+                            <apex:selectList id="filterOptions" value="{!filterSelected}" size="1">
+                                <apex:selectOptions value="{!filterOptions}"/>
+                                <apex:actionSupport event="onchange" action="{!applyFilter}" status="loadingStatus" reRender="messages,allocationTable" oncomplete="sumAll();"/>
+                            </apex:selectList>
+                        </span>
+                    </span>
+                </div>&nbsp;
+
+                <apex:pageBlock title="{!tableTitle}" id="allocationTable">
+                    <apex:pageBlockButtons >
+                        <apex:commandButton value="Save" action="{!saveAllocations}" status="loadingStatus" reRender="allocationTable,messages"/>
+                        <apex:commandButton value="Cancel" action="{!redirectBack}" status="loadingStatus" immediate="true"/>
+                    </apex:pageBlockButtons>
+
+
+                    <apex:pageBlockSection id="liveDealTable" title="Live Deals" collapsible="true" columns="1">
+                        <script type="text/javascript">
+                        $(function() {
+                            sum('liveDealEstimate','liveDealEstimate');
+                            sum('liveDealActual','liveDealActual');
+                        });
+                        </script>
+                        <apex:variable value="{!0}" var="liveDealIndex"/>
+                        <apex:pageBlockTable value="{!liveDealList}" var="a">
+                            <apex:column headerValue="Action" styleClass="actionColumn">
+                                <apex:commandLink value="X" action="{!deleteAllocation}" immediate="true" styleClass="actionLink" reRender="liveDealTable" oncomplete="sumAll();">
+                                    <apex:param name="category" value="{!a.Category__c}"/>
+                                    <apex:param name="index" value="{!liveDealIndex}"/>
+                                </apex:commandLink>
+                                <apex:variable value="{!liveDealIndex+1}" var="liveDealIndex"/>
+                            </apex:column>
+                            <apex:column headerValue="Deal">
+                                <apex:outputField value="{!a.Related_Deal__c}" rendered="{!NOT(ISBLANK(a.Id))}"/>
+                                <apex:inputField value="{!a.Related_Deal__c}" rendered="{!ISBLANK(a.Id)}"/>
+                            </apex:column>
+                            <apex:column headerValue="Allocation (%)">
+                                <apex:inputField id="liveDealActualValue" value="{!a.Allocation__c}" onkeypress="return isNumber(this.value,event);" onchange="sum('liveDealActual','liveDealActual');sum('Actual','summaryActual');"/>
+                            </apex:column>
+                            <apex:column headerValue="Description">
+                                <apex:inputText value="{!a.Description__c}"/>
+                            </apex:column>
+                            <apex:facet name="footer">
+                                <apex:outputPanel layout="none">
+                                    <apex:commandLink value="Add More" title="Add Live Deal" action="{!addLiveDeal}" reRender="liveDealTable" immediate="true" style="padding-left:2px;"/>
+                                    <div style="float:right;padding-right:2px;">
+                                        <b>Allocation:  </b><span id="liveDealActualTotal">0%</span>
+                                    </div>
+                                </apex:outputPanel>
+                            </apex:facet>
+                        </apex:pageBlockTable>
+                    </apex:pageBlockSection>
+
+
+                    <apex:pageBlockSection id="themeTable" title="Market Research" collapsible="true" columns="1">
+                        <script type="text/javascript">
+                        $(function() {
+                            sum('themeEstimate','themeEstimate');
+                            sum('themeActual','themeActual');
+                        });
+                        </script>
+                        <apex:variable value="{!0}" var="themeIndex"/>
+                        <apex:pageBlockTable value="{!themeList}" var="a">
+                            <apex:column headerValue="Action" styleClass="actionColumn">
+                                <apex:commandLink value="X" action="{!deleteAllocation}" immediate="true" styleClass="actionLink" reRender="themeTable" oncomplete="sumAll();">
+                                    <apex:param name="category" value="{!a.Category__c}"/>
+                                    <apex:param name="index" value="{!themeIndex}"/>
+                                </apex:commandLink>
+                                <apex:variable value="{!themeIndex+1}" var="themeIndex"/>
+                            </apex:column>
+                            <apex:column headerValue="Market Research">
+                                <apex:inputField value="{!a.Related_Theme__c}" rendered="{!ISBLANK(a.Id)}"/>
+                                <apex:outputField value="{!a.Related_Theme__c}" rendered="{!NOT(ISBLANK(a.Id))}"/>
+                            </apex:column>
+                            <apex:column headerValue="Allocation (%)">
+                                <apex:inputField id="themeActualValue" value="{!a.Allocation__c}" onkeypress="return isNumber(this.value,event);" onchange="sum('themeActual','themeActual');sum('Actual','summaryActual');"/>
+                            </apex:column>
+                            <apex:column headerValue="Description">
+                                <apex:inputText value="{!a.Description__c}"/>
+                            </apex:column>
+                            <apex:facet name="footer">
+                                <apex:outputPanel layout="none">
+                                    <apex:commandLink value="Add More" title="Add Theme" action="{!addTheme}" reRender="themeTable" immediate="true" style="padding-left:2px;"/>
+                                    <div style="float:right;padding-right:2px;">
+                                        <b>Allocation:  </b><span id="themeActualTotal">0%</span>
+                                    </div>
+                                </apex:outputPanel>
+                            </apex:facet>
+                        </apex:pageBlockTable>
+                    </apex:pageBlockSection>
+
+
+                    <apex:pageBlockSection id="portfolioCompanyTable" title="Portfolio Companies" collapsible="true" columns="1">
+                        <script type="text/javascript">
+                        $(function() {
+                            sum('portfolioCompanyEstimate','portfolioCompanyEstimate');
+                            sum('portfolioCompanyActual','portfolioCompanyActual');
+                        });
+                        </script>
+                        <apex:variable value="{!0}" var="portfolioCompanyIndex"/>
+                        <apex:pageBlockTable value="{!portfolioCompanyList}" var="a">
+                            <apex:column headerValue="Action" styleClass="actionColumn">
+                                <apex:commandLink value="X" action="{!deleteAllocation}" immediate="true" styleClass="actionLink" reRender="portfolioCompanyTable" oncomplete="sumAll();">
+                                    <apex:param name="category" value="{!a.Category__c}"/>
+                                    <apex:param name="index" value="{!portfolioCompanyIndex}"/>
+                                </apex:commandLink>
+                                <apex:variable value="{!portfolioCompanyIndex+1}" var="portfolioCompanyIndex"/>
+                            </apex:column>
+                            <apex:column headerValue="Portfolio Company">
+                                <apex:inputField value="{!a.Related_Company__c}" rendered="{!ISBLANK(a.Id)}"/>
+                                <apex:outputField value="{!a.Related_Company__c}" rendered="{!NOT(ISBLANK(a.Id))}"/>
+                            </apex:column>
+                            <apex:column headerValue="Allocation (%)">
+                                <apex:inputField id="portfolioCompanyActualValue" value="{!a.Allocation__c}" onkeypress="return isNumber(this.value,event);" onchange="sum('portfolioCompanyActual','portfolioCompanyActual');sum('Actual','summaryActual');"/>
+                            </apex:column>
+                            <apex:column headerValue="Description">
+                                <apex:inputText value="{!a.Description__c}"/>
+                            </apex:column>
+                            <apex:facet name="footer">
+                                <apex:outputPanel layout="none">
+                                    <apex:commandLink value="Add More" title="Add Portfolio Company" action="{!addPortfolioCompany}" reRender="portfolioCompanyTable" immediate="true" style="padding-left:2px;"/>
+                                    <div style="float:right;padding-right:2px;">
+                                        <b>Allocation:  </b><span id="portfolioCompanyActualTotal">0%</span>
+                                    </div>
+                                </apex:outputPanel>
+                            </apex:facet>
+                        </apex:pageBlockTable>
+                    </apex:pageBlockSection>
+                    
+                    <apex:pageBlockSection title="Prospecting" collapsible="true" columns="1">
+                        <script type="text/javascript">
+                        $(function() {
+                            sum('prospectingEstimate','prospectingEstimate');
+                            sum('prospectingActual','prospectingActual');
+                        });
+                        </script>
+                        <apex:pageBlockTable id="prospectingTable" value="{!prospectingList}" var="a">
+                            <!--apex:column headerValue="Expected Calls">
+                                <apex:inputField value="{!a.Expected_Calls__c}" onkeypress="return isNumber(this.value,event);"/>
+                            </apex:column-->
+                            <apex:column headerValue="Prospect Calls">
+                                <apex:outputField value="{!a.Actual_Calls__c}"/>
+                            </apex:column>
+                            <apex:column headerValue="Prospect Meetings">
+                                <apex:outputField value="{!a.Actual_Events__c}" />
+                            </apex:column>
+                            <apex:column headerValue="Allocation (%)">
+                                <apex:inputField id="prospectingActualValue" value="{!a.Allocation__c}" onkeypress="return isNumber(this.value,event);" onchange="sum('prospectingActual','prospectingActual');sum('Actual','summaryActual');"/>
+                            </apex:column>
+                            <apex:column headerValue="Description">
+                                <apex:inputText value="{!a.Description__c}"/>
+                            </apex:column>
+                            <apex:facet name="footer">
+                                <apex:outputPanel layout="none">
+                                    <div style="float:right;padding-right:2px;">
+                                        <b>Allocation:  </b><span id="prospectingActualTotal">0%</span>
+                                    </div>
+                                </apex:outputPanel>
+                            </apex:facet>
+                        </apex:pageBlockTable>
+                    </apex:pageBlockSection>
+
+                    <apex:pageBlockSection id="firmProjectTable" title="Other" collapsible="true" columns="1">
+                        <script type="text/javascript">
+                        $(function() {
+                            sum('firmProjectEstimate','firmProjectEstimate');
+                            sum('firmProjectActual','firmProjectActual');
+                        });
+                        </script>
+                        <apex:variable value="{!0}" var="firmProjectIndex"/>
+                        <apex:pageBlockTable value="{!firmProjectList}" var="a">
+                            <apex:column headerValue="Action" styleClass="actionColumn">
+                                <apex:commandLink value="X" action="{!deleteAllocation}" immediate="true" styleClass="actionLink" reRender="firmProjectTable" oncomplete="sumAll();">
+                                    <apex:param name="category" value="{!a.Category__c}"/>
+                                    <apex:param name="index" value="{!firmProjectIndex}"/>
+                                </apex:commandLink>
+                                <apex:variable value="{!firmProjectIndex+1}" var="firmProjectIndex"/>
+                            </apex:column>
+                            <apex:column headerValue="Description">
+                                <apex:inputText value="{!a.Description__c}"/>
+                            </apex:column>
+                            <apex:column headerValue="Allocation (%)">
+                                <apex:inputField id="firmProjectActualValue" value="{!a.Allocation__c}" onkeypress="return isNumber(this.value,event);" onchange="sum('firmProjectActual','firmProjectActual');sum('Actual','summaryActual');"/>
+                            </apex:column>
+                            <apex:facet name="footer">
+                                <apex:outputPanel layout="none">
+                                    <apex:commandLink value="Add More" title="Add Firm Project" action="{!addFirmProject}" reRender="firmProjectTable" immediate="true" style="padding-left:2px;"/>
+                                    <div style="float:right;padding-right:2px;">
+                                        <b>Allocation:  </b><span id="firmProjectActualTotal">0%</span>
+                                    </div>
+                                </apex:outputPanel>
+                            </apex:facet>
+                        </apex:pageBlockTable>
+                    </apex:pageBlockSection>
+                    
+                    <apex:pageBlockSection title="Summary" columns="2" collapsible="false">
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Total Allocation"/>
+                            <span id="summaryActualTotal">0%</span>
+                        </apex:pageBlockSectionItem>
+                        <script type="text/javascript">
+                        $(function() {
+                            sum('Actual','summaryActual');
+                        });
+                        </script>
+                    </apex:pageBlockSection>
+                </apex:pageBlock>
+            </apex:outputPanel>
+            </apex:facet>
+        </apex:actionStatus>
+    </apex:form>
+</apex:page>

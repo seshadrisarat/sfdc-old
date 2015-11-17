@@ -1,0 +1,446 @@
+<!-- 
+ *Page : SL_ContactViewPage
+ *Description : This page is used to Override Contact detail page based on following criteria: 
+                If the user is a "MIHN - HPD Provider User" profile and he is viewing someone else's contact record (Contact.ID != User.ContactID) then contact record is read only to user.
+                If the user is a "MIHN - HPD Provider User" profile and he is viewing HIS OWN contact record (Contact.ID == User.ContactID) then contact record is read/write to user. 
+                If the user is not a "MIHN - HPD Provider User" profile, the page will look like  standard Contact page. 
+*Copyright 2013 Michigan Health Information Network Shared Services MuffiN Confidential Proprietary Restricted
+-->
+
+<apex:page standardcontroller="Contact" extensions="SL_ContactViewPageController" >
+    <font size="2">
+        <apex:SectionHeader title="{!Contact.Name}" />
+    </font>
+    
+    <style>
+        #datePicker {
+            position:fixed;
+        }
+    </style>
+    <apex:stylesheet value="{!$Resource.ModalWindowCSS}"/>
+    <apex:form >
+      <apex:outputpanel id="opid" rendered="{!!isAnotherprofileUser}">
+        <apex:pageblock >
+            <apex:actionfunction name="updateAccount" action="{!updateContactAccountId}"  rerender="GIId,ESIId,CIId" status="processing">
+               <apex:param name="AffiliationAccountId" assignTo="{!strAffiliationAccountId}" value=""/>
+            </apex:actionFunction> 
+            <apex:actionfunction name="updateProviderSpeciality" action="{!updateProviderSpecialityRecord}" rerender=" " status="process" >
+               <apex:param name="UpdatedProviderSpecialtyId" assignTo="{!idProviderSpeciality}" value=""/>
+            </apex:actionFunction>
+            <apex:actionfunction name="SelectedRecordType" action="{!queryRelatedRecordTypeFields}" rerender="modalWindowIdForAddNewButtonOrEditLink" status="processing" immediate="true">
+               <apex:param name="SelectedRecordType" assignTo="{!strRecordTypeName}" value=""/>
+               <apex:param name="AddingNewRecordOrEditingExistingRecord" assignTo="{!isAddNewOrEdit}" value="false"/>
+            </apex:actionFunction>
+            
+<!--             This section displays the contact fields present in ContactGeneralInformation fieldset. -->
+            <apex:pageblocksection title="General Information" columns="2" id="GIId">
+                 <apex:pageblocksectionitem rendered="{!isEditRendered}" labelStyle="width: 100%;">  
+                   <apex:commandButton action="{!EditContact}" value="Edit" id="theButton" style="margin-left:90%;" rerender="modalWindowId" status="processing">
+                       <apex:param value="General Information" assignTo="{!strContactSection}" />
+                    </apex:commandButton>
+                  </apex:pageblocksectionitem> 
+                 <apex:pageblocksectionitem rendered="{!isEditRendered}"><div></div></apex:pageblocksectionitem>  
+                <apex:repeat value="{!$ObjectType.Contact.FieldSets.ContactGeneralInformation}" var="f">
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="{!f.Label}" for="OutID"/>
+                        <apex:outputText value="{!objContact[f.FieldPath]}" id="OutID"/>
+                    </apex:pageBlockSectionItem>
+               </apex:repeat>
+            </apex:pageblocksection>
+            
+<!--             This section displays the contact fields present in ContactESIData fieldset. -->
+            <apex:pageblocksection title=" ESI Data" columns="2" id="ESIId">
+             <apex:pageblocksectionitem rendered="{!isEditRendered}"> 
+                <apex:commandButton action="{!EditContact}" value="Edit" id="theButton" style="margin-left:90%;" rerender="modalWindowId" status="processing">
+                    <apex:param value="ESI Data" assignTo="{!strContactSection}" />
+                </apex:commandButton>
+              </apex:pageblocksectionitem>
+               <apex:pageblocksectionitem rendered="{!isEditRendered}"><div></div></apex:pageblocksectionitem> 
+                <apex:repeat value="{!$ObjectType.Contact.FieldSets.ContactESIData}" var="f">
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="{!f.Label}" for="OutID"/>
+                        <apex:outputText value="{!objContact[f.FieldPath]}" id="OutID"/>
+                    </apex:pageBlockSectionItem>
+               </apex:repeat>
+            </apex:pageblocksection>
+            
+<!--             This section displays the contact fields present in ContactInformation fieldset. -->           
+             <apex:pageblocksection title=" Contact Information" columns="2" id="CIId"> 
+               <apex:pageblocksectionitem rendered="{!isEditRendered}">   
+                    <apex:commandButton action="{!EditContact}" value="Edit" id="theButton" style="margin-left:90%;" rerender="modalWindowId" status="processing">
+                        <apex:param value="Contact Information" assignTo="{!strContactSection}" />
+                    </apex:commandButton>
+               </apex:pageblocksectionitem>
+               <apex:pageblocksectionitem rendered="{!isEditRendered}"><div></div></apex:pageblocksectionitem> 
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Practice Address" for="OutID"/>
+                    <apex:outputText value="{!strPracticeAddress}" id="OutID" escape="false"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Mailing Address" for="OutID"/>
+                    <apex:outputText value="{!strMailingAddress}" id="OutID" escape="false"/>
+                </apex:pageBlockSectionItem>
+                <apex:repeat value="{!$ObjectType.Contact.FieldSets.ContactInformation}" var="f">
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="{!f.Label}" for="OutID"/>
+                        <apex:outputText value="{!objContact[f.FieldPath]}" id="OutID"/>
+                    </apex:pageBlockSectionItem>
+               </apex:repeat>
+            </apex:pageblocksection>
+            
+    <!--             This section displays the Affiliations related lists for contact  -->      
+        <apex:outputpanel id="affId">   
+             <script>
+                var vCheckedFirst = 'true';
+            </script>       
+            <apex:pageblocksection title="Affiliations" columns="1" id="AffId1"> 
+                <apex:pageblocksectionitem dataStyle="text-align:center;" rendered="{!isEditRendered}">
+                    <apex:commandButton action="{!addNewRecordForContactRelatedList}" value="Add New" id="addnewaffiliation"  rerender="modalWindowIdForAddNewButtonOrEditLink" status="processing">
+                       <apex:param value="Affiliation Edit" assignTo="{!strRelatedlistName}" />
+                    </apex:commandButton>
+                </apex:pageblocksectionitem>
+                <apex:pageBlockTable value="{!lstAffiliationWrapper}" var="Affiliation" > 
+                     <apex:column headerValue="Primary" rendered="{!!isEditRendered}">
+                         <apex:inputCheckbox value="{!Affiliation.isPrimary}" rendered="{!Affiliation.isPrimary}" disabled="true"/>
+                     </apex:column>
+                      <apex:column headerValue="Primary" rendered="{!isEditRendered}" > 
+                         <input id="radio{!Affiliation.objAffiliation.Id}" type="radio" name="affiliation" onClick="updateAccount('{!Affiliation.objAffiliation.Organization__c}');" />
+                         <script>
+                            var vChecked = '{!Affiliation.isPrimary}';
+                            if(vChecked == 'true' && vCheckedFirst == 'true')
+                            {
+                                document.getElementById('radio{!Affiliation.objAffiliation.Id}').checked = 'true';
+                                vCheckedFirst = 'false';
+                            }
+                         </script>
+                     </apex:column>   
+                     <apex:column headerValue="Action" rendered="{!isEditRendered}">
+                         <apex:outputPanel rendered="{!Affiliation.isEditable}">
+                              <apex:commandLink value="Edit" action="{!editRelatedListRecordForContact}" rerender="modalWindowIdForAddNewButtonOrEditLink">
+                                 <apex:param value="{!Affiliation.objAffiliation.Id}" name="EditingAffiliationRecordId" assignTo="{!strRelatedListRecordIdToEdit}" /> 
+                                 <apex:param value="Affiliation Edit" name="EditingAffiliation" assignTo="{!strRelatedlistName}" /> 
+                             </apex:commandLink>&nbsp;&nbsp;&nbsp;&nbsp;
+                              <apex:commandLink value="Del" action="{!editOrDeleteAffiliationRecord}" status="processing" rerender="affId">
+                                 <apex:param value="true" name="DeletingAffiliationRecord" assignTo="{!Affiliation.isDelete}"/>
+                             </apex:commandLink>
+                        </apex:outputPanel>      
+                     </apex:column> 
+                     <apex:column headerValue=" Organization " value="{!Affiliation.objAffiliation.Organization__c}" />
+                     <apex:column headerValue="Type" value="{!Affiliation.objAffiliation.Type__c}" />
+                     <apex:column headerValue="Start Date" value="{!Affiliation.objAffiliation.Start_Date__c}" />
+                     <apex:column headerValue="End Date" value="{!Affiliation.objAffiliation.End_Date__c}" />
+                </apex:pageBlockTable>
+             </apex:pageblocksection> 
+         </apex:outputpanel>     
+             
+<!--             Dummy output panel used to rerender when Add New button is clicked in related lists section -->
+             <apex:outputpanel id="opdummy"/>
+             
+             <!--             This section displays the ProviderAddress related lists for contact  -->        
+           <apex:pageblocksection title="My Addresses" columns="1"  id="ProviderAddressId">
+              <apex:pageblocksectionitem dataStyle="text-align:center;" rendered="{!isEditRendered}">
+                  <apex:commandButton action="{!addNewRecordForContactRelatedList}" value="Add New" id="addnewprovideraddress"  rerender="modalWindowIdForAddNewButtonOrEditLink" status="processing">
+                     <apex:param value="ProviderAddress Edit" assignTo="{!strRelatedlistName}" />
+                  </apex:commandButton>
+              </apex:pageblocksectionitem>   
+              <apex:pageBlockTable value="{!lstProviderAddressWrapper}" var="ProviderAddress" > 
+                   <apex:column headerValue="Action" rendered="{!isEditRendered}">
+                       <apex:outputPanel rendered="{!ProviderAddress.isEditable}">
+                           <apex:commandLink value="Edit" action="{!editRelatedListRecordForContact}" rerender="modalWindowIdForAddNewButtonOrEditLink" status="processing">
+                               <apex:param value="{!ProviderAddress.objProviderAddress.Id}" name="ProviderAddressRecordIdForEdit" assignTo="{!strRelatedListRecordIdToEdit}" /> 
+                               <apex:param value="ProviderAddress Edit" name="ProviderAddressEdit" assignTo="{!strRelatedlistName}" />
+                               <apex:param value="true" name="EditrecordOrAddnew" assignTo="{!isEditRecord}" /> 
+                           </apex:commandLink>&nbsp;&nbsp;&nbsp;&nbsp;
+                            <apex:commandLink value="Del" action="{!editOrDeleteProviderAddressRecord}" status="processing" rerender="ProviderAddressId" >
+                               <apex:param value="true" name="DeleteProviderAddress" assignTo="{!ProviderAddress.isDelete}"/>
+                           </apex:commandLink>
+                       </apex:outputPanel>    
+                   </apex:column>     
+                   <apex:column headerValue="Street Address 1" value="{!ProviderAddress.objProviderAddress.Street_Address_1__c}" />
+                   <apex:column headerValue="Street Address 2" value="{!ProviderAddress.objProviderAddress.Street_Address_2__c}"/>
+                   <apex:column headerValue="City" value="{!ProviderAddress.objProviderAddress.City__c}"/>
+                   <apex:column headerValue="State" value="{!ProviderAddress.objProviderAddress.State__c}" />                   
+                   <apex:column headerValue="Postal Code" value="{!ProviderAddress.objProviderAddress.Postal_Code__c}"  />
+                   <apex:column headerValue="Type" value="{!ProviderAddress.objProviderAddress.Type__c}"  /> 
+                   <apex:column headerValue="Phone" value="{!ProviderAddress.objProviderAddress.Phone__c}"  /> 
+                   <apex:column headerValue="Fax" value="{!ProviderAddress.objProviderAddress.Fax__c}"  />
+                   <apex:column headerValue="Primary" value="{!ProviderAddress.objProviderAddress.Primary__c}"  />     
+                   <apex:column headerValue="Provider Address ID" value="{!ProviderAddress.objProviderAddress.Provider__c}"  />               
+              </apex:pageBlockTable>
+           </apex:pageblocksection> 
+             
+<!--             This section displays the ProviderSpecialities related lists for contact  -->                   
+             <apex:pageblocksection title="Specialities" columns="1" id="specId"> 
+                <apex:pageblocksectionitem dataStyle="text-align:center;" rendered="{!isEditRendered}">
+                    <apex:commandButton action="{!addNewRecordForContactRelatedList}" value="Add New" id="addnewspeciality"  rerender="modalWindowIdForAddNewButtonOrEditLink" status="processing">
+                       <apex:param value="ProviderSpecialty Edit" assignTo="{!strRelatedlistName}" />
+                    </apex:commandButton>
+                </apex:pageblocksectionitem>
+                <apex:pageBlockTable value="{!lstProviderSpecialtyWrapper}" var="Speciality" > 
+                     <apex:column headerValue="Primary" rendered="{!!isEditRendered}">
+                         <apex:inputCheckbox value="{!Speciality.objProviderSpeciality.Primary_Indicator__c}" rendered="{!Speciality.objProviderSpeciality.Primary_Indicator__c}" disabled="true"/>
+                     </apex:column>
+                      <apex:column headerValue="Primary"  rendered="{!isEditRendered}"> 
+                         <input type="radio" id="radio1{!Speciality.objProviderSpeciality.Id}" name="Speciality" onClick="updateProviderSpeciality('{!Speciality.objProviderSpeciality.id}');"/>
+                         <script>
+                            var vChecked = '{!Speciality.objProviderSpeciality.Primary_Indicator__c}';
+                            if(vChecked == 'true')
+                            {
+                                document.getElementById('radio1{!Speciality.objProviderSpeciality.Id}').checked = 'true';
+                            }
+                         </script>
+                     </apex:column>   
+                     <apex:column headerValue="Action" rendered="{!isEditRendered}">
+                         <apex:outputPanel rendered="{!Speciality.isEditable}">
+                             <apex:commandLink value="Edit" action="{!editRelatedListRecordForContact}" rerender="modalWindowIdForAddNewButtonOrEditLink">
+                                 <apex:param value="{!Speciality.objProviderSpeciality.Id}" name="ProviderSpecialtyRecordID" assignTo="{!strRelatedListRecordIdToEdit}" /> 
+                                 <apex:param value="ProviderSpecialty Edit" name="ProviderSpecialtyEdit" assignTo="{!strRelatedlistName}" /> 
+                             </apex:commandLink>&nbsp;&nbsp;&nbsp;&nbsp;
+                              <apex:commandLink value="Del" action="{!editOrDeleteProviderSpecialityRecord}" status="processing" rerender="specId">
+                                 <apex:param value="true" name="DeleteProviderSpecialty" assignTo="{!Speciality.isDelete}"/>
+                             </apex:commandLink>
+                         </apex:outputPanel>    
+                     </apex:column> 
+                     <apex:column headerValue=" Speciality Name " value="{!Speciality.objProviderSpeciality.Specialty__c}" rendered="{!isEditRendered}"/>
+                     <apex:column headerValue=" Speciality Name " rendered="{!!isEditRendered}">
+                        <apex:outputtext value="{!Speciality.objProviderSpeciality.Specialty__r.Name}" />
+                     </apex:column>
+                     <apex:column headerValue="Speciality Code" value="{!Speciality.objProviderSpeciality.Specialty__r.Specialty_Code__c}"/>
+                     <apex:column headerValue="AS-of Date" value="{!Speciality.objProviderSpeciality.As_of_Date__c}" />
+                     <apex:column headerValue="Recertification Date" value="{!Speciality.objProviderSpeciality.Recertification_Date__c}" />
+                     <apex:column headerValue="Expiration Date" value="{!Speciality.objProviderSpeciality.Expiration_Date__c}" />
+                </apex:pageBlockTable>
+             </apex:pageblocksection>  
+             
+<!--             This section displays the ProviderCredentials related lists for contact  -->        
+             <apex:pageblocksection title="Credentials" columns="1"  id="CredId">
+                <apex:pageblocksectionitem dataStyle="text-align:center;" rendered="{!isEditRendered}">
+                    <apex:commandButton action="{!addNewRecordForContactRelatedList}" value="Add New" id="addnewspeciality"  rerender="modalWindowIdForAddNewButtonOrEditLink" status="processing">
+                       <apex:param value="ProviderCredential Edit" assignTo="{!strRelatedlistName}" />
+                    </apex:commandButton>
+                </apex:pageblocksectionitem>   
+                <apex:pageBlockTable value="{!lstProviderCredentialWrapper}" var="Credential" > 
+                     <apex:column headerValue="Action" rendered="{!isEditRendered}">
+                         <apex:outputPanel rendered="{!Credential.isEditable}">
+                             <apex:commandLink value="Edit" action="{!editRelatedListRecordForContact}" rerender="modalWindowIdForAddNewButtonOrEditLink">
+                                 <apex:param value="{!Credential.objProviderCredential.Id}" name="ProviderCredentialRecordIdForEdit" assignTo="{!strRelatedListRecordIdToEdit}" /> 
+                                 <apex:param value="ProviderCredential Edit" name="ProvidercredentialEdit" assignTo="{!strRelatedlistName}" />
+                                 <apex:param value="true" name="EditrecordOrAddnew" assignTo="{!isEditRecord}" /> 
+                             </apex:commandLink>&nbsp;&nbsp;&nbsp;&nbsp;
+                              <apex:commandLink value="Del" action="{!editOrDeleteProviderCredentialRecord}" status="processing" rerender="CredId" >
+                                 <apex:param value="true" name="DeleteProviderCredential" assignTo="{!Credential.isDelete}"/>
+                             </apex:commandLink>
+                         </apex:outputPanel>    
+                     </apex:column>     
+                     <apex:column headerValue=" Credential Name " value="{!Credential.objProviderCredential.Name}" />
+                     <apex:column headerValue="Record Type" value="{!Credential.objProviderCredential.RecordTypeId}" />
+                     <apex:column headerValue="Credential Number" value="{!Credential.objProviderCredential.Credential_Number__c}"/>
+                     <apex:column headerValue="Granting Organization" value="{!Credential.objProviderCredential.Granting_Organization__c}"  />
+                     <apex:column headerValue="Grant Date" value="{!Credential.objProviderCredential.Grant_Date__c}"  />
+                     <apex:column headerValue="Current Status" value="{!Credential.objProviderCredential.Current_Status__c}" />
+                </apex:pageBlockTable>
+             </apex:pageblocksection> 
+             
+ <!--             This section displays the ProviderCareTeam related lists for contact  -->        
+           <apex:pageblocksection title="Care Team Memberships" columns="1"  id="CareId">
+              <apex:pageblocksectionitem dataStyle="text-align:center;" rendered="{!isEditRendered}">
+                  <apex:commandButton action="{!addNewRecordForContactRelatedList}" value="Add New" id="addnewcareteam"  rerender="modalWindowIdForAddNewButtonOrEditLink" status="processing">
+                     <apex:param value="ProviderCareTeam Edit" assignTo="{!strRelatedlistName}" />
+                  </apex:commandButton>
+              </apex:pageblocksectionitem>   
+              <apex:pageBlockTable value="{!lstProviderCareTeamWrapper}" var="CareTeam" > 
+                   <apex:column headerValue="Action" rendered="{!isEditRendered}">
+                       <apex:outputPanel rendered="{!CareTeam.isEditable}">
+                           <apex:commandLink value="Edit" action="{!editRelatedListRecordForContact}" rerender="modalWindowIdForAddNewButtonOrEditLink">
+                               <apex:param value="{!CareTeam.objProviderCareTeam.Id}" name="ProviderCareTeamRecordIdForEdit" assignTo="{!strRelatedListRecordIdToEdit}" /> 
+                               <apex:param value="ProviderCareTeam Edit" name="ProvidercareteamEdit" assignTo="{!strRelatedlistName}" />
+                               <apex:param value="true" name="EditrecordOrAddnew" assignTo="{!isEditRecord}" /> 
+                           </apex:commandLink>&nbsp;&nbsp;&nbsp;&nbsp;
+                            <apex:commandLink value="Del" action="{!editOrDeleteProviderCareTeamRecord}" status="processing" rerender="CareId" >
+                               <apex:param value="true" name="DeleteProviderCareTeam" assignTo="{!CareTeam.isDelete}"/>
+                           </apex:commandLink>
+                       </apex:outputPanel>    
+                   </apex:column>     
+                   <apex:column headerValue=" Care Team Name " value="{!CareTeam.objProviderCareTeam.Care_Team__c}" />
+                   <apex:column headerValue="Organization Name" value="{!CareTeam.objProviderCareTeam.Care_Team__r.Organization__c}"/>
+                   <apex:column headerValue="Role" value="{!CareTeam.objProviderCareTeam.Role__c}"/>
+                   <apex:column headerValue="TOC Destination?" value="{!CareTeam.objProviderCareTeam.TOC_Destination__c}" />                   
+                   <!-- apex:column headerValue="Direct Email" value="{!CareTeam.objProviderCareTeam.Direct_Email__c}"  /-->                   
+              </apex:pageBlockTable>
+           </apex:pageblocksection> 
+             
+             
+             <!--MIHIN-106-->
+             
+             <apex:pageblocksection title="Report" columns="1"  id="reportId">
+                <apex:include pageName="canvas_combo_NPI_Test3"/>
+             </apex:pageBlockSection>
+             
+             <!--MIHIN-106-->
+        </apex:pageblock>
+     </apex:outputpanel>
+        <apex:outputpanel id="modalWindowId">
+            <apex:outputpanel rendered="{!isEdit}">
+                <div id="popUpBack" class="popupBackground" style="height:100%;width:100%;"></div>
+                <div class="modalDialog" style="min-height:150px;min-width:70%;overflow: auto;position: fixed;">
+                    <apex:pageblock >
+                        <apex:pageblocksection title="{!strContactSection}" columns="2">
+                          <apex:panelGrid columns="1" Style="margin-left: 350px">
+                            <apex:panelGroup >
+                                <center>
+                                <table>
+                                    <apex:pageMessages id="Msg"/>
+                                    <tr>
+                                        <td>
+                                            <apex:commandButton action="{!save}" value="Save" rerender="Msg"/>
+                                        </td>
+                                        <td>
+                                            <apex:commandButton action="{!cancel}" value="Cancel" />
+                                        </td>
+                                    </tr>
+                                </table>
+                                </center>
+                            </apex:panelGroup>
+                          </apex:panelGrid> 
+                           <apex:outputText value="" />
+                            <apex:pageBlockSectionItem rendered="{!IF(strContactSection == 'Contact Information',true,false)}">
+                                    <apex:outputLabel value="Practice Street" for="OutID1"/>
+                                    <apex:inputfield value="{!contact.OtherStreet}" id="OutID1"/>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem rendered="{!IF(strContactSection == 'Contact Information',true,false)}">
+                                    <apex:outputLabel value="Mailing Street" for="OutID2"/>
+                                    <apex:inputfield value="{!contact.MailingStreet}" id="OutID2"/>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem rendered="{!IF(strContactSection == 'Contact Information',true,false)}">
+                                    <apex:outputLabel value="Practice City " for="OutID3"/>
+                                    <apex:inputfield value="{!contact.OtherCity}" id="OutID3"/>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem rendered="{!IF(strContactSection == 'Contact Information',true,false)}">
+                                    <apex:outputLabel value="Mailing City" for="OutID4"/>
+                                    <apex:inputfield value="{!contact.MailingCity}" id="OutID4"/>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem rendered="{!IF(strContactSection == 'Contact Information',true,false)}">
+                                    <apex:outputLabel value="Practice State/Province" for="OutID5"/>
+                                    <apex:inputfield value="{!contact.OtherState}" id="OutID5"/>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem rendered="{!IF(strContactSection == 'Contact Information',true,false)}">
+                                    <apex:outputLabel value="Mailing State/Province" for="OutID6"/>
+                                    <apex:inputfield value="{!contact.MailingState}" id="OutID6"/>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem rendered="{!IF(strContactSection == 'Contact Information',true,false)}">
+                                    <apex:outputLabel value="Practice Zip/PostalCode" for="OutID7"/>
+                                    <apex:inputfield value="{!contact.OtherPostalCode}" id="OutID7"/>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem rendered="{!IF(strContactSection == 'Contact Information',true,false)}">
+                                    <apex:outputLabel value="Mailing Zip/PostalCode" for="OutID8"/>
+                                    <apex:inputfield value="{!contact.MailingPostalCode}" id="OutID8"/>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem rendered="{!IF(strContactSection == 'Contact Information',true,false)}">
+                                    <apex:outputLabel value="Practice Country" for="OutID9"/>
+                                    <apex:inputfield value="{!contact.OtherCountry}" id="OutID9"/>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem rendered="{!IF(strContactSection == 'Contact Information',true,false)}">
+                                    <apex:outputLabel value="Mailing Country" for="OutID10"/>
+                                    <apex:inputfield value="{!contact.MailingCountry}" id="OutID10"/>
+                                </apex:pageBlockSectionItem>
+                            <apex:repeat value="{!lstContactFields}" var="f">
+                                <apex:pageBlockSectionItem >
+                                    <apex:outputLabel value="{!f.Label}" for="OutID11"/>
+                                    <apex:inputfield value="{!contact[f.FieldPath]}" id="OutID11"/>
+                                </apex:pageBlockSectionItem>
+                           </apex:repeat>
+                        </apex:pageblocksection>
+                    </apex:pageblock>
+                </div>
+            </apex:outputpanel>
+        </apex:outputpanel>
+        
+        <apex:outputpanel id="modalWindowIdForAddNewButtonOrEditLink">
+            <apex:outputpanel rendered="{!isAddNewOrEdit}">
+                <div id="popUpBack" class="popupBackground" style="height:100%;width:100%;"></div>
+                <div class="modalDialog" style="min-height:150px;min-width:70%;overflow: auto;position: fixed;" >
+                    <apex:pageblock id="pbId">
+                        <apex:pageblocksection title="{!strRelatedlistName}" columns="2" id="pbsecId">
+                          <apex:panelGrid columns="1" Style="margin-left: 350px">
+                            <apex:panelGroup >
+                                <table>
+                                    <tr>
+                                        <td>
+                                            <apex:commandButton action="{!createOrEditRelatedlistRecordForContact}" value="Save" />
+                                        </td>
+                                        <td>
+                                            <apex:commandButton action="{!cancel}" value="Cancel"  />
+                                        </td>
+                                    </tr>
+                                </table>
+                            </apex:panelGroup>
+                          </apex:panelGrid> 
+                           <apex:outputText value="" />
+                            <apex:repeat value="{!lstRelatedListFields}" var="f">
+                            
+                                <!-- Start - This item comes under the requirement of MIHIN-95 -->
+                                <apex:pageBlockSectionItem rendered="{!IF(strRelatedlistName == 'ProviderAddress Edit',true,false)}">
+                                    <apex:outputLabel value="{!f.Label}" for="OutID6"/>
+                                    <apex:inputfield value="{!objProviderAddressForInsertOrEdit[f.FieldPath]}" required="{!OR(f.required, f.dbrequired)}" id="OutID6" />
+                                </apex:pageBlockSectionItem>
+                                <!-- End - This item comes under the requirement of MIHIN-95 -->
+                                
+                                <apex:pageBlockSectionItem rendered="{!IF(strRelatedlistName == 'Affiliation Edit',true,false)}">
+                                    <apex:outputLabel value="{!f.Label}" for="OutID"/>
+                                    <apex:inputfield value="{!objAffiliationForInsertOrEdit[f.FieldPath]}" required="{!OR(f.required, f.dbrequired)}" id="OutID" />
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem rendered="{!IF(strRelatedlistName == 'ProviderSpecialty Edit',true,false)}">
+                                    <apex:outputLabel value="{!f.Label}" for="OutID1"/>
+                                    <apex:inputfield value="{!objProviderSpecialityForInsertOrEdit[f.FieldPath]}" required="{!OR(f.required, f.dbrequired)}" id="OutID1" />
+                               </apex:pageBlockSectionItem> 
+                               <apex:pageBlockSectionItem rendered="{!IF(strRelatedlistName == 'ProviderCredential Edit',true,false)}">
+                                    <apex:outputpanel >
+                                         <apex:outputLabel value="{!f.Label}"  rendered="{!IF(f.Label == 'Record Type ID',true,false)}" for="idRecordType" />&nbsp;&nbsp;&nbsp;
+                                         <apex:outputLabel value="{!f.Label}" rendered="{!IF(f.Label != 'Record Type ID',true,false)}" for="OutID3" />&nbsp;&nbsp;&nbsp;    
+                                    </apex:outputpanel>
+                                    <apex:outputpanel >    
+                                        <apex:outputfield value="{!objProviderCredentialForInsertOrEdit[f.FieldPath]}" rendered="{!IF(f.FieldPath == 'RecordTypeId',true,false) && isEditRecord }"/> 
+                                             <apex:selectList value="{!strRecordTypeName}" size="1" required="{!OR(f.required, f.dbrequired)}" rendered="{!IF(f.FieldPath == 'RecordTypeId',true,false) && !isEditRecord }" onchange="passSelectedRecordType(this.value);" id="idRecordType">
+                                                <apex:selectOptions value="{!lstPCRT}"  />
+                                              </apex:selectList>    
+                                            <apex:inputfield value="{!objProviderCredentialForInsertOrEdit[f.FieldPath]}" required="{!OR(f.required, f.dbrequired)}" rendered="{!IF(f.FieldPath != 'RecordTypeId',true,false)}" id="OutID3" />
+                                     </apex:outputpanel>
+                                 </apex:pageBlockSectionItem>
+                                 <apex:pageBlockSectionItem rendered="{!IF(strRelatedlistName == 'ProviderCareTeam Edit',true,false)}">
+                                    <apex:outputLabel value="{!f.Label}" for="OutID4"/>
+                                    <apex:inputfield value="{!objProviderCareTeamForInsertOrEdit[f.FieldPath]}" required="{!OR(f.required, f.dbrequired)}" id="OutID4" />
+                                </apex:pageBlockSectionItem>
+                           </apex:repeat>
+                        </apex:pageblocksection>
+                    </apex:pageblock>
+                </div>
+            </apex:outputpanel>
+        </apex:outputpanel>
+        <script>
+            function passSelectedRecordType(selectedRecordTypeId)
+            {
+                SelectedRecordType(selectedRecordTypeId);
+            }
+        </script>
+        <apex:actionstatus id="processing" startText="Requesting...">
+         <apex:facet name="start">
+            <div id="popUpBack" class="popupBackground" style="height:100%;width:100%; display: block;"></div>
+            <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; ">
+                <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+                <table align="center" valign="top" style="width: 100%; height: 30%">
+                <tr align="center" valign="top" style="width: 100%; height: 30%">
+                    <td valign="top"><img src="{!$Resource.loading}" /><span class="waitingDescription">Loading...</span></td>
+                </tr>
+                </table>
+                </div>
+            </div>
+            <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; "> </div>
+            <script>document.getElementById('ManageMembersViewport_loading').height = window.innerHeight * (3/4);</script>
+         </apex:facet>
+         <apex:facet name="stop"></apex:facet>
+      </apex:actionstatus>
+   </apex:form>
+    <apex:outputpanel rendered="{!isAnotherprofileUser}" id="opstandardId">
+        <apex:detail subject="{!objContact.id}" title="false"/>
+    </apex:outputpanel>
+</apex:page>

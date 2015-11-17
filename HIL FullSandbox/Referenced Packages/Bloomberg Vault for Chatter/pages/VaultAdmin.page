@@ -1,0 +1,498 @@
+<apex:page title="{!$Label.bbgarchive__BVault_Admin_PageTitle}" showChat="false" sidebar="true" controller="BBGArchive.VaultAdminController" action="{!updateOrgSettings}" applyBodyTag="false">
+<apex:stylesheet value="https://code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css"/>
+<apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js" />
+<apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/jquery-ui.min.js" />
+<apex:stylesheet value="https://jqueryui.com/resources/demos/style.css" />
+
+
+<script>
+    j$ = jQuery.noConflict();
+    j$(function() {
+        j$( "#tabs" ).tabs();
+    });
+
+    j$(document).ready(function(){
+        var j$tabs = j$('#tabs').tabs({ selected: 0 });
+        j$tabs.tabs('option', 'active', {!activeTab});
+
+        j$('#tabs').on('tabsactivate', function(event, ui) {
+            var newIndex = ui.newTab.index();
+            console.log('Switched to tab '+newIndex);
+
+            var editAdminSettingsMode = document.getElementById('{!$Component.adminForm.editAdminMode}').value;
+            if(editAdminSettingsMode == "true") {
+                j$( "#dialog-confirm" ).dialog({
+                    resizable: false,
+                    height:200,
+                    modal: true,
+                    buttons: {
+                        Yes: function() {
+                            CancelAdminSettings();
+                            j$( this ).dialog( "close" );
+                        },
+                        No: function() {
+                            var oldIndex = {!adminSettingsTab};
+                            j$tabs.tabs('option', 'active', oldIndex);
+                            //j$("#tabs-" + newIndex).removeClass("ui-state-hover");
+                            //j$("#tabs-element-" + oldIndex).focus();
+                            j$( this ).dialog( "close" );
+                        }
+                    }
+                });
+            }
+
+            var editMonitoredUsersMode = document.getElementById('{!$Component.adminForm.editUsersMode}').value;
+            if(editMonitoredUsersMode == "true") {
+                j$( "#dialog-confirm" ).dialog({
+                    resizable: false,
+                    height:200,
+                    modal: true,
+                    buttons: {
+                        Yes: function() {
+                            CancelMonitoredUsers();
+                            j$( this ).dialog( "close" );
+                        },
+                        No: function() {
+                            var oldIndex = {!monitoredUsersTab};
+                            j$tabs.tabs('option', 'active', oldIndex);
+                            j$( this ).dialog( "close" );
+                        }
+                    }
+                });
+            }
+        });
+    });
+</script>
+<body>
+
+<apex:pageBlock id="permissionError" rendered="{!NOT(LicensedUser)}" >
+    <apex:pageBlockSection collapsible="false" columns="1">
+         <apex:pageBlockSectionItem >
+            <apex:outputLabel value="{!$Label.bbgarchive__BVault_AdminPermissionError}" />
+        </apex:pageBlockSectionItem>
+    </apex:pageBlockSection>
+</apex:pageBlock>
+<apex:form id="adminForm" rendered="{!LicensedUser}" >
+    <apex:inputHidden id="editAdminMode" value="{!inEditAdminSettingsMode}"/>
+    <apex:inputHidden id="editUsersMode" value="{!inEditMonitoredUsersMode}"/>
+    <apex:sectionHeader title="{!$Label.bbgarchive__BVault_AdminTab}" />
+    <apex:actionFunction name="CancelAdminSettings" action="{!cancelAdminSettings}" rerender="adminSettings,vaultAdmin">
+    </apex:actionFunction>
+    <apex:actionFunction name="CancelMonitoredUsers" action="{!cancelMonitoredUsers}" rerender="monitoredUsers,vaultAdmin">
+    </apex:actionFunction>
+    <apex:pageMessages id="pageMessages"/>
+<div id="tabs">
+    <ul>
+        <li id="tabs-element-0"><a href="#tabs-0">{!$Label.bbgarchive__BVault_ArchiveStatusTab}</a></li>
+        <li id="tabs-element-1"><a href="#tabs-1">{!$Label.bbgarchive__BVault_AdminSettingsTab}</a></li>
+        <li id="tabs-element-2"><a href="#tabs-2">{!$Label.bbgarchive__BVault_MonitoredUsersTab}</a></li>
+    </ul>
+    <div id="tabs-0">
+        <apex:pageBlock id="archiveStatus" mode="maindetail" helpUrl="{!$Page.BBGArchive__VaultConfig}" helpTitle="{!$Label.bbgarchive__BVault_HelpAndTraining}" >
+
+            <apex:pageBlockSection id="archiveStatus" collapsible="false" columns="1">
+                <apex:outputPanel style="display:block;width:99%;text-align:center;">
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="{!$Label.bbgarchive__BVault_ArchiveStatusLabel}: " style="font-weight:bold; font-size:large"/>
+                        <apex:outputLabel value="{!archiveStatus}" style="color:{!archiveStatusColor}; font-weight:bold; font-size:large"/>
+                    </apex:pageBlockSectionItem>
+                </apex:outputPanel>
+            </apex:pageBlockSection>
+
+            <apex:pageBlockSection id="archiveControl" title="{!$Label.bbgarchive__BVault_ArchiveControlLabel}" collapsible="false" columns="1" rendered="{!userHasVaultAdminPermissionSet}" >
+                <apex:pageBlockSectionItem rendered="{!NOT(systemInitialized)}">
+                    <apex:outputText value="{!$Label.bbgarchive__BVault_ArchiveControlExplanation}"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!NOT(systemInitialized)}">
+                    <apex:outputPanel style="display:block;width:99%;text-align:center;">
+                        <apex:commandButton disabled="{!NOT(canStartArchiving)}"
+                                            action="{!initiateArchive}" value="{!$Label.bbgarchive__BVault_StartArchiving}"/>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+            
+
+                <apex:outputPanel layout="Block" style="text-align: justify;padding-right: 25px;margin-bottom: 14px;">
+                    <apex:outputText value="{!$Label.bbgarchive__BVault_PauseResumePreInitialization} " rendered="{!NOT(systemInitialized)}" />
+                    <apex:outputText value="{!$Label.bbgarchive__BVault_PauseResumeExplanation}" />
+                </apex:outputPanel>
+                <apex:outputPanel style="display:block;width:99%;text-align:center;">
+                    <apex:commandButton disabled="{!paused}"
+                                        action="{!pause}" value="{!$Label.bbgarchive__BVault_Pause}"/>
+                    <apex:commandButton disabled="{!NOT(canResume)}"
+                                        action="{!resume}" value="{!$Label.bbgarchive__BVault_Resume}"/>
+                </apex:outputPanel>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+        
+        <apex:pageBlock mode="maindetail" id="statistics" rendered="{!userHasVaultReaderPermissionSet || userHasVaultAdminPermissionSet}">
+            <apex:actionFunction action="{!refreshStatistics}" name="refreshStatistics" />
+            <apex:pageBlockSection id="statsExplanation" title="{!$Label.bbgarchive__BVault_VaultStatisticsLabel}" collapsible="false" columns="1"  rendered="{!userHasVaultAdminPermissionSet}">
+
+                 <apex:outputPanel layout="Block" style="text-align: justify;padding-right: 25px;margin-bottom: 14px;">
+                    <apex:outputText value="{!$Label.bbgarchive__BVault_VaultStatisticsExplanation}" />
+                </apex:outputPanel>
+
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="{!$Label.bbgarchive__BVault_VaultStatisticsInterval}"/>
+                    <apex:selectList value="{!statsInterval}" size="1"
+                                    disabled="{!NOT(systemInitialized)}"
+                                    onChange="refreshStatistics()">
+                        <apex:selectOptions value="{!statsIntervalOptions}"/>
+                    </apex:selectList>
+                </apex:pageBlockSectionItem>
+                    <!--
+                    <apex:pageBlockSectionItem >
+                        <apex:outputPanel style="display:block;width:99%;text-align:center;">
+                            <apex:commandButton disabled="{!NOT(systemInitialized)}"
+                                                action="{!refreshStatistics}"
+                                                value="Refresh Statistics"
+                                                rerender="summaryStats,archiveStats"/>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    -->
+                <!-- </apex:pageBlockSection> -->
+            </apex:pageBlockSection>
+            <apex:pageBlockSection id="summaryStats" title="{!$Label.bbgarchive__BVault_SummaryStatisticsLabel}" collapsible="true" columns="1">
+                 <apex:pageBlockSection title="{!$Label.bbgarchive__BVault_ChatterFeedsLabel}" collapsible="false" columns="1">
+                    <apex:dataTable value="{!myVaultAnalytics.thisSlice.sliceSummaryStats}"
+                                    var="stats" id="feedSummaryTable" rowClasses="odd,even"
+                                    styleClass="tableClass" style="width:99%;">
+                        <apex:column >
+                            <apex:outputText value="{!stats.statsType}" style="font-weight:bold;"/>
+                        </apex:column>
+                        <apex:column >
+                            <apex:facet name="header">{!$Label.bbgarchive__BVault_TotalFeedsLabel}</apex:facet>
+                            <apex:outputText value="{!stats.totalFeeds}"/>
+                        </apex:column>
+                        <apex:column >
+                            <apex:facet name="header">{!$Label.bbgarchive__BVault_TotalFeedUsersLabel}</apex:facet>
+                            <apex:outputText value="{!stats.totalFeedUsers}"/>
+                        </apex:column>
+                        <apex:column >
+                            <apex:facet name="header">{!$Label.bbgarchive__BVault_LargestFileLabel}</apex:facet>
+                            <apex:outputText value="{!stats.largestArchivedFileSize}"/>
+                        </apex:column>
+                        <apex:column >
+                            <apex:facet name="header">{!$Label.bbgarchive__BVault_SmallestFileLabel}</apex:facet>
+                            <apex:outputText value="{!stats.smallestArchivedFileSize}"/>
+                        </apex:column>
+                    </apex:dataTable>
+                </apex:pageBlockSection>
+                <apex:pageBlockSection title="{!$Label.bbgarchive__BVault_PrivateMessagesLabel}" collapsible="false" columns="1">
+                    <apex:dataTable value="{!myVaultAnalytics.thisSlice.sliceSummaryStats}"
+                                    var="stats" id="messageSummaryTable" rowClasses="odd,even" styleClass="tableClass" style="width:99%;">
+                        <apex:column >
+                            <apex:outputText value="{!stats.statsType}" style="font-weight:bold;"/>
+                        </apex:column>
+                        <apex:column >
+                            <apex:facet name="header">{!$Label.bbgarchive__BVault_TotalMessagesLabel}</apex:facet>
+                            <apex:outputText value="{!stats.totalMessages}"/>
+                        </apex:column>
+                        <apex:column >
+                            <apex:facet name="header">{!$Label.bbgarchive__BVault_TotalSendersLabel}</apex:facet>
+                            <apex:outputText value="{!stats.totalMessageUsers}"/>
+                        </apex:column>
+                        <apex:column >
+                            <apex:facet name="header">{!$Label.bbgarchive__BVault_TotalConversationsLabel}</apex:facet>
+                            <apex:outputText value="{!stats.totalConversations}"/>
+                        </apex:column>
+                    </apex:dataTable>
+                </apex:pageBlockSection>
+                <apex:pageBlockSection title="{!$Label.bbgarchive__BVault_ChatterGroupsLabel}" collapsible="false" columns="1">
+                    <apex:dataTable value="{!myVaultAnalytics.thisSlice.sliceSummaryStats}"
+                                    var="stats" id="messageSummaryTable" rowClasses="odd,even" styleClass="tableClass" style="width:99%;">
+                        <apex:column >
+                            <apex:outputText value="{!stats.statsType}" style="font-weight:bold;"/>
+                        </apex:column>
+                        <apex:column >
+                            <apex:facet name="header">{!$Label.bbgarchive__BVault_TotalGroupChangesLabel}</apex:facet>
+                            <apex:outputText value="{!stats.totalGroupChanges}"/>
+                        </apex:column>
+                        <apex:column >
+                            <apex:facet name="header">{!$Label.bbgarchive__BVault_TotalGroupMemberChangesLabel}</apex:facet>
+                            <apex:outputText value="{!stats.totalGroupMemberChanges}"/>
+                        </apex:column>
+                   </apex:dataTable>
+                </apex:pageBlockSection>
+            </apex:pageBlockSection>
+            <apex:pageBlockSection id="archiveStats" title="{!$Label.bbgarchive__BVault_ArchiveStatistics}" collapsible="true" columns="1">
+                <apex:pageBlockSection title="{!$Label.bbgarchive__BVault_ChatterFeedsLabel}" collapsible="false" columns="1">
+                    <apex:outputText value="{!noFeedAnalyticsMessage}"
+                                        rendered="{!myVaultAnalytics.noFeedAnalytics}"/>
+                    <apex:chart height="400" width="800" data="{!myVaultAnalytics.feedsThisSlice}"
+                                rendered="{!NOT(myVaultAnalytics.noFeedAnalytics)}">
+                        <apex:legend position="right"/>
+                        <apex:axis type="Numeric" position="bottom" fields="archivedCount,sentCount" 
+                            title="{!$Label.bbgarchive__BVault_NumberOfFeedsLabel}" grid="true" minimum="0"/>
+                        <apex:axis type="Category" position="left" fields="feedType" 
+                            title="{!$Label.bbgarchive__BVault_FeedTypeLabel}" minimum="0"/>
+                        <apex:barSeries orientation="horizontal" axis="bottom"
+                                        title="{!$Label.bbgarchive__BVault_Archived},{!$Label.bbgarchive__BVault_Sent}"
+                                        yField="feedType" xField="archivedCount,sentCount"
+                                        colorSet="red,blue">
+                            <apex:chartTips height="20" width="200"/>
+                        </apex:barSeries>
+                    </apex:chart>
+                </apex:pageBlockSection>
+                <apex:pageBlockSection title="{!$Label.bbgarchive__BVault_PrivateMessagesLabel}" collapsible="false" columns="1">
+                    <apex:outputText value="{!noMessageAnalyticsMessage}"
+                                        rendered="{!myVaultAnalytics.noMessageAnalytics}"/>
+                    <apex:chart height="200" width="800" data="{!myVaultAnalytics.messagesThisSlice}"
+                                rendered="{!NOT(myVaultAnalytics.noMessageAnalytics)}">
+                       <apex:legend position="right"/>
+                        <apex:axis type="Numeric" position="bottom" fields="archivedCount,sentCount" 
+                            title="{!$Label.bbgarchive__BVault_NumberOfMessagesLabel}" grid="true" minimum="0"/>
+                        <apex:axis type="Category" position="left" fields="messageType" 
+                            title="{!$Label.bbgarchive__BVault_MessageTypeLabel}" minimum="0"/>
+                        <apex:barSeries orientation="horizontal" axis="bottom"
+                                        title="{!$Label.bbgarchive__BVault_Archived},{!$Label.bbgarchive__BVault_Sent}"
+                                        yField="messageType" xField="archivedCount,sentCount"
+                                        colorSet="red,blue">
+                            <apex:chartTips height="20" width="200"/>
+                        </apex:barSeries>
+                    </apex:chart>
+                </apex:pageBlockSection>
+                <apex:pageBlockSection title="{!$Label.bbgarchive__BVault_ChatterGroupsLabel}" collapsible="false" columns="1">
+                    <apex:outputText value="{!noGroupAnalyticsMessage}"
+                                        rendered="{!myVaultAnalytics.noGroupAnalytics}"/>
+                    <apex:chart height="400" width="800" data="{!myVaultAnalytics.groupsThisSlice}"
+                                rendered="{!NOT(myVaultAnalytics.noGroupAnalytics)}">
+                        <apex:legend position="right"/>
+                        <apex:axis type="Numeric" position="bottom" fields="archivedGroupChangeCount,sentGroupChangeCount" 
+                            title="{!$Label.bbgarchive__BVault_NumberOfGroupChangesLabel}" grid="true" minimum="0"/>
+                        <apex:axis type="Category" position="left" fields="groupChangeType" 
+                            title="{!$Label.bbgarchive__BVault_GroupChangeTypeLabel}" minimum="0"/>
+                        <apex:barSeries orientation="horizontal" axis="bottom"
+                                        title="{!$Label.bbgarchive__BVault_Archived},{!$Label.bbgarchive__BVault_Sent}"
+                                        yField="groupChangeType"
+                                        xField="archivedGroupChangeCount,sentGroupChangeCount" colorSet="red,blue">
+                            <apex:chartTips height="20" width="200"/>
+                        </apex:barSeries>
+                    </apex:chart>
+                </apex:pageBlockSection>
+            </apex:pageBlockSection>
+            <!--
+            <apex:pageBlockSection id="chatterAnalytics" title="{!$Label.BVault_ChatterAnalytics}" collapsible="false" columns="1">
+            </apex:pageBlockSection>
+            -->
+        </apex:PageBlock>
+    </div>
+    <div id="tabs-1">
+        <apex:pageBlock id="adminSettings" mode="maindetail" helpUrl="{!$Page.BBGArchive__VaultConfig}" helpTitle="{!$Label.bbgarchive__BVault_HelpAndTraining}" rendered="{!userHasVaultAdminPermissionSet}" >
+            
+            <apex:pageBlockButtons >
+                <apex:commandButton action="{!editAdminSettings}" value="{!$Label.bbgarchive__BVault_Edit}" disabled="{!inEditAdminSettingsMode}"/>
+                <apex:commandButton action="{!saveAdminSettings}" value="{!$Label.bbgarchive__BVault_Save}" disabled="{!NOT(inEditAdminSettingsMode)}"/>
+                <apex:commandButton action="{!cancelAdminSettings}" value="{!$Label.bbgarchive__BVault_Cancel}" disabled="{!NOT(inEditAdminSettingsMode)}"/>
+            </apex:pageBlockButtons>
+            <apex:pageBlockSection title="{!$Label.bbgarchive__BVault_RequiredSettings}" collapsible="false" columns="1">
+                <!--    <apex:pageBlockSectionItem >    -->
+                <apex:outputPanel layout="Block" style="text-align: justify;padding-right: 25px;margin-bottom: 14px;">
+                    <apex:outputText value="{!$Label.bbgarchive__BVault_RequiredSettingsExplanation}" />
+                </apex:outputPanel>
+                    <!--    <apex:outputLabel value="These settings are required in order to properly capture Chatter traffic and archive it to the Bloomberg Vault.  Caid is a Bloomberg-defined unique identifier for your company.  Destination email address is a Bloomberg-specified address where archived Chatter data will be sent.  Once these settings are entered (when this application is initially configured), they should never change."/>  -->
+                <!--    </apex:pageBlockSectionItem>    -->
+                <!--    <apex:pageBlockSectionItem >    -->
+                <!--   <apex:outputLabel value="NOTE: Once caid is entered and saved (when this application is initially configured), it cannot be changed."/>  -->
+                <!--   </apex:pageBlockSectionItem>    -->
+                <!--    <apex:pageBlockSection collapsible="false" columns="1">   -->
+                    <!--    <apex:pageBlockSection collapsible="false" columns="1"> -->
+                       <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="{!$Label.bbgarchive__BVault_CaidLabel}" />
+                            <apex:outputPanel >
+                            <apex:inputText value="{!caid}" rendered="{!NOT(haveCaid)}" ></apex:inputText>
+                            <apex:outputText value="{!caid}" rendered="{!haveCaid}"></apex:outputText>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem rendered="{!NOT(haveCaid)}" >
+                            <apex:outputLabel />
+                            <apex:outputLabel value="{!$Label.bbgarchive__BVault_CaidRequired}" style="color:red;" />
+                        </apex:pageBlockSectionItem>
+                    <!--    </apex:pageBlockSection>    -->
+                    <!--    <apex:pageBlockSection collapsible="false" columns="1"> -->
+                       <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="{!$Label.bbgarchive__BVault_DestinationEmailLabel}" />
+                            <apex:inputText value="{!destinationEmail}" size="80" disabled="{!NOT(inEditAdminSettingsMode)}"/>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem rendered="{!NOT(haveDestinationEmail)}" >
+                            <apex:outputLabel />
+                            <apex:outputLabel value="{!$Label.bbgarchive__BVault_DestinationEmailRequired}" style="color:red;" />
+                        </apex:pageBlockSectionItem>
+                    <!--    </apex:pageBlockSection>    -->
+                    <!--    <apex:pageBlockSection collapsible="false" columns="1"> -->
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="{!$Label.bbgarchive__BVault_DestinationUserLabel}" />
+                            <apex:outputText value="{!destinationUserName}"/>
+                        </apex:pageBlockSectionItem>
+                    <!--    </apex:pageBlockSection>    -->
+                    <apex:pageBlockSectionItem > <!-- Added for spacing -->
+                    </apex:pageBlockSectionItem>
+                <!--    </apex:pageBlockSection>    -->
+                <!--    <apex:pageBlockSectionItem >    -->
+                 <apex:outputPanel layout="Block" style="text-align: justify;padding-right: 25px;margin-bottom: 14px;">
+                    <apex:outputText value="{!$Label.bbgarchive__BVault_DefaultOwnerExplanation}" />
+                </apex:outputPanel>
+                   <!-- <apex:outputLabel value="The Default Owner must be a user who has both 'Modify All Data' and 'Manage Chatter Messages' privileges.  This will be checked every time this administration tab is accessed."/> -->
+                <!--    </apex:pageBlockSectionItem>    -->
+                <!--    <apex:pageBlockSection collapsible="false" columns="1"> -->
+                    <!--    <apex:pageBlockSection collapsible="false" columns="1"> -->
+                       <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="{!$Label.bbgarchive__BVault_DefaultOwnerLabel}" />
+                            <apex:selectList value="{!selectedDefaultOwnerId}" multiselect="false" size="1" disabled="{!NOT(inEditAdminSettingsMode)}">
+                                <apex:selectOptions value="{!eligibleDefaultOwnerOptions}"/>
+                            </apex:selectList>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem rendered="{!NOT(haveDefaultOwner)}">
+                            <apex:outputLabel />
+                            <apex:outputLabel value="{!$Label.bbgarchive__BVault_DefaultOwnerRequired}" style="color:red;" />
+                        </apex:pageBlockSectionItem>
+                    <!--    </apex:pageBlockSection>    -->
+                <!--    </apex:pageBlockSection>    -->
+            </apex:pageBlockSection>
+            <apex:pageBlockSection title="{!$Label.bbgarchive__BVault_ArchiveIntervalSettingsLabel}" collapsible="false" columns="1">
+                 <apex:outputPanel layout="Block"  style="text-align: justify;padding-right: 25px;margin-bottom: 14px;">
+                   <apex:outputText value="{!$Label.bbgarchive__BVault_ArchiveIntervalExplanation}" />
+                </apex:outputPanel>
+                <!--    <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="This setting determines the interval on which Chatter feeds, Private Messages and Collaboration Group settings are sent to Bloomberg Vault for archival.  The default setting is {!defaultInterval} minutes."/>
+                </apex:pageBlockSectionItem>    -->
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="{!$Label.bbgarchive__BVault_SendIntervalLabel}"/>
+                    <apex:selectRadio value="{!sendInterval}" disabled="{!NOT(inEditAdminSettingsMode)}">
+                        <apex:selectOptions value="{!sendIntervalOptions}"/>
+                    </apex:selectRadio>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            <apex:pageBlockSection title="{!$Label.bbgarchive__BVault_OrgSettingsLabel}" collapsible="false" columns="1">
+                 <apex:outputPanel layout="Block" style="text-align: justify;padding-right: 25px;margin-bottom: 14px;">
+                    <apex:outputText value="{!$Label.bbgarchive__BVault_OrgSettingsExplanation}" />
+                </apex:outputPanel>
+                <!--    <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="These fields uniquely identify your salesforce.com instance.  This data is sent to Bloomberg as part of your Chatter archive.  These fields are read-only and are displayed here for your information."/>
+                </apex:pageBlockSectionItem>    -->
+                <!--    <apex:pageBlockSection collapsible="false" columns="1"> -->
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="{!$ObjectType.Organization.fields.Name.label}"/>
+                        <apex:outputText value="{!orgName}" />
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="{!$ObjectType.Organization.fields.Id.label}" />
+                        <apex:outputText value="{!orgId}" />
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="{!$ObjectType.Organization.fields.OrganizationType.label}" />
+                        <apex:outputText value="{!orgType}" />
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="{!$Label.bbgarchive__BVault_Sandbox}" />
+                        <apex:outputText value="{!isSandbox}" />
+                    </apex:pageBlockSectionItem>
+                <!--    </apex:pageBlockSection>    -->
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+    </div>
+    <div id="tabs-2">
+        <apex:pageBlock id="monitoredUsers" mode="maindetail" helpUrl="{!$Page.BBGArchive__VaultConfig}" helpTitle="{!$Label.bbgarchive__BVault_HelpAndTraining}" rendered="{!userHasVaultAdminPermissionSet}" >
+            
+            <apex:actionFunction name="findUsers" action="{!findAvailableUsers}" rerender="editExcludedUsers"/>
+            <apex:actionFunction name="findProfiles" action="{!findAvailableProfiles}" rerender="editExcludedProfiles"/>
+            <apex:actionFunction name="findRoles" action="{!findAvailableRoles}" rerender="editExcludedRoles"/>
+            <apex:pageBlockButtons >
+                <apex:commandButton action="{!editMonitoredUsers}" value="{!$Label.bbgarchive__BVault_Edit}" disabled="{!inEditMonitoredUsersMode}"/>
+                <apex:commandButton action="{!saveMonitoredUsers}" value="{!$Label.bbgarchive__BVault_Save}" disabled="{!NOT(inEditMonitoredUsersMode)}"/>
+                <apex:commandButton action="{!cancelMonitoredUsers}" value="{!$Label.bbgarchive__BVault_Cancel}" disabled="{!NOT(inEditMonitoredUsersMode)}"/>
+            </apex:pageBlockButtons>
+            <!--<apex:pageBlockSection title="Monitored Users" collapsible="false" columns="1"> -->
+                <apex:pageBlockSection collapsible="false" columns="1">
+                <apex:outputPanel layout="Block" style="text-align: justify;padding-right: 25px;margin-bottom: 14px;">
+                    <apex:outputText value="{!$Label.bbgarchive__BVault_ExclusionsExplanation}" />
+                </apex:outputPanel>
+                </apex:pageBlockSection>
+                <!--    <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="By default, all users' Chatter traffic is monitored.  You can create exclusions, such that some Chatter traffic is excluded from archiving.  Below, you can specify individual users, user profiles, and/or roles to be excluded from Chatter archiving."/>
+                </apex:pageBlockSectionItem>    -->
+            <!--    </apex:pageBlockSection>    -->
+            <apex:pageBlockSection id="editExcludedUsers" title="{!$Label.bbgarchive__BVault_ExcludedUsersLabel}" collapsible="false" columns="1" rendered="{!inEditMonitoredUsersMode}">
+                <apex:outputLabel id="userFindError" rendered="{!badUserFindString}"
+                                    value="{!userFindStringError}"
+                                    style="font-weight:bold; color:red;"/>
+                <c:ExclusionPicklist leftLabel="{!$Label.bbgarchive__BVault_AvailableUsersLabel}"
+                    lOptions="{!availableUsers}"
+                    rightLabel="{!$Label.bbgarchive__BVault_ExcludedUsersLabel}"
+                    rOptions="{!excludedUsers}"
+                    fString="{!userFindString}"
+                    fActionFunction="findUsers"
+                    size="10"
+                    width="auto"/>
+            </apex:pageBlockSection>
+            <apex:pageBlockSection id="editExcludedProfiles" title="{!$Label.bbgarchive__BVault_ExcludedProfilesLabel}" collapsible="false" columns="1" rendered="{!inEditMonitoredUsersMode}">
+                <apex:outputLabel id="profileFindError" rendered="{!badProfileFindString}"
+                                    value="{!profileFindStringError}"
+                                    style="font-weight:bold; color:red;"/>
+                <c:ExclusionPicklist leftLabel="{!$Label.bbgarchive__BVault_AvailableProfilesLabel}"
+                    lOptions="{!availableProfiles}"
+                    rightLabel="{!$Label.bbgarchive__BVault_ExcludedProfilesLabel}"
+                    rOptions="{!excludedProfiles}"
+                    fString="{!profileFindString}"
+                    fActionFunction="findProfiles"
+                    size="10"
+                    width="auto"/>
+            </apex:pageBlockSection>
+            <apex:pageBlockSection id="editExcludedRoles" title="{!$Label.bbgarchive__BVault_ExcludedRolesLabel}" collapsible="false" columns="1" rendered="{!inEditMonitoredUsersMode}">
+                <apex:outputLabel id="roleFindError" rendered="{!badRoleFindString}"
+                                    value="{!roleFindStringError}"
+                                    style="font-weight:bold; color:red;"/>
+                <c:ExclusionPicklist leftLabel="{!$Label.bbgarchive__BVault_AvailableRolesLabel}"
+                    lOptions="{!availableRoles}"
+                    rightLabel="{!$Label.bbgarchive__BVault_ExcludedRolesLabel}"
+                    rOptions="{!excludedRoles}"
+                    fString="{!roleFindString}"
+                    fActionFunction="findRoles"
+                    size="10"
+                    width="auto"/>
+            </apex:pageBlockSection>
+            <apex:pageBlockSection id="excludedUsersList" title="{!$Label.bbgarchive__BVault_ExcludedUsersLabel}" collapsible="false" columns="1" rendered="{!NOT(inEditMonitoredUsersMode)}">
+                <apex:pageBlockSectionItem >
+                    <apex:repeat value="{!ExcludedUserList}" var="u" >
+                        <apex:outputText value="{!u.Name}"/><br />
+                    </apex:repeat>  
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            <!-- <apex:pageBlockSection id="excludedUsers" title="{!$Label.bbgarchive__BVault_ExcludedUsersLabel}" collapsible="false" columns="1" rendered="{!NOT(inEditMonitoredUsersMode)}">
+                <apex:selectList size="10" style="width: auto;" disabled="true">
+                    <apex:selectOptions value="{!excludedUsers}"/>
+                </apex:selectList>
+            </apex:pageBlockSection> -->
+            <apex:pageBlockSection id="excludedProfilesList" title="{!$Label.bbgarchive__BVault_ExcludedProfilesLabel}" collapsible="false" columns="1" rendered="{!NOT(inEditMonitoredUsersMode)}">
+                <apex:pageBlockSectionItem >
+                    <apex:repeat value="{!ExcludedProfileList}" var="p" >
+                        <apex:outputText value="{!p.Name}"/><br />
+                    </apex:repeat>  
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            <!-- <apex:pageBlockSection id="excludedProfiles" title="{!$Label.bbgarchive__BVault_ExcludedProfilesLabel}" collapsible="false" columns="1" rendered="{!NOT(inEditMonitoredUsersMode)}">
+                <apex:selectList size="10" style="width: auto;" disabled="true">
+                    <apex:selectOptions value="{!excludedProfiles}"/>
+                </apex:selectList>
+            </apex:pageBlockSection> -->
+            <apex:pageBlockSection id="excludedRolesList" title="{!$Label.bbgarchive__BVault_ExcludedRolesLabel}" collapsible="false" columns="1" rendered="{!NOT(inEditMonitoredUsersMode)}">
+                <apex:pageBlockSectionItem >
+                    <apex:repeat value="{!ExcludedRoleList}" var="r" >
+                        <apex:outputText value="{!r.Name}"/><br />
+                    </apex:repeat>  
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+           <!--  <apex:pageBlockSection id="excludedRoles" title="{!$Label.bbgarchive__BVault_ExcludedRolesLabel}" collapsible="false" columns="1" rendered="{!NOT(inEditMonitoredUsersMode)}">
+                <apex:selectList size="10" style="width: auto;" disabled="true">
+                    <apex:selectOptions value="{!excludedRoles}"/>
+                </apex:selectList>
+            </apex:pageBlockSection> -->
+        </apex:pageBlock>
+    </div>
+</div>
+</apex:form>
+</body>
+<div id="dialog-confirm" style="display: none;" title="{!$Label.BVault_UnsavedChangesTitle}">
+  <p><span class="ui-icon ui-icon-alert" style="float:left; margin:0 7px 20px 0;"></span>{!$Label.BVault_UnsavedChangesMessage}</p>
+</div>
+</apex:page>

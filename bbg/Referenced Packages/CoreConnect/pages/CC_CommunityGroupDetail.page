@@ -1,0 +1,533 @@
+<apex:page showHeader="false" sidebar="false" standardStylesheets="false" applyHtmlTag="false" applyBodyTag="false" docType="html-5.0" controller="CORECONNECT.CC_CommunityGroupDetailController" >
+  <apex:composition template="{!$Site.Template}">
+    <apex:define name="pagetitle">{!CollabGroup.Name}</apex:define>
+
+    <apex:define name="body" > 
+
+      <header class="container page-heading">
+        <apex:pageMessages ></apex:pageMessages>
+        <apex:form >
+          <apex:outputPanel id="JoinLeaveButtons" >
+            <apex:commandLink id="joinButton" rerender="JoinLeaveButtons" action="{!Join}" rendered="{!CGM==null && IsOwner==false && CollabGroup.CollaborationType=='Public'}" styleClass="btn btn-default btn-lg pull-right hidden-xs">{!$Label.coreconnect__CC_Group_Detail_Join}</apex:commandLink>
+            <apex:commandLink id="leaveButton" rerender="JoinLeaveButtons"  action="{!LeaveGroup}" rendered="{!CGM!=null && IsOwner==false}" styleClass="btn btn-default btn-lg pull-right hidden-xs">{!$Label.coreconnect__CC_Group_Detail_Leave}</apex:commandLink>
+            <apex:commandLink rendered="{!IsOwner==true}"  styleClass="btn btn-default btn-lg pull-right hidden-xs disabled">{!$Label.coreconnect__CC_Group_Detail_Owner}</apex:commandLink>
+          </apex:outputPanel>
+        </apex:form>
+ 
+        <h1 class="inline has-edit">
+          <apex:outputField value="{!CollabGroup.Name}" id="groupNameField" ></apex:outputField>
+          <div class="edit">
+            <apex:outputPanel rendered="{!isOwner || isManager}"><button class="close" data-toggle="modal" data-target="#group-name-edit">{!$Label.CC_Group_Detail_Edit_Name}</button></apex:outputPanel>
+          </div>
+        </h1>
+
+      </header>
+   
+      <article class="container box group-detail">
+        <div id="bannerImage" class="group-header has-edit" style="background-image: url({!If(BannerImageAttachment!=null,URLFOR($Action.Attachment.Download, BannerImageAttachment.Id),URLFOR($Resource.CC_Community, 'images/bg-group-default.png'))})">
+          <apex:outputPanel rendered="{!isOwner  || isManager}"><button class="edit close" data-toggle="modal" data-target="#banner-edit">{!$Label.CC_Group_Detail_Edit}</button></apex:outputPanel>
+          <div class="shading">
+            <div class="avatar has-edit">
+              <apex:outputPanel rendered="{!CONTAINS(CollabGroup.FullPhotoUrl, '0F9/F')}">
+                <img src="{!DefaultGroupLogo}" alt="{!CollabGroup.Name}" />
+              </apex:outputPanel>
+              <apex:outputPanel rendered="{!NOT(CONTAINS(CollabGroup.FullPhotoUrl, '0F9/F'))}">
+                <img src="{!CollabGroup.FullPhotoUrl}" alt="{!CollabGroup.Name}" />
+              </apex:outputPanel>
+
+              <apex:outputPanel rendered="{!isOwner   || isManager}"><button class="edit close" data-toggle="modal" data-target="#group-profile-image-edit">{!$Label.CC_Group_Detail_Edit}</button></apex:outputPanel>
+            </div>
+            <ul class="nav nav-tabs">
+              <li class="active"><a href="#">{!$Label.CC_Group_Detail_Overview}</a></li>
+              <li>
+                <a href="{!$Site.BaseUrl}/_ui/core/chatter/content/GroupFileListPage?g={!$CurrentPage.parameters.id}">{!$Label.CC_Group_Detail_Files}</a>
+              </li>
+              <li>
+                <a href="javascript:void(0);" onclick="if(!window.groupMembersDialog) { window.groupMembersDialog = chatter.createModalOverlay({id:'groupMembersDialog',height:'420',title:'Members',url:'/ui/groups/{!$CurrentPage.parameters.id}/memberoverlay',params:{filter:'member'}});  window.groupMembersDialog.register(); }  window.groupMembersDialog.open();" class="dialog_groupMembersDialog"><span  id="moreGroupMembersLink">{!$Label.CC_Group_Detail_Members}</span></a>
+              </li>
+
+              <apex:outputPanel id="JoinLeaveButtons" layout="none">
+                <li class="pull-right visible-xs">
+                  <apex:form >
+                    <apex:commandLink id="joinButton" rerender="JoinLeaveButtons" action="{!Join}" rendered="{!CGM==null && IsOwner==false && CollabGroup.CollaborationType=='Public'}">{!$Label.coreconnect__CC_Group_Detail_Join}</apex:commandLink>
+                    <apex:commandLink id="leaveButton" rerender="JoinLeaveButtons"  action="{!LeaveGroup}" rendered="{!CGM!=null && IsOwner==false}">{!$Label.coreconnect__CC_Group_Detail_Leave}</apex:commandLink>
+                  </apex:form>
+                </li>
+              </apex:outputPanel>
+
+              <apex:outputPanel rendered="{!hasAccess}" layout="none">
+                <li class="pull-right hidden-xs">
+                  <a href="javascript:HelpBubble.hideBubble(HelpBubbleConstants.CLASS_CHANGE_EMAIL_SETTINGS_HELP_BUBBLE);sfdcPage.openPersonalSetup(%27{!PathName}/_ui/common/setup/PersonalSetup%27,%27Notifications%27,%27{!$CurrentPage.parameters.id}KAM%27);" class="emailSettingsLinkItem">{!$Label.CC_Group_Detail_Email_Settings}</a>
+                </li>
+              </apex:outputPanel>
+
+            </ul>
+          </div>
+        </div>
+        
+        <apex:outputPanel rendered="{!AND(OR(CustGroup.CORECONNECT__Group_Text_Area_1__c != '', CustGroup.CORECONNECT__Group_Text_Area_2__c != '', CustGroup.CORECONNECT__Group_Text_Area_3__c != '', CustGroup.CORECONNECT__Group_Summary_Title__c != '', CustGroup.CORECONNECT__Group_Summary__c != '', isOwner || isManager), hasAccess)}" layout="none">
+          <apex:outputPanel styleClass="text-center" rendered="true">
+          <div class="col-xs-0 has-edit">
+            <h1><apex:outputText id="upSummaryTitle" value="{!CustGroup.CORECONNECT__Group_Summary_Title__c}"/></h1>
+          	<apex:outputField id="upSummary" value="{!CustGroup.CORECONNECT__Group_Summary__c}"/>
+          	<apex:outputPanel rendered="{!isOwner   || isManager}">
+                  <button class="edit close" data-toggle="modal" data-target="#news-summary-edit">{!$Label.CC_Group_Detail_Edit}</button>
+                </apex:outputPanel>
+          </div>
+          </apex:outputPanel>
+          <section class="row group-news-items">
+            
+            <!-- Updates 1-->
+            <apex:outputPanel rendered="{!OR(CustGroup.CORECONNECT__Group_Text_Area_1__c != '', isOwner || isManager)}" layout="none">
+              <div class="col-sm-4 group-news-item has-edit">
+                <h3><apex:outputText id="upTitle1" value="{!CustGroup.CORECONNECT__Group_Text_Area_1_Title__c}" ></apex:outputText></h3>
+                <apex:outputField id="upBody1" value="{!CustGroup.CORECONNECT__Group_Text_Area_1__c}"/>
+                <apex:outputPanel rendered="{!isOwner   || isManager}">
+                  <button class="edit close" data-toggle="modal" data-target="#news-item-1-edit">{!$Label.CC_Group_Detail_Edit}</button>
+                </apex:outputPanel>
+              </div>
+              <hr class="visible-xs" />
+            </apex:outputPanel>
+            
+            <!-- Updates 2-->
+            <apex:outputPanel rendered="{!OR(CustGroup.CORECONNECT__Group_Text_Area_2__c != '', isOwner || isManager)}" layout="none">
+              <div class="col-sm-4 group-news-item has-edit">
+                <h3><apex:outputText id="upTitle2" value="{!CustGroup.CORECONNECT__Group_Text_Area_2_Title__c}"></apex:outputText></h3>
+                <apex:outputField id="upBody2" value="{!CustGroup.CORECONNECT__Group_Text_Area_2__c}"/>
+                <apex:outputPanel rendered="{!isOwner   || isManager}"><button class="edit close" data-toggle="modal" data-target="#news-item-2-edit">{!$Label.CC_Group_Detail_Edit}</button></apex:outputPanel>
+              </div>
+              <hr class="visible-xs" />
+            </apex:outputPanel>
+            
+            <!-- Updates 3-->
+            <apex:outputPanel rendered="{!OR(CustGroup.CORECONNECT__Group_Text_Area_3__c != '', isOwner || isManager)}" layout="none">
+              <div class="col-sm-4 group-news-item has-edit">
+                <h3><apex:outputText id="upTitle3" value="{!CustGroup.CORECONNECT__Group_Text_Area_3_Title__c}"></apex:outputText></h3>
+                <apex:outputField id="upBody3" value="{!CustGroup.CORECONNECT__Group_Text_Area_3__c}"/>
+                <apex:outputPanel rendered="{!isOwner   || isManager}"><button class="edit close" data-toggle="modal" data-target="#news-item-3-edit">{!$Label.CC_Group_Detail_Edit}</button></apex:outputPanel>
+              </div>
+              <hr class="visible-xs" />
+            </apex:outputPanel>
+
+          </section>
+
+          <hr class="hidden-xs" />
+        </apex:outputPanel>
+        
+
+        <!-- Description, Important Link, Open Text -->
+        <div class="row">
+          <div class="group-sidebar col-sm-4 col-sm-push-8 col-md-3 col-md-push-9">
+            <!-- Description --> 
+            <apex:outputPanel rendered="{!AND(OR(CollabGroup.Description != '', isOwner || isManager), hasAccess)}" layout="none">
+              <section class="group-sidebar-item has-edit">
+                <h3>{!$Label.coreconnect__CC_Group_Detail_Description}</h3>
+                <apex:outputText id="description" value="{!CollabGroup.Description}" />
+                <apex:outputPanel rendered="{!isOwner   || isManager}">
+                  <button class="edit close" data-toggle="modal" data-target="#sidebar-item-0-edit">{!$Label.CC_Group_Detail_Edit}</button>
+                </apex:outputPanel>
+              </section>
+            </apex:outputPanel>
+            
+             <!-- Category --> 
+            <apex:outputPanel rendered="{!AND(OR(CustGroup.CORECONNECT__Category__c != '', isOwner || isManager), hasAccess)}" layout="none">
+              <section class="group-sidebar-item has-edit">
+                <h3>{!$Label.coreconnect__CC_Group_Detail_Category}</h3>
+                <apex:outputText id="category" value="{!CustGroup.CORECONNECT__Category__c}" />
+                <apex:outputPanel rendered="{!isOwner   || isManager}">
+                  <button class="edit close" data-toggle="modal" data-target="#group-category-edit">{!$Label.CC_Group_Detail_Edit}</button>
+                </apex:outputPanel>
+              </section>
+            </apex:outputPanel>
+            
+            <!-- Important Links --> 
+            <apex:outputPanel rendered="{!AND(OR(CustGroup.CORECONNECT__Important_Links__c != '', isOwner || isManager), hasAccess)}" layout="none">
+              <section class="group-sidebar-item has-edit">
+                <h3>{!$Label.coreconnect__CC_Group_Detail_Links}</h3>
+                <apex:outputField id="importantLink" value="{!CustGroup.CORECONNECT__Important_Links__c}" />
+                <apex:outputPanel rendered="{!isOwner   || isManager}" layout="none">
+                  <button class="edit close" data-toggle="modal" data-target="#sidebar-item-1-edit">{!$Label.CC_Group_Detail_Edit}</button>
+                </apex:outputPanel>
+              </section>
+            </apex:outputPanel>
+
+            <!-- Open Text Area --> 
+            <apex:outputPanel rendered="{!AND(OR(CustGroup.CORECONNECT__Open_Text__c != '', isOwner || isManager), hasAccess)}" layout="none">
+              <section class="group-sidebar-item has-edit">
+                <h3>
+                  <apex:outputField id="openTextTitle" value="{!CustGroup.CORECONNECT__Open_Text_Title__c}"></apex:outputField>
+                </h3>
+                <apex:outputField id="openTextBody"  value="{!CustGroup.CORECONNECT__Open_Text__c}"/>
+                <apex:outputPanel rendered="{!isOwner   || isManager}">
+                  <button class="edit close" data-toggle="modal" data-target="#sidebar-item-2-edit">{!$Label.CC_Group_Detail_Edit}</button>
+                </apex:outputPanel>
+              </section>
+            </apex:outputPanel>
+
+            <apex:outputPanel rendered="{!isOwner || isManager}" layout="none">
+              <section class="group-sidebar-item has-edit">
+                <h3>{!$Label.coreconnect__CC_Group_Detail_Group_Management}</h3>
+                <ul class="list-unstyled">
+                  <apex:outputPanel layout="none" rendered="{!CollabGroup.CollaborationType=='Private' && NumberRequested > 0}">
+                    <li class="manage-requests-link">
+                      <a href="javascript:void(0);" id="manageRequestsLink" onclick="if(!window.groupUserManagementDialog) {window.groupUserManagementDialog = new GroupPanelAccessibleUrlDialog({dialogId:'groupUserManagementDialog',dialogTitle:'{!$Label.coreconnect__CC_Group_Detail_Requests_Add_Members}',url:'/ui/groups/{!$CurrentPage.parameters.id}/memberaddremove',subjectId:'{!$CurrentPage.parameters.id}',height:'0',onHide:function() { SfdcApp.ChatterGroupAddRemoveMemberOverlay.resetRequestConfig() }});window.groupUserManagementDialog.width=500;window.groupUserManagementDialog.register();}window.groupUserManagementDialog.open({params:{'filter':'requests'},onSuccess:function(json) {  SfdcApp.ChatterGroupAddRemoveMemberOverlay.setRequestConfig('requests');  SfdcApp.ChatterGroupAddRemoveMemberOverlay.processPayload(json.payload);}});" title="{!$Label.coreconnect__CC_Group_Detail_Requests_Title}">{!$Label.coreconnect__CC_Group_Detail_Requests}</a>
+                    </li>
+                  </apex:outputPanel>
+                  <li>
+                    <a href="javascript:void(0);" id="manageUsersLink" onclick="if(!window.groupUserManagementDialog) {window.groupUserManagementDialog = new GroupPanelAccessibleUrlDialog({dialogId:'groupUserManagementDialog',dialogTitle:'{!$Label.CC_Group_Detail_Add_Remove_Members}',url:'/ui/groups/{!$CurrentPage.parameters.id}/memberaddremove',subjectId:'{!$CurrentPage.parameters.id}',height:'0',onHide:function() { SfdcApp.ChatterGroupAddRemoveMemberOverlay.resetRequestConfig() }});window.groupUserManagementDialog.width=500;window.groupUserManagementDialog.register();}window.groupUserManagementDialog.open({params:{'filter':'all'},onSuccess:function() {  SfdcApp.ChatterGroupAddRemoveMemberOverlay.setRequestConfig('all');}});">{!$Label.CC_Group_Detail_Add_Remove_Members}</a>
+                  </li>															
+                  <li>
+                    <a href="javascript:void(0);" id="changeGroupRolesLink" onclick="if(!window.groupRolesDialog) {window.groupRolesDialog = new GroupPanelAccessibleUrlDialog({dialogId:'groupRolesDialog',dialogTitle:'{!$Label.CC_Group_Detail_Change_Roles}',url:'/ui/groups/{!$CurrentPage.parameters.id}/changeroles',subjectId:'{!$CurrentPage.parameters.id}',height:'0',onHide:function() { SfdcApp.ChatterGroupChangeRolesOverlay.resetRequestConfig() }});window.groupRolesDialog.width=500;window.groupRolesDialog.register();}window.groupRolesDialog.open({params:{'filter':'member'}});">{!$Label.CC_Group_Detail_Change_Roles}</a>
+                  </li>
+                  <li>
+                    <a data-toggle="modal" data-target="#group-delete">{!$Label.CC_Group_Detail_Delete_Group}</a>
+                  </li>
+                </ul>
+              </section>
+            </apex:outputPanel>
+
+          </div>
+       
+        
+          <section id="comments" class="group-chatter comments col-sm-8 col-sm-pull-4 col-md-9 col-md-pull-3">
+            <hr class="visible-xs" />
+            <h2><apex:outputField id="groupNameField2" value="{!CollabGroup.Name}"></apex:outputField> {!$Label.coreconnect__CC_Group_Detail_Feed}</h2>
+
+            <chatter:feed rendered="{!hasAccess}" entityId="{!$CurrentPage.parameters.id}" />
+          </section>
+
+        </div>
+
+      </article>
+
+      <!-- Assorted Modal Windows needed for the edit functionality above. Only needed if the user is an admin. -->
+      
+      <!-- Delete This Group -->
+      <div class="modal fade" id="group-delete" tabindex="-1" role="dialog" aria-labelledby="group-delete" aria-hidden="true">
+        <div class="modal-dialog">
+          <apex:form >
+          <form role="form">
+            <div class="modal-content">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">{!$Label.coreconnect__CC_Group_Detail_Close}</span></button>
+                <h4 class="modal-title" id="group-label">{!$Label.CC_Group_Detail_Delete_Group}</h4>
+              </div>
+              <div class="modal-body">
+                <div class="form-group">
+                  {!$Label.CC_Group_Detail_Delete_Group_Statement}&nbsp;<apex:outputField id="groupNameField2" value="{!CollabGroup.Name}"></apex:outputField>{!$Label.coreconnect__CC_Group_Detail_Question_Mark}
+                </div>
+              </div>
+              <div class="modal-footer">
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Close}" styleClass="btn btn-default" html-data-dismiss="modal"></apex:commandButton>
+                <apex:commandButton html-data-dismiss="modal"  value="{!$Label.coreconnect__CC_Group_Detail_Delete}" action="{!DeleteThisGroup}" styleClass="btn btn-primary" rerender="groupNameField" ></apex:commandButton>
+              </div>
+            </div>
+          </form>
+          </apex:form>
+        </div>
+      </div>
+      
+      <!-- Group Name -->
+      <div class="modal fade" id="group-name-edit" tabindex="-1" role="dialog" aria-labelledby="group-name-label" aria-hidden="true">
+        <div class="modal-dialog">
+          <apex:form >
+          <form role="form">
+            <div class="modal-content">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">{!$Label.coreconnect__CC_Group_Detail_Close}</span></button>
+                <h4 class="modal-title" id="group-label">{!$Label.CC_Group_Detail_Edit_Group_Name}</h4>
+              </div>
+              <div class="modal-body">
+                <div class="form-group">
+                  <apex:inputField label="Group Name:" styleClass="form-control" value="{!CollabGroup.Name}"></apex:inputField>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Close}" styleClass="btn btn-default" html-data-dismiss="modal"></apex:commandButton>
+                <apex:commandButton html-data-dismiss="modal"  value="{!$Label.coreconnect__CC_Group_Detail_Save}" action="{!EditGroupName}" styleClass="btn btn-primary" rerender="groupNameField,groupNameField2" ></apex:commandButton>
+              </div>
+            </div>
+          </form>
+          </apex:form>
+        </div>
+      </div>
+      
+      <!-- Banner Image -->
+      <div class="modal fade" id="banner-edit" tabindex="-1" role="dialog" aria-labelledby="banner-label" aria-hidden="true">
+        <div class="modal-dialog">
+          <apex:form >
+          <form role="form">
+            <div class="modal-content">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">{!$Label.coreconnect__CC_Group_Detail_Close}</span></button>
+                <h4 class="modal-title" id="group-label">{!$Label.CC_Group_Detail_Upload_Banner_Image}</h4>
+              </div>
+              <div class="modal-body">
+                <div class="form-group">
+                  <apex:inputFile value="{!NewBannerImageAttachment.body}" filename="{!NewBannerImageAttachment.name}" styleClass="file image" accept="gif,png,jpg,jpeg" />
+                </div>
+              </div>
+              <div class="modal-footer">
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Close}" styleClass="btn btn-default" html-data-dismiss="modal" ></apex:commandButton>
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Save}" action="{!UploadNewBannerImage}" styleClass="btn btn-primary"  ></apex:commandButton>
+              </div>
+            </div>
+          </form>
+          </apex:form>
+        </div>
+      </div>
+      
+       <!-- Profile Image -->
+      <div class="modal fade" id="group-profile-image-edit" tabindex="-1" role="dialog" aria-labelledby="group-profile-image-label" aria-hidden="true">
+        <div class="modal-dialog">
+          <apex:form >
+          <form role="form">
+            <div class="modal-content">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">{!$Label.coreconnect__CC_Group_Detail_Close}</span></button>
+                <h4 class="modal-title" id="group-label">{!$Label.CC_Group_Detail_Upload_Profile_Image}</h4>
+              </div>
+              <div class="modal-body">
+                <div class="form-group">
+                  <apex:inputFile value="{!GroupProfilePicBody}" filename="{!GroupProfilePicName}" contentType="{!GroupProfilePicContType}" styleClass="file image" accept="gif,png,jpg,jpeg" />
+                  <div class="help-block">{!$Label.coreconnect__CC_Group_Detail_Upload_Profile_Image_Help}</div>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Close}" styleClass="btn btn-default" html-data-dismiss="modal" ></apex:commandButton>
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Save}" styleClass="btn btn-primary" action="{!UploadGroupProfileImage}"  ></apex:commandButton>
+              </div>
+            </div>
+          </form>
+          </apex:form>
+        </div>
+      </div>
+      
+      <!-- Group Summary -->
+      <div class="modal fade" id="news-summary-edit" tabindex="-1" role="dialog" aria-labelledby="news-summary-label" aria-hidden="true">
+        <div class="modal-dialog">
+          <apex:form >
+          <form role="form">
+            <div class="modal-content">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">{!$Label.coreconnect__CC_Group_Detail_Close}</span></button>
+                <h4 class="modal-title" id="news-item-1-label">{!$Label.CC_Group_Detail_Edit_Summary}</h4>
+              </div>
+              <div class="modal-body">
+               <div class="form-group">
+                  <apex:inputField label="Title:" styleClass="form-control" value="{!CustGroup.CORECONNECT__Group_Summary_Title__c}"></apex:inputField>
+                </div>
+                <div class="form-group">
+                  <apex:inputField label="Summary" id="news-summary-body" value="{!CustGroup.CORECONNECT__Group_Summary__c}"></apex:inputField>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Close}" styleClass="btn btn-default" html-data-dismiss="modal"></apex:commandButton>
+                <apex:commandButton html-data-dismiss="modal"  value="{!$Label.coreconnect__CC_Group_Detail_Save}" action="{!EditTextArea}" styleClass="btn btn-primary" rerender="upSummary,upSummaryTitle,fakeBody1" ></apex:commandButton>
+              </div>
+            </div>
+          </form>
+          </apex:form>
+        </div>
+      </div>
+      
+      <!-- Group Text 1 -->
+      <div class="modal fade" id="news-item-1-edit" tabindex="-1" role="dialog" aria-labelledby="news-item-1-label" aria-hidden="true">
+        <div class="modal-dialog">
+          <apex:form >
+          <form role="form">
+            <div class="modal-content">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">{!$Label.coreconnect__CC_Group_Detail_Close}</span></button>
+                <h4 class="modal-title" id="news-item-1-label">{!$Label.CC_Group_Detail_Edit_FreeText_Item_1}</h4>
+              </div>
+              <div class="modal-body">
+                <div class="form-group">
+                  <apex:inputField label="Title:" styleClass="form-control" value="{!CustGroup.CORECONNECT__Group_Text_Area_1_Title__c}"></apex:inputField>
+                </div>
+                <div class="form-group">
+                  <apex:inputField label="Body" id="news-item-1-body" value="{!CustGroup.CORECONNECT__Group_Text_Area_1__c}"></apex:inputField>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Close}" styleClass="btn btn-default" html-data-dismiss="modal"></apex:commandButton>
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Save}" action="{!EditTextAreaPr}" styleClass="btn btn-primary" ></apex:commandButton>
+              </div>
+            </div>
+          </form>
+          </apex:form>
+        </div>
+      </div>
+        
+      <!-- Group Text 2 -->
+      <div class="modal fade" id="news-item-2-edit" tabindex="-1" role="dialog" aria-labelledby="news-item-2-label" aria-hidden="true">
+        <div class="modal-dialog">
+          <apex:form >
+          <form role="form">
+            <div class="modal-content">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">{!$Label.coreconnect__CC_Group_Detail_Close}</span></button>
+                <h4 class="modal-title" id="news-item-2-label">{!$Label.CC_Group_Detail_Edit_FreeText_Item_2}</h4>
+              </div>
+              <div class="modal-body">
+                <div class="form-group">
+                  <apex:inputField label="Title:" styleClass="form-control" value="{!CustGroup.CORECONNECT__Group_Text_Area_2_Title__c}"></apex:inputField>
+                </div>
+                <div class="form-group">
+                    <apex:inputField label="Body" value="{!CustGroup.CORECONNECT__Group_Text_Area_2__c}"></apex:inputField>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Close}" styleClass="btn btn-default" html-data-dismiss="modal"></apex:commandButton>
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Save}" action="{!EditTextAreaPr}" styleClass="btn btn-primary" ></apex:commandButton>
+              </div>
+            </div>
+          </form>
+          </apex:form>
+        </div>
+      </div>
+
+    <!-- Group Text 3 -->
+      <div class="modal fade" id="news-item-3-edit" tabindex="-1" role="dialog" aria-labelledby="news-item-3-label" aria-hidden="true">
+        <div class="modal-dialog">
+          <apex:form >
+          <form role="form">
+            <div class="modal-content">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">{!$Label.coreconnect__CC_Group_Detail_Close}</span></button>
+                <h4 class="modal-title" id="news-item-3-label">{!$Label.CC_Group_Detail_Edit_FreeText_Item_3}</h4>
+              </div>
+              <div class="modal-body">
+                <div class="form-group">
+                  <apex:inputField label="Title:" styleClass="form-control" value="{!CustGroup.CORECONNECT__Group_Text_Area_3_Title__c}"></apex:inputField>
+                </div>
+                <div class="form-group">
+                    <apex:inputField label="Body" value="{!CustGroup.CORECONNECT__Group_Text_Area_3__c}"></apex:inputField>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Close}" styleClass="btn btn-default" html-data-dismiss="modal"></apex:commandButton>
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Save}" action="{!EditTextAreaPr}" styleClass="btn btn-primary" ></apex:commandButton>
+              </div>
+            </div>
+          </form>
+          </apex:form>
+        </div>
+      </div>
+
+        <!-- Description -->
+      <div class="modal fade" id="sidebar-item-0-edit" tabindex="-1" role="dialog" aria-labelledby="sidebar-item-0-label" aria-hidden="true">
+        <div class="modal-dialog">
+          <apex:form >
+          <form role="form">
+            <div class="modal-content">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">{!$Label.coreconnect__CC_Group_Detail_Close}</span></button>
+                <h4 class="modal-title" id="sidebar-item-1-label">{!$Label.CC_Group_Detail_Edit_Description}</h4>
+              </div>
+              <div class="modal-body">
+                <div class="form-group">
+                  <apex:inputField label="Body" value="{!CollabGroup.Description}" styleClass="form-control"></apex:inputField>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Close}" styleClass="btn btn-default" html-data-dismiss="modal"></apex:commandButton>
+                <apex:commandButton html-data-dismiss="modal"  value="{!$Label.coreconnect__CC_Group_Detail_Save}" action="{!EditGroupName}" styleClass="btn btn-primary" rerender="description" ></apex:commandButton>
+              </div>
+            </div>
+          </form>
+          </apex:form>
+        </div>
+      </div>
+      
+      <!-- Important Links -->
+      <div class="modal fade" id="sidebar-item-1-edit" tabindex="-1" role="dialog" aria-labelledby="sidebar-item-1-label">
+        <div class="modal-dialog">
+          <apex:form >
+          <form role="form">
+            <div class="modal-content">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">{!$Label.coreconnect__CC_Group_Detail_Close}</span></button>
+                <h4 class="modal-title" id="sidebar-item-1-label">{!$Label.CC_Group_Detail_Edit_Links}</h4>
+              </div>
+              <div class="modal-body">
+                <div class="form-group">
+                    <apex:inputField label="Body" value="{!CustGroup.CORECONNECT__Important_Links__c}"></apex:inputField>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Close}" styleClass="btn btn-default" html-data-dismiss="modal"></apex:commandButton>
+                <apex:commandButton html-data-dismiss="modal"  value="{!$Label.coreconnect__CC_Group_Detail_Save}" action="{!EditTextArea}" styleClass="btn btn-primary" rerender="importantLink" ></apex:commandButton>
+              </div>
+            </div>
+          </form>
+          </apex:form>
+        </div>
+      </div>
+
+     <!--Open Text-->
+      <div class="modal fade" id="sidebar-item-2-edit" tabindex="-1" role="dialog" aria-labelledby="sidebar-item-2-label" aria-hidden="true">
+        <div class="modal-dialog">
+          <apex:form >
+          <form role="form">
+            <div class="modal-content">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">{!$Label.coreconnect__CC_Group_Detail_Close}</span></button>
+                <h4 class="modal-title" id="sidebar-item-2-label">{!$Label.CC_Group_Detail_Edit_Open_Text}</h4>
+              </div>
+              <div class="modal-body">
+                <div class="form-group">
+                  <apex:inputField label="Title:" styleClass="form-control" value="{!CustGroup.CORECONNECT__Open_Text_Title__c}"></apex:inputField>
+                </div>
+                <div class="form-group">
+                  <apex:inputField label="Body" value="{!CustGroup.CORECONNECT__Open_Text__c}"></apex:inputField>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Close}" styleClass="btn btn-default" html-data-dismiss="modal"></apex:commandButton>
+                <apex:commandButton html-data-dismiss="modal"  value="{!$Label.coreconnect__CC_Group_Detail_Save}" action="{!EditTextArea}" styleClass="btn btn-primary" rerender="openTextTitle,openTextBody" ></apex:commandButton>
+              </div>
+            </div>
+          </form>
+          </apex:form>
+        </div>
+      </div>
+      
+       <!--Edit Category-->
+      <div class="modal fade" id="group-category-edit" tabindex="-1" role="dialog" aria-labelledby="group-category-label" aria-hidden="true">
+        <div class="modal-dialog">
+          <apex:form >
+          <form role="form">
+            <div class="modal-content">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">{!$Label.coreconnect__CC_Group_Detail_Close}</span></button>
+                <h4 class="modal-title" id="sidebar-item-2-label">{!$Label.CC_Group_Detail_Edit_Group_Category}</h4>
+              </div>
+              <div class="modal-body">
+                <div class="form-group">
+                  <apex:inputField styleClass="form-control chosen" label="Body" value="{!CustGroup.CORECONNECT__Category__c}"></apex:inputField>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <apex:commandButton value="{!$Label.coreconnect__CC_Group_Detail_Close}" styleClass="btn btn-default" html-data-dismiss="modal"></apex:commandButton>
+                <apex:commandButton html-data-dismiss="modal"  value="{!$Label.coreconnect__CC_Group_Detail_Save}" action="{!EditTextArea}" styleClass="btn btn-primary" rerender="category" ></apex:commandButton>
+              </div>
+            </div>
+          </form>
+          </apex:form>
+        </div>
+      </div>
+
+    </apex:define>
+
+    <apex:define name="footerjs">
+<script>
+$("input.file.image").fileinput({
+  showUpload: false, 
+  showPreview: false
+});
+</script>
+    </apex:define>
+
+  </apex:composition>
+</apex:page>

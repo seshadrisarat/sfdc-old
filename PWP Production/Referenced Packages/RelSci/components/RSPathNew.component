@@ -1,0 +1,566 @@
+<apex:component controller="rels.RSPathComponentController" access="global">  
+    <style type="text/css">
+        .rsMobileLogo
+        {
+            width: 30px;
+            height: 30px;
+            padding-right:14px;
+        }
+        .rsMobileCardHeader
+        {
+            font-size:14px;
+            color: #3c3d3e;
+        }
+        .rsMobileCard
+        {
+            height:30px;
+            padding:14px;
+            border-top-left-radius: 5px;
+            border-top-right-radius: 5px;
+            background-color:#ffffff;
+        }
+        .rsFloatLeft
+        {
+            float:left;
+        }
+        .rsMobileCardTitle
+        {
+            line-height:30px;
+        }
+
+    </style>
+	<script
+		src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"
+		type="text/javascript"></script>
+	<script src="//static.relsci.com/Content/Crm/js/json2.min.js" type="text/javascript"></script>
+	<apex:includeScript value="/soap/ajax/28.0/connection.js" />
+	<apex:includeScript value="/soap/ajax/28.0/apex.js" />
+
+	<apex:attribute name="UniqueId" type="String" description="ObjectId"
+		required="false" access="global" />
+
+	<apex:attribute name="ObjectType" type="String"
+		description="Account Record" required="false" access="global" />
+ 
+    <apex:attribute name="IsMobile" type="String" description="Views On Mobile Site" required="false" access="global" />
+
+	<apex:attribute name="Account" type="Account"
+		description="Account Record" assignTo="{!CurrentAccount}"
+		required="false" />
+
+	<apex:attribute name="Lead" type="Lead" description="Lead Record"
+		assignTo="{!CurrentLead}" required="false" />
+
+	<apex:attribute name="Opportunity" type="Opportunity"
+		description="Opportunity Record" assignTo="{!CurrentOpportunity}"
+		required="false" />
+
+	<apex:attribute name="Contact" type="Contact"
+		description="Contact Record" assignTo="{!CurrentContact}"
+		required="false" />
+
+	<apex:attribute name="inEntityId" type="String"
+		description="Name Column" required="false" access="global" />
+
+    <apex:attribute name="inMatchTypeId" type="String"
+        description="Name Column" required="false" access="global" />        
+
+	<apex:attribute name="inName" type="String" description="Name Column"
+		required="false" access="global" />
+
+	<apex:attribute name="inCompany" type="String"
+		description="Company Column" required="false" access="global" />
+
+	<apex:attribute name="inExternalId" type="String"
+		description="Unique Identifier Column" required="false" access="global" />
+
+	<apex:attribute name="inTitle" type="String" description="Title Column"
+		required="false" access="global" />
+
+	<apex:attribute name="inCity" type="String[]" description="City Column"
+		required="false" access="global" />
+	
+	<apex:attribute name="inCityStr" type="String" description="City Column"
+		required="false" access="global" />
+	
+	<apex:attribute name="inStateStr" type="String" description="State Column"
+		required="false" access="global" />	
+	
+	<apex:attribute name="inState" type="String" description="State Column"
+		required="false" access="global" />		
+		
+	<apex:attribute name="inEmail" type="String" description="Email Column"
+		required="false" access="global" />
+
+	<apex:attribute name="inDomain" type="String"
+		description="Domain Column" required="false" access="global" />
+
+	<apex:attribute name="inTickerSymbol" type="String"
+		description="TickerSymbol Column" required="false" access="global" />
+
+    <apex:attribute name="PersonAccountEnabled" type="Boolean" description="Person accounts enabled for organization" required="false" access="global" />
+
+    <apex:outputPanel rendered="{!(IsMobile == 'false')}">
+    	<div id="__rsContent" style="width: 100%;">
+    	<div style="width: 100%;"><img
+    		style="display: block; margin: auto;"
+    		src="https://static.relsci.com/Content/Crm/Images/ajax-loader.gif" border="0" />
+    	</div>
+    	
+       
+    	</div>
+    </apex:outputPanel>
+    <apex:outputPanel rendered="{! (IsMobile == 'true')}">
+        <div class="rsMobileCard">
+            <div class="rsMobileCardHeader">
+                <div class="rsFloatLeft">
+                    <img class="rsMobileLogo" src="https://www.RelSci.com/Content/Images/Logo-Large.png"></img> 
+                </div>
+                <span class="rsFloatLeft rsMobileCardTitle">RelSci</span>
+            </div>
+
+        </div>
+        <div id="__rsContent" style="width: 100%; background-color:#ffffff; padding-bottom:20px;">
+
+            <div style="width: 100%;"><img
+            style="display: block; margin: auto;"
+            src="https://static.relsci.com/Content/Crm/Images/ajax-loader.gif" border="0" />
+            </div>
+        </div>
+    </apex:outputPanel>
+ 
+	<script type="text/javascript">
+	sforce.connection.sessionId = "{!$Api.Session_ID}";
+
+    /*
+        1. get type
+        2. query for sf object
+        3. sync if necessary
+        4. 
+    */
+    
+    $i = {};
+    $i.Type = '{!JSENCODE(ObjectType)}';
+    $i.SFId = '{!JSENCODE(UniqueId)}';
+    $i.IsMobile = '{!JSENCODE(IsMobile)}';
+    
+    ignoredEntity = false;
+
+    jQuery(document).ready(function () { 
+        
+        SyncOrPath();
+        
+    });
+    
+    function SyncOrPath()
+    {
+        var sfo = getSFObject(SyncOrPathCallback);
+        
+    }
+    
+    function SyncOrPathCallback(sfo)
+    { 
+    	if(sfo.rels__MatchType__c == '-1') {
+        	
+    		ignoredEntity = true;
+            var mc = GetMobileContactFromSFObject(sfo);
+            onLoad(false, sfo.rels__EntityId__c, mc);
+            
+    		
+    	} else if(sfo.rels__EntityId__c != null && 
+        	sfo.rels__EntityId__c.length > 0 && 
+            sfo.rels__EntityId__c.indexOf(",") === -1) {
+            //get paths
+            onLoad(false, sfo.rels__EntityId__c, {});
+            
+            
+        } else {
+            //sync           
+            var mc = GetMobileContactFromSFObject(sfo);
+            
+            onLoad(false, sfo.rels__EntityId__c, mc);
+            
+            
+        }
+    }
+    
+    
+function GetMobileContactFromSFObject(SFobject)
+{
+	var o = {
+		Id:'',
+		Name:'',
+		Company:'',
+		Title: '',
+		Email: [],
+		Domains: [],
+		City: [],
+		State: [],
+		Zip: [],
+		TickerSymbol:'', 
+		IsCompany:false
+	};
+		
+		o.Id = SFobject.Id;
+		if(SFobject.type == 'Opportunity')
+		{
+			
+			if(SFobject.Account != null) 
+			{
+				o.Name = SFobject.Name;
+				o.Company = SFobject.Account.Name;
+				if(SFobject.Account.ShippingCity != null)
+                    o.City.push(SFobject.Account.ShippingCity);
+				if(SFobject.Account.ShippingState != null)
+                    o.State.push(SFobject.Account.ShippingState);
+				o.Zip.push(SFobject.Account.ShippingPostalCode);
+				if(SFobject.Account.BillingCity != null)
+                    o.City.push(SFobject.Account.BillingCity);
+				if(SFobject.Account.BillingState != null)
+                    o.State.push(SFobject.Account.BillingState);
+				o.Zip.push(SFobject.Account.BillingPostalCode);
+                if(SFobject.Account.Website != null)
+				    o.Domains.push(SFobject.Account.Website);
+                if(SFobject.Account.TickerSymbol != null)
+				    o.TickerSymbol = SFobject.Account.TickerSymbol;
+			} else {
+				o.Name = SFobject.Name;
+				
+			}
+			
+		} else if(SFobject.type =='Account') {             
+            
+            if({!PersonAccountEnabled} == true)
+            {
+                o.IsCompany = false;
+                o.Name = SFobject.Name;
+            }
+            else
+            {
+                o.IsCompany = true;
+                o.Company = SFobject.Name;
+            }
+
+			o.Id = SFobject.Id;
+			o.City.push(SFobject.ShippingCity);
+			o.State.push(SFobject.ShippingState);
+			o.Zip.push(SFobject.ShippingPostalCode);
+			o.City.push(SFobject.BillingCity);
+			if(SFobject.BillingState != null)
+                o.State.push(SFobject.BillingState);
+			o.Zip.push(SFobject.BillingPostalCode);
+			o.TickerSymbol = SFobject.TickerSymbol;
+            if(SFobject.Website != null)
+			   o.Domains.push(SFobject.Website);
+			
+			
+		} else if(SFobject.type == 'Contact') {
+		
+			o.Name = SFobject.Name;
+			o.Title = SFobject.Title;
+			if(SFobject.Account != null)
+			{
+				o.Company = SFobject.Account.Name;
+				o.City.push(SFobject.Account.ShippingCity);
+				o.State.push(SFobject.Account.ShippingState);
+				o.Zip.push(SFobject.Account.ShippingPostalCode);
+				o.City.push(SFobject.Account.BillingCity);
+				o.State.push(SFobject.Account.BillingState);
+				o.Zip.push(SFobject.Account.BillingPostalCode);
+			}
+			if(SFobject.Email != null)				
+				o.Email.push(StripLocalEmail(SFobject.Email));
+			if(SFobject.MailingCity != null)
+				o.City.push(SFobject.MailingCity);
+			if(SFobject.MailingState != null)
+				o.State.push(SFobject.MailingState);					
+			
+			
+		} else if(SFobject.type == 'Lead')	{
+		
+		
+			o.Name = SFobject.Name;
+			o.Title = SFobject.Title;
+			o.Company = SFobject.Company;
+			o.Domains.push(SFobject.Website);	
+			if(SFobject.Email != null)		
+				o.Email.push(StripLocalEmail(SFobject.Email));
+			
+			
+		}
+		
+		return o;
+}
+
+function StripLocalEmail(email)
+{
+	var atindex = email.indexOf('@');
+	if(atindex !== -1)
+	{
+		return  email.substring(atindex, email.length);
+	}
+	return '';
+}
+    
+    function getSFObject(cb)
+    {
+        if($i.Type == 'Contact') {
+            
+            query = "select {!ContactAccessibility} rels__EntityId__c, rels__MatchType__c from Contact where Id = \'"+$i.SFId+"\' ";
+                             
+        }
+        else if($i.Type == 'Account') {
+
+            query = "select {!AccountAccessibility} rels__EntityId__c, rels__MatchType__c from Account where Id = \'"+$i.SFId+"\' ";
+                         
+        }
+        else if($i.Type == 'Lead') {
+            query = "select {!LeadAccessibility} rels__EntityId__c, rels__MatchType__c  from Lead where IsConverted = false and Id = \'"+$i.SFId+"\' ";
+        } 
+        else if ($i.Type == 'Opportunity') {
+            query = "select {!OpportunityAccessibility} rels__EntityId__c, rels__MatchType__c from Opportunity where Id = \'"+$i.SFId+"\' ";
+        } 
+        else if($i.Type.length > 0) {
+            //custom object logic
+            if('{!JSENCODE(inMatchTypeId)}' == '-1')
+            {
+                ignoredEntity = true;
+            }
+           if(!isNullOrWhiteSpace('{!JSENCODE(inEntityId)}'))
+           {
+                //matched
+            
+            var mc = {
+                    Name : '{!JSENCODE(inName)}', 
+                    Title : '{!JSENCODE(inTitle)}',
+                    Company : '{!JSENCODE(inCompany)}',
+                    ExternalId : '{!JSENCODE(UniqueId)}',
+                    City : ['{!JSENCODE(inCityStr)}', ],
+                    State : ['{!JSENCODE(inStateStr)}', ],
+                    Email : ['{!JSENCODE(inEmail)}', ],
+                    TickerSymbol : '{!JSENCODE(inTickerSymbol)}'
+                    
+            };
+                
+                onLoad(false, '{!JSENCODE(inEntityId)}', mc);
+                return;
+           } 
+           else 
+           {
+                //need to match                 
+            var mc = {
+                    Name : '{!JSENCODE(inName)}', 
+                    Title : '{!JSENCODE(inTitle)}',
+                    Company : '{!JSENCODE(inCompany)}',
+                    ExternalId : '{!JSENCODE(UniqueId)}',
+                    City : ['{!JSENCODE(inCityStr)}', ],
+                    State : ['{!JSENCODE(inStateStr)}', ],
+                    Email : ['{!JSENCODE(inEmail)}', ],
+                    TickerSymbol : '{!JSENCODE(inTickerSymbol)}'
+                    
+            };
+                if(cb.toString().indexOf('ShowPossible') !== -1)
+                {
+                    onLoad(true, '', mc);
+                }else {
+                    onLoad(false, '', mc);
+                }
+                return;
+           }
+            
+            
+        } else {
+           return;
+        }
+        RunQuery(query, cb);
+        
+    }
+    
+    
+    
+        
+    function RunQuery(strQuery, callback)
+    {      
+        var resultQuery = sforce.connection.query(strQuery, function (results) {
+        	
+        	var records = results.getArray("records");               
+            
+            if(records.length == 1)
+	        {
+	            callback(records[0]);
+	        }
+             
+            
+        });         
+    }
+        
+    
+
+    
+    function showLoading(){
+        $("#__rsContent").html('<div style="width:100%;"><img style="display:block; margin:auto;" src="https://static.relsci.com/Content/Crm/Images/ajax-loader.gif" border="0" /></div>');
+    }
+    
+    function ShowPossible() {
+     	var sfo = getSFObject(ShowPossibleCallback);
+       
+    }
+    
+    function ShowPossibleCallback(sfo)
+    {
+     	var mc = GetMobileContactFromSFObject(sfo);
+        onLoad(true, '', mc);
+    }
+    
+    function isNullOrWhiteSpace(str){
+    	return str === null || str.match(/^ *$/) !== null;
+	}
+	
+	
+    
+    function onLoad(showPossible, matchedEntityId, mobileContacts) {
+        var baseurl = "{!URLFOR($Page.RelSciPathAjax)}"; 
+        if(baseurl[baseurl.length-1] == "/")
+        {
+            baseurl = baseurl.substring(0,baseurl.length-2);
+        }
+        //append the query string since mobile adds additional navigation parameters
+        if({!IsMobile == 'false'})
+        {
+            baseurl += '?';
+        }
+        else
+        {
+            baseurl += '&';  
+        }                		
+        location.replace(baseurl += $.param({                     
+                    UniqueId: '{!JSENCODE(UniqueId)}',
+                    EntityId : matchedEntityId,
+                    type: '{!JSENCODE(ObjectType)}',
+                    showPossible : showPossible,
+                    csrf : '{!JSENCODE(csrf)}',
+                    mobilecontactjson : JSON.stringify(mobileContacts),
+                    ignoredEntity : ignoredEntity,
+                    IsMobile : '{!JSENCODE(IsMobile)}'
+                }));
+        
+        
+        /*
+        jQuery.ajax({
+            url: baseurl,
+            cache:false,
+            type: 'post',
+            data: {                     
+                    UniqueId: '{!UniqueId}',
+                    EntityId : matchedEntityId,
+                    type: '{!ObjectType}',
+                    showPossible : showPossible,
+                    csrf : '{!csrf}',
+                    mobilecontactjson : JSON.stringify(mobileContacts),
+                },
+                success: function(data) {     
+                              
+                        $("#__rsContent").html(data);
+                   
+                }         
+            });
+            
+            */
+    }
+    if (!('indexOf' in Array.prototype)) {
+        Array.prototype.indexOf= function(find, i /*opt*/) {
+            if (i===undefined) i= 0;
+            if (i<0) i+= this.length;
+            if (i<0) i= 0;
+            for (var n= this.length; i<n; i++)
+                if (i in this && this[i]===find)
+                    return i;
+            return -1;
+        };
+    }
+    
+    
+sforce.Transport = function(url) {
+    this.url = url;
+    this.connection = null;
+
+    this.newConnection = function() {
+        try {
+            this.connection = new ActiveXObject('Msxml2.XMLHTTP');
+        } catch(e) {
+            try {
+                this.connection = new ActiveXObject('Microsoft.XMLHTTP');
+            } catch(e) {
+                this.connection = new XMLHttpRequest();
+            }
+        }
+
+        return this.connection;
+    };
+    
+    this.send = function (envelope, callback, async, timeout) {
+        this.newConnection();
+        if (async) {
+            this.connection.onreadystatechange = this.httpConnectionCallback;
+        }
+        var holder = new sforce.internal.ConnectionHolder(this.connection, callback);
+        sforce.internal._connections.push(holder);
+        this.connection.open("POST", this.url, async);
+        this.connection.setRequestHeader("Content-Type", "text/xml; charset=UTF-8");
+        this.connection.setRequestHeader("SOAPAction", "\"\"");
+        this.connection.setRequestHeader("Accept", "text/xml");
+     // this.connection.setRequestHeader("User-Agent", "SFAJAX 1.0");
+        this.connection.send(envelope);
+        if (async && typeof(timeout) !== "undefined") {
+            this.setTimeoutOn(holder, timeout);
+        }
+        if (!async) {
+            this.httpConnectionCallback();
+        }
+    };
+ 
+    this.setTimeoutOn = function (holder, timeout) {
+        function abortConnection() {
+            if (holder.connection.readyState !== 4) {
+                holder.timedout = true;
+                holder.connection.abort();
+            }
+        }
+        setTimeout(abortConnection, timeout);
+    };
+
+    this.httpConnectionCallback = function () {
+
+        for (var i = 0; i < sforce.internal._connections.length; i++) {
+            var holder = sforce.internal._connections[i];
+            if (holder !== null) {
+                if (holder.timedout) {
+                    sforce.internal._connections[i] = null;
+                    sforce.internal._connections.slice(i,1);
+                    holder.callback.httpCallback("Remote invocation timed out", false);
+                } else  if (holder.connection.readyState == 4) {
+                    sforce.internal._connections[i] = null;
+                    sforce.internal._connections.slice(i,1);
+                    var success = holder.connection.status == 200;
+                    if (sforce.debug.trace) {
+                        sforce.debug.log("Response : status - " + holder.connection.status);
+                        sforce.debug.logXml(holder.connection.responseText);
+                    }
+                    if (sforce.debug.apexTrace) {
+                        sforce.debug.logApex(holder.connection.responseText);
+                    }
+                    if (holder.connection.responseXML && holder.connection.responseXML.documentElement) {
+                        holder.callback.httpCallback(holder.connection.responseXML.documentElement, success);
+                    } else {
+                        holder.callback.httpCallback("Remote invocation failed, due to: " + holder.connection.responseText +
+                                                     " status code: ", holder.connection.status);
+                    }
+                }
+            }
+        }
+    };
+};      
+</script>
+
+
+</apex:component>

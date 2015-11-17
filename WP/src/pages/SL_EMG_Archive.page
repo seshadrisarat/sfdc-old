@@ -1,0 +1,261 @@
+<apex:page controller="SL_ctrl_EMG_Archive">
+<head>
+
+   <apex:includeScript value="{!URLFOR($Resource.jquery_js)}"/>
+
+    <!-- Here is the css styles that will be used for the progress bars -->
+<!--     
+    <style>
+        .progressBar{
+            background-color: #f8f8f8;
+            border:1px solid #DDDDDD;
+            height: 19px;
+            width: 300px;
+            -moz-border-radius: 5px; 
+            -webkit-border-radius: 5px;
+			border-radius: 5px;            
+        }
+        .progress{
+            background-color: #F7B64B;
+            border:1px solid #E78F08;
+            height: 100%;
+            margin: -1px;
+            text-align: center;
+            -moz-border-radius: 5px; 
+            -webkit-border-radius: 5px;
+			border-radius: 5px;            
+            line-height: 18px;
+        }
+    </style>
+-->
+   <script type="text/javascript">
+
+      function checkArchiveParams() {
+         var strOneWPGroup = "{!OneWPGroup}";
+         if($('input[type="hidden"][name$="someHiddenKeys"]').val().length < 1 && strOneWPGroup.length == 0) {  
+            alert("Please select at least one WP Group to proceed archive process.");
+            return false;
+         }
+         
+         if($('input[type="text"][name$="txtId1"]').val().length < 15) {  
+            alert("Please enter an End DateTime.");
+            return false;
+         }
+         
+         if(  !$('input[type="checkbox"][name$="note_emg_comment"]').is(":checked") 
+         && !$('input[type="checkbox"][name$="note_emg_paragraph"]').is(":checked") 
+         && !$('input[type="checkbox"][name$="note_key_dates_next_steps"]').is(":checked")
+           ) {  
+            alert("Please check at least one of Archive Types.");
+            return false;
+         }
+
+         alert("The archive process has been started, you will be notified by email when it is completed.");
+         return true;  
+      }
+   </script>
+   
+</head>
+
+    <div id="show_error_id" style="{!Error_Style}">
+      <apex:pageBlock title="Archive" id="emg_archive_form">
+      You do not have permission to view this page.<br/><br/>
+      Archive cannot be run because:<br/>
+         1) User does not have an employee record, or<br/>
+         2) User is not associated to an appropriate user profile, or<br/>
+         3) Employee record does not have “Archive Permission” set
+      </apex:pageBlock>
+    </div>
+    
+    <apex:messages />
+   
+    <div id="show_form_id" style="{!Form_Style}">
+
+   <apex:form >
+    
+    <apex:pageBlock title="Archive" id="emg_archive_form">
+
+    <apex:pageBlock title="WP Group(s)" id="wp_groups_multiselect">
+    
+      <div id="show_form_multiselect_id" style="{!Form_many_WP_Groups}">
+
+         <c:SL_LIB20_component_Multiselect in_list_opt="{!input_list}"  out_list_opt="{!output_list}" out_str_ids="{!BaseParam}" />
+      
+      </div>
+
+      <div id="show_form_wp_group_id" style="{!Form_one_WP_Group}">
+      
+         {!OneWPGroup}
+
+      </div>
+
+    </apex:pageBlock>
+    
+    <apex:pageBlock title="Archive Type" id="emg_note_check">
+    
+         <apex:inputCheckbox value="{!note_emg_comment}" id="note_emg_comment" label="EMG Comment" selected="true"/> EMG Comment<br /> 
+         <apex:inputCheckbox value="{!note_emg_paragraph}" id="note_emg_paragraph" label="EMG Paragraph" selected="true"/> EMG Paragraph<br /> 
+         <apex:inputCheckbox value="{!note_key_dates_next_steps}" id="note_key_dates_next_steps" label="Key Dates / Next Steps" selected="true"/> Key Dates / Next Steps<br /> 
+
+    </apex:pageBlock>
+    
+   <!-- 
+    End Date &nbsp;<apex:inputText value="{!end_date}"/>
+   -->
+       
+   <!-- 
+   Start Component for Date Time picker
+   This is simple Date Picker with Format - (dd-MM-YYYY) and 12 hour format, with Seconds. 
+   -->
+   End Datetime &nbsp;
+      <c:SL_LIB46_DateTimePicker textId="{!$Component.txtId1}" withFormat="true" dateFormat="yyyyMMdd" timeFormat="24" withTime="true" withSecond="true">
+         <apex:componentBody >
+            <apex:inputtext value="{!end_datetime}" id="txtId1"/>
+         </apex:componentBody>
+      </c:SL_LIB46_DateTimePicker>    
+
+      <apex:pageBlockButtons location="bottom">
+         <apex:commandButton action="{!RunArchiveProcess}" value="Archive" onclick="return checkArchiveParams();" id="theButtonArchive"/>
+<!--       
+         <apex:commandButton action="{!RunArchiveProcess}" value="Archive" reRender="result" id="theButtonArchive"/>
+-->         
+      </apex:pageBlockButtons>
+
+    </apex:pageBlock>
+
+   </apex:form>
+
+      </div>
+
+<!-- 
+   <apex:form >
+      <apex:actionFunction action="{!ArchiveProgressRun}" name="setArchiveProgress" rerender="progressout" />
+      <apex:actionFunction action="{!ArchiveProgressRun}" name="refreshHistory" rerender="historyout" />
+   </apex:form>
+
+<script>
+
+   function showStatus() {
+      jQuery('#progress_popup').show();
+   }
+
+   function closeStatus() {
+      jQuery('#progress_popup').hide();
+   }
+
+   
+   var currentArchiveProgress = 0;
+
+   function goArchiveProgress() {
+
+      if(currentArchiveProgress<100) {
+           try { 
+            setArchiveProgress();
+           } catch(errr) {}  
+            window.setTimeout(goArchiveProgress,4000); 
+      } else {
+//            alert('Archive done.'); 
+            closeStatus();
+            refreshHistory();
+      }
+   }
+   
+   jQuery(document).ready(function(){
+         currentArchiveProgress = '{!ArchiveProgress}';
+            
+      if({!ProcessRun} == false)      
+		 closeStatus();
+		 //jQuery('#EMG_Comment_History_popup').hide();
+		else {
+		 showStatus();
+		 goArchiveProgress();
+		}
+		 
+   });
+   
+</script>
+
+   <apex:outputPanel id="progressout" >
+         <script>currentArchiveProgress = {!ArchiveProgress};</script>
+         <div id="progress_popup">
+               <div id="jobs"  style="z-index: 9998; position:fixed; width: 100%; left:0; top:0; bottom:0; right:0; background-color: #dcdcdc; opacity:0.6; filter:alpha(opacity=60)" ></div>
+               <div id="progressbar" class="progressBar" style=" z-index: 9999; position: absolute; top:30%; left: 50%; margin-top:-10px; margin-left:-150px; width: 300px; ">
+                    <div class="progress" style="align: center; width: {!ArchiveProgress}%;">
+                        {!ArchiveProgress}%
+                    </div>
+                </div>
+           </div>     
+   </apex:outputPanel>
+
+
+   <apex:outputPanel id="historyout" >
+         <div id="EMG_Comment_History_popup">
+         
+            <apex:pageBlock id="pbEMG_Comment_History" title="EMG Comment History" rendered="{!IF(pageSize_EMG_Comment_History>0, true, false)}">
+
+               <apex:pageBlockTable id="tblEMG_Comment_History" value="{!New_EMG_Comment_History}" var="c">
+                  
+                  <apex:column headerValue="Deal Name" width="200">
+                     <apex:outputLink value="/{!c.Deal__c}">{!c.Deal__r.Name}</apex:outputLink>&nbsp;
+                  </apex:column>
+                  <apex:column headerValue="Description">
+                     <apex:outputText escape="false" value="{!c.EMG_Comment__c}" />&nbsp;
+                  </apex:column>
+                  <apex:column headerValue="Last Updated By" width="150">
+                     <apex:outputLink value="/{!c.EMG_Last_Updated_By_Contact__c}">{!c.EMG_Last_Updated_By_Contact__r.Name}</apex:outputLink>&nbsp;
+                  </apex:column>
+                  <apex:column headerValue="Last Updated Date" width="200">
+                     {!c.EMG_Last_Updated_Date__c}&nbsp;
+                  </apex:column>
+                  
+               </apex:pageBlockTable>
+            
+            </apex:pageBlock>
+
+            <apex:pageBlock id="pbEMG_Paragraph_History" title="EMG Paragraph History" rendered="{!IF(pageSize_EMG_Paragraph_History>0, true, false)}">
+
+               <apex:pageBlockTable id="tblEMG_Paragraph_History" value="{!New_EMG_Paragraph_History}" var="c">
+                  
+                  <apex:column headerValue="Deal Name" width="200">
+                     <apex:outputLink value="/{!c.Deal__c}">{!c.Deal__r.Name}</apex:outputLink>&nbsp;
+                  </apex:column>
+                  <apex:column headerValue="Description">
+                     <apex:outputText escape="false" value="{!c.EMG_Paragraph__c}" />&nbsp;
+                  </apex:column>
+                  <apex:column headerValue="Last Updated By" width="150">
+                     <apex:outputLink value="/{!c.EMG_Last_Updated_By_Contact__c}">{!c.EMG_Last_Updated_By_Contact__r.Name}</apex:outputLink>&nbsp;
+                  </apex:column>
+                  <apex:column headerValue="Last Updated Date" width="200">
+                     {!c.EMG_Last_Updated_Date__c}&nbsp;
+                  </apex:column>
+                  
+               </apex:pageBlockTable>
+            
+            </apex:pageBlock>
+
+            <apex:pageBlock id="pbKey_Dates_Next_Steps_History" title="Key Dates/Next Steps History" rendered="{!IF(pageSize_Key_Dates_Next_Steps_History>0, true, false)}">
+
+               <apex:pageBlockTable id="tblKey_Dates_Next_Steps_History" value="{!New_Key_Dates_Next_Steps_History}" var="c">
+                  
+                  <apex:column headerValue="Deal Name" width="200">
+                     <apex:outputLink value="/{!c.Deal__c}">{!c.Deal__r.Name}</apex:outputLink>&nbsp;
+                  </apex:column>
+                  <apex:column headerValue="Description">
+                     <apex:outputText escape="false" value="{!c.Key_Dates_Next_Steps__c}" />&nbsp;
+                  </apex:column>
+                  <apex:column headerValue="Last Updated By" width="150">
+                     <apex:outputLink value="/{!c.EMG_Last_Updated_By__c}">{!c.EMG_Last_Updated_By__r.Name}</apex:outputLink>&nbsp;
+                  </apex:column>
+                  <apex:column headerValue="Last Updated Date" width="200">
+                     {!c.EMG_Last_Updated_Date__c}&nbsp;
+                  </apex:column>
+                  
+               </apex:pageBlockTable>
+            
+            </apex:pageBlock>
+            
+         </div>
+   </apex:outputPanel>
+-->   
+
+</apex:page>

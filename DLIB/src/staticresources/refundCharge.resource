@@ -1,0 +1,50 @@
+{
+  "id": "ch_102qR32mAiB3IuYi57zb94Pb",
+  "object": "charge",
+  "created": 1383082679,
+  "livemode": false,
+  "paid": true,
+  "amount": 1000000,
+  "currency": "usd",
+  "refunded": true,
+  "card": {
+    "id": "card_102iWu2mAiB3IuYiv8YIc1Y9",
+    "object": "card",
+    "last4": "4444",
+    "type": "MasterCard",
+    "exp_month": 10,
+    "exp_year": 2013,
+    "fingerprint": "7Wt87MHhdUCOMb2e",
+    "customer": "cus_2iWunHDfGG1x0m",
+    "country": "US",
+    "name": "Brock",
+    "address_line1": "",
+    "address_line2": "",
+    "address_city": null,
+    "address_state": "",
+    "address_zip": "",
+    "address_country": "IN",
+    "cvc_check": "pass",
+    "address_line1_check": "pass",
+    "address_zip_check": "pass"
+  },
+  "captured": true,
+  "refunds": [
+    {
+      "amount": 1000000,
+      "currency": "usd",
+      "created": 1383082680,
+      "object": "refund",
+      "balance_transaction": "txn_102qR32mAiB3IuYiFJZUpS7Z"
+    }
+  ],
+  "balance_transaction": "txn_102qR32mAiB3IuYiCqYDTJA8",
+  "failure_message": null,
+  "failure_code": null,
+  "amount_refunded": 1000000,
+  "customer": "cus_2iWunHDfGG1x0m",
+  "invoice": null,
+  "description": null,
+  "dispute": null,
+  "metadata": {}
+}

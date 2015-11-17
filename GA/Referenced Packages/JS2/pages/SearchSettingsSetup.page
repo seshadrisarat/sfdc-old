@@ -1,0 +1,102 @@
+<apex:page controller="ts2.SearchSettingsSetupController">
+	<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, 'jquery-1.8.2.min.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__SSearch, 'res/js/jquery-ui-1.8.5.custom.min.js')}" />
+
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__SSearch, 'res/css/jquery-ui-1.8.5.custom.css')}"/>
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__SSearch, 'res/css/s_style.css')}"/>
+
+
+<apex:form >
+<apex:outputText id="global_vars" value="
+	global_vars = {
+		IsTaxonomiesReadyToLoad:{!IsTaxonomiesReadyToLoad},
+		LoadListItemsCount:{!LoadListItemsCount},
+		AllBatchesCompleted:{!AllBatchesCompleted}
+	};
+" style="display:none;"/>
+
+	<apex:pageMessages id="pageMessages" />
+
+	<apex:pageBlock id="pbSearchSettings" mode="details" title="Search Settings Setup" >
+
+		<apex:outputPanel id="pbsSearchSettingsTaxonomies">
+		<apex:pageBlockSection title="Taxonomies Status" collapsible="false" columns="1">
+			<apex:pageMessage summary="Taxonomies and Skills are not loaded." severity="info" strength="2" rendered="{!NOT(IsTaxonomiesLoaded)}" />
+			<apex:pageMessage summary="Taxonomies and Skills records are loaded." severity="confirm" strength="2" rendered="{!IsTaxonomiesLoaded}" />
+		</apex:pageBlockSection>
+		<apex:outputPanel id="btnpSearchSettingsTaxonomies" rendered="{!AND(NOT(IsTaxonomiesLoaded),IsCurrentUserSystemAdmin)}">
+			<apex:commandButton action="{!LoadTaxonomiesAction}" value="Load in Taxonomies and Skills" onclick="jQuery('#pbsSearchSettingsTaxonomies_spinner').addClass('spinner_on');jQuery('[id$=pbsSearchSettingsTaxonomies] input.btn').attr('disabled','disabled').addClass('btnDisabled');" oncomplete="jQuery('#pbsSearchSettingsTaxonomies_spinner').removeClass('spinner_on');jQuery('[id$=pbsSearchSettingsTaxonomies] input.btn').attr('disabled','').removeClass('btnDisabled');if(getGlobalVars('IsTaxonomiesReadyToLoad')){pbsLoadDialogOpen();}" rerender="pageMessages,pbsLoadDialogForm,global_vars" />
+			<span id="pbsSearchSettingsTaxonomies_spinner" class="spinner_indicator">&nbsp;</span>
+		</apex:outputPanel>
+		</apex:outputPanel>
+
+	</apex:pageBlock>
+
+</apex:form>
+
+<div id="pbsLoadDialog" title="Load Dialog" style="display:none;">
+<apex:form id="pbsLoadDialogForm" rendered="{!IsCurrentUserSystemAdmin}">
+
+	<apex:outputPanel id="pbsLoadDialogSection">
+	<apex:pageBlock mode="details">
+		<apex:outputPanel id="pbpLoadDialogMessage">
+			<apex:outputPanel rendered="{!LoadItemsStageNumber==0}">
+				<apex:outputText value="You are about to import {!LoadListItemsCount} records. Are you sure?"/>
+			</apex:outputPanel>
+			<apex:outputPanel rendered="{!LoadItemsStageNumber!=0}">
+				<apex:outputText value="{!LoadActionMessage}"/>
+			</apex:outputPanel>
+		</apex:outputPanel>
+		<apex:pageBlockButtons location="bottom">
+			<apex:commandButton value="Import" action="{!LoadTaxonomiesActionCommit}" onclick="jQuery('#pbsLoadDialog_spinner').addClass('spinner_on');jQuery('[id$=pbsLoadDialogSection] input.btn').attr('disabled','disabled').addClass('btnDisabled');" oncomplete="pbsLoadDialogAutoSize();" rerender="pbpLoadDialogMessage,actionPollerLoad" />
+			<apex:commandButton value="Cancel" onclick="jQuery('#pbsLoadDialog').dialog('close');return(false);" />
+			<span id="pbsLoadDialog_spinner" class="spinner_indicator">&nbsp;</span>
+		</apex:pageBlockButtons>
+	</apex:pageBlock>
+	</apex:outputPanel>
+
+	<apex:actionPoller id="actionPollerLoad" action="{!PollerHandler}" rerender="pbpLoadDialogMessage,global_vars" enabled="{!EnablePoller}" interval="5" oncomplete="if(getGlobalVars('AllBatchesCompleted')){jQuery('#pbsLoadDialog_spinner').removeClass('spinner_on');}" />
+</apex:form>
+</div>
+
+<script type="text/javascript">
+	jQuery.noConflict();
+	jQuery(document).ready(function() {
+		gfxInit();
+		jQuery("#pbsLoadDialog").dialog({
+			modal: true,
+			autoOpen: false,
+			width: 480,
+			height: 260,
+			resizable: false
+		});
+	});
+	function gfxInit() {
+		a1=new Image; a1.src="{!URLFOR($Resource.SSearch, 'res/img/spinner.gif')}";
+	}
+	function pbsLoadDialogOpen() {
+		jQuery('#pbsLoadDialog').dialog('open');
+		pbsLoadDialogAutoSize();
+	}
+	function pbsLoadDialogAutoSize() {
+		jQuery('#pbsLoadDialog').dialog('option','height',jQuery('[id$=pbsLoadDialogForm]').height()+60);
+	}
+	function getGlobalVars(property) {
+		var result = '';
+		var global_vars_hash = '';
+		var global_vars_val = jQuery("span[id$=global_vars]").html();
+		try {
+			global_vars_hash = eval(global_vars_val);
+		}
+		catch (e) { global_vars_hash=''; }
+		if (typeof global_vars_hash === "object") {
+			try {
+				var getter_str = 'global_vars_hash.'+property;
+				result = eval(getter_str);
+			}
+			catch (e) { result=''; }
+		}
+		return result;
+	}
+</script>
+</apex:page>

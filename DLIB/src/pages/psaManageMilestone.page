@@ -1,0 +1,345 @@
+<apex:page controller="psaManageMilestoneController">
+<apex:includescript value="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.js"/>
+<apex:includeScript value="{!$Resource.date_js}"/>
+<script type="text/javascript">
+
+var onLoadFormValues; 
+var onUnloadFormValues; 
+   
+function checkall(){
+   if($('.checkAll').attr('checked') == 'checked'){
+      $('.tblCheckboxes').attr('checked', true);
+   }
+   else{
+        $('.tblCheckboxes').attr('checked', false);
+   }  
+   chkCheckbox(); 
+} 
+
+function validateStartDate(){
+       if ($('.msStartDate').val() == ""){
+           alert('You must enter a value for "First Milestone Date" in order to apply a template. Please select a date and try again.'); 
+           return false; 
+       }
+}
+
+function validateDuration(){
+        if ($('.duration').val() < 0){
+            alert('Duration cannot be negative. Please enter a value greater than 0.'); 
+            return false; 
+        }
+}
+
+$(document).ready(function(){
+    onLoadFormValues = $('.theForm').serialize(); 
+    
+    /*$('.duration').change(function(){
+        var endDate = Date.parse($(this).parent('.dataCell').prev().children('span').html()); 
+        var startDate = Date.parse($(this).parent('.dataCell').prev().prev().find('.startDateInput').val()); 
+        var duration = $(this).val(); 
+        var newDate = startDate.addDays(duration); 
+        
+        $(this).parent('.dataCell').prev().children('span').text(newDate.toString("M/d/yyyy")); 
+    }); 
+    
+    $('.startDateInput').change(function(){
+        var endDate = Date.parse($(this).parent().parent().parent('.dataCell').next().children('span').html()); 
+        var startDate = Date.parse($(this).val()); 
+        var duration = $(this).parent().parent().parent('.dataCell').next().next().find('.duration').val(); 
+        var newDate = startDate.addDays(duration); 
+        
+        $(this).parent().parent().parent('.dataCell').next().children('span').text(newDate.toString("M/d/yyyy")); 
+    });*/
+    
+    removeNoneOption();
+    disableChildStatuses();
+});
+
+function disableChildStatuses() {
+  $('select.parent option:selected[value=Canceled]').change();
+}
+
+function removeNoneOption(){
+    $('.StatusSelect').each(function() {
+        $(this).children().each(function() {
+            if ($(this).val() == ''){
+                $(this).remove(); 
+            }
+        });
+    });
+}
+
+function enableSaveButton(){ 
+    $('.saveButton').removeAttr('disabled'); 
+    $('.saveButton').removeClass('btnDisabled'); 
+    $('.saveButton').addClass('btn'); 
+    setHasChangesBool(); 
+}
+
+function validateOnCancel(){
+    onUnloadFormValues = $('.theForm').serialize(); 
+    if (onUnloadFormValues != onLoadFormValues){
+        var r=confirm("You have unsaved changes. Do you wish to continue?")
+        if (r==true)
+          {
+              return true; 
+          }
+        else
+          {
+              return false; 
+          }
+    }
+} 
+
+function validateSave(){
+    $('.pbButtons').css('visibility','hidden'); 
+    var startDateValidation = validateFields( '.startDateInput' );
+    
+    if ( startDateValidation ) {
+        alert('Milestone Start Date is required. Please make sure that all Milestones have a Start Date assigned then try again.'); 
+    }
+
+    var endDateValidation = validateFields( '.endDateInput' );
+
+    if ( endDateValidation ) {
+        alert('Milestone End Date is required. Please make sure that all Milestones have a End Date assigned then try again.'); 
+    }
+
+    if ( startDateValidation || endDateValidation ) {
+        $('.pbButtons').css('visibility','visible'); 
+        setHasChangesBool(); 
+        return false;
+    }
+}
+
+function validateFields( selector ) {
+    var result = false;
+    $( selector ).each(function(){
+        if ($(this).val() == ''){
+           result = true;
+        }
+    });
+    return result;
+}
+function changeChildrenStatus( eid, status ) {
+  if ( status != 'Canceled' ) {
+  	$( '.childOf' + eid ).each(function() {
+  	  $(this).removeAttr( 'disabled' );
+  	});
+    return;
+  }
+  $( '.childOf' + eid ).each(function() {
+    $(this).val( 'Canceled' );
+    $(this).attr( 'disabled', 'disabled' );
+  });
+}
+</script>
+<style type="text/css">
+.dateFormat{
+   visibility:hidden;
+}
+.apexp .totalRow {
+  background-color: #F0F0F0;
+}
+.apexp .detailList .list td, .apexp .detailList .list th, .apexp .editPage .bPageBlock .detailList .list tr td, .apexp .editPage .bPageBlock .detailList .list tr th {
+  border-bottom: 1px solid #E6E6E6;
+}
+</style>
+<apex:form id="theForm" styleClass="theForm">
+<apex:actionFunction name="setHasChangesBool" action="{!setHasChangesBool}" rerender="refresh" />
+<apex:pageMessages id="pMessages" />
+<apex:sectionHeader title="Manage Milestones"/>
+<apex:pageBlock id="pageBlock" mode="edit">
+<apex:pageBlockButtons location="bottom" styleClass="pbButtons">
+       <apex:panelGrid columns="1" style="width:58%; text-align:center;">
+      <apex:panelGroup >
+      <apex:commandButton value="Save" action="{!save}" disabled="{!NOT hasChangedRows}" styleClass="saveButton" onclick="return validateSave();" />
+      <apex:commandButton value="Save and Close" action="{!saveAndClose}" disabled="{!NOT hasChangedRows}" styleClass="saveButton" onclick="return validateSave();" />
+      <apex:commandButton value="Refresh Project" action="{!refreshProject}" reRender="pMessages" />
+      <apex:commandButton value="Cancel" action="{!cancel}" immediate="true" onclick="return validateOnCancel();" />
+      </apex:panelGroup>
+      </apex:panelGrid>
+</apex:pageblockButtons>
+    <apex:pageBlockSection collapsible="true" columns="2" title="Project Info">
+        <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Project Name" for="Project Name"/>
+               <apex:outputPanel styleClass="" layout="block">  
+                  <apex:outputPanel styleClass="" layout="block"/>
+                  <apex:outputLink id="chooseinputDate" value="/{!project.id}">{!project.name}</apex:outputLink>
+               </apex:outputPanel>              
+        </apex:pageBlockSectionItem>     
+        <apex:outputField value="{!project.pse__Start_Date__c}" title="Start Date"/>
+        <apex:outputField value="{!project.pse__Stage__c}" title="Stage"/>
+        <apex:outputField value="{!project.pse__End_Date__c}" title="End Date"/>
+    </apex:pageBlockSection>
+    <!--<apex:pageBlockSection collapsible="true" columns="2" title="Choose Milestone Template">
+        <apex:selectList size="1" multiselect="false" title="Please choose the Milestone Template that you wish to apply" label="Choose Milestone Template" value="{!selectedMSTemplate}" >
+            <apex:selectOptions value="{!msTemplateOptionsSelectList}"></apex:selectOptions>
+        </apex:selectList>
+        <apex:pageBlockSectionItem >
+            <apex:outputLabel value="First Milestone Date" for="First Milestone Date"/>
+               <apex:outputPanel styleClass="requiredInput" layout="block">  
+                  <apex:outputPanel styleClass="requiredBlock" layout="block"/>
+                  <apex:inputField id="chooseinputDate" value="{!throwawayContact.BirthDate}" styleClass="msStartDate" />
+               </apex:outputPanel>
+        </apex:pageBlockSectionItem>
+    </apex:pageBlockSection>
+    <apex:pageblockSection columns="1" id="pbsButtons">
+      <apex:panelGrid columns="1" style="width:100%; text-align:center;">
+      <apex:panelGroup >
+          <apex:commandButton value="Apply Template" action="{!applyTemplate}" id="btnApplyTemplate" onclick="return validateStartDate();" />
+      </apex:panelGroup>
+      </apex:panelGrid>
+    </apex:pageblockSection>-->
+    <apex:outputPanel id="pb">
+    <apex:pageBlockSection title="Edit Milestone Details" columns="1">
+        <apex:pageBlockTable value="{!Wrappers}" var="msObj" rowClasses="odd,even" style="width:98%; margin-left:10px; margin-right:10px;" id="pbt" styleClass="table">
+            <apex:column >
+                <apex:facet name="header"></apex:facet>
+                <apex:image url="/img/samples/flag_red.gif" title="Isn't Saved" rendered="{! NOT( msObj.isExistingMS ) }"/>
+            </apex:column>
+            <apex:column >
+              <apex:facet name="header">
+                <apex:inputCheckbox id="checkAll" styleClass="checkAll" onclick="checkall();" value="{!isAllBoxChecked}" />
+              </apex:facet>
+              <apex:inputCheckbox value="{!msObj.isMSChecked}" styleClass="tblCheckboxes" />
+
+              <apex:facet name="footer">
+                  <apex:commandLink styleClass="tblCheckboxes" rerender="pb" oncomplete="disableChildStatuses();">
+                      <img src="/img/icon/custom51_100/gears16.png" title="Recalculate Summary" />
+                  </apex:commandLink>
+              </apex:facet>
+            </apex:column>
+            <apex:column > 
+                <apex:facet name="header">Project Phase</apex:facet>
+                <apex:outputPanel styleClass="requiredInput" layout="block" rendered="{! msObj.isParent }">  
+                  <apex:outputPanel styleClass="requiredBlock" layout="block" />
+                    <apex:outputPanel >
+                      <apex:selectList value="{! msObj.mStone.Project_Phase__c }" size="1">
+                        <apex:selectOptions value="{! ProjectPhases }"/>
+                      </apex:selectList>
+                    </apex:outputPanel>
+                </apex:outputPanel>
+            </apex:column>
+            <apex:column > 
+                <apex:facet name="header">Parent Name</apex:facet>
+                <apex:outputPanel styleClass="requiredInput" layout="block" rendered="{! msObj.isParent }">  
+                  <apex:outputPanel styleClass="requiredBlock" layout="block"/>
+                  <apex:inputField value="{!msObj.mStone.Name}" onchange="enableSaveButton();" styleClass="msNameInput" />
+                </apex:outputPanel>
+                <apex:outputText value="{!msObj.mStone.Name}" styleClass="msNameInput" rendered="{! msObj.isBillable }" />
+                
+                <apex:facet name="footer">
+                    <span>{! oSummary.mStone.Name }</span>
+                </apex:facet>
+            </apex:column>
+            <apex:column > 
+                <apex:facet name="header">Child Name</apex:facet>
+                <apex:outputPanel styleClass="requiredInput" layout="block" rendered="{! msObj.isChild }">  
+                  <apex:outputPanel styleClass="requiredBlock" layout="block"/>
+                  <apex:inputField value="{!msObj.mStone.Name}" onchange="enableSaveButton();" styleClass="msNameInput" />
+                </apex:outputPanel>
+                
+                <apex:facet name="footer">
+                    <span>{! oSummary.mStone.Name }</span>
+                </apex:facet>
+            </apex:column>
+            <apex:column >
+                <apex:facet name="header">Start Date</apex:facet>
+                <apex:pageBlockSectionItem >
+                   <apex:outputPanel styleClass="requiredInput" layout="block" rendered="{! NOT( msObj.isBillable ) }">  
+                      <apex:outputPanel styleClass="requiredBlock" layout="block"/>
+                      <apex:inputField value="{!msObj.mStone.Start_Date__c}" onchange="enableSaveButton();" styleClass="startDateInput"/>
+                   </apex:outputPanel>
+                   <apex:outputText value="{0,date,MM/dd/yyyy}" rendered="{! msObj.isBillable }">
+                      <apex:param value="{! msObj.mStone.Start_Date__c }" />
+                   </apex:outputText>
+                </apex:pageBlockSectionItem>
+            </apex:column>
+            <apex:column >
+                <apex:facet name="header">End Date</apex:facet>
+                <apex:pageBlockSectionItem >
+                   <apex:outputPanel styleClass="requiredInput" layout="block" rendered="{! NOT( msObj.isBillable ) }">  
+                      <apex:outputPanel styleClass="requiredBlock" layout="block"/>
+                       <apex:inputField value="{!msObj.mStone.End_Date__c}" onchange="enableSaveButton();" styleClass="endDateInput"/>
+                   </apex:outputPanel>
+                   <apex:outputText value="{0,date,M/d/yyyy}" rendered="{! msObj.isBillable }">
+                      <apex:param value="{! msObj.mStone.End_Date__c }" />
+                   </apex:outputText>
+                </apex:pageBlockSectionItem>
+            </apex:column>
+            <apex:column >
+                <apex:facet name="header">Duration</apex:facet>
+                <apex:outputText value="{!msObj.duration}" />
+                
+                <apex:facet name="footer">
+                    <span>{! oSummary.duration }</span>
+                </apex:facet>
+            </apex:column>
+            <apex:column >
+                <apex:facet name="header">Status</apex:facet>
+                <apex:inputField value="{!msObj.mStone.pse__Status__c}" styleClass="StatusSelect parent" onchange="changeChildrenStatus('{!msObj.mStone.Id}',this.value);enableSaveButton();" rendered="{! msObj.isParent }" />
+                <apex:inputField value="{!msObj.mStone.pse__Status__c}" styleClass="StatusSelect childOf{!msObj.mStone.Parent_Milestone__c}" onchange="enableSaveButton();" rendered="{! msObj.isChild }" />
+                <apex:outputText value="{!msObj.mStone.pse__Status__c}" rendered="{! msObj.isBillable }" />
+            </apex:column>
+            <apex:column >
+                <apex:facet name="header">Budget Hours</apex:facet>
+                <apex:outputText value="{!msObj.mStone.Budget_Hours__c}" />
+                
+                <apex:facet name="footer">
+                    <span>{! oSummary.mStone.Budget_Hours__c }</span>
+                </apex:facet>
+            </apex:column>
+            <apex:column >
+                <apex:facet name="header">Estimated Hours</apex:facet>
+                <apex:inputField value="{!msObj.mStone.Estimated_Hours__c}" style="width:34px" onchange="enableSaveButton();" rendered="{! msObj.isChild }" />
+                <apex:outputText value="{!msObj.mStone.Estimated_Hours__c}" rendered="{! OR( msObj.isParent, msObj.isBillable ) }" />
+
+                <apex:facet name="footer">
+                    <span>{! oSummary.mStone.Estimated_Hours__c }</span>
+                </apex:facet>
+            </apex:column>
+            <apex:column >
+                <apex:facet name="header">Actual Hours</apex:facet>
+                <apex:outputText value="{!msObj.mStone.pse__Billable_Hours_In_Financials__c}" />
+
+                <apex:facet name="footer">
+                    <span>{! oSummary.mStone.pse__Billable_Hours_In_Financials__c }</span>
+                </apex:facet>
+            </apex:column>
+            <!--<apex:column >
+                <apex:facet name="header">Planned Hours</apex:facet>
+                <apex:inputField value="{!msObj.mStone.pse__Planned_Hours__c}" style="width:26px" onchange="enableSaveButton();" rendered="{! msObj.isChild }" />
+                <apex:outputText value="{!msObj.mStone.pse__Planned_Hours__c}" rendered="{! OR( msObj.isParent, msObj.isBillable ) }" />
+                
+                <apex:facet name="footer">
+                    <span class="summary">{! oSummary.mStone.pse__Planned_Hours__c }</span>
+                </apex:facet>
+            </apex:column>-->
+        </apex:pageBlockTable>
+        <apex:panelGrid columns="1" style="width:100%; text-align:center;">
+          <apex:actionStatus id="lockStatus">
+            <apex:facet name="stop">
+              <apex:panelGroup >
+                <apex:commandButton value="Add Parent Task" action="{!addParentTask}" status="lockStatus" rerender="pbt,pMessages" oncomplete="removeNoneOption();disableChildStatuses();enableSaveButton();" />
+                <apex:commandButton value="Add Child Task" action="{!addChildTask}" status="lockStatus" rerender="pbt,pMessages" oncomplete="removeNoneOption();disableChildStatuses();enableSaveButton();" />
+                <apex:commandButton value="Delete Checked Rows" action="{!deleteSelected}" status="lockStatus" rerender="pbt,pMessages" oncomplete="disableChildStatuses();enableSaveButton();" />
+                <!--<apex:commandButton value="Recalculate Dates" action="{!recalculateDates}" status="lockStatus" rerender="pbt,pMessages" onclick="enableSaveButton();" />-->
+              </apex:panelGroup>
+            </apex:facet>
+            <apex:facet name="start">
+              <apex:panelGroup >
+                <apex:commandButton value="Add Parent Task" action="{!addParentTask}" status="lockStatus" disabled="true" rerender="pbt,pMessages" oncomplete="removeNoneOption();disableChildStatuses();enableSaveButton();" />
+                <apex:commandButton value="Add Child Task" action="{!addChildTask}" status="lockStatus" disabled="true" rerender="pbt,pMessages" oncomplete="removeNoneOption();disableChildStatuses();enableSaveButton();" />
+                <apex:commandButton value="Delete Checked Rows" action="{!deleteSelected}" status="lockStatus" disabled="true" rerender="pbt,pMessages" oncomplete="disableChildStatuses();enableSaveButton();" />
+                <!--<apex:commandButton value="Recalculate Dates" action="{!recalculateDates}" status="lockStatus" disabled="true"  rerender="pbt,pMessages" onclick="enableSaveButton();" />-->
+              </apex:panelGroup>
+            </apex:facet>
+          </apex:actionStatus>
+        </apex:panelGrid>
+    </apex:pageBlockSection>
+    </apex:outputPanel>
+    <div id="refresh"></div>
+</apex:pageBlock>
+</apex:form>    
+</apex:page>

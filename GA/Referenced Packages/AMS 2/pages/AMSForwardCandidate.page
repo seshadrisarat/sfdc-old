@@ -1,0 +1,235 @@
+<apex:page controller="ts2extams.AMSSingleActionController" showHeader="false" sideBar="false">
+<apex:includeScript value="{!URLFOR($Resource.ts2extams__UIRes, 'res/js/jquery-1.6.min.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.ts2__stcode, 'res/js/ui-2.js')}" />
+<apex:stylesheet value="{!URLFOR($Resource.ts2extams__UIRes, 'res/css/std_style.css')}"/>
+<apex:includeScript value="/apexpages/fckeditor/fckeditor.js"/>
+<apex:stylesheet value="{!URLFOR($Resource.ts2__stcode, 'res/css/ui-2.css')}"/>
+
+
+<script>
+function closeWin(refresh) {
+	parent.window.opener = self;
+	parent.window.close();
+}
+</script>
+
+<style>
+	.ForwardModeSelector label { vertical-align: middle; margin-right:8px; }
+	.ForwardModeSelector input { vertical-align: middle; }
+</style>
+
+<body width="100%" style="margin:10px;">
+
+<apex:form id="frm">
+
+	<apex:pageMessages id="pageMessages" />
+	<apex:pageBlock title="{!$Label.AMS_LABEL_Forward}" mode="details" rendered="{!NOT(HasFatalMessages)}" >
+
+		<apex:pageBlockButtons id="pbbsMainButtons" style="text-align: right;" location="bottom">
+			<span id="pbsMainButtons_spinner" class="spinner_indicator">&nbsp;</span>
+			<apex:commandButton id="Send_b" immediate="true" onclick="RerenderToUserContactBlock();setValueFromEditor();jQuery('#pbsMainButtons_spinner').addClass('spinner_on');jQuery('[id*=pbbsMainButtons] input.btn').attr('disabled','disabled').addClass('btnDisabled'); return false;" value="{!$Label.AMS_BTN_Send}" title="{!$Label.AMS_BTN_Send}" rendered="{!NOT(Completed)}"/>
+			<apex:commandButton value="{!$Label.ts2__SelectTemplate}" title="{!$Label.ts2__SelectTemplate}" rendered="{!NOT(Completed) && ForwardMode=='External Forward'}" onclick="openTemplateSelectorWindow();return(false);" />
+			<apex:commandButton value="{!$Label.AMS_BTN_Cancel}" title="{!$Label.AMS_BTN_Cancel}" rendered="{!NOT(Completed)}" onclick="closeWin(false);return(false);" />
+			<apex:commandButton value="{!$Label.AMS_BTN_Close}" title="{!$Label.AMS_BTN_Close}" rendered="{!Completed}" onclick="closeWin(false);return(false);" />
+
+			<apex:actionFunction name="RerenderToUserContactBlock" rerender="toUserContactBlock"/>
+			<apex:actionFunction name="ForwardCandidateSend" action="{!ForwardCandidateSend}" rerender="frm"/>
+			<apex:actionFunction name="ForwardCandidateSendHtml" action="{!ForwardCandidateSend}" rerender="frm">
+				<apex:param name="var1" value="" assignTo="{!eventCC.Description}" />
+			</apex:actionFunction>
+		</apex:pageBlockButtons>
+
+		<apex:pageBlockSection columns="1" rendered="{!NOT(Completed)}">
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$Label.AMS_LABEL_ForwardMode}" />
+				<apex:outputPanel id="ForwardModeSelector">
+					<apex:selectRadio value="{!ForwardMode}" styleClass="ForwardModeSelector" style="float:left;" required="true" >
+						<apex:selectOptions value="{!ForwardModeList}" />
+						<apex:actionSupport event="onclick" onsubmit="jQuery('#pbsFMselector_spinner').addClass('spinner_on');
+							jQuery('[id$=ForwardModeSelector] input').attr('disabled','disabled');
+							setForwardMode(jQuery('[id$=ForwardModeSelector] input:checked').val());return(false);"
+						/>
+					</apex:selectRadio>
+					<span id="pbsFMselector_spinner" class="spinner_indicator">&nbsp;</span>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem />
+		</apex:pageBlockSection>
+
+		<!-- BEGIN INTERNAL FORWARD -->
+		<apex:pageBlockSection columns="1" rendered="{!NOT(Completed) && ForwardMode=='Internal Forward'}">
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$Label.AMS_LABEL_ForwardAssign}" />
+				<apex:inputField required="true" value="{!taskObj.ownerId}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$Label.AMS_LABEL_Subject}" />
+				<apex:inputField required="true" value="{!taskObj.Subject}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$Label.AMS_LABEL_ForwardPriority}" />
+				<apex:inputField required="true" value="{!taskObj.Priority}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$Label.AMS_LABEL_DueDate}" />
+				<apex:inputField value="{!taskObj.ActivityDate}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$Label.AMS_LABEL_ForwardComments}" />
+				<apex:inputField style="width:350px;height:150px;margin-bottom: 20px;" id="txtComment" value="{!taskObj.Description}" />
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+		<!-- END INTERNAL FORWARD -->
+
+		<!-- BEGIN EXTERNAL FORWARD -->
+		<apex:pageBlockSection columns="1" rendered="{!NOT(Completed) && ForwardMode=='External Forward'}" >
+			<apex:pageBlockSectionItem id="toUserContactBlock">
+				<apex:outputLabel value="{!$Label.AMS_LABEL_To}" />
+				<!-- For External Forward we just used contact MasterRecordId field instead of any setter/getter to send mail on "To" Email Address -->
+				<apex:outputPanel layout="block" styleClass="requiredInput">
+					<apex:outputPanel layout="block" styleClass="requiredBlock" />
+					<apex:inputField value="{!toUserContact.ContactId}" />
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$Label.AMS_LABEL_ForwardAdditional}" />
+				<apex:inputText value="{!AdditionalTo}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$Label.AMS_LABEL_CC}" />
+				<apex:inputField required="false" value="{!eventCC.ownerId}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$Label.AMS_LABEL_BCC}" />
+				<apex:inputField required="false" value="{!eventBCC.ownerId}" />
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="ecndSubject" value="{!$Label.AMS_LABEL_Subject}" />
+				<apex:actionStatus id="TemplateLoading">
+					<apex:facet name="start">
+						<apex:outputText style="font-weight:bold;color:red;" value="{!$Label.AMS_LABEL_Loading}" />
+					</apex:facet>
+					<apex:facet name="stop">
+						<apex:outputPanel id="ecndSubject">
+							<apex:inputField rendered="{!NOT(IsEmailTemplateSelected) || $Setup.ts2__ApplicantManagementSystem__c.ts2__Enable_Send_Email_Edits__c}" value="{!eventCC.Subject}" />
+							<apex:outputLabel rendered="{!IsEmailTemplateSelected && NOT($Setup.ts2__ApplicantManagementSystem__c.ts2__Enable_Send_Email_Edits__c)}" value="{!eventCC.Subject}"></apex:outputLabel>
+						</apex:outputPanel>
+					</apex:facet>
+				</apex:actionStatus>
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="ecndMessage" value="{!$Label.AMS_LABEL_Message}" />
+				<apex:outputPanel id="ecndMessage">
+					<apex:inputField id="Message_box" style="width:350px;height:110px;" value="{!eventCC.Description}" rendered="{!NOT(IsEmailTemplateSelected) || $Setup.ts2__ApplicantManagementSystem__c.ts2__Enable_Send_Email_Edits__c}" />
+					<apex:inputTextArea style="width:350px;height:110px;color:#666666;border:1px solid #666666;" value="{!eventCC.Description}" readonly="true" rendered="{!IsEmailTemplateSelected && NOT($Setup.ts2__ApplicantManagementSystem__c.ts2__Enable_Send_Email_Edits__c) && $ObjectType.Event.fields.Description.Accessible}" />
+					<apex:outputPanel layout="none" rendered="{!(IsEmailTemplateSelected || $Setup.ts2__ApplicantManagementSystem__c.ts2__Enable_Send_Email_Edits__c) && HtmlView}">
+						<script type="text/javascript">
+							RerenderEditor();
+						</script>
+					</apex:outputPanel>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="" />
+				<apex:outputText value="{!$Label.AMS_LABEL_ForwardHeplText}" />
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+		<apex:pageBlockSection id="Attachments_block" title="{!$ObjectType.Attachment.LabelPlural}" rendered="{!NOT(Completed) && ForwardMode=='External Forward'}" columns="1">
+			<apex:pageBlockTable value="{!AttachmentsList}" var="att" rendered="{!AttachmentsList.SIZE>0}">
+				<apex:column headerValue="{!$Label.AMS_LABEL_Select}" width="30px">
+					<apex:inputCheckbox value="{!att.selectedAttachment}" />
+				</apex:column>
+				<apex:column headerValue="{!$Label.AMS_LABEL_Name}" value="{!att.attachmentName}" />
+			</apex:pageBlockTable>
+		</apex:pageBlockSection>
+		<!-- END EXTERNAL FORWARD -->
+
+		<apex:pageBlockSection id="pbsCompleted" columns="1" rendered="{!Completed}" >
+			<apex:pageMessage summary="{!$Label.AMS_LABEL_ForwardSave}" severity="confirm" strength="2" rendered="{!EmailsMissingCount == '0' && EmailsOptOut == '0'}"/>
+			<apex:pageMessage summary="{!$Label.AMS_LABEL_EmailNotSend}" severity="warning" strength="2" rendered="{!EmailsMissingCount != '0' || EmailsOptOut != '0'}"/>
+			<apex:pageBlockSectionItem labelStyle="width:50%" rendered="{!eventCC.Subject != null || eventCC.Description != null}">
+				<apex:outputLabel value="{!$Label.ts2__SelectedContacts}" for="cntCount" />
+				<apex:outputText id="cntCount" value="1" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem labelStyle="width:50%" rendered="{!eventCC.Subject != null || eventCC.Description != null}">
+				<apex:outputLabel value="{!$Label.ts2__EmailsSent}" for="cntSent" />
+				<apex:outputText id="cntSent" value="{!EmailsSentCount}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem labelStyle="width:50%" rendered="{!eventCC.Subject != null || eventCC.Description != null}">
+				<apex:outputLabel value="{!$Label.ts2__MissingEmailAddress}" for="cntMissing" />
+				<apex:outputText id="cntMissing" value="{!EmailsMissingCount}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem labelStyle="width:50%" rendered="{!eventCC.Subject != null || eventCC.Description != null}">
+				<apex:outputLabel value="{!$Label.ts2__EmailOptOutSelected}" for="cntOptOut" />
+				<apex:outputText id="cntOptOut" value="{!EmailsOptOut}" />
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+
+	</apex:pageBlock>
+
+	<apex:actionFunction name="setForwardMode" immediate="true" reRender="frm" >
+		<apex:param name="a" value="" assignTo="{!ForwardMode}" />
+	</apex:actionFunction>
+
+	<apex:actionFunction name="SelectTemplateAction" action="{!ChangeEmailTemplateOnSendEmail}" rerender="ecndSubject,ecndMessage,Attachments_block" status="TemplateLoading">
+		<apex:param name="var1" value="" assignTo="{!SelectedEmailTemplate}" />
+		<apex:param name="var1" value="" assignTo="{!SelectedEmailFolder}" />
+	</apex:actionFunction>
+
+</apex:form>
+
+</body>
+
+<script type="text/javascript">
+	jQuery.noConflict();
+	jQuery(document).ready(function() {
+		gfxInit();
+	});
+	function gfxInit() {
+		a1=new Image; a1.src="{!URLFOR($Resource.UIRes, 'res/img/spinner.gif')}";
+	}
+	function openTemplateSelectorWindow() {
+		var pageURL = '{!$Page.AMS2_s_EmailTemplate}';
+		pageURL = (typeof(pageURL)=='string') ? pageURL : "/apex/AMS2_s_EmailTemplate";
+		var url = pageURL;
+		var features = 'directories=no,menubar=no,titlebar=no,toolbar=no,scrollbars=yes,resizable=yes,width=600,height=300';
+		win = window.open(url, 'template', features);
+	}
+	function setTemplateId(templateId) {
+		LoadingElementShow(jQuery("[id$=pbSendEmail]").find("div.pbBody").get(0), '{!$Label.ts2__Candidates_LABEL_Loading}');
+		SelectTemplateAction(templateId, templateId);
+	}
+	function RerenderEditor() {
+		var Editor = jQuery('[id$=Message_box]');
+		Editor.attr('name', 'Message_box');
+		var NameEditor = Editor.attr('name');
+		var editor  = new FCKeditor(NameEditor, null, 300);
+			editor.BasePath = '/apexpages/fckeditor/';
+			editor.Config['CustomConfigurationsPath'] = '/apexpages/richtext.config.js';
+			editor.ToolbarSet = 'SalesforceBasic';
+			editor.Config['SkinPath'] = editor.BasePath + 'editor/skins/sfdc/';
+			editor.Config['DefaultLanguage'] = 'en-us';
+			editor.Config['EditorAreaStyles'] = ['/sCSS/23.0/sprites/1323209069000/Theme3/default/gc/HtmlDetailElem.css'];
+			editor.Config['ImageUpload'] = true;
+			editor.Config['SitesPath'] =  '';
+			editor.ReplaceTextarea();
+	}
+
+	function setValueFromEditor() {
+		if (jQuery('[id$=Message_box___Frame]') == null || jQuery('[id$=Message_box___Frame]').attr('src') == null) {
+			ForwardCandidateSend();
+			return true;
+		} else {
+			var NameEditor = jQuery('[id$=Message_box___Frame]');
+			EditorValue = NameEditor.contents().find("iframe").contents().find("body").html();
+			EditorValue = jQuery.trim(EditorValue);
+			ForwardCandidateSendHtml(EditorValue);
+			return true;
+		}
+	}
+</script>
+
+</apex:page>

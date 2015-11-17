@@ -1,0 +1,776 @@
+<apex:page id="buySignalPage" standardController="EDP1__BuySignal__c" extensions="EDP1.BuySignalController" 
+id="buySignalPage" tabStyle="BuySignals__tab" title="Buy Signals">
+
+<script type="text/javascript">
+    var __sfdcSessionId = '{!GETSESSIONID()}';
+</script>
+
+<script src="../../soap/ajax/18.0/connection.js" type="text/javascript" />
+<apex:includeScript value="{!URLFOR($Resource.EDP1__All, 'js/jquery-1.4.2.min.js')}" />
+<apex:stylesheet value="{!URLFOR($Resource.EDP1__All, 'js/fancybox/jquery.fancybox-1.3.1.css')}"/>
+<apex:includeScript value="{!URLFOR($Resource.EDP1__All, 'js/fancybox/jquery.fancybox-1.3.1.pack.js')}" />
+
+<style>
+<!-- Override the width of the Edit form label column so it doesn't wrap on the pop-up dialog -->
+.bPageBlock .detailList .labelCol {
+    width: 25%;
+}
+</style>
+
+<script type="text/javascript">
+
+// Page Initialization JavaScript
+BUY_SIGNAL_OBJECT = "EDP1__BuySignal__c";
+BUY_SIGNAL_QUERY_FIELDLIST = "EDP1__Type__c, EDP1__TotalTimesRaised__c, EDP1__Timeframe__c, SystemModstamp, "
+    + "EDP1__RecurrenceTimeframe__c, OwnerId, EDP1__NumberOfTimes__c, Name, LastModifiedDate, LastModifiedById, " 
+    + "LastModifiedBy.Name, EDP1__IsDeleted__c, IsDeleted, Id, CreatedDate, CreatedById, CreatedBy.Name, "
+    + "EDP1__Asset__c, EDP1__Asset__r.Name, EDP1__Asset__r.EDP1__Type__c, EDP1__ActivityType__c, EDP1__Active__c ";
+// BUY_SIGNAL_QUERY_ALL_FIELDS = "SELECT " + BUY_SIGNAL_QUERY_FIELDLIST + "FROM " + BUY_SIGNAL_OBJECT + " ";
+BUY_SIGNAL_QUERY_WHERE = " WHERE EDP1__IsDeleted__c = false ";
+BUY_SIGNAL_QUERY_ORDER = " ORDER BY EDP1__Type__c, Name";
+// BUY_SIGNAL_DELETE_QUERY = "SELECT EDP1__IsDeleted__c, Id, EDP1__Active__c FROM " + BUY_SIGNAL_OBJECT + " ";
+BUY_SIGNAL_EDIT_FIELDLIST = "Id, Name, EDP1__Type__c, EDP1__Timeframe__c, EDP1__RecurrenceTimeframe__c, EDP1__NumberOfTimes__c, "
+    + "EDP1__ActivityType__c, EDP1__Active__c, EDP1__IsDeleted__c, EDP1__Asset__c ";
+// BUY_SIGNAL_EDIT_QUERY = "SELECT " + BUY_SIGNAL_EDIT_FIELDLIST + "FROM " + BUY_SIGNAL_OBJECT + " ";
+
+var jQuery = $;  // Salesforce overrites the $ class with another framework
+var record;
+var asset;
+var idPrefix;
+var fieldPrefix;
+var isNewRecord = false;
+var recID; 
+
+var blockPrefix;
+var theRowNumber;
+
+function modalConfirm() {
+    return (Modal.confirm && Modal.confirm('Are you sure?')) || (!Modal.confirm && window.confirm('Are you sure?'));
+}
+
+// -----------------------------------------------------------------------
+// Called from the DEL Link on the lists of Generic and Specific buy Signals
+// -----------------------------------------------------------------------
+function del_onClick(obj, id) {
+    if (modalConfirm()) {
+        // var result = sforce.connection.query(BUY_SIGNAL_DELETE_QUERY + 'where Id=\'' + id + '\'');
+        var records = sforce.connection.retrieve(BUY_SIGNAL_EDIT_FIELDLIST, BUY_SIGNAL_OBJECT, [id]);
+        if (records) {
+            var rec = records[0];
+            rec.EDP1__IsDeleted__c = true;
+            result = sforce.connection.deleteIds([id]);
+            if (!result[0].getBoolean("success")) alert("Failed to mark Buy Signal as Deleted" + result[0]);
+            else refreshLists();
+        }
+    }
+}
+
+// -----------------------------------------------------------------------
+// Called from the EDIT Link on the lists of Generic and Specific buy Signals
+// Displays the related Forms via jQuery.Fancybox
+// -----------------------------------------------------------------------
+function edit_onClick(id, obj) {
+    // Query the selected BuySignal record
+    // var result = sforce.connection.query(BUY_SIGNAL_EDIT_QUERY + 'where Id=\'' + id + '\'');
+    records = sforce.connection.retrieve(BUY_SIGNAL_EDIT_FIELDLIST, BUY_SIGNAL_OBJECT, [id]);
+    isNewRecord = false;
+    recID = id;
+    
+    // determine the ID's of the page area and row that are being 'edited'
+    blockPrefix = obj.id.substr(0,obj.id.indexOf("EditLink")-1);
+    theRowNumber = blockPrefix.substr(blockPrefix.lastIndexOf(":")+1)
+    blockPrefix = blockPrefix.substr(0,blockPrefix.length - theRowNumber.length-1); 
+    // alert("blockPrefix=" + blockPrefix + ", theRowNumber=" + theRowNumber);
+    
+    // If a record was retreived
+    if (records) {
+        record = records[0];
+        if(record.EDP1__Asset__c != null) {
+            asset = sforce.connection.retrieve('Id, Name, EDP1__Type__c', 'EDP1__Asset__c', [record.EDP1__Asset__c])[0];
+        }
+        idPrefix = 'edit' + record.EDP1__Type__c;
+
+        var formID = 'buySignalPage:' + idPrefix + 'Form';
+        var form = document.getElementById(formID);
+        resetFieldColorStatus(form);
+        fieldPrefix = form.id + ':' + idPrefix + 'Block:' + idPrefix + 'Section:'; // + idPrefix ; 
+        // buySignalPage:editSpecificForm:editSpecificBlock:editSpecificSection:FldRecurrenceTimeframe:RecurrenceTimeframe" 
+        
+        // For all TEXT fields, set the 'defaultValue' property so the value
+        // shows up in the fancyBox dialog. For some reason using .value does not
+        // properly update the field value. This is likely due to the way that the form 
+        // dialog is rendered via Fancybox
+        form.elements[fieldPrefix + 'Name'].defaultValue = record.Name;
+        form.elements[fieldPrefix + 'Name'].value = record.Name;
+
+        // Set the "defaultValue" for the rest of the form fields based on the
+        // TYPE of record being edited
+        form[fieldPrefix + 'FldRecurrenceTimeframe:RecurrenceTimeframe'].defaultValue = record.EDP1__RecurrenceTimeframe__c == null ? '' : new Number(record.EDP1__RecurrenceTimeframe__c).toFixed(0).toString();
+        form[fieldPrefix + 'FldRecurrenceTimeframe:RecurrenceTimeframe'].value = form[fieldPrefix + 'FldRecurrenceTimeframe:RecurrenceTimeframe'].defaultValue;
+        form[fieldPrefix + 'Active'].defaultChecked = (record.EDP1__Active__c === 'true');
+        form[fieldPrefix + 'Active'].checked = (record.EDP1__Active__c === 'true');
+
+        // For a picklist field, need to loop through the Options and set the 'defaultSelected' 
+        // property to TRUE
+        var activityType = form.elements[fieldPrefix + 'FldActivityType:ActivityType'];
+        activityType.selectedIndex = 0;
+        activityType.defaultValue = record.EDP1__ActivityType__c == null ? '' : record.EDP1__ActivityType__c;
+        for (i=0; i < activityType.length; i++) {   
+            if (activityType.options[i].text == record.EDP1__ActivityType__c) {
+                activityType.options[i].defaultSelected = true;
+                activityType.selectedIndex = i;
+                break;
+            }
+        }
+
+        if (record.EDP1__Type__c == 'Generic') {
+            frmHeight = 350;
+            form[fieldPrefix + 'FldNumberOfTimes:NumberOfTimes'].defaultValue = record.EDP1__NumberOfTimes__c == null ? '' : new Number(record.EDP1__NumberOfTimes__c).toFixed(0).toString();
+            form[fieldPrefix + 'FldNumberOfTimes:NumberOfTimes'].value = form[fieldPrefix + 'FldNumberOfTimes:NumberOfTimes'].defaultValue; 
+            form[fieldPrefix + 'FldTimeframe:Timeframe'].defaultValue = record.EDP1__Timeframe__c == null ? '' : new Number(record.EDP1__Timeframe__c).toFixed(0).toString();
+            form[fieldPrefix + 'FldTimeframe:Timeframe'].value = form[fieldPrefix + 'FldTimeframe:Timeframe'].defaultValue; 
+
+
+        } else if (record.EDP1__Type__c == 'Specific') {
+            frmHeight = 300;
+            form[fieldPrefix + 'FldAsset:Asset'].defaultValue = record.EDP1__Asset__c == null ? '' : asset.Name;
+            form[fieldPrefix + 'FldAsset:Asset'].value = form[fieldPrefix + 'FldAsset:Asset'].defaultValue;
+            form[fieldPrefix + 'FldAsset:Asset_lkid'].defaultValue = record.EDP1__Asset__c == null ? '000000000000000' : record.EDP1__Asset__c;
+            form[fieldPrefix + 'FldAsset:Asset_lkid'].value = form[fieldPrefix + 'FldAsset:Asset_lkid'].defaultValue; 
+        }
+
+        // Use the "callFancyBox()" call to activate the fancyBox via an <a HREF> link
+        // to work around issues with being able to access form field properties properly
+        callFancybox("#" + idPrefix + "DIV", frmHeight);
+    }
+}
+
+// -----------------------------------------------------------------------
+// Called from the CANCEL button on the EDIT/NEW Forms that are displayed
+// via jQuery.Fancybox
+// -----------------------------------------------------------------------
+function cancel_onClick() {
+    isNewRecord = false;
+    $.fancybox.close();
+}
+
+// -----------------------------------------------------------------------
+// Called from the SAVE button on the EDIT/NEW Forms that are displayed
+// via jQuery.Fancybox
+// -----------------------------------------------------------------------
+function save_onClick(form) {
+
+    if (!validateForm(form)) {
+        alert("Fields Marked as Required Must be Filled in Before Saving"); 
+        return false;
+    }
+    
+
+    if (record) {
+        //idPrefix = 'edit' + record.EDP1__Type__c;
+        //fieldPrefix = form.id + ':' + idPrefix;
+
+        record.Name = form[fieldPrefix + 'Name'].value;
+        record.EDP1__Active__c = String(form[fieldPrefix + 'Active'].checked);
+        record.EDP1__RecurrenceTimeframe__c = form[fieldPrefix + 'FldRecurrenceTimeframe:RecurrenceTimeframe'].value == '' 
+            ? null 
+            : form[fieldPrefix + 'FldRecurrenceTimeframe:RecurrenceTimeframe'].value;
+      
+        if ( form.elements[fieldPrefix + 'FldActivityType:ActivityType'].selectedIndex != 0) {
+            record.EDP1__ActivityType__c = form.elements[fieldPrefix + 'FldActivityType:ActivityType'].options[form.elements[fieldPrefix + 'FldActivityType:ActivityType'].selectedIndex].text;
+        } else 
+            record.EDP1__ActivityType__c = null;
+            
+        if (record.EDP1__Type__c == 'Generic') {
+            record.EDP1__Timeframe__c = form[fieldPrefix + 'FldTimeframe:Timeframe'].value == '' ? null : form[fieldPrefix + 'FldTimeframe:Timeframe'].value;
+            record.EDP1__NumberOfTimes__c = form[fieldPrefix + 'FldNumberOfTimes:NumberOfTimes'].value == '' ? null : form[fieldPrefix + 'FldNumberOfTimes:NumberOfTimes'].value;
+        } else {
+            if(form[fieldPrefix + 'FldAsset:Asset'].value != "") 
+                record.EDP1__Asset__c = form[fieldPrefix + 'FldAsset:Asset_lkid'].value;
+            else 
+                record.EDP1__Asset__c = null;     
+        }
+
+        if (isNewRecord) {
+            
+            var result = sforce.connection.create([record]);
+            
+            var error = eval("(" + result[0] + ")");
+            //alert(error.success);
+            if ( error.success == 'false' ) {
+                //alert(error.errors.statusCode);
+                switch ( error.errors.statusCode ) {
+                    case 'FIELD_CUSTOM_VALIDATION_EXCEPTION':
+                        alert('The activity type must match the asset type');
+                        break;
+                    default:
+                        alert('Failed to create new Buy Signal '+ result[0]);
+                  }
+                return;
+            } else {
+                isNewRecord = false;
+                $.fancybox.close();
+                refreshLists();
+            }
+
+        } else {
+            var result = sforce.connection.update([record]);
+            if (!result[0].getBoolean("success")) { 
+               alert("Failed to save Buy Signal changes " + result[0]);
+               return true;
+            }
+            $.fancybox.close();
+            // Rather than call back to the server or refresh the page
+            // update the field values directly on the page with the saved
+            // value for the object
+            var idPrefix = blockPrefix + ":" + theRowNumber + ":" + record.EDP1__Type__c;
+            document.getElementById(idPrefix + "_Name").innerHTML = stripHTML(record.Name);
+            document.getElementById(idPrefix + "_RecurrenceTimeFrame").innerHTML = stripHTML(record.EDP1__RecurrenceTimeframe__c);
+            
+            // For the Checkbox, find the IMG tag and change the displayed image based on the field value
+            var img = document.getElementById(idPrefix + "_Active");
+            if (img.hasChildNodes()) {
+                img = img.childNodes[0];
+                if (record.getBoolean('EDP1__Active__c')) img.src = "/img/checkbox_checked.gif";
+                else img.src = "/img/checkbox_unchecked.gif";
+            }
+
+            if (record.EDP1__Type__c == 'Generic') {
+                document.getElementById(idPrefix + "_ActivityType").innerHTML = stripHTML(record.EDP1__ActivityType__c);
+                document.getElementById(idPrefix + "_NumberOfTimes").innerHTML = stripHTML(record.EDP1__NumberOfTimes__c);
+                document.getElementById(idPrefix + "_TimeFrame").innerHTML = stripHTML(record.EDP1__Timeframe__c);
+            } else {
+                document.getElementById(idPrefix + "_Asset").innerHTML = stripHTML(form[fieldPrefix + 'FldAsset:Asset'].value);
+                if(form[fieldPrefix + 'FldAsset:Asset'].value != "") {
+                    records = sforce.connection.retrieve(BUY_SIGNAL_QUERY_FIELDLIST, BUY_SIGNAL_OBJECT, [recID]);
+                    record = records[0];
+                    document.getElementById(idPrefix + "_AssetType").innerHTML = stripHTML(record.EDP1__Asset__r.EDP1__Type__c);
+                } else document.getElementById(idPrefix + "_AssetType").innerHTML = "";
+            }
+        }
+    }
+
+}
+
+// -----------------------------------------------------------------------
+// Called from the Save_onClick function to validate the fields on the form
+// before saving the new/edited record. Returns False if not valid
+// -----------------------------------------------------------------------
+function validateForm(form) {
+
+    if (!validateField(form, fieldPrefix + 'Name')) return false;
+    
+    if (record.EDP1__Type__c == 'Generic') {
+        // if (form.elements[fieldPrefix + 'FldActivityType:ActivityType'].selectedIndex == 0) return false;
+        if (!validateField(form, fieldPrefix + 'FldActivityType:ActivityType')) return false;
+        if (!validateField(form, fieldPrefix + 'FldTimeframe:Timeframe')) return false;
+        if (!validateField(form, fieldPrefix + 'FldNumberOfTimes:NumberOfTimes')) return false;
+    } else {
+        if (!validateField(form, fieldPrefix + 'FldAsset:Asset_lkid')) return false;
+        if (!validateField(form, fieldPrefix + 'FldActivityType:ActivityType')) return false;
+    }
+
+    return true;
+}
+
+// ----------------------------------------------------------------------------------
+// Called from validateForm() to validate a specific field
+// If the field is empty, it returns FALSE and changes the color of the field
+// ----------------------------------------------------------------------------------
+function validateField(form, fldID) {
+    var fld = form.elements[fldID];
+    if (fld.value == '') {
+        fld.style.backgroundColor="#FFCC80";
+        fld.focus();
+        return false;
+    } else {
+        fld.style.backgroundColor="#FFFFFF";
+        fld.focus();
+        return true;
+    }
+}
+
+// ----------------------------------------------------------------------------------
+// Called from edit_onClick() and new_OnClick() to reset the background color of all
+// fields before displaying the forms
+// ----------------------------------------------------------------------------------
+function resetFieldColorStatus(form) {
+    for (var i=0; i < form.length; i++) {
+        form.elements[i].style.backgroundColor="#FFFFFF";
+    }
+}
+
+// -----------------------------------------------------------------------
+// Called from the VIEW (name) Link on the lists of Generic and Specific buy Signals
+// Displays the related Forms via jQuery.Fancybox
+// -----------------------------------------------------------------------
+function view_onClick(id, obj) {
+    // Query the selected BuySignal record
+    records = sforce.connection.retrieve(BUY_SIGNAL_QUERY_FIELDLIST, BUY_SIGNAL_OBJECT, [id]);
+    
+    // If a record was retreived
+    if (records) {
+        record = records[0];
+
+        fieldPrefix = 'buySignalPage:viewOnlyForm:viewOnlyBlock:viewOnlySection' + record.EDP1__Type__c + ':view';
+        
+        document.getElementById(fieldPrefix + 'Name').innerHTML = stripHTML(record.Name);
+        // document.getElementById(fieldPrefix + 'Type').innerHTML = record.EDP1__Type__c;
+        document.getElementById(fieldPrefix + 'RecurrenceTimeframe').innerHTML = record.EDP1__RecurrenceTimeframe__c == null ? '' : new Number(record.EDP1__RecurrenceTimeframe__c).toFixed(0).toString();
+        
+        if (record.getBoolean('EDP1__Active__c')) {
+            document.getElementById(fieldPrefix + 'Active').innerHTML = 
+                "<img width=\"21\" height=\"16\" title=\"Checked\" class=\"checkImg\" alt=\"Checked\" src=\"/img/checkbox_checked.gif\">";
+        } else {
+            document.getElementById(fieldPrefix + 'Active').innerHTML = 
+                "<img width=\"21\" height=\"16\" title=\"Unchecked\" class=\"checkImg\" alt=\"Unchecked\" src=\"/img/checkbox_unchecked.gif\">";
+        }
+
+        // document.getElementById(fieldPrefix + 'TotalTimesRaised').innerHTML = record.EDP1__TotalTimesRaised__c == null ? '' : new Number(record.EDP1__TotalTimesRaised__c).toFixed(0).toString();
+
+        if (record.EDP1__Type__c == 'Generic') {
+            document.getElementById(fieldPrefix + 'ActivityType').innerHTML = stripHTML(record.EDP1__ActivityType__c);
+            document.getElementById(fieldPrefix + 'NumberOfTimes').innerHTML = record.EDP1__NumberOfTimes__c == null ? '' : new Number(record.EDP1__NumberOfTimes__c).toFixed(0).toString();
+            document.getElementById(fieldPrefix + 'Timeframe').innerHTML = record.EDP1__Timeframe__c == null ? '' : new Number(record.EDP1__Timeframe__c).toFixed(0).toString();
+            frmHeight = 400;
+            document.getElementById('viewOnlySectionGeneric').style.display = '';
+            document.getElementById('SectionHeaderGeneric').style.display = '';
+            document.getElementById('viewOnlySectionSpecific').style.display = 'none';
+            document.getElementById('SectionHeaderSpecific').style.display = 'none';
+        } else {
+            document.getElementById(fieldPrefix + 'Asset').innerHTML = record.EDP1__Asset__c == null ? '' : record.EDP1__Asset__r.Name;
+            frmHeight = 350;
+            document.getElementById('viewOnlySectionGeneric').style.display = 'none';
+            document.getElementById('SectionHeaderGeneric').style.display = 'none';
+            document.getElementById('viewOnlySectionSpecific').style.display = '';
+            document.getElementById('SectionHeaderSpecific').style.display = '';
+        }
+
+        document.getElementById(fieldPrefix + 'Created').innerHTML = 
+            record.CreatedBy.Name + ", " + formatDate(record.getDateTime("CreatedDate")); 
+        document.getElementById(fieldPrefix + 'LastModified').innerHTML = 
+            record.LastModifiedBy.Name + ", " + formatDate(record.getDateTime("LastModifiedDate"));
+
+        // Use the "callFancyBox()" call to activate the fancyBox via an <a HREF> link
+        // to work around issues with being able to access form field properties properly
+        callFancybox("#viewOnlyDIV", frmHeight, 700);
+    }
+}
+
+// -----------------------------------------------------------------------
+// Called from the ADD (name) Button on the lists of Generic and Specific buy Signals
+// -----------------------------------------------------------------------
+function new_onClick(type) {
+    isNewRecord = true;
+
+    record = new sforce.SObject(BUY_SIGNAL_OBJECT);
+    record.EDP1__Type__c = type;
+
+    idPrefix = 'edit' + type;
+
+    var formID = 'buySignalPage:' + idPrefix + 'Form';
+    var form = document.getElementById(formID);
+    resetFieldColorStatus(form);
+    fieldPrefix = form.id + ':' + idPrefix + 'Block:' + idPrefix + 'Section:'; // + idPrefix ; 
+    
+    form.elements[fieldPrefix + 'Name'].defaultValue = '';
+    form.elements[fieldPrefix + 'Name'].value = '';
+    form[fieldPrefix + 'FldRecurrenceTimeframe:RecurrenceTimeframe'].defaultValue = '';
+    form[fieldPrefix + 'FldRecurrenceTimeframe:RecurrenceTimeframe'].value = '';
+    form[fieldPrefix + 'Active'].defaultChecked = false;
+    
+    var activityType = form.elements[fieldPrefix + 'FldActivityType:ActivityType'];
+    activityType.defaultValue = '';
+    activityType.value = '';
+    activityType.options[0].defaultSelected = true;
+    activityType.selectedIndex = 0;
+    
+    if (type == 'Generic') {
+        frmHeight = 350;
+        form[fieldPrefix + 'FldNumberOfTimes:NumberOfTimes'].defaultValue = '';
+        form[fieldPrefix + 'FldNumberOfTimes:NumberOfTimes'].value = '';
+        form[fieldPrefix + 'FldTimeframe:Timeframe'].defaultValue = '';
+        form[fieldPrefix + 'FldTimeframe:Timeframe'].value = '';
+
+
+    } else if (record.EDP1__Type__c == 'Specific') {
+        frmHeight = 315;
+        form[fieldPrefix + 'FldAsset:Asset'].defaultValue = '';
+        form[fieldPrefix + 'FldAsset:Asset'].value = '';
+        form[fieldPrefix + 'FldAsset:Asset_lkid'].defaultValue = '000000000000000';
+        form[fieldPrefix + 'FldAsset:Asset_lkid'].value = '';
+    }
+
+    // Use the "callFancyBox()" call to activate the fancyBox via an <a HREF> link
+    // to work around issues with being able to access form field properties properly
+    callFancybox("#" + idPrefix + "DIV", frmHeight);
+
+}
+
+// Format the Created/LastModified dates for display
+function formatDate(dt) {
+    return dt.getMonth()+1 + "/" + dt.getDate() + "/" + dt.getFullYear() + " " + dt.toLocaleTimeString();
+}
+
+</script>
+
+<apex:messages />
+
+<!-- ************************************************************************* -->
+<!-- GENERIC BUY SIGNALS -->
+<!-- ************************************************************************* -->
+<apex:outputPanel id="buySignalLists">
+ <apex:outputPanel rendered="{!all.size==0}">
+ <apex:form >
+ <div class="message confirmM3">
+        <table border="0" width='100%' cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">
+            <tbody><tr valign="top">
+                <td class="messageCell" ><div class="messageText"><span>
+                There are currently no buy signals setup.<BR/> <BR/>
+
+                <apex:commandButton action="{!createDefaultBuySignals}" value="Create Default Buy Signals"/><BR/> 
+                </span></div></td>
+            </tr>
+            <tr>
+                <td></td>
+                <td>
+                </td>
+            </tr>
+        </tbody></table>
+    </div></apex:form>
+ </apex:outputPanel>
+ 
+    <apex:PageBlock id="genericBuySignals" title="Generic Buy Signals" tabStyle="BuySignal__c" id="genericBlock">
+
+<!-- action="{!URLFOR($Action.BuySignal__c.New, null, [
+    retURL=Event__c.Id,
+    cancelURL=Event__c.Id,
+    saveURL=Event__c.Id,
+    CF00NA0000002AL5e_lkid=Event__c.Id,
+    CF00NA0000002AL5e=Event__c.Name
+    ])}"/ -->
+
+    <apex:pageBlockButtons location="top">
+        <input type="button" value="New Generic Buy Signal" class="btn" onClick="new_onClick('Generic');" />
+    </apex:pageBlockButtons>
+
+        <apex:pageBlockSection columns="1" collapsible="false" rendered="{!generic.size != 0}" id="genSection">
+            <apex:pageBlockTable value="{!generic}" var="bs" id="genericBuySignalTable" 
+            rowClasses="odd,even" styleClass="tableClass" width="100%">
+
+<!-- ACTION COLUMN -->
+                <apex:column headerValue="Action" styleClass="actionColumn" id="Actions">
+                    <apex:outputLink value="#" styleClass="actionLink" id="EditLink" onclick="edit_onClick('{!bs.Id}', this);">
+                        <apex:outputText value="Edit"/>
+                    </apex:outputLink>&nbsp;|&nbsp;
+                    <apex:outputLink value="#" styleClass="actionLink" onclick="del_onClick(this, '{!bs.Id}');">
+                        <apex:outputText value="Del"/>
+                    </apex:outputLink>
+                </apex:column>
+
+                <apex:column headerValue="Name">
+                    <apex:outputLink value="#" onClick="view_onClick('{!bs.Id}', this);" >
+                        <apex:outputField value="{!bs.Name}" id="Generic_Name" />
+                    </apex:outputLink>
+                </apex:column>
+                <apex:column headerValue="Activity Type">
+                    <apex:outputField value="{!bs.EDP1__ActivityType__c}" id="Generic_ActivityType" />
+                </apex:column>
+                <apex:column headerValue="Number Of Times">
+                    <apex:outputField value="{!bs.EDP1__NumberOfTimes__c}" id="Generic_NumberOfTimes" />
+                </apex:column>
+                <apex:column headerValue="Timeframe">
+                    <apex:outputField value="{!bs.EDP1__Timeframe__c}" id="Generic_TimeFrame" />
+                </apex:column>
+                <apex:column headerValue="Recurrence Timeframe (Days)">
+                    <apex:outputField value="{!bs.EDP1__RecurrenceTimeframe__c}" id="Generic_RecurrenceTimeFrame" />
+                </apex:column>
+                <apex:column headerValue="Total Times Raised">
+                    <apex:outputField value="{!bs.EDP1__TotalTimesRaised__c}" id="Generic_TotalTimesRaised" />
+                </apex:column>
+                <apex:column headerValue="Active">
+                    <apex:outputField value="{!bs.EDP1__Active__c}"  id="Generic_Active" />
+                </apex:column>
+
+            </apex:pageBlockTable>
+        </apex:pageBlockSection>
+    </apex:PageBlock>
+
+
+<!-- ************************************************************************* -->
+<!-- SPECIFIC BUY SIGNALS -->
+<!-- ************************************************************************* -->
+    <apex:PageBlock id="specificBuySignals" title="Specific Buy Signals" tabStyle="BuySignal__c" id="specificBlock">
+
+    <apex:pageBlockButtons location="top">
+        <input type="button" value="New Specific Buy Signal" class="btn" onClick="new_onClick('Specific');" />
+    </apex:pageBlockButtons>
+
+
+        <apex:pageBlockSection columns="1" collapsible="false" rendered="{!specific.size != 0}">
+            <apex:pageBlockTable value="{!specific}" var="bs" id="specificBuySignalTable" 
+            rowClasses="odd,even" styleClass="tableClass" width="100%">
+
+<!-- ACTION COLUMN -->
+                <apex:column headerValue="Action" styleClass="actionColumn" id="actions">
+                    <apex:outputLink value="#" styleClass="actionLink" id="EditLink" onclick="edit_onClick('{!bs.Id}', this);">
+                        <apex:outputText value="Edit"/>
+                    </apex:outputLink>&nbsp;|&nbsp;
+                    <apex:outputLink value="#" styleClass="actionLink" onclick="del_onClick(this, '{!bs.Id}');">
+                        <apex:outputText value="Del"/>
+                    </apex:outputLink>
+                </apex:column>
+
+                <apex:column headerValue="Name">
+                    <apex:outputLink value="#" onClick="view_onClick('{!bs.Id}', this);" >
+                    <!-- <apex:outputLink value="{!URLFOR($Action.BuySignal__c.View, bs.Id)}" target="_top">  -->
+                        <apex:outputField value="{!bs.Name}" id="Specific_Name" />
+                    </apex:outputLink>
+                </apex:column>
+                <apex:column headerValue="Marketing Asset">
+                    <apex:outputField value="{!bs.Asset__r.Name}" id="Specific_Asset" />
+                </apex:column>
+                <apex:column headerValue="Activity Type">
+                    <apex:outputField value="{!bs.EDP1__ActivityType__c}" id="Specific_ActivityType" />
+                </apex:column>
+                <apex:column headerValue="Asset Type">
+                    <apex:outputField value="{!bs.Asset__r.EDP1__Type__c}" id="Specific_AssetType" />
+                </apex:column>
+                <apex:column headerValue="Recurrence Timeframe (Days)">
+                    <apex:outputField value="{!bs.EDP1__RecurrenceTimeframe__c}" id="Specific_RecurrenceTimeFrame" />
+                </apex:column>
+                <apex:column headerValue="Total Times Raised">
+                    <apex:outputField value="{!bs.EDP1__TotalTimesRaised__c}" id="Specific_TimesRaised" />
+                </apex:column>
+                <apex:column headerValue="Active">
+                    <apex:outputField value="{!bs.EDP1__Active__c}" id="Specific_Active" />
+                </apex:column>
+
+            </apex:pageBlockTable>
+        </apex:pageBlockSection>
+    </apex:PageBlock>
+</apex:outputPanel>
+
+<!-- ************************************************************************************ -->
+<!-- fancyBox logic as pulled from the following website                                  --> 
+<!-- http://thingsilearned.com/2010/01/27/dynamically-calling-fancybox-from-javascript/   -->
+<!--                                                                                      --> 
+<!-- Currently fancybox only works on links in your page.  This div hides a link,         -->
+<!-- and the call to callFancyBox() changes the link & then 'clicks' it to open the box   -->
+<!-- ************************************************************************************ --> 
+<div id="hidden_clicker" style="display:none">
+<a id="hiddenclicker" href="http://asdf.com" >Hidden Clicker</a>
+</div>
+<script>
+
+// This function allows you to call the fancy box from javascript
+// origional source: http://outburst.jloop.com/2009/08/06/call-fancybox-from-flash/
+function callFancybox(my_href, frmHeight, frmWidth, title) {
+
+    if (!frmWidth) frmWidth = 500;
+    // Initialize the hiddenClicker DIV for FancyBox
+    $("a#hiddenclicker").fancybox({
+        'width' : frmWidth,
+        'height' : frmHeight,
+        'modal'  : true, 
+        'scrolling' : 'off',
+        'autoDimensions': false,
+        'autoScale' : true,
+        'transitionIn' : 'none',
+        'transitionOut' : 'none'
+    });
+
+  var j1 = document.getElementById("hiddenclicker");
+  j1.href = my_href;
+  $('a#hiddenclicker').trigger('click');
+}
+   
+</script>
+
+
+<!-- ************************************************************************************ 
+* DIV for Generic Buy Signal Edit/Add Form
+* Displayed via jQuery.FancyBox()
+***************************************************************************************** -->
+<div id="editGeneric" style="display:none">
+<div id="editGenericDIV">
+    <apex:form id="editGenericForm">
+        <apex:sectionHeader title="Generic Buy Signal" />
+        <apex:pageBlock id="editGenericBlock" >
+        <apex:pageBlockButtons location="bottom">
+            <input class="btn" type="button" value=" Save " onclick="save_onClick(this.form);"/>
+            <input class="btn" type="button" value=" Cancel " onclick="$.fancybox.close();"/>
+        </apex:pageBlockButtons>
+        <apex:pageBlockSection columns="1" id="editGenericSection" >
+            <apex:pageBlockSectionItem >
+              <apex:outputLabel value="Name" />
+              <apex:outputPanel layout="block" styleClass="requiredInput">
+                  <apex:outputPanel layout="block" styleClass="requiredBlock" />
+               <input type="text" id="buySignalPage:editGenericForm:editGenericBlock:editGenericSection:Name" size="50" />
+               </apex:outputPanel>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem Id="FldActivityType">
+              <apex:outputLabel value="Activity Type" />
+              <apex:outputPanel layout="block" styleClass="requiredInput">
+              <apex:outputPanel layout="block" styleClass="requiredBlock" />
+                 <apex:inputField id="ActivityType" value="{!EDP1__BuySignal__c.EDP1__ActivityType__c}"/>
+              </apex:outputPanel>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem id="FldNumberOfTimes">
+              <apex:outputLabel value="Number of Times" for="editGenericNumberOfTimes" />
+              <apex:outputPanel layout="block" styleClass="requiredInput">
+                <apex:outputPanel layout="block" styleClass="requiredBlock" />
+                <apex:selectList size="1" id="NumberOfTimes" value="{!EDP1__BuySignal__c.EDP1__NumberOfTimes__c}">
+                    <apex:selectOptions value="{!NumberOfTimesPickList}" />
+                </apex:selectList>
+              </apex:outputPanel>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem id="FldTimeframe" >
+              <apex:outputLabel value="Timeframe (Days)" />
+              <apex:outputPanel layout="block" styleClass="requiredInput">
+                <apex:outputPanel layout="block" styleClass="requiredBlock" />
+                <apex:selectList size="1" id="Timeframe" value="{!EDP1__BuySignal__c.EDP1__Timeframe__c}">
+                    <apex:selectOptions value="{!TimeframePickList}" />
+                </apex:selectList>
+              </apex:outputPanel>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem id="FldRecurrenceTimeframe">
+                <apex:outputLabel value="Recurrence Timeframe (Days)" />
+                <apex:selectList size="1" id="RecurrenceTimeframe" value="{!EDP1__BuySignal__c.EDP1__RecurrenceTimeframe__c}">
+                    <apex:selectOptions value="{!TimeframePickList}" />
+                </apex:selectList>
+            </apex:pageBlockSectionItem>
+            <!-- 
+            <apex:inputField id="editGenericNumberOfTimes" value="{!EDP1__BuySignal__c.EDP1__NumberOfTimes__c}"
+                onkeypress="return isNumberKey(event);" />
+            <apex:inputField id="editGenericTimeframe" value="{!EDP1__BuySignal__c.EDP1__Timeframe__c}"
+               onkeypress="return isNumberKey(event);"/>
+            <apex:inputField id="editGenericRecurrenceTimeframe" value="{!EDP1__BuySignal__c.EDP1__RecurrenceTimeframe__c}"
+               onkeypress="return isNumberKey(event);" />  
+            -->
+            <apex:inputField id="Active" value="{!EDP1__BuySignal__c.EDP1__Active__c}"/>
+        </apex:pageBlockSection>
+        </apex:pageBlock>
+        <apex:actionFunction name="refreshLists" action="{!refreshLists}" rerender="buySignalLists"/>
+    </apex:form>
+</div>
+</div>
+
+<!-- ************************************************************************************ 
+* DIV for Specific Buy Signal Edit/Add Form
+* Displayed via jQuery.FancyBox()
+***************************************************************************************** -->
+<div id="editSpecific" style="display:none">
+<div id="editSpecificDIV">
+    <apex:form id="editSpecificForm">
+        <apex:sectionHeader title="Specific Buy Signal" />
+        <apex:pageBlock id="editSpecificBlock" >
+        <apex:pageBlockButtons location="bottom">
+            <input class="btn" type="button" value=" Save " onclick="save_onClick(this.form);"/>
+            <input class="btn" type="button" value=" Cancel " onclick="cancel_onClick();"/>
+        </apex:pageBlockButtons>
+        <apex:pageBlockSection columns="1" id="editSpecificSection" >
+            <apex:pageBlockSectionItem >
+              <apex:outputLabel value="Name" />
+              <apex:outputPanel layout="block" styleClass="requiredInput">
+              <apex:outputPanel layout="block" styleClass="requiredBlock" />
+               <input type="text" id="buySignalPage:editSpecificForm:editSpecificBlock:editSpecificSection:Name" size="50" />
+              </apex:outputPanel>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem Id="FldAsset">
+                <apex:outputLabel value="Asset" />
+                <apex:outputPanel layout="block" styleClass="requiredInput">
+                <apex:outputPanel layout="block" styleClass="requiredBlock" />
+                    <apex:inputField id="Asset" value="{!EDP1__BuySignal__c.EDP1__Asset__c}" style="width: 80%;"/>
+                </apex:outputPanel>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem id="FldActivityType" >
+               <apex:outputLabel value="Activity Type" />
+               <apex:outputPanel layout="block" styleClass="requiredInput">
+               <apex:outputPanel layout="block" styleClass="requiredBlock" />
+              
+                <apex:selectList size="1" id="ActivityType" value="{!EDP1__BuySignal__c.EDP1__ActivityType__c}">
+                    <apex:selectOptions value="{!ActivitTypePicklist}" />
+                </apex:selectList>
+                </apex:outputPanel>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem id="FldRecurrenceTimeframe">
+                <apex:outputLabel value="Recurrence Timeframe (Days)" />
+                <apex:selectList size="1" id="RecurrenceTimeframe" value="{!EDP1__BuySignal__c.EDP1__RecurrenceTimeframe__c}">
+                    <apex:selectOptions value="{!TimeframePickList}" />
+                </apex:selectList>
+            </apex:pageBlockSectionItem>
+            <!-- <apex:inputField id="editSpecificRecurrenceTimeframe" value="{!EDP1__BuySignal__c.EDP1__RecurrenceTimeframe__c}"
+               onkeypress="return isNumberKey(event);" />  -->
+            <apex:inputField id="Active" value="{!EDP1__BuySignal__c.EDP1__Active__c}"/>
+        </apex:pageBlockSection>
+        </apex:pageBlock>
+    </apex:form>
+</div>
+</div>
+
+<!-- ************************************************************************************ 
+* DIV for VIEWING Buy Signals (Generic or Specific)
+* Displayed via jQuery.FancyBox()
+***************************************************************************************** -->
+<div id="viewOnly" style="display:none">
+<div id="viewOnlyDIV">
+    <apex:form id="viewOnlyForm">
+        <div id="SectionHeaderGeneric" style="display:none;">
+        <apex:sectionHeader title="Generic Buy Signal" />
+        </div>
+        <div id="SectionHeaderSpecific" style="display:none;">
+        <apex:sectionHeader title="Specific Buy Signal" />
+        </div>
+        <apex:pageBlock id="viewOnlyBlock" >
+        <apex:pageBlockButtons >
+            <!-- <input class="btn" type="button" value=" Save " onclick="save_onClick(this.form);"/>  -->
+            <input class="btn" type="button" value=" Close " onclick="cancel_onClick();"/>
+        </apex:pageBlockButtons> 
+        <div id="viewOnlySectionGeneric" style="display:none;">
+        <apex:pageBlockSection columns="1" id="viewOnlySectionGeneric">
+            <apex:outputField id="viewName" value="{!EDP1__BuySignal__c.Name}" />
+            <apex:outputField id="viewActivityType" value="{!EDP1__BuySignal__c.EDP1__ActivityType__c}"/>
+            <apex:outputField id="viewNumberOfTimes" value="{!EDP1__BuySignal__c.EDP1__NumberOfTimes__c}" />
+            <apex:outputField id="viewTimeframe" value="{!EDP1__BuySignal__c.EDP1__Timeframe__c}" />
+            <apex:outputField id="viewRecurrenceTimeframe" value="{!EDP1__BuySignal__c.EDP1__RecurrenceTimeframe__c}"  />
+            <apex:outputField id="viewActive" value="{!EDP1__BuySignal__c.EDP1__Active__c}"/>
+            <apex:outputField id="viewCreated" value="{!EDP1__BuySignal__c.CreatedDate}"/>
+            <apex:outputField id="viewLastModified" value="{!EDP1__BuySignal__c.LastModifiedDate}"/>
+        </apex:pageBlockSection>
+        </div>
+        <div id="viewOnlySectionSpecific" style="display:none;">
+        <apex:pageBlockSection columns="1" id="viewOnlySectionSpecific" >
+            <apex:outputField id="viewName" value="{!EDP1__BuySignal__c.Name}" />
+            <apex:outputField id="viewAsset" value="{!EDP1__BuySignal__c.EDP1__Asset__c}"/>
+            <apex:outputField id="viewRecurrenceTimeframe" value="{!EDP1__BuySignal__c.EDP1__RecurrenceTimeframe__c}"  />
+            <apex:outputField id="viewActive" value="{!EDP1__BuySignal__c.EDP1__Active__c}"/>
+            <apex:outputField id="viewCreated" value="{!EDP1__BuySignal__c.CreatedDate}"/>
+            <apex:outputField id="viewLastModified" value="{!EDP1__BuySignal__c.LastModifiedDate}"/>
+        </apex:pageBlockSection>
+        </div>
+        </apex:pageBlock>
+    </apex:form>
+</div>
+</div>
+
+
+<script>
+// --------------------------------------------------
+// Restrict Numeric fields to only all numbers
+// --------------------------------------------------
+function isNumberKey(evt) {
+   var charCode = (evt.which) ? evt.which : event.keyCode;
+   // Period Character:  && charCode != 46
+   if (charCode > 31 && (charCode < 48 || charCode > 57)) return false;
+   else return true;
+}
+
+function stripHTML(s) {
+    if ( s )
+        return s.replace(/(<([^>]+)>)/ig,"");
+    return null;
+}
+</script> 
+
+</apex:page>

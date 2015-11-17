@@ -1,0 +1,448 @@
+<!-- 
+ @Developer Name: Roshan Pillai 
+ @Page Name		: SL_IntranetCalendarMobile
+ @JIRA Ticket   : Socint-66
+ @Created on    : 18/Mar/13
+ @Modified by   : SL
+ @Description   : This page is used to display Calendar records for Mobile view. 
+-->
+
+<apex:page showheader="false" sidebar="false" standardstylesheets="false" cache="false" controller="SLSI.SL_IntranetCalendarController">
+	
+	<meta name="viewport" content="initial-scale=0.5, maximum-scale=0.5"/>
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+	
+	<link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.IntranetHubMobile,'/IntranetHub/css/all.css')}" />
+	<link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.IntranetHubMobile,'/IntranetHub/css/holder.css')}" />
+	<link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.IntranetHubMobile,'/IntranetHub/css/slide-search.css')}" />
+	<link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.IntranetHubMobile,'/IntranetHub/css/top-block.css')}" />
+	<link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.IntranetHubMobile,'/IntranetHub/css/list.css')}" />
+	
+	<link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.IntranetHub,'/IntranetHub/css/social-feed.css')}" />
+	
+	<script src="{!URLFOR($Resource.IntranetHubMobile,'/IntranetHub/js/jquery-1.8.3.min.js')}"></script>
+	<script src="{!URLFOR($Resource.IntranetHubMobile,'/IntranetHub/js/jquery.main.js')}"></script>
+	
+	<script src="{!URLFOR($Resource.IntranetHUB,'/IntranetHub/js/browser.detect.js')}"></script> 
+	<script src="{!URLFOR($Resource.IntranetHUB,'/IntranetHub/js/hide.chrome.js')}"></script>
+	
+	<style>
+		.eventPopup{
+		      background-color: white;
+		      border-width: 1px;
+		      border-style: solid;
+		      z-index: 9999;
+		      left: 20%;
+		      position: absolute;  
+		      text-align:center;   
+		      width: 60%; 
+		      -moz-border-radius: 10px;
+		      -webkit-border-radius: 10px;  
+		      -khtml-border-radius: 10px;
+		      border-radius: 10px;
+		 }  
+		 
+		 .popupBackground
+		  {  
+		      background-color: black;
+		      opacity: 0.5;
+		      filter: alpha(opacity = 50);
+		      position: fixed;
+		      width: 100%;    
+		      height: 100%;
+		      top: 0;
+		      z-index: 9998;
+		      text-align:center; 
+		      vertical-align: middle; 
+		  }
+	</style>
+	
+	<script type="text/javascript">
+		// hide chrome on page load
+		initHideChrome();
+
+		function hideAddressBar1()
+		{
+		  //if(!window.location.hash)
+		  {
+		      if(document.height < window.outerHeight){
+		          document.body.style.height = (window.outerHeight + 50) + 'px';
+		      }
+		      setTimeout( function(){ window.scrollTo(0, 1); }, 50 );
+		      
+		      setTimeout( function(){ 
+				document.getElementById('eventPopUpId').style.top = (window.orientation==90?0:200)+'px';
+				document.getElementById('eventBgId').style.height = (window.outerHeight + 150) + 'px';
+		      }, 1000 ); 
+		   }
+		}
+ 
+		//window.addEventListener("load", function(){ if(!window.pageYOffset){ hideAddressBar1(); } } );
+		window.addEventListener("orientationchange", hideAddressBar1 );
+	</script> 
+	
+	<style>
+		.waitingSearchDiv{position:absolute;text-align:center;top:0;z-index:80;left:0}
+		.waitingHolder{font-weight:bold;font-size:1.20em;position:relative;padding:0.5em;white-space:nowrap;margin:auto;width:40%;top:45%;}
+		.waitingDescription{padding:0 1.5em 0 0.5em}
+	</style>
+	
+	<style>
+		.logoD{display : none;}
+		.logoM{display : none;}
+		@media only screen and (max-width: 650px){
+			.logoD{display : none;}
+			.logoM{display : block;}	
+		}
+		@media only screen and (min-width: 651px){
+			.logoD{display : block;}
+			.logoM{display : none;}	
+		}
+	</style>
+	
+	<apex:outputpanel rendered="{!!$Setup.SL_CustomizableComponent__c.Default__c}">
+		<apex:outputpanel rendered="{!IF(logoURL != '',true ,false)}">
+			<style>	
+				.logo{
+					background : URL('{!JSENCODE(logoURL)}');
+					background-repeat:no-repeat;
+				}	 
+			</style>
+		</apex:outputpanel>
+	</apex:outputpanel>
+	
+	 
+	<body>
+		
+		<div id="eventBgId" style="display: none;" class="popupBackground"/>
+		
+		<div id="eventPopUpId" style="display: none;" class="eventPopup">
+			<ul class="list" style="padding-bottom: 5px;">
+				<li><h3 style="color:#BA0320;">{!$Label.SL_Tab_Calendar}</h3></li>
+				<li style="cursor: pointer;"><div onclick="toggleCalendarView('{!JSINHTMLENCODE('All Types')}');"><h3>All Events</h3></div></li>
+				<apex:repeat value="{!listIntranetEventRecordTypes}" var="et" >
+					<li style="cursor: pointer;"><div onclick="toggleCalendarView('{!JSINHTMLENCODE(et.DeveloperName)}');"><h3>{!et.Name}</h3></div></li>
+				</apex:repeat>
+				<li style="border-bottom:none;cursor: pointer;" onclick="closePopup();"><h3 style="color:#BA0320;">Cancel</h3></li>
+			</ul>
+		</div>
+					
+		<script>
+			function openPopup()
+			{
+				document.getElementById('eventBgId').style.display = 'block';
+				document.getElementById('eventPopUpId').style.display = 'block';
+			}
+			function toggleCalendarView(param)
+			{
+				toggleCalendarViews(param);
+				document.getElementById('eventBgId').style.display = 'none';
+				document.getElementById('eventPopUpId').style.display = 'none';
+			}
+			function closePopup()
+			{
+				document.getElementById('eventBgId').style.display = 'none';
+				document.getElementById('eventPopUpId').style.display = 'none';
+			}
+		</script>
+	
+		<!-- wrapper -->
+		<div id="wrapper"> 
+			
+			<!-- header -->
+			<header id="header">
+				
+				<!-- header holder -->
+				<div class="holder open-close"> 
+					
+					<a href="" class="btn-search" style="cursor: pointer;">search</a>
+					<a href="/apex/SL_IntranetHub" class="btn-left">left button</a>
+					
+<!-- 					<h1 class="logo"><a href="">Silverline.com</a></h1> -->
+					
+					<div class="logoD">
+						<div class="logo" id="logoId" style="background-position: center;visibility:hidden;">Silverline.com</div>
+					</div>
+					<div class="logoM">
+						<div class="logo" id="logoIdM" style="background-position: center;visibility:hidden;">Silverline.com</div>
+					</div>
+					<img src="{!logoURL}" style="display:none;" id="img"/>
+					<script>
+						$(document).ready(function() 
+						{
+							resizeLogo();
+							resizeLogoM();
+							document.getElementById('logoId').style.visibility = 'visible';
+							document.getElementById('logoIdM').style.visibility = 'visible';
+						});
+						
+						$(window).load(function()
+						{
+							resizeLogo();
+							resizeLogoM();
+							document.getElementById('logoId').style.visibility = 'visible';
+							document.getElementById('logoIdM').style.visibility = 'visible';
+						});
+						
+						function resizeLogo()
+						{
+							if('{!JSENCODE(logoURL)}' != '')
+							{
+								var imgW = 200;
+								var imgH = 59;
+								var w = $('#img').width();
+								var h = $('#img').height();
+								var hTemp;
+								var wTemp;
+								var varRatio;
+								if(w > imgW)
+								{
+									varRatio = w/imgW;
+									hTemp = h/varRatio;
+									if(hTemp > imgH)
+									{
+										varRatio = h/imgH;
+										wTemp = w/varRatio;
+										hTemp = imgH;
+									}
+									else
+										wTemp = imgW;	
+								}
+								else if(h > imgH)
+								{
+									varRatio = h/imgH;
+									wTemp = h/varRatio;
+									if(wTemp > imgW)
+									{
+										varRatio = w/imgW;
+										hTemp = h/varRatio;
+										wTemp = imgW;
+									}
+									else
+										hTemp = imgH;		
+								}
+								else
+								{
+									wTemp = w;
+									hTemp = h;	
+								}
+								var imgSize = wTemp + 'px ' + hTemp + 'px';
+								$('#logoId').css('background-size', imgSize);
+							}
+						}
+						
+						function resizeLogoM()
+						{
+							if('{!JSENCODE(logoURL)}' != '')
+							{
+								var imgW = 300;
+								var imgH = 70;
+								var w = $('#img').width();
+								var h = $('#img').height();
+								var hTemp;
+								var wTemp;
+								var varRatio;
+								if(w > imgW)
+								{
+									varRatio = w/imgW;
+									hTemp = h/varRatio;
+									if(hTemp > imgH)
+									{
+										varRatio = h/imgH;
+										wTemp = w/varRatio;
+										hTemp = imgH;
+									}
+									else
+										wTemp = imgW;	
+								}
+								else if(h > imgH)
+								{
+									varRatio = h/imgH;
+									wTemp = h/varRatio;
+									if(wTemp > imgW)
+									{
+										varRatio = w/imgW;
+										hTemp = h/varRatio;
+										wTemp = imgW;
+									}
+									else
+										hTemp = imgH;		
+								}
+								else
+								{
+									wTemp = w;
+									hTemp = h;	
+								}
+								var imgSize = wTemp + 'px ' + hTemp + 'px';
+								$('#logoIdM').css('background-size', imgSize);
+							}
+						}
+					</script>
+						
+					
+					
+					<div class="slide-search">
+						
+						<!-- search form -->
+						<apex:form styleclass="search-form">
+							
+							<apex:actionFunction name="toggleCalendarViews" action="{!getIntranetevents}"  rerender="eventPanel, eventHeaderId" status="loader">
+					 			<apex:param name="eventType" assignTo="{!strIntranetEventType}" value="" />   
+					 		</apex:actionFunction>
+					 		<apex:actionFunction name="searchForMobile" action="{!calenderSearchForMobile}" rerender="eventPanel" status="loader">
+					 			<apex:param name="searchText" assignTo="{!searchTextForMobile}" value=""/>
+					 		</apex:actionFunction>
+							<apex:actionFunction name="getMoreRecords" action="{!getMoreRecords}" rerender="eventPanel" status="loader"/> 	
+							
+							<fieldset>
+								<input type="text" placeholder="Search" id="search1" onKeydown = "return checkMobileEnterKey(event);"/>
+							</fieldset>
+							
+							<script>
+								//To redirect to Search results page
+								function redirectNotificationSearch()
+								{
+									var searchTxt = document.getElementById('search1').value;
+									if(searchTxt.trim().length > 1)
+									{
+										document.getElementById('MobileErrMsg').innerHTML = '';
+										searchForMobile(searchTxt);
+									}
+									else
+										document.getElementById('MobileErrMsg').innerHTML = 'Enter atleast 2 Chars.' ;
+										
+									return false;	
+								}
+								
+								// To redirect on Search results page on Enter key press
+								function checkMobileEnterKey(e)
+								{
+									//To track the Enter event
+									var key;
+						                               
+						            if(window.event)
+						                 key = window.event.keyCode; //IE
+						            else
+						                 key = e.which;     //firefox
+									
+									if(key == 13)
+						            {
+						            	redirectNotificationSearch();  
+						            	return false;
+						            } 
+						            else
+							        	return true;	    
+						         }
+							</script>
+						</apex:form>
+						
+						<div id="MobileErrMsg" style="color: red;align:center;" />
+					
+					</div>
+				</div>
+			</header>
+			
+			<!-- mobile content -->
+			<section class="mobile-content">
+				
+				<div class="top-block" style="padding-right: 5px !important;">
+					<div style="" class="title-holder"> 
+						<apex:outputpanel id="eventHeaderId">
+							<h2 style="display: inline;padding-top: 10px;">{!mapEventTypeNameToLabel[strIntranetEventType]}</h2>
+							<apex:image id="theImage" value="{!URLFOR($Resource.SLSI__IntranetHub,'/IntranetHub/images/Calendar-FilterIcons.png')}" title="Filter your records" onclick="openPopup();" width="70" height="65" style="float: left;margin-right:20px;cursor: pointer;"/>
+						</apex:outputpanel> 
+					</div>
+				</div>
+
+				<apex:outputpanel id="eventPanel">
+					<ul class="list">
+						<apex:repeat value="{!lstIntranetEvents}" var="events" rows="{!numOfRecordeToBedisplayed_Mobile}">  
+							<li>
+								<div class="info">
+			                       
+			                       	<h3 style="color:#BA0320;">
+				                       	<apex:outputText value="{0,date,MMMM, yyyy}" rendered="{!events.isDisplayheader}"> 
+			                                 <apex:param value="{!events.objIntranetEvent.SLSI__Date_of_Event__c}" /> 
+			                            </apex:outputText>
+			                        </h3>
+									
+									<h3>{!events.objIntranetEvent.Name}</h3>
+									
+									<span class="sub-info">
+										<apex:outputPanel >   
+		                                    <em>
+			                                    <apex:outputText value="{0,date,MMMM d, yyyy}">
+			                                         <apex:param value="{!events.objIntranetEvent.SLSI__Date_of_Event__c}" /> 
+			                                    </apex:outputText>
+			                                    <apex:outputText value="{0,date, - MMMM d, yyyy}">
+			                                         <apex:param value="{!events.objIntranetEvent.SLSI__End_Date__c}" /> 
+			                                    </apex:outputText><br/>
+			                                    <apex:outputpanel rendered="{!IF(events.objIntranetEvent.SLSI__Venue__c !=null, true,false)}">
+			                                    	Venue:&nbsp;<apex:outputText value="{!events.objIntranetEvent.SLSI__Venue__c}">
+			                                    	</apex:outputText><br/>
+			                                    </apex:outputpanel>
+			                                    <apex:outputpanel rendered="{!IF(events.objIntranetEvent.SLSI__Event_Type__c !=null, true,false)}">
+			                                    	Event type:&nbsp;<apex:outputText value="{!events.objIntranetEvent.SLSI__Event_Type__c}" >
+			                                    	</apex:outputText>
+			                                    </apex:outputpanel>
+			                                    
+		                                    </em>
+		                                </apex:outputPanel>    
+	                                    <apex:outputPanel rendered="{!IF(ISNULL(events.objIntranetEvent.SLSI__Date_of_Event__c) || ISBLANK(events.objIntranetEvent.SLSI__Date_of_Event__c), true, false)}">
+	                                        <p><strong class="title"><b>&nbsp;</b></strong></p>
+	                                    </apex:outputPanel>
+									</span>
+									
+									<apex:outputPanel >
+                                    	<p><apex:outputField value="{!events.objIntranetEvent.SLSI__Comments__c}" /></p>
+                                    </apex:outputPanel>
+                                   
+                                    <apex:outputPanel rendered="{!IF(ISNULL(events.objIntranetEvent.SLSI__Comments__c) || ISBLANK(events.objIntranetEvent.SLSI__Comments__c), true, false)}">
+                                        <p><strong class="title"><b>&nbsp;</b></strong></p>
+                                    </apex:outputPanel>
+								</div>
+							</li>
+						</apex:repeat>
+						
+						<apex:outputpanel rendered="{!lstIntranetEvents.size = 0}">
+							<li><h3>No Records found.</h3></li>
+						</apex:outputpanel>
+					</ul>
+					
+					<apex:outputPanel rendered="{!(lstIntranetEvents.size - numOfRecordeToBedisplayed_Mobile) > 0}">
+						<ul class="list links">
+							<li style="padding: 0 0 0 0;border-bottom: none;">
+								<a href="javascript:getMoreRecords();" style="color: #a3a3a3;" class="see-more">{!$Label.SL_Pagination_SeeMore}</a>
+							</li>
+						</ul>
+					</apex:outputPanel> 
+				
+				</apex:outputpanel>	
+			</section>
+		</div>
+		
+		<!-- Start of Action status --> 
+		<apex:actionstatus id="loader">
+	        <apex:facet name="start">
+	            <div id="salesforceSource_blurybackground" style="position:fixed; left:1px; top:1px; width:100%;height:100%; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.4;filter:alpha(opacity=40)"></div>
+                <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 80%; display: ''; ">
+                    <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+                        <table align="center" valign="middle" style="width: 100%; height: 30%">
+                            <tr align="center" valign="middle" style="width: 100%; height: 30%">
+                                <td valign="middle"><img src="/img/loading.gif"/><span class="waitingDescription"><b>Loading...</b></span></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+	            <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; "></div>
+	            <script>document.getElementById('ManageMembersViewport_loading').height = window.innerHeight * (3/4);</script>
+	        </apex:facet>
+	    </apex:actionstatus>
+		<!-- End of Action status -->
+		
+	</body>
+	
+	<script>hideAddressBar1();</script> 
+	
+</apex:page>

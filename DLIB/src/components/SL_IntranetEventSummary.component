@@ -1,0 +1,108 @@
+<apex:component controller="SL_IntranetEventSummaryController" id="EventSummary">
+	<apex:attribute assignTo="{!compImpl}" name="aComponentImpl" type="WidgetAbstract" description="component implementation object" required="true"/>
+	
+	<apex:form id="EventSummaryForm">
+		 <apex:actionfunction id="showMoreAF" 
+		 	name="widget{!id}showMoreAF" action="{!showMoreRecords}" rerender="eventSummaryOP, opEvents2" status="loaderEvent" >
+		 	<apex:param name="numberToDisplay" value="" assignTo="{!MyImpl.config.intEventCount}" />
+        	<apex:param name="deptId" assignTo="{!MyImpl.strDeptId}" value=""/> 
+		 </apex:actionfunction>
+    
+   		 <!-- Newly created for Department -->
+	     <apex:actionFunction id="getFilteredByDepartment" 
+	     	name="widget{!id}.getFilteredByDepartment" action="{!MyImpl.getFilteredByDepartment}" status="loader" rerender="eventSummaryOP, opEvents2" onComplete="reRenderCss();">
+	         <apex:param name="deptId" assignTo="{!MyImpl.strDeptId}" value=""/>
+	     </apex:actionFunction>
+	     <!-- Action Function to update the record on Edit of Event Record Start-->
+	     <apex:actionFunction name="widget{!id}.updateEventPopupDetails" action="{!MyImpl.loadEventSummaryData}" status="loaderEvent" rerender="eventSummaryOP" onComplete="reRenderCss();"/>
+     	 <!-- End -->		
+     	 
+		<div class="wc-widget SL_IntranetEventSummary" id="widget{!id}" >
+			<div class="alerts-block">
+	            <h2>{!compImpl.properties['heading']}</h2>
+				<apex:outputpanel id="eventSummaryOP" >
+					<ul class="alerts" style="margin-left:0px;border-top:1px dashed #c3c3c3;margin-top:5px;word-wrap: break-word;">
+						<apex:repeat value="{!MyImpl.lstIntranetEvents}" var="event" rows="{!MyImpl.config.intEventCount}" id="intranetEventsRows">
+							<li>
+								<h3>
+									<a style="cursor:pointer;text-decoration:none;" onclick="widget{!id}.viewIntranetEvents('{!event.Id}',false, '');">{!event.Name}</a>
+								</h3>
+								<br/>
+								<apex:repeat id="wrapperEventsRows" value="{!MyImpl.lstWrapperEventFields}" var="eventField" rendered="{!MyImpl.config.hasFieldSet}">
+	                                <apex:outputPanel styleclass="date" rendered="{!(event.End_Date__c != null && eventField.fieldAPIName == 'End_Date__c')}" layout="none">
+										<apex:outputField value="{!event.End_Date__c}"/>
+										<br/>
+	                                </apex:outputPanel>    
+	                                
+	                                <apex:outputPanel styleclass="date" rendered="{!(event.Date_of_Event__c != null && eventField.fieldAPIName == 'Date_of_Event__c')}" layout="none">
+										<apex:outputField value="{!event.Date_of_Event__c}"/>
+										<br/>
+	                                </apex:outputPanel>
+	                                
+	                                <apex:outputPanel styleclass="date" style="word-wrap: break-word;" 
+	                                		rendered="{!event[eventField.fieldAPIName] != null && eventField.fieldAPIName != 'Date_of_Event__c' && eventField.fieldAPIName != 'End_Date__c' && eventField.fieldAPIName != 'Name'}" layout="none">
+	                                    
+	                                    <apex:outputpanel rendered="{!If(eventField.fieldType == 'DATE',true,false)}" layout="none">
+											<apex:outputField value="{!event[eventField.fieldAPIName]}"/>
+	                                    </apex:outputpanel>   
+	                                    
+	                                    <apex:outputpanel rendered="{!If(eventField.fieldType == 'DATETIME',true,false)}" layout="none">
+											<apex:outputField value="{!event[eventField.fieldAPIName]}"/>
+	                                    </apex:outputpanel>
+	                                    
+	                                    <apex:outputpanel rendered="{!If(AND(eventField.fieldType != 'DATETIME',eventField.fieldType != 'DATE'),true,false)}" layout="none">
+	                                        <apex:outputField value="{!event[eventField.fieldAPIName]}" rendered="{!if(eventField.fieldType == 'BOOLEAN', true, false)}"/>
+	                                        <apex:outputText value="{!event[eventField.fieldAPIName]}" rendered="{!if(eventField.fieldType != 'BOOLEAN', true, false)}" escape="false"/>
+	                                    </apex:outputpanel>
+	                                    <br/>
+	                                </apex:outputPanel> 
+	                            </apex:repeat>
+	                            
+	                            <apex:outputpanel rendered="{!!MyImpl.config.hasFieldSet}" layout="none">
+									<apex:outputText value="Start Date : {0, date, MMMM d','  yyyy} <br/>" escape="false">
+									    <apex:param value="{!event.Date_of_Event__c}" /> 
+									</apex:outputText>
+									<apex:outputText value="End Date: {0, date, MMMM d','  yyyy} <br/>" escape="false">
+									    <apex:param value="{!event.End_Date__c}" /> 
+									</apex:outputText>
+	                            </apex:outputpanel>
+							</li>	
+						</apex:repeat>
+					</ul>
+					
+					<apex:outputPanel rendered="{!MyImpl.lstIntranetEvents.size < 1}" layout="none">
+						<span class="noResult"> No records found.</span>
+					</apex:outputPanel>	
+					
+					<apex:outputpanel id="opEvents2" >
+						<apex:outputpanel rendered="{!MyImpl.lstIntranetEvents.size > MyImpl.config.intEventCount && MyImpl.config.intEventCount < MyImpl.config.intTotalRecords}" styleclass="link-holder" layout="none">
+							<a class="btn" style="cursor: pointer;text-decoration: none;float:right;text-align: center;" 
+								onClick="$(this).parent().css('display','none');widget{!id}showMoreAF('{!MyImpl.config.intEventCount}','{!JSENCODE(MyImpl.strDeptId)}');">
+								Show More
+							</a>
+						</apex:outputpanel>
+					</apex:outputpanel> 
+					
+					<!-- Start of Action status -->  
+		        	<apex:actionstatus id="loaderEvent">
+			            <apex:facet name="start">
+			                <div id="salesforceSource_blurybackground" style="position:relative; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.4;filter:alpha(opacity=40)"></div>
+							<div id="ManageEventsViewport_loading" class="waitingSearchDiv" style="display: '';position: relative; ">
+							    <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+							        <table align="center" valign="middle" style="width: 100%; height: 30%">
+							            <tr align="center" valign="middle" style="width: 100%; height: 30%">
+											<td valign="middle"><img src="/img/loading.gif"/><span class="waitingDescription"><b>Loading...</b></span></td>
+							            </tr> 
+							        </table>
+							    </div>
+							</div>
+			                <div id="ManageEventsViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; "></div>
+			                <script>document.getElementById('ManageEventsViewport_loading').height = window.innerHeight * (3/4);</script>
+			            </apex:facet>
+			        </apex:actionstatus>
+			        <!-- End of Action status -->
+				</apex:outputpanel>
+			</div>
+		</div>
+	</apex:form>	
+</apex:component>

@@ -1,0 +1,401 @@
+<!--
+*   	DueDiligenceChecklistComponent VF component is used to display the Due Diligence checklist UI
+*	
+*       Author  :   Wilson Ng
+*		Date	:	Sept 17, 2012
+*  
+-->
+<apex:component controller="DueDiligenceChecklistController" id="myComponent" allowDML="true" >
+	
+<apex:attribute name="sObjectName"   type="String" required="true" assignTo="{!sObjectName}" description="Name of repeating sobject.  This is the child object." />
+<apex:attribute name="parentSObject" type="String" required="true" assignTo="{!parentSObjectName}" description="Name of primary sobject.  This is the parent object." />
+<apex:attribute name="lookupField"  type="String" required="true" assignTo="{!lookupField}" description="Name of lookup field on child sobject." />
+<apex:attribute name="editFields"    type="String" required="true" assignTo="{!editFields}" description="List of fields to display and edit on repeating list.  Also controls column ordering." />
+<apex:attribute name="groupingField" type="String" required="false" assignTo="{!groupingField}" description="Field name of grouping field.  Optional." />
+<apex:attribute name="sortingField"  type="String" required="false" assignTo="{!sortingField}" description="Field name of sorting field (after the grouping field).  Optional." />
+
+<apex:includeScript value="{!$Resource.consoleLog}" />
+<apex:includeScript value="{!$Resource.jQuery_1_8_2_min}" />
+<apex:includeScript value="{!$Resource.jQueryCommon}" />
+<apex:includeScript value="{!$Resource.JQueryBlockUI}" />
+<apex:includeScript value="{!URLFOR($Resource.jQueryPlugin_LoadMask, 'jquery.loadmask.js')}" />
+<apex:styleSheet value="{!URLFOR($Resource.jQueryPlugin_LoadMask, 'jquery.loadmask.css')}" />
+<style>
+    .dataCell{
+        vertical-align:top !important;
+    }
+    .myCheckbox{
+        width:15px;
+    }
+    .dataCell textarea{
+        height:2.5em;
+        width:300px;
+    }
+    .dataCell double{
+        width:40px;
+    }
+    .listfield-boolean{
+        width:1%;
+    }
+    .listfield-custom{
+        width:10%;
+    }
+    .listfield-date{
+        width:10%;
+    }
+    .listfield-double{
+        width:1%;
+    }
+    .listfield-picklist{
+        width:20%;
+    }
+    .listfield-reference{
+        width:10%;
+    }
+    .listfield-string{
+        width:20%;
+    }
+    .listfield-textarea{
+        width:20%;
+    }
+    .inputfield-boolean{
+        width:75% !important;
+    }
+    .inputfield-date{
+        width:100% !important;
+    }
+    .inputfield-double{
+        width:100% !important;
+    }
+    .inputfield-picklist{
+        width:100% !important;
+    }
+    .inputfield-reference{
+        width:75% !important;
+    }
+    .inputfield-string{
+        width:100% !important;
+    }
+    .inputfield-textarea{
+        width: 98% !important;
+    }
+    .backLink-div{
+    	margin:10px 0;
+    }
+    .pageBlockTableIndented1{
+    	margin-left: 5px;
+    	width: 95%;
+    }
+    .pageBlockTableIndented2{
+    	margin-left: 5px;
+    	width: 95%;
+    }
+    .groupHeader{
+    	font-weight:bold;
+    	font-size:125%;
+    }
+    .expandLink{
+    	vertical-align: middle;
+    	cursor: pointer;
+    }
+    .collapseLink{
+    	vertical-align: middle;
+    	cursor: pointer;
+    }
+    .expandAllLink{
+    	float:right;
+    	margin-right:5px;
+    }
+    .collapseAllLink{
+    	float:right;
+    	margin-right:5px;
+    }
+    .printableView{
+    	float:right;
+    	margin-right:5px;
+    }
+	.dateInput{
+		white-space:normal !important;
+	}
+	.list .headerRow th {
+    	white-space: normal;
+	}
+</style>
+
+<script type="text/javascript">
+	var j$ = jQuery.noConflict();
+    j$("document").ready(function(){
+    	if({!asPrintableView} === false)
+        	refreshList();
+    });
+</script>
+
+<apex:sectionHeader title="Checklists" subtitle="{!parentName}" rendered="{!asPrintableView}" />
+
+<apex:form id="myForm" >
+	<apex:actionStatus id="myStatus" onStart="j$('#pageContentDiv').mask('Processing List...');" onStop="j$('#pageContentDiv').unmask();" />
+	<apex:actionFunction name="refreshList" action="{!refreshList}" rerender="DDListPageBlock, messages" onComplete="j$('#pageContentDiv').unmask();" status="myStatus" />
+	
+	<!-- for sticky sections -->
+	<apex:inputHidden value="{!stickySectionsIndicator}" id="stickySectionsIndicator"/>	<!-- values are show or hide -->
+	<apex:inputHidden value="{!stickySectionsNums}" id="stickySectionsNums"/>
+	<apex:actionFunction name="stickySections" action="{!stickySections}" rerender="nothingPanel"/>
+	<apex:outputPanel id="nothingPanel"/>
+	
+    <div id="pageContentDiv" >
+    <apex:outputPanel id="DDListPageBlock" > 
+
+		<apex:outputText value="{!$ObjectType[sObjectName].fields[lookupField].Label}" style="display:none;" />
+		<apex:sectionHeader title="Edit All {!$ObjectType[sObjectName].Label}" subtitle="{!parentName}" rendered="{!isEditAll}" />
+		<apex:outputPanel layout="block" styleclass="backLink-div" rendered="{!isEditAll}" >
+			<apex:outputLink value="/{!parentId}" >{!parentName}</apex:outputLink>
+		</apex:outputPanel>
+	
+		<apex:pageMessages id="messages" escape="false" />
+    
+        <script type="text/javascript">
+            
+            // collapse a section
+            function collapseSection(secNum) {
+            	collapseSection2(secNum, true);
+            }
+            function collapseSection2(secNum, callout) {
+            	console.log('in collapse section, num is ' + secNum + ', callout is ' + callout);
+            	var secObj = document.getElementById('{!$Component.myComponent.myForm.myPb.myDataTable}:' + secNum + ':myPbTable');
+            	secObj.style.display = 'none';
+            	var imgObj1 = document.getElementById('{!$Component.myComponent.myForm.myPb.myDataTable}:' + secNum + ':imgExpand');
+            	imgObj1.style.display = 'inline';
+            	var imgObj2 = document.getElementById('{!$Component.myComponent.myForm.myPb.myDataTable}:' + secNum + ':imgCollapse');
+            	imgObj2.style.display = 'none';
+            	
+            	if(callout === true)
+	            	stickSection('hide', secNum);
+            }
+       		
+       		// expand a section
+       		function expandSection(secNum) {
+       			expandSection2(secNum, true);
+       		}
+       		function expandSection2(secNum, callout) {
+       			console.log('in expand section, num is ' + secNum + ', callout is ' + callout);
+       			var secObj = document.getElementById('{!$Component.myComponent.myForm.myPb.myDataTable}:' + secNum + ':myPbTable');
+            	secObj.style.display = 'block';
+            	var imgObj1 = document.getElementById('{!$Component.myComponent.myForm.myPb.myDataTable}:' + secNum + ':imgExpand');
+            	imgObj1.style.display = 'none';
+            	var imgObj2 = document.getElementById('{!$Component.myComponent.myForm.myPb.myDataTable}:' + secNum + ':imgCollapse');
+            	imgObj2.style.display = 'inline';
+            	
+            	if(callout === true)
+	            	stickSection('show', secNum);
+       		}
+       		
+       		function collapseAll(maxsize) {
+       			console.log('maxsize is ' + maxsize);
+       			var str = '';
+       			for(var i=0; i<maxsize; i++) {
+       				collapseSection2(i, false);
+       				str += i + ',';
+       			}
+       			stickSection('hide', str);
+       		}
+       		
+       		function expandAll(maxsize) {
+       			console.log('maxsize is ' + maxsize);
+       			var str = '';
+       			for(var i=0; i<maxsize; i++) {
+       				expandSection2(i, false);
+       				str += i + ',';
+       			}
+       			stickSection('show', str);
+       		}
+       		
+       		function confirmDelete() {
+       			return {!isEditAll} || confirm('Are you sure?');
+       		}
+       		
+       		function stickSection(indicator, secNums) {
+	       		console.log('in stick section, indicator is ' + indicator + ', secNums is ' + secNums);
+       			var indObj = document.getElementById('{!$Component.myComponent.myForm.stickySectionsIndicator}');
+       			indObj.value = indicator;
+       			var numObj = document.getElementById('{!$Component.myComponent.myForm.stickySectionsNums}');
+       			numObj.value = secNums;
+       			// call sticky sections method
+       			stickySections();
+       		}
+        </script>
+
+		<apex:outputPanel id="addNewItemPanel" >
+			<apex:pageBlock id="myPbNewItem" rendered="{!isAddNewItem}" >
+			<apex:pageBlockButtons >
+	            <apex:commandButton value="Insert Item" action="{!SaveNewItem}" rerender="DDListPageBlock, messages" status="myStatus"/> 
+	            <apex:commandButton value="Cancel" action="{!CancelNewItem}" rerender="DDListPageBlock, messages" status="myStatus"/>
+	        </apex:pageBlockButtons>
+        
+        	<apex:pageBlockTable styleClass="pageBlockTableIndented1" value="{!newItems}" var="dd" id="myPbTableNewItem">
+	
+	            <apex:repeat value="{!allFields}" var="fld" id="repeaterPanelNewItem"> 
+	                <apex:column styleClass="listfield-{!$ObjectType[sObjectName].Fields[fld].Type}">
+	                    <apex:facet name="header">
+	                        {!$ObjectType[sObjectName].Fields[fld].Label}
+	                    </apex:facet>
+	                    <apex:outputPanel >
+		                    <apex:inputField value="{!dd.record[fld]}" styleClass="inputfield-{!$ObjectType[sObjectName].Fields[fld].Type}"/>
+	    	            </apex:outputPanel>
+	                </apex:column>
+	            </apex:repeat>
+	            
+	        </apex:pageBlockTable>
+	      
+	        </apex:pageBlock>
+	        
+		</apex:outputPanel>	<!-- addNewItemPanel -->
+		
+		<apex:outputPanel id="addNewTemplatePanel" >
+			<apex:pageBlock id="myPbNewTemplate" rendered="{!isAddNewTemplate}" >
+			<apex:pageBlockButtons >
+	            <apex:commandButton value="Insert Template" action="{!SaveNewTemplate}" rerender="DDListPageBlock, messages" status="myStatus"/> 
+	            <apex:commandButton value="Cancel" action="{!CancelNewTemplate}" rerender="DDListPageBlock, messages" status="myStatus" />
+	        </apex:pageBlockButtons>
+	        
+        	<apex:pageBlockTable styleClass="pageBlockTableIndented1" value="{!newTemplateItems}" var="dd" id="myPbTableNewTemplate">
+	
+            	<apex:column styleClass="myCheckbox" style="width:1%;">
+	                <apex:facet name="header">
+	                    <input class="headerSelectionBox" type="checkbox" onClick="j$('.selectionBox').prop('checked',j$('.headerSelectionBox').prop('checked'));"/>
+	                </apex:facet>
+	                <apex:inputCheckbox styleclass="selectionBox" value="{!dd.IsChecked}"/>
+	            </apex:column>
+                <apex:column styleClass="listfield-text}" style="width:50%;">
+                    <apex:facet name="header">
+                        {!$ObjectType[sObjectName].Fields['List_Name__c'].Label}
+                    </apex:facet>
+                    <apex:outputPanel >
+	                    <apex:outputText value="{!dd.ListName}"/>
+    	            </apex:outputPanel>
+                </apex:column>
+                <apex:column styleClass="listfield-integer}" style="width:5%;">
+                    <apex:facet name="header">
+                        Number of items
+                    </apex:facet>
+                    <apex:outputPanel >
+	                    <apex:outputText value="{!dd.Cnt}"/>
+    	            </apex:outputPanel>
+                </apex:column>
+	            
+	        </apex:pageBlockTable>
+	      
+	        </apex:pageBlock>
+	        
+		</apex:outputPanel>	<!-- addNewTemplatePanel -->
+		
+		<apex:outputPanel id="listPanel" >
+
+		<apex:pageBlock rendered="{!AND(NOT(isAddNewTemplate),NOT(isAddNewItem),queryPerformed)}" id="myPb" >
+        <apex:pageBlockButtons styleClass="listViewport" >
+        	<apex:outputPanel rendered="{!NOT(asPrintableView)}" >
+            <apex:commandButton rendered="true" action="{!refreshList}" title="Refresh List" rerender="DDListPageBlock, messages" status="myStatus" styleClass="refreshListButton" />
+            <apex:commandButton rendered="{!NOT(isEditAll)}" value="Edit All" onclick="top.location='{!editAllPageURL}';return false" />
+            <apex:commandButton rendered="{!isEditAll}" value="Save" action="{!SaveAll}" rerender="DDListPageBlock, messages" status="myStatus" />
+            <apex:commandButton rendered="{!isDueDiligence}" value="New Template" action="{!AddNewTemplate}" rerender="DDListPageBlock, messages" status="myStatus" />
+            <apex:commandButton rendered="true" value="New Item" action="{!AddNewItem}" rerender="DDListPageBlock, messages" status="myStatus" />
+            <apex:commandButton rendered="{!isEditAll}" value="Cancel" action="{!Cancel}" rerender="DDListPageBlock, messages" status="myStatus" />
+			</apex:outputPanel>
+			<apex:outputPanel rendered="{!NOT(isEditAll)}" >
+            <apex:commandLink rendered="{!NOT(asPrintableView)}" action="{!printMe}" value="Printable View" target="_blank" styleClass="printableView" />
+            <apex:commandLink rendered="{!asPrintableView}" onclick="javascript:window.print(); return false;" value="Print This Page" styleClass="printableView" />
+            </apex:outputPanel>
+            <apex:commandLink rendered="true" value="Collapse All" onclick="collapseAll({!listNames.size});return false;" styleClass="collapseAllLink" />
+            <apex:commandLink rendered="true" value="Expand All" onclick="expandAll({!listNames.size});return false;" styleClass="expandAllLink" />
+        </apex:pageBlockButtons>
+		
+		<apex:variable var="sectionNum" value="{!-1}" />
+        <apex:repeat rendered="{!AND(dueDiligenceList.size>0, queryPerformed)}" value="{!listNames}" var="listnameWrapper" id="myDataTable" >
+			<apex:variable var="sectionNum" value="{!sectionNum + 1}"/>
+			
+			<apex:image id="imgExpand" value="/img/tree/plusEnd.gif" onclick="expandSection('{!FLOOR(sectionNum)}');return false;" styleClass="expandLink" style="display: {!listnameWrapper.notdisplay}"/>
+			<apex:image id="imgCollapse" value="/img/tree/minusEnd.gif" onclick="collapseSection('{!FLOOR(sectionNum)}');return false;" styleClass="collapseLink" style="display: {!listnameWrapper.display}"/>
+            <apex:outputText value="{!listnameWrapper.listName}" styleClass="groupHeader" />
+            <apex:outputPanel rendered="{!NOT(asPrintableView)}">
+            &nbsp;&nbsp;
+            [&nbsp;<apex:commandLink value="Delete" action="{!deleteList}" onclick="return confirm('Delete list name: {!JSENCODE(listnameWrapper.listName)}.  Are you sure?');" title="Delete list" styleClass="actionLink" status="myStatus" ><apex:param name="firstParam" value="{!listnameWrapper.listName}" assignTo="{!deleteListname}" /></apex:commandLink>&nbsp;]
+            </apex:outputPanel>
+            
+	        <apex:pageBlockTable styleClass="pageBlockTableIndented2" rendered="{!AND(dueDiligenceList.size>0, queryPerformed)}" value="{!dueDiligenceMap[listnameWrapper.listName]}" var="dd" id="myPbTable" style="display: {!listnameWrapper.display}">
+	
+	            <apex:column headerValue="Action" headerClass="actionColumn" styleClass="actionColumn" id="actionPanel" rendered="{!NOT(asPrintableView)}"> 
+	            	<apex:outputPanel rendered="{!dd.isRendered}" >       
+	                <apex:commandLink action="{!editOne}" styleClass="actionLink" value="Edit" rendered="{!AND(NOT(isEditAll),NOT(dd.isEdit))}" title="Edit row" rerender="actionPanel,myPbTable" >
+	                	<apex:param name="firstParam" value="{!dd.rowNum}" assignTo="{!oneItem}" />
+	                </apex:commandLink>
+	                <apex:commandLink action="{!saveOne}" styleClass="actionLink" value="Save" rendered="{!AND(NOT(isEditAll),dd.isEdit)}" title="Save row" rerender="actionPanel,myPbTable">
+	                	<apex:param name="firstParam" value="{!dd.rowNum}" assignTo="{!oneItem}" />
+	                </apex:commandLink>
+	                <apex:outputLabel value=" | " rendered="{!AND(NOT(isEditAll),NOT(dd.isClosed))}" />
+	                <apex:commandLink action="{!closeOne}" styleClass="actionLink" value="Cls" rendered="{!NOT(dd.isClosed)}" title="Close task" rerender="actionPanel,myPbTable" status="myStatus">
+	                	<apex:param name="firstParam" value="{!dd.rowNum}" assignTo="{!oneItem}" />
+	                </apex:commandLink>
+	                <apex:outputLabel value=" | " rendered="{!OR(NOT(isEditAll),NOT(dd.isClosed))}" />
+	                <apex:commandLink action="{!deleteOne}" styleClass="actionLink" value="Del" title="Delete row" rerender="actionPanel,myPbTable" status="myStatus" > <!-- onclick="return (confirmDelete());"> - the onclick cause problems -->
+	                	<apex:param name="firstParam" value="{!dd.rowNum}" assignTo="{!oneItem}" />
+	                </apex:commandLink>
+	                </apex:outputPanel>
+	            </apex:column>
+	            
+	            <apex:repeat value="{!availableEditFields}" var="fld" id="repeaterPanel" rendered="{!dd.isRendered}"> 
+	                <apex:column id="repeaterColumns" styleClass="listfield-{!$ObjectType[sObjectName].Fields[fld].Type}" rendered="{!dd.isRendered}">
+	                    <apex:facet name="header">
+	                        {!$ObjectType[sObjectName].Fields[fld].Label}
+	                    </apex:facet>
+	                    <apex:outputPanel id="repeaterFields">
+		                    <apex:inputField styleClass="inputfield-{!$ObjectType[sObjectName].Fields[fld].Type}" value="{!dd.record[fld]}" rendered="{!AND(OR(isEditAll, dd.isEdit), NOT(asPrintableView))}" />
+	    	                <apex:outputField value="{!dd.record[fld]}" rendered="{!NOT(AND(OR(isEditAll, dd.isEdit), NOT(asPrintableView)))}" />
+	    	            </apex:outputPanel>
+	                </apex:column>
+	            </apex:repeat>
+	            
+	            <!-- attachments support here -->
+	            <apex:column headerValue="Attachments" id="attachmentPanel" rendered="{!NOT(isEditAll)}">
+	            	<apex:outputPanel rendered="{!dd.isRendered}">
+		            	<!-- display existing -->
+		            	<apex:repeat value="{!dd.attachments}" var="attach">
+	    	        		<apex:outputLink value="{!URLFOR($Action.Attachment.Download, LEFT(attach, 18))}" target="_blank" title="View attachment" >{!RIGHT(attach, LEN(attach)-18)}</apex:outputLink>
+	        	    		&nbsp;	
+	            		</apex:repeat>
+	            		<apex:outputPanel rendered="{!NOT(asPrintableView)}" >
+	            		<!-- link to add more -->
+		            	[&nbsp;<apex:commandLink action="{!addAttachment}" styleClass="actionLink" value="Add" title="Add attachment" rerender="attachPanel2" oncomplete="j$.blockUI({ message: j$('#attachPanel'), css: { width: '600px' } });" >&nbsp;]
+		                	<apex:param name="firstParam" value="{!dd.rowNum}" assignTo="{!oneItem}" />
+		                </apex:commandLink>
+		                </apex:outputPanel>
+	                </apex:outputPanel>
+	                
+	            </apex:column>
+	        </apex:pageBlockTable>
+	        <br/><br/>
+	
+        </apex:repeat>
+
+        <apex:outputPanel rendered="{!(dueDiligenceList.size==0)}">
+            No results found.
+        </apex:outputPanel>
+        
+        </apex:pageBlock>
+        </apex:outputPanel> <!-- listPanel -->
+
+    </apex:outputPanel></div>
+</apex:form>
+
+<div id="attachPanel" style="display:none; cursor: default;">
+	<apex:outputPanel id="attachPanel2">
+	<div class="bPageTitle"><div class="ptBody">
+	<apex:form id="attachForm">
+		<h1 class="pageType noSecondHeader">Attach File to {!oneItemName}</h1><br/>
+		File: <apex:inputFile value="{!att.body}" filename="{!att.name}"/>&nbsp;&nbsp;
+		<apex:commandButton value="Attach" action="{!saveAttachment}" onclick="j$('#attachPanel').css('cursor', 'progress');" />&nbsp;&nbsp;
+		<apex:commandButton value="Cancel" action="{!cancelAttachment}" />
+	</apex:form>
+	</div></div>
+	</apex:outputPanel>
+</div>
+
+</apex:component>

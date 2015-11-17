@@ -1,0 +1,329 @@
+<apex:page showheader="false" sidebar="false" standardStylesheets="false" controller="SL_AttachmentController">
+    
+    <apex:includeScript value="{!URLFOR($Resource.AttachmentTable, 'build/jquery-latest.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.AttachmentTable, 'build/jquery.tablesorter.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.AttachmentTable, 'build/moment.js')}" />
+    
+    <apex:stylesheet value="{!URLFOR($Resource.MeetingNoteMain, 'styles/lib.css')}"></apex:stylesheet>
+    
+    <!--[if lt IE 10 ]> <div class="ie9" id="browserCheck"/><![endif]-->
+    <!--[if (gt IE 9)|!(IE)]><!--> <div class="" id="browserCheck"/><!--<![endif]-->    
+
+    <apex:form >
+        <apex:actionFunction name="uploadAttachmentAF" action="{!save}"></apex:actionFunction>
+        <apex:actionFunction name="refreshAttachmentAF" action="{!refreshAttachments}"></apex:actionFunction>
+
+        <apex:inputHidden id="newActivity" value="{!sobjId}" />
+        <apex:inputHidden id="removedAttachments" value="{!strRemovedAttachments}" />
+
+        <style> 
+            div.upload {
+                margin-left: 5px;
+                overflow: hidden;
+            }        
+            div.upload input {
+                display: block !important;
+                width: 14px !important;
+                margin-top: -13px !important;
+                height: 14px !important;
+                opacity: 0 !important;
+                cursor: pointer; 
+                overflow: hidden !important;
+            }
+            .relatedListThead {
+                background-color: #E8E8E8 !important;
+            }
+            .s1AttachmentRelatedList {
+                margin-bottom: 55%; 
+                /*height:300px; */
+                margin-top:3.5%;
+            }
+            .mnHeaderText {
+                font-weight: 500;
+                font-size: 18px;
+            }
+            .removeIconTh {
+                width: 6%; 
+                border-color:#D0D0D0;
+            }
+
+            .ASC {
+                width: 44%;
+                white-space:pre-wrap;
+                cursor:pointer;
+                border-color:#D0D0D0;
+            }
+
+            .DESC {
+                width: 44%;
+                white-space:pre-wrap;
+                cursor:pointer;
+                border-color:#D0D0D0;
+            }
+
+            .removeIconTd {
+                width: 6%;
+                cursor:pointer;
+            }
+
+            .tableTextTd {
+                width: 44%;
+                word-wrap: break-word;
+            }
+            .downloadTd {
+                width: 6%;
+                cursor:pointer;
+            }
+            .downloadTh {
+                width: 6%;
+            }
+            .borderless td, th {
+                border: none;
+            }
+            .disabled-glyphicon {
+                cursor: default;
+                opacity: 0.1;
+            }
+        </style>
+        <script>
+            if (document.getElementById('browserCheck').className.indexOf('ie9') >= 0) {
+                window.onbeforeunload = function() {
+                    var doc = window.top.document;
+                    doc.location="javascript:history.back(1);"
+                }
+            }   
+            
+            var removedAttachments = [];
+            
+            $(function() {
+                
+                $("#attachmentsTable").tablesorter({
+                    debug: false,
+                    theme: 'blue', 
+                    dateFormat : '{!dateFormat}',
+                    
+                    // pass the headers argument and assing a object 
+                    headers: { 
+                        // assign the first column (we start counting zero) 
+                        0: { 
+                            // disable it by setting the property sorter to false 
+                            sorter: false 
+                        },
+                        2: {
+                            sorter: 'shortDate'
+                        }, 
+                        // assign the fourth column (we start counting zero) 
+                        3: { 
+                            // disable it by setting the property sorter to false 
+                            sorter: false 
+                        } 
+                    } 
+                });
+
+                var currentActivityId = '{!$CurrentPage.parameters.id}';
+
+                if(currentActivityId !== undefined && currentActivityId.length !== 0) {
+
+                    $('.removeIconTh').hide();
+                    $('.removeIconTd').hide();
+                    
+                    if('{!attachments.size}' > 0) {
+
+                        $('#attachmentTable').show();
+                        $('#noRecordsMessage').hide();
+
+                    } else {
+
+                        $('#attachmentTable').hide();
+                        $('#noRecordsMessage').show();
+                    }
+
+                } else {
+                    
+                    $('#attachmentTable').hide();
+                }
+
+                //To decide enable/disable upload button
+                var editAccess = '{!$CurrentPage.parameters.editAccess}';
+                                
+                if(editAccess == false || editAccess == 'false') {
+                    
+                    $('#uploadIcon').addClass('disabled-glyphicon');
+                }
+            }); 
+
+            function uploadAttachment(parentId){
+
+                $("[id$='newActivity']").val(parentId);
+                $("[id$='removedAttachments']").val(removedAttachments.toString());
+                
+                uploadAttachmentAF();
+            }
+
+            //Function to enable and disable edit mode
+            function editAttachments(isEdit) {
+             
+                if(isEdit == true) {
+
+                    $('.removeIconTh').show();
+                    $('.removeIconTd').show();
+
+                } else if(isEdit == false) {
+
+                    refreshAttachmentAF();
+
+                    $('.removeIconTh').hide();
+                    $('.removeIconTd').hide();
+                }                
+
+            }
+
+            function downloadAttachment(attachmentId) {
+
+                window.open('/servlet/servlet.FileDownload?file=' + attachmentId, '_blank');
+            }
+
+            function addAttachment(attachmentName) {
+
+                if(document.getElementById('newAttachment') != undefined && document.getElementById('newAttachment') != null) {
+
+                    alert('Only one file can be attached in one go!');
+
+                } else {
+
+                    if(attachmentName != undefined && attachmentName != '') {
+
+                        //To show the attachment related list table
+                        $('#attachmentTable').show();
+                        $('#noRecordsMessage').hide();
+
+                        var index = attachmentName.lastIndexOf('\\');
+                        var filename = attachmentName.substring(index+1,attachmentName.length);
+
+                        var currentDate = new moment();
+                        currentDate = currentDate.format('{!dateFormat}');
+
+                        $('#attachmentsTable > tbody:last').append(
+                            '<tr id="newAttachment">'+
+                                '<td class="removeIconTd"><span onclick="removeAttachment()" class="glyphicon glyphicon-remove-circle"></span></td>'+
+                                '<td class="tableTextTd">'+filename+'</td>'+
+                                '<td class="tableTextTd">'+currentDate+'</td>'+
+                                '<td class="downloadTd"></td>'+
+                            '</tr>');
+
+                        parent.iframeLoaded();
+                    }
+                }                
+            }
+
+            function removeAttachment(attachmentId) {
+
+                if(attachmentId == undefined) {
+ 
+                    $('#newAttachment').remove(); 
+
+                } else {
+
+                    removedAttachments.push(attachmentId);
+
+                    $('#' + attachmentId).remove();
+                } 
+
+                parent.iframeLoaded();
+
+                var rowsLength = document.getElementById("attachmentsTable").rows.length;
+                
+                if(rowsLength-1 == 0) {
+                    
+                    $('#attachmentTable').hide();
+                    $('#noRecordsMessage').show();
+                }               
+            }
+
+            function sortColumn(classname, index, id) {
+
+                if(classname == 'ASC') {
+
+                    var sorting = [[index,0]]; 
+                    $("#attachmentsTable").trigger("sorton",[sorting]);
+                    $("#"+id).attr('class', 'DESC');
+
+                } else if(classname == 'DESC') {
+
+                    var sorting = [[index,1]]; 
+                    $("#attachmentsTable").trigger("sorton",[sorting]);
+                    $("#"+id).attr('class', 'ASC');
+                }
+            }
+
+            function switchToEditMode() {
+
+                //To change the page view to edit mode
+                parent.switchToEditModeFromAttachments();
+            }
+
+        </script>
+        <body id="sl" style="margin-top: -40px;margin-left: 0px;">
+            <div id="sl-body">
+                <apex:outputPanel id="successBlock" layout="none" rendered="{!$CurrentPage.parameters.isSuccess = 'true'}">
+                    <script>
+                        //call parent method with msg on success
+                        parent.attachmentsResult(true);
+                    </script>
+                </apex:outputPanel>
+                <apex:outputPanel id="failureBlock" layout="none" rendered="{!$CurrentPage.parameters.isSuccess = 'false'}">
+                    <script>
+                        //call parent method with msg on failure
+                        parent.attachmentsResult(false);
+                    </script>
+                </apex:outputPanel>
+                    
+                <div class="s1AttachmentRelatedList well well-lg">
+                    <div id="attachmentTable">
+                        <table id="relatedList" class="table table-striped table-hover borderless" rules="cols" style="margin-bottom:0px;" border="0">
+                            <thead class="relatedListThead">
+                                <tr style="background-color:white;">
+                                    <th class="removeIconTh"></th>
+                                    <th id="attName" class="ASC" onclick='sortColumn(this.className,1,"attName")'>Name</th>
+                                    <th id="attUploadedOn" class="ASC" onclick='sortColumn(this.className,2,"attUploadedOn")'>Uploaded On</th>
+                                    <th class="downloadTh"></th>
+                                </tr>
+                            </thead>
+                        </table>
+                        <div class="table-scroll">
+                            <table id="attachmentsTable" class="table table-striped table-hover borderless" rules="cols" style="border-color: transparent;">
+                                <thead class="relatedListThead" style="display:none;">
+                                    <th class="removeIconTh"></th>
+                                    <th class="textHeaderTh">Name</th>
+                                    <th class="textHeaderTh">Uploaded On</th>
+                                    <th></th>
+                                </thead>
+                                <tbody>
+                                    <apex:repeat value="{!attachments}" var="att">
+                                        <tr id="{!att.id}">
+                                            <td class="removeIconTd"><span onclick="removeAttachment('{!att.id}')" class="glyphicon glyphicon-remove-circle"></span></td>
+                                            <td class="tableTextTd">{!att.name}</td>
+                                            <td class="tableTextTd"><span id="{!att.id}date">{!att.createdDate}</span>
+                                                <script>
+                                                    $('#{!att.id}date').html(moment($('#{!att.id}date').html()).format('{!dateFormat}'));
+                                                </script>
+                                            </td>
+                                            <td class="downloadTd"><span onclick="downloadAttachment('{!att.id}')" class="glyphicon glyphicon-download downloadGlyphicon"></span></td>
+                                        </tr>
+                                    </apex:repeat>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div id="noRecordsMessage">
+                        No records to display
+                    </div>
+                    <div class="upload">
+                        <span id="uploadIcon" class="glyphicon glyphicon-plus-sign" style="font-size: 16px;"></span>
+                        <apex:inputFile id="fileAttachment" onClick="switchToEditMode()" onChange="addAttachment(this.value)" value="{!attachment.body}" filename="{!attachment.name}" disabled="{! If($CurrentPage.parameters.editAccess == 'false', true, false)}"/>
+                    </div>
+                </div>   
+            </div> 
+        </body>
+    </apex:form>
+</apex:page>

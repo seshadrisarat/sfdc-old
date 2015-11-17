@@ -1,0 +1,160 @@
+<apex:component controller="SL_IntranetEventSummaryDetailsController" allowDML="true" id="EventSummaryDetails"> 
+    <apex:attribute assignTo="{!CompImpl}" name="aComponentImpl" type="WidgetAbstract" description="component implementation object" required="true"/>
+    
+    <style>
+    .popupEvent{
+        z-index: 100;
+        width: 100%; 
+/*      display:none; */
+        position: fixed;
+        top: 0px; 
+        left: 0px; 
+        height: 100%;
+        overflow: auto;
+        background: none repeat scroll 0px 0px rgba(0, 0, 0, 0.5);"
+    }
+    
+    .innerPopupEvent{
+        width: 730px;  
+        height: 450px;  
+        display: block; 
+        visibility: visible; 
+        left: 325px; 
+        top: 100px;
+        position: fixed !important; 
+        z-index:9999;
+    }
+    </style>
+    
+    <span id="detailwidgetSL_IntranetEventSummaryDetails">
+    	<div class="wc-widget SL_IntranetEventSummaryDetails" id="widget{!id}" >
+	        <apex:form id="EventSummaryDetailsForm">
+	            <apex:actionFunction id="getEventSummaryDetailAF" 
+	                                 name="widget{!id}.getEventSummaryDetailAF" action="{!getEventSummaryDetail}" status="loader" rerender="EventSummaryDetailOP" oncomplete="resizeImage();">
+	                <apex:param name="param1" assignTo="{!MyImpl.strEventId}" value=""/>
+	                <apex:param name="param3" assignTo="{!MyImpl.strFilterDate}" value=""/>
+	            </apex:actionFunction>
+	            <!-- End of Newly created for Event -->	   
+	            
+	            <apex:actionFunction id="deleteEventAFid" name="widget{!id}.deleteEventRecord" action="{!MyImpl.deleteEventRecord}" status="loader" rerender="EventSummaryDetailOP" oncomplete="resizeImage();widget{!id}.updateEventList();">   
+	        		<apex:param name="deletedRecordId" value=""/>
+	        	</apex:actionFunction>
+	        </apex:form> 
+	        
+	        <div id="EventEditPopup" style="display: none;">
+                <div id="popupEvent" class="docViewerPanel popupEvent">
+                    <div  role="dialog" id="innerPopupEvent" aria-live="assetive" aria-describedby="docViewerOverlayTitle" class="overlayDialog docViewerOverlay innerPopupEvent" />
+                </div>
+            </div> 
+        
+	        <apex:outputPanel id="EventSummaryDetailOP">     
+	            <apex:outputpanel rendered="{!MyImpl.initialState}" layout="none">
+                    <h2>{!$Label.SL_IntranetEventSummaryDetails_Header}</h2>
+                    <ul style="list-style: none; border-top: 1px solid #ededed; padding:0px;word-wrap: break-word;"> 
+                        <apex:repeat id="intranetAlertsRows" value="{!MyImpl.lstIntranetAlerts}" var="event" rows="{!MyImpl.detailConfig.numOfEventsPerPage}">
+                            <li onmouseover="{!id}mouseOverCheck('{!event.CreatedById}','{!$User.Id}','{!$Profile.Name}','{!event.Id}');" onmouseout="{!id}mouseOutCheck('{!event.CreatedById}','{!$User.Id}','{!$Profile.Name}','{!event.Id}');" style="border-bottom: 1px solid #ededed;padding: 5px 0 5px 0px;">
+                                <h3><a style="text-decoration: none;"> {!event.Name}</a>
+									<apex:outputpanel id="deleteRecord">
+                                        <div class="deleteCross" id="deleteRecord{!event.Id}" style="display:none; float:right;margin-left:5px;">
+                                            <img style="cursor: pointer;width:15px;" src="{!URLFOR($Resource.SL_IntranetHub, '/IntranetHub/images/icons/closeIcon.png')}" onclick="{!id}confirmBoxForDelete('{!event.Id}');"/>
+                                        </div>
+                                    </apex:outputpanel> 
+									<apex:outputpanel >
+									      <div class="editPencil" id="EditPencil{!event.Id}" style="display:none; float:right;"> 
+									        <img style="cursor: pointer;" src="/img/func_icons/util/pencil12.gif" alt="Edit Profile" title="Edit this Event" onClick="displayEditPopupEvent('{!event.Id}');"/>
+									    </div>
+									</apex:outputpanel>
+                                </h3><br/>
+                                <span class="date">
+                                    <apex:outputText value="Start Date : {0, date, MMMM d','  yyyy} <br/>" escape="false" rendered="{!!MyImpl.detailConfig.hasFieldset}">
+                                        <apex:param value="{!event.Date_of_Event__c}" /> 
+                                    </apex:outputText>
+                                    <apex:outputText value="End Date : {0, date, MMMM d','  yyyy} <br/>" escape="false" rendered="{!!MyImpl.detailConfig.hasFieldset}">
+                                        <apex:param value="{!event.End_Date__c}" /> 
+                                    </apex:outputText>
+                                    <apex:repeat id="wrapperEventInfoFeldsRows" value="{!MyImpl.lstWrapperEventInfoFields}" var="field" rendered="{!MyImpl.detailConfig.hasFieldset}">
+                                        <apex:outputText value="Start Date : {0, date, MMMM d','  yyyy} <br/>" escape="false" rendered="{!AND(MyImpl.detailConfig.hasFieldset, field.fieldAPIName == 'Date_of_Event__c')}">
+                                            <apex:param value="{!event.Date_of_Event__c}" /> 
+                                        </apex:outputText>
+                                        <apex:outputText value="End Date : {0, date, MMMM d','  yyyy} <br/>" escape="false" rendered="{!AND(MyImpl.detailConfig.hasFieldset, field.fieldAPIName == 'End_Date__c')}">
+                                            <apex:param value="{!event.End_Date__c}" /> 
+                                        </apex:outputText>
+                                        <apex:outputpanel style="word-wrap: break-word !important;" 
+                                                          rendered="{!if(AND(field.fieldAPIName != 'Comments__c', field.fieldAPIName != 'Date_of_Event__c', field.fieldAPIName != 'End_Date__c'), true, false)}" layout="none">
+                                            <apex:outputText value="{!field.fieldLabel}: "/>
+                                            
+                                            <apex:outputField value="{!event[field.fieldAPIName]}" rendered="{!field.fieldType == 'DATE'}"/>
+                                            
+                                            <apex:outputField value="{!event[field.fieldAPIName]}" rendered="{!field.fieldType == 'DATETIME'}"/>
+                                            
+                                            <apex:outputText value="{!event[field.fieldAPIName]}" escape="false" rendered="{!if(field.fieldType != 'BOOLEAN' && field.fieldType != 'DATETIME' && field.fieldType != 'DATE', true, false)}"/>
+                                            <apex:outputField value="{!event[field.fieldAPIName]}" rendered="{!if(field.fieldType == 'BOOLEAN', true, false)}"/>
+                                            <br/>
+                                        </apex:outputpanel>
+                                        <apex:outputpanel rendered="{!if(field.fieldAPIName == 'Comments__c', true, false)}" layout="none">
+                                            <apex:outputText value="{!event[field.fieldAPIName]} <br/>" escape="false" rendered="{!if(event[field.fieldAPIName] != null, true, false)}" id="divCommentsId"/>
+                                        </apex:outputpanel>
+                                    </apex:repeat> 
+                                </span>
+                            </li>
+                        </apex:repeat>
+                    </ul>
+	                    <!-- End of display more Section -->
+	            </apex:outputpanel>
+	            
+	            <script>
+                    //checks wether the Current logged in user is able to edit the current Event
+                    function {!id}mouseOverCheck(notifRecordCreatedById,userId,profileName,recordId)
+                    {
+                        if((notifRecordCreatedById == userId) && profileName == 'System Administrator') 
+                        {
+                            document.getElementById('EditPencil'+recordId).style.display = 'block';
+                            document.getElementById('deleteRecord'+recordId).style.display = 'block';
+                        }
+                    }
+                    function {!id}mouseOutCheck(notifRecordCreatedById,userId,profileName,recordId)
+                    {
+                        if((notifRecordCreatedById == userId) && profileName == 'System Administrator')
+						{                         
+                            document.getElementById('EditPencil'+recordId).style.display = 'none';
+                            document.getElementById('deleteRecord'+recordId).style.display = 'none';
+                        }
+                    }
+                </script>
+	            
+	            <!-- START : Object Record Feed Post section  -->
+	            <apex:outputPanel id="opChatterEvent" rendered="{!(MyImpl.showFeed && MyImpl.isEventCalled)}">
+	                <script>
+	                	var chatterWidget{!id} = new SL_IntranetChatterPlugIn('{!id}');
+	                </script>
+	                <c:SL_IntranetChatterPlugIn id="chatterEvent" chatterImpl="{!MyImpl.Chatter}" objectRecordId="{!MyImpl.strEventId}" chatterId="{!id}"/>
+	            </apex:outputPanel>
+	            <!--  END : Object Record Feed Post section  -->
+	            
+	        </apex:outputPanel>
+        </div>
+        <script>
+	        jQuery(document).ready(function($) 
+	         {
+	             resizeImage();
+	         });
+	         
+	        //to display the editing popup for the current event
+            function displayEditPopupEvent(eventRecordId)
+            {
+                $('#EventEditPopup').css('display','block');
+                $('#innerPopupEvent').append('<iframe scrolling="no" style="overflow:hidden; height:100%; width:100%;border-radius: 10px;" id="documentUploadIframe{!id}" src="apex/SL_IntranetRecordEdit?widgetId={!id}&recordId='+eventRecordId+'&fieldSetName={!MyImpl.strEventFieldSetName}"/>' );
+            }
+            
+            //To check whether user want to delete the record
+            function {!id}confirmBoxForDelete(recordId)
+            {
+            	var result = confirm('Are you sure you want to delete this Event?');
+	        	if(result == true)
+	        		widget{!id}.deleteEventRecord(recordId);
+	        	else
+	        		return false;
+            }
+        </script>
+    </span>
+</apex:component>

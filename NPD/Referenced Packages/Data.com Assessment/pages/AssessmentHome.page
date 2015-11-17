@@ -1,0 +1,350 @@
+<apex:page controller="ddcAssess.AssessmentCtlr" action="{!onPageLoad}" title="Data.com Assessment" sidebar="false">
+	<link rel="stylesheet" href="{!URLFOR($Resource.jquery_ui_base_theme,'jquery-ui.min.css')}" />
+	<link rel="stylesheet" type="text/css" href="{!URLFOR($Resource.assessment_css)}" />
+	<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.0/jquery.min.js"></script>
+	<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.9.2/jquery-ui.min.js"></script>
+	<script type="text/javascript" src="{!URLFOR($Resource.jquery_migrate)}"></script>
+	<script type="text/javascript" src="{!URLFOR($Resource.jquery_qtip_100_js)}"></script>
+		<script>function setFocusOnLoad() {}</script>
+	<script type="text/javascript">
+	    function start_button() {
+	       if (document.getElementById('{!$Component.theForm.new_pageblock.dunsright}').checked) {
+	           document.getElementById('dialog').style.display='block';
+	           document.getElementById('notification').style.display='block';
+	           $("#dialog").dialog({
+	               create: function(event) {
+	                   $(event.target).dialog("widget").css({ "position" : "fixed" });
+	                   $("#close").click(function() {
+	                       $("#dialog").dialog('close');
+	                   });
+	               },
+	               title: "Confirm DUNSRight&#8482; Match",
+	               modal: true,
+	               width: 650
+	           });
+	           
+	       } else {
+	           onPreStart();
+	           return false;
+	       }
+	    }
+	    
+	    function dunsright_checkbox() {
+	       document.getElementById('submit_dunsright').disabled = !(document.getElementById('dnb').checked && document.getElementById('tos').checked);
+	    }
+	    
+		function confirmCancel(assessmentToCancel) {
+			if(confirm("Are you sure you wish to proceed? Any assessment data collected will be lost.")) {
+				onCancel(assessmentToCancel);
+			}
+		}
+		
+		function confirmDelete(assessmentToDelete) {
+			if(confirm("Are you sure you wish to delete this assessment?")) {
+				onDelete(assessmentToDelete);
+			}
+		}
+		
+		function refreshTable() {
+			$('table.assessment_table').fadeTo("fast", 0.33).fadeTo("fast", 1);
+			onRefresh();
+		}
+		
+		function showErrors(id) {
+			$('#' + id).show();
+		}
+		
+		function attachTooltips() {
+			$('.error_tooltip').each(function(){
+				$(this).qtip({
+					content: {
+						text: $('#errors_' + this.id).html(),
+						title: {
+							text: 'Assessment Errors'
+						}
+					},
+					show : {
+						when: 'click',
+						solo: true
+					},
+					hide: 'unfocus',
+					style: {
+						width: 300,
+						tip: true,
+						border: {
+							width: 1,
+							radius: 3,
+							//color: '#D9DCDF'
+							color: '#FFBB00'
+						},
+						title: {
+							background: '#EFF0F0'
+						}
+					},
+					position: {
+						corner: {
+							target: 'topRight',
+							tooltip: 'bottomLeft'
+						}
+					}
+				});
+			});
+		}
+		
+		$(function(){
+			attachTooltips();
+		});
+	</script>
+	
+	<apex:pageMessages id="page_messages" />
+	<apex:form id="theForm">
+		<apex:actionFunction name="onPreStart" rerender="page_messages, start_button" action="{!onPreStart}" oncomplete="onStart()"/>
+		<apex:actionFunction name="onStart" rerender="page_messages, start_button" action="{!onStart}" oncomplete="onRefresh()"/>
+		<apex:actionFunction name="refreshMessages" rerender="page_messages" />
+		<apex:actionFunction name="refreshTimeEstimate" rerender="time_estimate" />
+		<apex:actionFunction name="onCancel" action="{!onCancel}" rerender="assessment_pageblock, start_button_container">
+			<apex:param name="assessmentToCancel" assignTo="{!assessmentToCancel}" value="" />
+		</apex:actionFunction>
+		<apex:actionFunction name="onDelete" action="{!onDelete}" rerender="assessment_pageblock">
+			<apex:param name="assessmentToDelete" assignTo="{!assessmentToDelete}" value="" />
+		</apex:actionFunction>
+		<apex:actionFunction name="onRefresh" action="{!onRefresh}" rerender="assessment_pageblock, start_button_container" oncomplete="attachTooltips()" />
+		
+		<c:AssessmentHeader />
+		<br/>
+		<apex:pageBlock title="Assessments" id="assessment_pageblock">
+			<div class="inner_content">
+					<p>Your last five requested assessments are listed here.</p>
+					<apex:outputPanel rendered="{!NOT(hasSummaries)}">
+		<p>
+		No Summaries are available. Please start an assessment below.
+		</p>
+		</apex:outputPanel>
+					<apex:outputPanel rendered="{!hasSummaries}">
+
+						<table class="assessment_table">
+							<thead>
+								<tr>
+									<th>Date Requested</th>
+									<th>Requested By</th>
+									<th>Status</th>
+									<th>Action</th>
+								</tr>
+							</thead>
+							<tbody>
+								<apex:repeat value="{!summaries}" var="summary">
+									<tr>
+										<td><apex:outputField value="{!summary.createddate}" /></td>
+										<td><apex:outputField value="{!summary.createdby.name}" /></td>
+										<td><apex:outputPanel layout="none" rendered="{!summary.ddcAssess__Complete__c}">
+												<a href="{!IF(summary.version__c==null || summary.version__c==1.00, URLFOR($Page.ResultV1), URLFOR($Page.Results))}?id={!summary.id}&sfdc.tabName={!$CurrentPage.parameters.sfdc.tabName}" class="blue">View Assessment</a>
+												<apex:outputPanel layout="none" rendered="{!NOT(summary.ddcAssess__Error_Count__c == 0)}">
+									&nbsp;
+									<a href="#" class="error_tooltip" id="{!summary.id}">
+									<img src="/img/msg_icons/warning16.png" alt="warning" class="message_icon"
+										 title="There were errors while running the assessment. Click for details." />
+										 </a>
+										 <div id="errors_{!summary.id}" style="display:none">
+										 	Errors occurred while completing the assessment:<br/>{!summary.error_count__c} records failed ({!summary.Failed_pcnt__c}%)<br />
+										 	<br />
+										 	If you're experiencing problems with the assessment package, please 
+										 	<a href="http://help.salesforce.com/HTUnauthContactSupport" target="_blank">contact Salesforce.com support</a>
+										 </div>
+												</apex:outputPanel>
+											</apex:outputPanel>
+											<apex:outputPanel layout="none" rendered="{!NOT(summary.ddcAssess__Complete__c)}">
+												<a href="{!URLFOR($Page.Results)}?id={!summary.id}&sfdc.tabName={!$CurrentPage.parameters.sfdc.tabName}" class="blue">In Progress</a> ( 
+												<apex:outputPanel layout="none" rendered="{!NOT(isRecordCountComplete)}">
+													&nbsp;
+													<apex:repeat value="{!summary.Entity_Assessments__r}" var="entity">
+														<apex:outputField value="{!entity.ddcAssess__Entity_Type__c}"/>s:&nbsp;<apex:outputField value="{!entity.ddcAssess__Total__c}"/>&nbsp;
+													</apex:repeat>
+												</apex:outputPanel>
+												<apex:outputPanel layout="none" rendered="{!isRecordCountComplete && recordCount != 0}">
+													<apex:outputText value="{0, number, ###}% ">
+														<apex:param value="{!((summary.ddcAssess__Total__c / recordCount) * 100)}"/>
+													</apex:outputText>
+												</apex:outputPanel>)
+											</apex:outputPanel>
+										</td>
+										<td>
+											<apex:outputPanel layout="none" rendered="{!summary.ddcAssess__Complete__c}">
+												<a href="#" onclick="confirmDelete('{!summary.id}')" class="blue">Delete</a>
+											</apex:outputPanel>
+											<apex:outputPanel layout="none" rendered="{!NOT(summary.ddcAssess__Complete__c)}">
+												<a href="#" onclick="confirmCancel('{!summary.id}')">Cancel</a>
+											</apex:outputPanel>
+										</td>
+									</tr>
+								</apex:repeat>
+							</tbody>
+						</table>
+						<input type="button" value="Refresh" onclick="refreshTable()" class="btn" />
+					</apex:outputPanel>
+				</div>
+		</apex:pageBlock> 
+
+
+		<apex:pageBlock title="Start New Assessment" id="new_pageblock">
+			<div class="inner_content">
+				<div id="time_estimate">
+					<apex:outputPanel id="time_estimate">
+			Estimated Completion Time:&nbsp;
+			<apex:outputPanel rendered="{!NOT(isRecordCountComplete)}" layout="none">
+				Calculating...
+			</apex:outputPanel>
+						<apex:outputPanel rendered="{!isRecordCountComplete}" layout="none">
+							<span class="blue">{!IF(timeEstimate == 1,'<','')} {!timeEstimate} hour{!IF(timeEstimate > 1,'s','')}</span>
+						</apex:outputPanel>
+					</apex:outputPanel>
+				</div>
+				Define your preferences, then start your data assessment. <br /> <br />
+				
+				<h2>Duplicate Check</h2>
+				<p>Duplicate check tells you how many account, contact, and lead records in your org are likely duplicates. Duplicate check
+					temporarily consumes data storage in your Salesforce organization (2 KB per unique record).</p>
+				<div class="setup_checkbox">
+					<apex:inputCheckbox id="dupe_check" value="{!dupeCheck}" selected="true" />
+					Yes, check for duplicates.
+				</div>
+				
+				<h2>DUNSRight&#8482; Match</h2>
+                <p>Does your organization have a lot of international accounts? Use DUNSRight&#8482; Match, a key feature in Data.com 
+                	Prospector and Data.com Clean, to improve match results. DUNSRight&#8482; Match requires more time, about 24 hours,
+                	to complete your assessment.</p>
+                <div class="setup_checkbox">
+                    <apex:inputCheckbox id="dunsright" value="{!dunsright}" onclick="refreshTimeEstimate();" selected="true" />
+                    Yes, include DUNSRight match results.
+                </div>
+
+				<br />
+				<h2>Notifications</h2>
+				<p>When your assessment is done, we can also send an email notification to you and anyone else you designate.</p>
+				<div class="setup_checkbox">
+					Email recipients (separate addresses with commas):<br />
+					<apex:inputTextArea id="email_recipients" value="{!emailRecipients}" rows="2" cols="50" />
+					<br />
+				</div>
+			</div>
+			<hr />
+			<br />
+			<apex:outputPanel id="start_button_container">
+				<apex:commandButton value="Start My Assessment" onclick="start_button()" immediate="true" disabled="{!hasError}"
+					id="start_button" reRender="none" />
+				<apex:outputPanel id="error_messages" layout="none">
+					<apex:outputPanel id="in_blackout_period_error" rendered="{!inBlackoutPeriod}">
+						<img src="/img/msg_icons/warning16.png" alt="warning" class="message_icon" />
+							You can only request one assessment every {!timeLimit} days. 
+							Check the Assessments list to find out when you can start your next assessment.
+						</apex:outputPanel>
+					<apex:outputPanel id="assessment_in_progress_error" rendered="{!assessmentInProgress}">
+						<img src="/img/msg_icons/warning16.png" alt="warning" class="message_icon" />
+							An assessment is already in progress.
+						</apex:outputPanel>
+				</apex:outputPanel>
+			</apex:outputPanel>
+		</apex:pageBlock>
+		
+		<div id="dialog" class="dialog" title="Confirm DUNSRight&#8482; Match">
+		    <div id="notification">
+			    <table border="0" cellpadding="0" cellspacing="0">
+			        <tbody><tr>
+			        <td><img class="warning_image" src="/img/msg_icons/warning16.png" title="Warning" />
+			        </td>
+			        <td><div class="message_text"><h4>Please review and agree to the following information.</h4></div>
+			        </td></tr>
+			        </tbody>
+			    </table>
+		    </div>
+            <div><br />Note that, at a minimum, the following data will be transmitted to Dun &amp; Bradstreet in order to obtain match results:
+            Account Name, Address, and Phone. No information identifying the Customer or any particular Users as the entity or
+            individuals who are making requests shall be transmitted to Dun &amp; Bradstreet.<br /></div>
+            <div class="container">
+	            <input type="checkbox" id="dnb" name="dnb" class="checkbox" onclick="dunsright_checkbox()" /> 
+	            <label class="label" for="dnb">Dun &amp; Bradstreet (as opposed to salesforce.com)
+	            is the provider of the functionality that you are enabling and any use is solely between you and Dun &amp; Bradstreet, as further
+	            described in the Terms of Service referenced below. This functionality is NOT warranted by salesforce.com and salesforce.com shall
+	            not be responsible for any performance-related issues or decrease in functionality. You and/or other users at your company may be
+	            able to use this functionality to access your company's data in the Salesforce system. However, using this application may also result in
+	            transmission of such data out of the Salesforce system. To the extent data is transmitted out of the Salesforce system, salesforce.com
+	            is not responsible for the privacy, security or integrity of that data.</label>
+            </div><br />
+            <div class="container">
+	            <input type="checkbox" id="tos" name="tos" class="checkbox" onclick="dunsright_checkbox()" />
+	            <label class="label" for="tos">I have read and agreed to 
+	            Dun &amp; Bradstreet's DUNSRight&nbsp;
+	            <a href="http://www.salesforce.com/assets/pdf/misc/salesforce_DB_DUNSRight_service_terms.pdf" target="_blank">terms of service</a>. 
+	            </label>
+            </div>
+            <div class="buttons">
+	            <input type="button" id="submit_dunsright" name="submit_dunsright" value="Start my Assessment" onclick="onPreStart(); $('#dialog').dialog('close'); return false" disabled="true" />&nbsp;or&nbsp;
+	            <a href="#" id="close">Cancel</a>
+            </div>
+        </div>
+	</apex:form>
+	
+	<style type="text/css">
+	   .buttons{
+	       text-align: center;
+	       padding-top: 12px;
+	   }
+	   .message_text{
+	       margin-left: 8px;
+	   }
+	   .warning_image{
+	       width: 16px;
+	       height: 16px;
+	   }
+	   .container{
+	       margin-top: 10px;
+	   }
+	   .container:after{
+	       clear: both;
+	       content: " ";
+		   display: block;
+		   font-size: 0;
+		   height: 0;
+		   visibility: hidden;
+	   }
+	   .label{
+	       margin-left: 5px;
+	       float: left;
+	       text-align: left;
+	       width: 570px;
+	   }
+	   .checkbox{
+	       float: left;
+	   }
+	   #notification{
+		    position:relative;
+		    width:95%;
+		    background-color:#ffffdc;
+		    border-color:#f8e38e;
+		    border-radius:4px;
+		    border-style:solid;
+		    border-width:1px;
+		    height:20px;
+		    display:none;
+		    text-align:left;
+		    padding:6px 8px 6px 6px;
+		    padding-bottom: 15px;
+		    font-family: Arial,Helvetica,sans-serif;
+	   }
+	   .dialog{
+	       display: none;
+	   }
+    </style>
+
+	<script type="text/javascript">
+		var timer = setInterval(function() {
+			Visualforce.remoting.Manager.invokeAction(
+					'{!$RemoteAction.AssessmentCtlr.getIsRecordCountComplete}',
+					function(result, event) {
+						if (result) {
+							clearInterval(timer);
+							refreshTimeEstimate();
+						}
+					});
+		}, 2000);
+	</script>
+</apex:page>

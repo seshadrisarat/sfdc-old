@@ -1,0 +1,634 @@
+<apex:page controller="EDP1.ConfigurationController" action="{!initIntegrationOptions}" id="ConfigurationPage" title="Integration Details">
+
+<apex:stylesheet value="{!URLFOR($Resource.EDP1__All, 'js/fancybox/jquery.fancybox-1.3.1.css')}"/>
+<apex:includeScript value="{!URLFOR($Resource.EDP1__All, 'js/jquery-1.4.2.min.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.EDP1__All, 'js/fancybox/jquery.fancybox-1.3.1.pack.js')}" />
+
+<style type='text/css'>
+/* Override this FancyBox CSS element to enable the Close icon to appear in IE */ 
+.fancybox-ie #fancybox-close { 
+    background: transparent; 
+    filter: progid:DXImageTransform.Microsoft.AlphaImageLoader(src='{!URLFOR($Resource.All, 'js/fancybox/fancy_close.png')}', sizingMethod='scale'); 
+}
+
+.outputLabel {
+   padding:2px 1px 0px 0px;
+   text-align: right;
+}
+.outputLabelLookup {
+   padding: 8px 1px 0px 0px;
+}
+.contactSmallIcon {
+    background-image: url('/img/sprites/master.png');
+    background-position: 0px -82px;
+    height: 16px;
+    width: 16px;
+}
+.leadSmallIcon {
+    background-image: url('/img/sprites/master.png');
+    background-position: 0px -200px;
+    height: 16px;
+    width: 16px;
+}
+
+.foundActivityText {
+   font-weight: bold;
+   font-size: 11px; 
+   color: #360;
+}
+
+.unfoundActivityText {
+   font-weight: bold;
+   font-size: 11px; 
+   color: #900;
+}
+
+.summaryLabel {
+   font-family: Arial; 
+   font-weight: bold; 
+   font-size: 11px; 
+   color: #4A4A56 !important;
+}
+</style>
+
+<script type="text/javascript">
+// Salesforce uses prototype, so release the $ variable
+jQuery.noConflict();
+</script>
+
+<apex:sectionHeader title="Integration Options"/>
+
+<apex:form id="ConfigurationForm" >
+    <apex:pageMessages id="configPageMessages" />
+
+    <apex:pageBlock title="Eloqua Integration Options" id="MainConfigurationBlock" >
+        <apex:pageBlockSection id="MainConfigurationSection" columns="1">
+
+            <apex:pageBlockSectionItem id="IntegrationUserSection" >
+                <div class='outputLabelLookup'>Eloqua Integration User</div>
+                <apex:inputField id="IntegrationUser" value="{!config2.EDP1__User__c}"
+                onChange="enableTestButton();" onBlur="enableTestButton();" />
+            </apex:pageBlockSectionItem>
+    
+            <apex:pageBlockSectionItem id="IsDedicatedUserSection" >
+                <div class='outputLabel'>Dedicated Integration User</div>
+                <apex:inputField id="IsDedicatedUser" value="{!config.EDP1__DedicatedIntegrationUser__c}"
+                onChange="enableTestButton(); "/>
+            </apex:pageBlockSectionItem>
+      
+            <apex:pageBlockSectionItem id="integrationTypeSection" >  
+                <apex:outputLabel >Integration Type</apex:outputLabel>
+                <apex:outputPanel layout="block" styleClass="requiredInput">
+                <apex:outputPanel layout="block" styleClass="requiredBlock"/>
+                    <apex:selectList id="integrationType" value="{!config.EDP1__IntegrationType__c}" size="1">
+                    <apex:selectOption itemValue="" itemLabel=""/>
+                    <apex:selectOption itemValue="Standard" itemLabel="Standard Task"/>
+                    <apex:selectOption rendered="{!hasManagedPackage}" itemValue="ManagedPackage" itemLabel="Eloqua Managed Package"/>
+                    <apex:selectOption rendered="{!hasUnmanagedPackage}" itemValue="UnmanagedPackage" itemLabel="Eloqua Unmanaged Package"/>
+                    <apex:selectOption itemValue="Custom" itemLabel="Custom"/>
+                    <apex:actionSupport action="{!changeIntegrationType}" event="onchange" onComplete="enableTestButton();"
+                    rerender="customConfigurationPanel, packageLinks, customIntegrationCode" status="StatusChange" />
+                </apex:selectList>
+
+                </apex:outputPanel>
+            </apex:pageBlockSectionItem>
+        </apex:pageBlockSection>
+        
+<!-- <apex:actionStatus startText="Updating page ..." id="StatusChange"/>  -->
+
+        <apex:outputPanel id="packageLinks">
+        <apex:pageBlockSection columns="1" title="Managed Package Integration"  rendered="{!config.EDP1__IntegrationType__c == 'ManagedPackage'}">
+            Eloqua's managed package integration requires an additional Salesforce package
+            to allow Eloqua Discover to function properly. Please install the following package.
+            This package requires no special installation instructions.
+            <apex:outputLink value="https://login.salesforce.com/?startURL=%2Fpackaging%2FinstallPackage.apexp%3Fp0%3D04tA00000009qae">Eloqua Discover - Managed Package Integration</apex:outputLink>
+        </apex:pageBlockSection>
+
+</apex:outputPanel>
+
+    <apex:outputPanel id="customConfigurationPanel">
+    <apex:outputPanel id="customConfigurationBlock"  
+    rendered="{!config.EDP1__IntegrationType__c='Custom' && config.EDP1__ActivityObject__c != null}">
+
+    <apex:pageBlockSection id="activityObjectSection" columns="1">
+        <apex:pageBlockSectionItem rendered="{!config.EDP1__IntegrationType__c = 'Custom'}">
+            <apex:outputLabel >Activity Object</apex:outputLabel>
+            <apex:outputPanel layout="block" styleClass="requiredInput">
+            <apex:outputPanel layout="block" styleClass="requiredBlock"/>
+            <apex:selectList id="activityObjectField" size="1" value="{!config.EDP1__ActivityObject__c}" >
+                <apex:selectOptions value="{!objects}"/>
+                <apex:actionSupport event="onchange" onComplete="enableTestButton();"
+                rerender="customConfigurationPanel" status="StatusChange" />
+            </apex:selectList>
+            </apex:outputPanel>
+        </apex:pageBlockSectionItem>
+    </apex:pageBlockSection>
+        
+<!-- ============================================= -->
+<!-- Activity Type Text
+<!-- ============================================= -->
+        <apex:pageBlockSection id="customConfigSettingsSection" title="Activity Text" columns="1">    
+            <apex:repeat value="{!activityText}" var="var" id="theRepeat">
+                <tr>
+                    <td class="labelCol  first ">
+                        <div class='outputLabel'>{!var.Name}</div>
+                    </td>
+                    <td class="data2Col  first ">
+                        <apex:outputPanel layout="block" styleClass="requiredInput">
+                        <apex:outputPanel layout="block" styleClass="requiredBlock"/>
+                        <apex:inputField id="IntegrationText" value="{!var.EDP1__Text__c}" 
+                        onChange="enableTestButton();"/>
+                        </apex:outputPanel>
+                    </td>
+                </tr>
+            </apex:repeat>
+        </apex:pageBlockSection>
+          
+<!-- ============================================= -->
+<!-- Activity Field Map
+<!-- ============================================= -->
+        <apex:pageBlockSection id="customConfigActivityFields" title="Activity Fields Map"  columns="1">
+        </apex:pageBlockSection>
+        <table border="0" cellpadding="2" cellspacing="1" style="padding-left: 40px">
+            <tr>
+                <td width="122" nowrap="nowrap"><strong>Eloqua Field</strong></td>
+                <td style="padding-right:130px" nowrap="nowrap"><strong>Salesforce Field</strong></td>
+                <td width="135" nowrap="nowrap"><strong>Pattern</strong></td>
+                <td width="350" valign='top' rowspan='8'>
+                    <strong>HELP ON FIELD MAPPINGS AND PATTERNS</strong><BR/><BR/>
+                    IMPORTANT NOTE: <u>When a single Eloqua Field (left side) is mapped to only 
+                    one Salesforce field (right side) - meaning only that Eloqua field value is being 
+                    pushed into the Salesforce field selected - <strong>no Pattern is needed and the 
+                    Pattern field should be removed and left bank.</strong></u>
+                    
+                    <BR/><BR/>The patterns to the left are Java based “Regular Expressions” and they are used 
+to recognize important text values contained in activity records Eloqua pushes 
+over to Salesforce in cases where multiple values/fields of importance are being 
+pushed into a single Salesforce field. 
+                    
+                    <p><a id="regularExpressionsHelpLink" href="#regularExpressionsHelpDIV">Click here for more information and some help on this part of your configuration</a></p>
+                </td>
+            </tr>
+            
+            <apex:repeat value="{!afm}" var="field" id="theRepeat">
+            <tr>
+                <td class="" nowrap="nowrap" style="padding-right: 20px">
+                    <div class='outputLabel'>
+                    <apex:outputText value="{!IF(field.Name == 'Activity Description', 'Hypersite Page',field.Name)}" />
+                    <apex:outputText rendered="{!field.Name =='Activity Description' || field.Name=='Activity Url'}" value=" (if present)" />
+                    </div>
+                </td>
+                <td class="" nowrap="nowrap" style="padding-right: 10px">
+                    <apex:outputPanel layout="block" styleClass="requiredInput">
+                    <apex:outputPanel layout="block" styleClass="requiredBlock"/>
+                    <apex:selectList id="customConfigFields" value="{!field.EDP1__Field__c}" size="1" 
+                    onChange="enableTestButton();">
+                        <apex:selectOption itemValue="" itemLabel=""/>
+                        <apex:selectOptions value="{!IF(Contains(field.name, 'Date'), objectDateFields, IF(field.name = 'Contact' || field.name = 'Lead', objectReferenceFields, objectFields))}"/>
+                    </apex:selectList>
+                    </apex:outputPanel>
+                </td>
+                <td><apex:inputField id="customConfigPattern" value="{!field.EDP1__Pattern__c}" 
+                rendered="{!IF(field.EDP1__HasPattern__c,true,false)}" /></td>
+            </tr>
+            </apex:repeat> 
+            </table>
+        
+
+     
+    </apex:outputPanel>
+    </apex:outputPanel>
+   
+        <apex:outputPanel id="customIntegrationCode">
+        <apex:outputPanel id="codeBlockPanel" rendered="{!config.EDP1__IntegrationType__c == 'Custom' || config.EDP1__IntegrationType__c == 'UnmanagedPackage'}">
+        <apex:pageBlockSection title="Activity Trigger Code" columns="1">
+            <textarea rows="3" cols="120">{!triggerCode}</textarea>
+        </apex:pageBlockSection>
+        <apex:pageBlockSection title="Trigger Code Coverage" columns="1">
+            <textarea rows="8" cols="120">{!codeCoverage}</textarea>
+        </apex:pageBlockSection>
+        </apex:outputPanel>
+        </apex:outputPanel>
+
+    
+    <apex:pageBlockButtons location="bottom" id="buttonsSection">
+         
+         <apex:commandButton id="testButton" action="{!testSetup}"  
+             onComplete="openTestDialog();" value=" Test Configuration " rerender="TestResultsPanel" />
+             <apex:commandButton id="saveButton1" action="{!saveConfiguration}" value="Save Configuration" />
+             
+         <input id="cancelButton" class="btn" type="button" value=" Cancel " 
+         onClick="parent.location='/apex/IntegrationDetails';"/>
+     </apex:pageBlockButtons>
+    </apex:pageBlock>
+    
+<apex:actionFunction name="savePage" action="{!saveConfiguration}" rerender="configPageMessages" 
+    onComplete="enableSaveButton(); jQuery('body').animate({scrollTop: 0}, 'fast');" />
+    
+</apex:form>
+
+<script>
+// Initialize the hiddenClicker DIV for FancyBox
+jQuery("a#regularExpressionsHelpLink").fancybox({
+    'width' : 750,
+    'height' : 500,
+    'scrolling' : 'auto',
+    'autoDimensions': false,
+    'autoScale' : true,
+    'transitionIn' : 'none',
+    'transitionOut' : 'none',
+    'showCloseButton' : true,
+    'enableEscapeButton' : true
+});
+</script>
+
+<div id="regularExpressionsHelp" style="display:none">
+<div id="regularExpressionsHelpDIV">
+<center><strong>HELP ON FIELD MAPPINGS AND PATTERNS</strong></center>
+<p>IMPORTANT NOTE: <u>When a single Eloqua Field (left side) is mapped to only 
+one Salesforce field (right side) - meaning only that Eloqua field value is being 
+pushed into the Salesforce field selected - <strong>no Pattern is needed and the 
+Pattern field should be removed and left bank.</strong></u></p>
+
+<p>The patterns to the left are Java based “Regular Expressions” and they are used 
+to recognize important text values contained in activity records Eloqua pushes 
+over to Salesforce in cases where multiple values/fields of importance are being 
+pushed into a single Salesforce field.</p>
+
+<p>For example, imagine that <strong>Email Viewed: MKT – Welcome to Eloqua!</strong> 
+gets pushed over to the Subject field of an activity record in SFDC. In that Subject 
+there are two pieces of critical information: the <strong>TYPE</strong> of activity 
+(Email Open) and the <strong>ASSET</strong> on which the activity was taken ("MKT – 
+Welcome to Eloqua!", the name of the email). A regular expression is what allows us to 
+extract those two pieces of information and recognize them separately even though 
+they are contained within a single line of text.</p>
+
+<p>The prefilled patterns you see are the Regular Expressions that would be used if you 
+have the standard Eloqua-SFDC integration. However, in the case where you have customized 
+the way you write over activities from Eloqua - writing activity records in a number 
+of custom fields and/or altering the structure of the activity records (e.g., You use 
+two dashes to separate the action from the asset instead of a colon) - you can modify 
+the destination fields as well as the regular expressions used to evaluate the text.</p> 
+
+<p>For a quick illustration of how a regular expression maps to a Subject Line, let’s use 
+the example of, "Email Viewed: MKT – Welcome to Eloqua!" and assume that since both the 
+Activity Type and Asset Name are being written into the Subject field, we need to pull 
+out both of those values separately using a regular expression.</p>
+Regular Expression Used: ^([^:]*):?<BR/>
+<ul><li>^ = Matches at the start of the value</li>
+<li>( ) = Grouping of matched characters. Prospect Discover uses the first group as the 
+value for that field</li>
+<li>Etc.</li>
+</ul>
+For more information on regular expressions click <a target='_blank' 
+href='http://www.regular-expressions.info/tutorial.html'>here</a> or if you are 
+having difficulties or concerns setting this up, please contact Eloqua’s technical support team.
+</div>
+</div>
+
+<!-- ************************************************************************************ -->
+<!-- fancyBox logic as pulled from the following website                                  --> 
+<!-- http://thingsilearned.com/2010/01/27/dynamically-calling-fancybox-from-javascript/   -->
+<!--                                                                                      --> 
+<!-- Currently fancybox only works on links in your page.  This div hides a link,         -->
+<!-- and the call to callFancyBox() changes the link & then 'clicks' it to open the box   -->
+<!-- ************************************************************************************ --> 
+<div id="hidden_clicker" style="display:none">
+<a id="hiddenclicker" href="http://asdf.com" >Hidden Clicker</a>
+</div>
+
+<script>
+
+var isTestRun = false;
+var isTestRequired = false;
+
+function openTestDialog() {
+
+    var dialogWidth = 700;
+    var dialogHeight = 550;
+    isTestRun = false;
+    testAcctName = document.getElementById('ConfigurationPage:testForm:testBlock:testAccountSelection:testAccountSelectionItem:testAccount');
+    //if (testAcctName.value == '') disableTestGoButton();
+    //else enableTestGoButton();
+    testErrBlock = document.getElementById('ConfigurationPage:testForm:testErrors');
+    testErrBlock.innerHTML = '';
+
+    callFancybox('#runTestDialogDIV', dialogHeight, dialogWidth, "Test Configuration Settings");
+    return false;
+}
+
+// This function allows you to call the fancy box from javascript
+// origional source: http://outburst.jloop.com/2009/08/06/call-fancybox-from-flash/
+function callFancybox(my_href, frmHeight, frmWidth, title) {
+
+    if (!frmWidth) frmWidth = '500px';
+
+    // Initialize the hiddenClicker DIV for FancyBox
+    jQuery("a#hiddenclicker").fancybox({
+        'width' : frmWidth,
+        'height' : frmHeight,
+        'scrolling' : 'off',
+        'autoDimensions': false,
+        'autoScale' : true,
+        'transitionIn' : 'none',
+        'transitionOut' : 'none',
+        'modal' : false,
+        'onClosed' : function() { if (isTestRun) enableSaveButton(); }
+    });
+jQuery("#fancy-wrap").width(100); 
+jQuery("#fancy-wrap").height(720);
+  var j1 = document.getElementById("hiddenclicker");
+  j1.href = my_href;
+  jQuery('a#hiddenclicker').trigger('click');
+
+}
+   
+</script>
+
+<!-- ============================================= -->
+<!-- Test Configuration Dialog
+<!-- ============================================= -->
+<div id="runTestDialog" style="display:none">
+<div id="runTestDialogDIV">
+<center><h2 style="text-align: center;">Test Configuration Settings</h2></center>
+<apex:form id="testForm" >
+<apex:pageMessages id="testErrors" />
+
+<apex:actionFunction name="testConfigurationStart" action="{!testStart}" status="testStatusPanel"
+rerender="TestResultsPanel,testErrors" immediate="true" onComplete="testCompleted();" >
+    <apex:param name="param1" assignTo="{!testAccountID}" value="" />
+</apex:actionFunction>
+
+<apex:pageBlock id="testBlock">
+    <apex:pageBlockSection id="testAccountSelection" columns="2">
+        <apex:pageBlockSectionItem id="testAccountSelectionItem" >
+        <apex:outputlabel >Select Account for Testing:</apex:outputlabel>
+        <apex:outputPanel layout="block" styleClass="requiredInput">
+        <apex:outputPanel layout="block" styleClass="requiredBlock"/>
+        <apex:inputField id="testAccount" value="{!dummyContact.AccountID}" />
+        </apex:outputPanel>
+        </apex:pageBlockSectionItem>
+        
+        <apex:pageBlockSectionItem >
+        <input id="TestGoButton" class="btn" type="button" value=" Go " onclick="runTests();" 
+        style="position: relative; top: -8px;"/>&nbsp;&nbsp; 
+        <!-- <a id="testStartHelpLink" href="#testStartHelpDiv"> -->
+            <img src="{!URLFOR($Resource.EDP1__All, 'help24.png')}" width="24" height="24" 
+            title="What am I going to see and how will it work?"
+            onMouseOver="toggleTestHelp();" 
+            onMouseOut="toggleTestHelp();"/>
+        </apex:pageBlockSectionItem> 
+    </apex:pageBlockSection>
+    <hr/>
+
+    <div id="fullResultsBlock">
+    <apex:actionStatus id="testStatusPanel">
+       <apex:facet name="start">
+            <p style="text-align:center;">
+            <img src="{!URLFOR($Resource.EDP1__All, 'ajax-loader1.gif')}" /> <br/><br/>
+            </p>
+       </apex:facet>
+       <apex:facet name="stop">
+       <apex:outputPanel id="TestResultsPanel" >
+          <apex:outputPanel rendered="{!showTestResults}">
+            <table >
+                <tr>
+                  <td colspan="3" valign="top" class="summaryLabel">Sampled {!testResults.size} activities. Activity Types found are below in green.</td>
+                </tr>
+                <tr>
+                  <td  valign="top" style="padding-right: 20px;"><div class="{!IF(testResults.foundEmailClickthrough, 'found', 'unfound')}ActivityText">Email Click Through</div></td>
+                  <td  valign="top" style="padding-right:20px;"><div class="{!IF(testResults.foundEmailOpen, 'found', 'unfound')}ActivityText">Email Open</div></td>
+                  <td  valign="top"><div class="{!IF(testResults.foundOutlookEmailOpen, 'found', 'unfound')}ActivityText">Outlook Email Open</div></td>
+                </tr>
+                <tr>
+                  <td valign="top" style="padding-right: 20px;"><div class="{!IF(testResults.foundFormSubmit, 'found', 'unfound')}ActivityText">Form Submit</div></td>
+                  <td valign="top" style="padding-right:20px;"><div class="{!IF(testResults.foundHypersiteVisit, 'found', 'unfound')}ActivityText">Hypersite Visit</div></td>
+                  <td valign="top"><div class="{!IF(testResults.foundWebsiteVisit, 'found', 'unfound')}ActivityText">Website Visit</div></td>
+                </tr>
+            </table>
+        </apex:outputPanel>
+        <BR/>
+        
+        <apex:outputPanel rendered="{!showTestResults}"  >
+        <div class='summaryLabel'>Unrecognized Activities: {!testResults.errorBin.size} found</div>
+        <div style="overflow: auto; width: 675px; height: 150px;">
+        <apex:pageBlockTable id="ErrorTestResults" rendered="{!showTestResults}" 
+        value="{!testResults.errorBin}" var="r" rowClasses="odd,even" styleClass="tableClass" width="100%">
+            <apex:column headerValue="Lead/Contact">
+                <img src="/s.gif" class="{!LOWER(r.objectType)}SmallIcon" style="padding-right: 4px;"/>
+                <apex:outputText value="{!r.name}" />
+            </apex:column>
+            <apex:column headerValue="{!testActivityTypeField}">
+                <apex:outputText value="{!r.OriginalActivityType}" />
+            </apex:column>
+            <apex:column headerValue="{!testAssetField}" rendered="{!testActivityTypeField != testAssetField}">
+                <apex:outputText value="{!r.OriginalAssetName}" />
+            </apex:column>
+            <apex:column headerValue="{!testActivityDateField}">
+                <apex:outputText value="{!r.OriginalActivityDate}" />
+            </apex:column>
+            <apex:column headerValue="Error Text">
+                <apex:outputText value="{!r.errorText}" />
+            </apex:column>
+            <apex:column style="width: 25x;">
+                <apex:image value="{!URLFOR($Resource.EDP1__All, 'icons2/activity_warning.png')}" height="16" width="16"/>
+            </apex:column>
+        </apex:PageBlockTable> 
+        </div> 
+        </apex:outputPanel>
+<br/><br/>
+        <apex:outputPanel rendered="{!showTestResults}" >
+        <div class='summaryLabel'>Eloqua Activities Found: {!testResults.validBin.size} found</div>
+        <div style="overflow: auto; width: 675px; height: 150px;">
+        <apex:pageBlockTable id="ValidTestResults" rendered="{!showTestResults}" 
+        value="{!testResults.validBin}" var="r" rowClasses="odd,even" styleClass="tableClass" width="100%">
+            <apex:column headerValue="Lead/Contact">
+                <img src="/s.gif" class="{!LOWER(r.objectType)}SmallIcon" style="padding-right: 4px;"/>
+                <apex:outputText value="{!r.name}" />
+            </apex:column>
+            <apex:column headerValue="{!testActivityTypeField}">
+                <apex:outputText value="{!r.OriginalActivityType}" />
+            </apex:column>
+            <apex:column headerValue="{!testAssetField}" rendered="{!testActivityTypeField != testAssetField}">
+                <apex:outputText value="{!r.OriginalAssetName}" />
+            </apex:column>
+            <apex:column headerValue="{!testActivityDateField}">
+                <apex:outputText value="{!r.activityDate}" />
+            </apex:column>
+            <apex:column style="width: 25x;">
+                <apex:image value="{!URLFOR($Resource.EDP1__All, 'icons2/activity_valid.png')}" height="16" width="16"/>
+            </apex:column>
+        </apex:PageBlockTable> 
+        </div> 
+        </apex:outputPanel>
+      </apex:outputPanel>
+      </apex:facet>
+    </apex:actionStatus>
+    </div>
+    
+    <div id="testStartHelp" style="display:none; overflow: auto; width: 690px; height: 450px;">
+    <Center><strong>INFO AND INSTRUCTIONS ON TESTING</strong></Center>
+    <p>This tool allows you to confirm that what you have configured in your Integration 
+    Options is correct and will allow Prospect Discover to recognize and report on the 
+    activities you are sending over from Eloqua.</p>
+    
+    <p>Select an Account that you know has a lot of activities (i.e., the contacts linked 
+    to that Account have shown a lot of action). The system will run through the 300 most 
+    recent activities tied to that Account and attempt to evaluate and categorize them 
+    based on the configuration you have applied for recognizing Activity records.</p>
+    
+    <p>Once the test runs, you should see results for all 6 activities used by Prospect Discover:
+    <ol>
+    <li>Email Open (Marketing)</li>
+    <li>Email Open (Sales / Outlook Plugin)</li>
+    <li>Email Clickthrough (Marketing)</li>
+    <li>Website Visit</li>
+    <li>Hypersite Visit</li>
+    <li>Form Submission</li> 
+    </ol></p>
+    <p>Check the activities listed in green and/or red at the top of the results below. If all are green, then your test 
+    has run successfully and you're done! If you see any activities in red, take note of the Activity Type
+    and then see if that Activity Type is represented in the list of "Unrecognized" records. If there are 
+    any activities in red AND in the Unrecognized list you will need to revisit your configuration in the 
+    previous interface and ensure that everying is accurate (please refer to the admin documentation you have
+    been provided with this tool for tips on how to verify your configuration for accuracy).</p>
+    
+    <p>If you see an Activity Type in red that is in neither the Unrecognized or the Recognized list, please select
+    another Account that has a lot of activity and rerun the test in order to check the remaining unverified 
+    Activity Types. If you cannot figure out why certain activities are not being recognized, please contact Eloqua’s Technical Support Team.</p> 
+    </div>    
+    
+</apex:pageBlock>
+</apex:form>
+</div>
+</div>
+
+<script>
+function toggleTestHelp() {
+    var testStartHelpDiv = document.getElementById('testStartHelp');
+    var fullResultsBlock = document.getElementById('fullResultsBlock');
+    
+    if (testStartHelpDiv.style.display == 'none') {
+        if (fullResultsBlock) fullResultsBlock.style.display = 'none';
+        testStartHelpDiv.style.display = '';
+    } else {
+        testStartHelpDiv.style.display = 'none'; 
+        if (fullResultsBlock) fullResultsBlock.style.display = '';
+    }
+}
+
+</script>
+
+<script type="text/javascript">
+    var saveButton = document.getElementById('ConfigurationPage:ConfigurationForm:MainConfigurationBlock:buttonsSection:saveButton');
+    var testButton = document.getElementById('ConfigurationPage:ConfigurationForm:MainConfigurationBlock:buttonsSection:testButton');
+    var testGoButton = document.getElementById('TestGoButton');
+
+    var isDedicatedFld = document.getElementById('ConfigurationPage:ConfigurationForm:MainConfigurationBlock:MainConfigurationSection:IsDedicatedUserSection:IsDedicatedUser');
+    var dedicatedUserFld = document.getElementById('ConfigurationPage:ConfigurationForm:MainConfigurationBlock:MainConfigurationSection:IntegrationUserSection:IntegrationUser');
+
+    if (dedicatedUserFld.value == '') isDedicatedFld.disabled=true;
+    // var testCancelButton = document.getElementById('TestCancelButton');
+    // disableSaveButton();
+
+    function enableSaveButton() {
+        saveButton.disabled = false;
+        saveButton.className = 'btn';
+    }
+    function disableSaveButton() {
+        saveButton.disabled = true;
+        saveButton.className = 'btnDisabled';
+    }
+
+    function enableTestGoButton() {
+        testGoButton.disabled = false;
+        testGoButton.className = 'btn';
+    }
+    function disableTestGoButton() {
+       // testGoButton.disabled = true;
+       // testGoButton.className = 'btnDisabled';
+    }
+    function canSavePage() {
+        if (isTestRequired) {
+            //alert('You must run the [Test Configuration] option before you can save the changes');
+            return true;
+        } 
+            
+       return true;
+    }
+    
+    function enableTestButton() {
+        
+        // Some data has changed, so we now require a test to be run
+        isTestRequired = true;
+        
+        // Validate that all fields have been filled in
+        var isValid = false;
+        var configType = document.getElementById('ConfigurationPage:ConfigurationForm:MainConfigurationBlock:MainConfigurationSection:integrationTypeSection:integrationType');
+        var isStandard = (configType.options[configType.selectedIndex].text == 'Standard');
+
+        if (!isStandard) {
+            var isValid1 = true;
+            for (n = 0; n < 10; n++) {
+                var fldID = 'ConfigurationPage:ConfigurationForm:MainConfigurationBlock:theRepeat:' + n + ':IntegrationText';
+                try {
+                    isValid1 = isValid1 && (document.getElementById(fldID).value != ''); 
+                } catch(ex) {
+                    break;
+                }
+            }
+            var isValid2 = true;
+            for (i = 0; i < 10; i++) {
+                var fldID = 'ConfigurationPage:MainConfigurationBlock:theRepeat:' + i + ':customConfigFields';
+                try {
+                    isValid2 = isValid2 && (document.getElementById(fldID).selectedIndex != 0); 
+                } catch(ex) {
+                    break;
+                }
+            }
+            isValid = isValid1 && isValid2;
+        } else isValid = true;
+
+        if (dedicatedUserFld.value == '') {
+            isDedicatedFld.checked=false;
+            isDedicatedFld.disabled=true;
+        } else isDedicatedFld.disabled=false;
+        
+        testButton.disabled = !isValid;
+        testButton.className = (isValid) ? 'btn' : 'btnDisabled';
+    }
+    
+    function disableTestButton() {
+        testButton.disabled = true;
+        testButton.className = 'btnDisabled';
+    }
+    
+    function runTests() {
+        disableTestGoButton(); 
+        var accountID = document.getElementById('ConfigurationPage:testForm:testBlock:testAccountSelection:testAccountSelectionItem:testAccount_lkid').value;
+        testConfigurationStart(accountID);
+        isTestRequired = false;
+    }
+    
+    function testCompleted() {
+        isTestRun = true; 
+        testErrBlock = document.getElementById('ConfigurationPage:testForm:testErrors');
+        if (testErrBlock.innerHTML == '') {
+            disableTestGoButton();
+        //     testCancelButton.value=" Close ";
+            enableSaveButton();
+        }
+    }
+    
+    // Because the User and Account lookup field do not support an onChange event
+    // to enable the Save/Test buttons, use jQuery to add an onClick event handler
+    // to the lookupIcons on these two fields. Technically, it's not perfect because
+    // the buttons are enabled as soon as the lookup icon is clicked, even if the
+    // user doesn't select a value.
+    jQuery(".lookupIcon").click(enableTestButton);
+    jQuery(".lookupIcon").click(enableTestGoButton);
+    
+</script>
+
+
+</apex:page>

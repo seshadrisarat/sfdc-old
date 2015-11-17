@@ -1,0 +1,449 @@
+<apex:page sidebar="true"  showHeader="true" controller="DealListController" >
+<apex:stylesheet value="{!$Resource.wp_base_css}" />
+    
+<apex:includeScript value="{!URLFOR($Resource.JQuery_full, 'jquery-ui-1.9.2.custom/js/jquery-1.8.3.js')}"  />
+<apex:includeScript value="{!URLFOR($Resource.JQuery_full, 'jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js')}"  />
+<apex:stylesheet value="{!URLFOR($Resource.JQuery_full, 'jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css')}"  />
+
+<apex:includeScript value="{!URLFOR($Resource.Bootstrap, 'bootstrap/js/bootstrap.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.Bootstrap, 'bootstrap/js/bootstrap.min.js')}"/>
+    
+    
+   
+<apex:form >  
+<script>
+var dictMasterDeals = new Array();
+var dictMasterCos = new Array();
+var iCtrackerLinkNotes =0;
+var iMaxC=512;
+var bDealTeamBasedQuery= '{!SearchByDealNameText}'=='' ? true : false;
+function say(s) {   var q = document.getElementById('sayText');q.value=s+'\r'+q.value;}function showlog() { var d = document.getElementById('logarea'); if (d.style.display=="inline") d.style.display="none";     else      d.style.display="inline";  }
+
+function getFinContent(sDeal)
+{
+var sRc = "";
+if (dictMasterDeals[sDeal]!=null)
+{
+
+    var dl = dictMasterDeals[sDeal];
+
+    if (dl.WP_Ownership__c!=null) sRc += "<tr><td>Ownership</td><td align=\"right\">" + dl.WP_Ownership__c + "%</td></tr>";
+    if (dl.WP_Ownership_Diluted__c!=null) sRc += "<tr><td>FD Ownership</td><td align=\"right\">" + dl.WP_Ownership_Diluted__c + "%</td></tr>";
+   if (dl!=null && dl.Valuation_Reporting__r!=null) //dictMasterCos[dl.Company__c]==null) alert('ERROR! - company not found in dictionary');
+    {
+       //var co=dictMasterCos[dl.Company__c];
+        var recs = dl.Valuation_Reporting__r;//Administrative_Accounting_del__r;
+        var fndSet = new Array();
+        if (recs!=null && recs.size>0)
+        {
+        var bSet=false;
+        for(var iR=0;iR<recs.size;iR++) { 
+
+            var rec =  (recs.size == "1" ?  recs.records : recs.records[iR] );
+            if (rec!=null) {
+            var sCur = "";
+            if (rec.CurrencyIsoCode!=null) {
+                sCur = rec.CurrencyIsoCode;                
+                sCur = (sCur=="USD" ? "$" : (sCur=="GBP" ? "£" : (sCur=="EUR" ? "€" : sCur) ) );
+                sCur +="&nbsp;";
+            }
+            if (fndSet[rec.Fund__r.Acronym__c]==null) {
+                fndSet[rec.Fund__r.Acronym__c]=true;
+            sRc += "<tr><td>&nbsp;</td><td align=\"right\">&nbsp;</td></tr>";
+            if (rec.Fund__r!=null && rec.Fund__r.Acronym__c!=null) sRc += "<tr><td><u>" + rec.Fund__r.Acronym__c + "</u></td><td align=\"right\">&nbsp;</td></tr>";
+            if (rec.Cost_MM__c!=null) sRc += "<tr><td>Cost</td><td align=\"right\">" +sCur +  autoTableFormatPerConfig(rec.Cost_MM__c,'CURRENCYONEPOINT') + "</td></tr>";
+            if (rec.Carrying_Value_MM__c!=null) sRc += "<tr><td>Carrying</td><td align=\"right\">" +sCur +  autoTableFormatPerConfig(rec.Carrying_Value_MM__c,'CURRENCYONEPOINT') + "</td></tr>";
+            }
+      }
+          }
+        }
+        
+    }    
+    if (sRc!="")
+    sRc = "<table border=\"0\">" + sRc + "</table>";
+}
+if (sRc == "") sRc = "no financial information is available";
+return sRc;
+}
+
+function findPos(obj) { var curleft = curtop = 0; if (obj.offsetParent) { do {  curleft += obj.offsetLeft;  curtop += obj.offsetTop; } while (obj = obj.offsetParent); } return [curleft,curtop]; }
+function killDiv(sEl) {var q = ge(sEl);    var qp = q.parentNode;    qp.removeChild(q);}
+function showFin(sEl,sDealId){
+
+
+var q = ge(sEl);
+    var el = document.createElement("div");
+    el.innerHTML=getFinContent(sDealId);
+    var dvid='div_fin_'+sEl;
+    el.id = dvid;
+    el.style.display="inline"; 
+    el.style.position="absolute";
+    el.style.backgroundColor="white";
+    el.style.border="1px solid grey";
+    el.style.padding="2px";
+    el.style.zIndex=100;
+    el.onmouseout=function(d){ killDiv(dvid); }
+  var tPos = findPos(q);
+  el.style.left ="" + tPos[0]+"px";// sL;//"100x";// q.left;// pos.left+80;
+  el.style.top ="" + tPos[1]+"px";// "100px";//q.top;//pos.top-350;     
+    document.body.appendChild(el);
+}
+
+
+var iFinId=1;
+
+function funcCell( AutoTableConfig, tblCell,fldCfgs,thisFieldID,rc) {
+var dX = bDealTeamBasedQuery ? rc.Deal__r : rc;
+tblCell.vAlign="top"; 
+var fldCfg = fldCfgs[thisFieldID];
+if (fldCfg.ColName == "Key Dates / Next Steps")  tblCell.innerHTML=dX.Key_Dates_Next_Steps__c != null ? dX.Key_Dates_Next_Steps__c : "&nbsp;";
+if (fldCfg.ColName=="Status") {
+    if (dictMasterDeals[dX.Id]!=null) {
+        var dl = dictMasterDeals[dX.Id];
+       var sC = "Unspecified";
+       if (dl.Stage__c != null) sC = dl.Stage__c;
+    var sDt=""; var recs = dl.Histories;
+    if (recs!=null)  {
+     for(var iC =0; iC < recs.size; iC ++) {
+        var rec =  (recs.size == "1" ?  recs.records : recs.records[iC] );
+        if (sDt=="" && rec!=null && rec.Field !=null && (rec.Field == "Stage__c" ||rec.Field == "created" )) sDt = rec.CreatedDate;                 
+        }
+    }
+    if (sDt!="") { sDt = autoTableFormatPerConfig(sDt,'SHORTDATEFROMSTRING2');
+    if (dl.Dead_Deal_Reason__c==null)
+    sC = sC + "<br/>("+sDt + ")";
+    var recsTeam = dl.Deal_Team__r;
+    var sTeam="";
+    if (recsTeam!=null)  {
+        sTeam = "";
+     for(var iC =0; iC < recsTeam.size; iC ++) {
+        var rec =  (recsTeam.size == "1" ?  recsTeam.records : recsTeam.records[iC] );
+        if (rec!=null && rec.Employee__r!=null && rec.Employee__r.Initials__c != null) 
+        {
+        if (sTeam != "") sTeam = sTeam + ", ";
+        sTeam = sTeam + rec.Employee__r.Initials__c;
+        }
+        }
+    if (sTeam != "") sC = sC + "<br/><br/>" + "(" + sTeam + ")";
+    }
+    }    
+    tblCell.innerHTML= (sC == "" ? "&nbsp" : sC);
+    }
+
+}
+/*
+if (fldCfg.ColName=="EMG Comment") {
+    if (dictMasterDeals[dX.Id]!=null) {
+        var dl = dictMasterDeals[dX.Id];
+        var sC = ""; var sCWhoAndWhen="";
+        
+        if (dl.EMG_Paragraphs__r!=null) {
+        var recs = dl.EMG_Paragraphs__r;
+        for(var iC =0; iC < recs.size; iC ++) {
+            var rec =  (recs.size == "1" ?  recs.records : recs.records[iC] );
+                    if (sC=="" && rec.EMG_Paragraph__c!=null) 
+                    { 
+                    sC = rec.EMG_Paragraph__c;                    
+                    sCWhoAndWhen = autoTableFormatPerConfig(rec.EMG_Last_Updated_Date__c,'SHORTDATEFROMSTRING2'); 
+                    sCWhoAndWhen = "<br/><br/>(<b>" + sCWhoAndWhen + "</b>";
+                    if (rec.EMG_Updated_on_behalf_of__r !=null && rec.EMG_Updated_on_behalf_of__r.Name)
+                        sCWhoAndWhen = sCWhoAndWhen + " - " + rec.EMG_Updated_on_behalf_of__r.Name + ")";
+                    else if (rec.EMG_Last_Updated_By__r !=null && rec.EMG_Last_Updated_By__r.Name)                
+                        sCWhoAndWhen = sCWhoAndWhen + " - " + rec.EMG_Last_Updated_By__r.Name + ")";
+                    else  sCWhoAndWhen = sCWhoAndWhen+ ")"; 
+                    }
+                }
+            if (sC.length>iMaxC) addElipse(tblCell,sC,iMaxC,iCtrackerLinkNotes++); else tblCell.innerHTML= sC;
+            if (dl.Dead_Deal_Reason__c!=null)
+            {
+            var txtDd = document.createElement("text");txtDd.innerHTML="<br/><br/><b>Dead deal reason:</b> " + dl.Dead_Deal_Reason__c;
+            if (dl.Dead_Deal_Notes__c!=null) txtDd.innerHTML += "; &nbsp;" + dl.Dead_Deal_Notes__c;
+            tblCell.appendChild(txtDd);
+            
+            
+            }
+            
+            var txtD = document.createElement("text");txtD.innerHTML=sCWhoAndWhen;
+            tblCell.appendChild(txtD);
+           }
+           else tblCell.innerHTML="&nbsp;";
+        }
+    }
+
+if (fldCfg.ColName=="Deal Name") {
+    if (dictMasterDeals[dX.Id]!=null) {
+        var dl = dictMasterDeals[dX.Id];
+
+
+    var arl = document.createElement("a"); var s = "unspecified";
+    try { s=dl.Name; } catch (err) { s="unspecified"; } arl.innerHTML =s; arl.href= "/" + dl.Id;
+    var sT = arl.outerHTML;
+    var sGroups="Group Report?";
+    if (dl.Include_In_Group_Report__c=="true") sGroups += "&nbsp;Yes"; else  sGroups += "&nbsp;No";
+    sGroups += "<br/>EMG Paragraph?";
+    if (dl.Circulate_to_EMG__c=="true") sGroups += "&nbsp;Yes"; else  sGroups += "&nbsp;No";
+
+    var sFinId="fin_" + iFinId;
+    iFinId=iFinId+1;
+    var sqz="&nbsp;&nbsp;&nbsp;<a href=\"/#\" onmouseover=\"showFin('" + sFinId + "','" + dX.Id + "')\" id=\"" + sFinId + "\">$</a> ";
+    if (dl!=null && dl.Valuation_Reporting__r!=null) sT+=sqz;
+//    if (dl.Description__c!=null )sT = sT + "<br/><br/>" + dl.Description__c;
+    if (dl.Sector__c!=null )sT = sT + "<br/><br/>" + dl.Sector__c;
+    if (dl.Dead_Deal_Reason__c==null)
+    sT = sT + "<br/><br/>" + sGroups;
+    
+    tblCell.innerHTML = sT;
+    }
+  }
+*/
+}
+function showCollapsedNote(elt){ var sId=elt.alt; elt.style.display="none"; var dN = ge('txtoeN_' + sId); dN.style.display="inline"; return false;}
+function addElipse(tblCell,sC,iMaxC,iCtrackerLinkNotes)
+{
+   tblCell.innerHTML=sC.substring(0,iMaxC);
+  var lnk = document.createElement("a");
+
+    lnk.innerHTML= "[...]";
+    lnk.href = "javascript:void(0);";
+    lnk.title = "[...]" + sC.substring(iMaxC-1);
+    lnk.alt=iCtrackerLinkNotes;
+    lnk.id="lnknote_"+iCtrackerLinkNotes;
+    lnk.onclick=function(e) { showCollapsedNote(this);}
+tblCell.appendChild(lnk);
+    var txtN = document.createElement("text"); txtN.innerHTML = sC.substring(iMaxC);txtN.id="txtoeN_"+iCtrackerLinkNotes;
+    txtN.style.display="none";
+    tblCell.appendChild(txtN);  
+  
+  
+  /*  var lnk = document.createElement("span");
+    lnk.innerHTML="&nbsp;<u>[...]</u>";
+    lnk.id="lnknote_"+iCtrackerLinkNotes;
+    lnk.alt=iCtrackerLinkNotes;
+    lnk.onclick=function(e) { showCollapsedNote(this);}
+    lnk.title = "[...]" + sC.substring(iMaxC-1);
+    tblCell.appendChild(lnk);
+    var txtN = document.createElement("text"); txtN.innerHTML = sC.substring(iMaxC);txtN.id="txtoeN_"+iCtrackerLinkNotes;
+    txtN.style.display="none";
+    tblCell.appendChild(txtN);     
+    */
+}
+
+function queryDealsForDictionaryWithIds(sChk) {
+      // now query all deals in the chunk; have to do histories seperate - SOQL bug w/full query only returns deals that have histories
+////      var sDLQbase=" Select d.WP_Ownership_Diluted__c, d.WP_Ownership__c,  d.WP_Groups__c, d.Type__c, d.Stage__c, d.Sector__c, d.RecordType.Name, d.RecordTypeId, d.Project_Name__c, d.Period_Type__c, d.Period_Ended__c, d.Name, d.Key_Dates_Next_Steps__c, d.Include_In_Group_Report__c, d.Id, d.Highlight_In_Group_Report__c, d.Geographies__c, d.GUID__c, d.Expense_Code__c, d.Description__c, d.Deal_Team_Initials__c, d.Deal_Folder__c, d.Dead_Deal_Reason__c, d.Dead_Deal_Notes__c, d.Dead_Deal_Date__c, d.Date_Received__c, d.CreatedDate, d.Company__r.Name, d.Company__r.Id, d.Company__c, d.Circulate_to_EMG__c, (Select CreatedDate, LastModifiedDate, SystemModstamp, EMG_Paragraph__c, EMG_Last_Updated_By__r.Name, EMG_Category__c, EMG_Updated_on_behalf_of__r.Name, Last_Paragraph_History_Update__c, EMG_Last_Updated_Date__c, EMG_Paragraph_NEW__c From EMG_Paragraphs__r  order by EMG_Last_Updated_Date__c desc), (Select EMG_Paragraph__c, EMG_Last_Updated_By_Contact__r.Name,EMG_Last_Updated_By_Contact__r.Initials__c, EMG_Last_Updated_Date__c From EMG_Paragraph_History__r), (Select Employee__r.Initials__c, Employee__r.FirstName, Employee__r.LastName, Employee__r.Name, Role__c  From Deal_Team__r) From Deal__c d";
+      var sDLQbase=" Select d.WP_Ownership_Diluted__c, d.WP_Ownership__c,  d.WP_Groups__c, d.Type__c, d.Stage__c, d.Sector__c, d.RecordType.Name, d.RecordTypeId, d.Project_Name__c, d.Period_Type__c, d.Period_Ended__c, d.Name, d.Key_Dates_Next_Steps__c, d.Include_In_Group_Report__c, d.Id, d.Highlight_In_Group_Report__c, d.Geographies__c, d.GUID__c, d.Expense_Code__c, d.Description__c, d.Deal_Team_Initials__c, d.Deal_Folder__c, d.Dead_Deal_Reason__c, d.Dead_Deal_Notes__c, d.Dead_Deal_Date__c, d.Date_Received__c, d.CreatedDate, d.Company__r.Name, d.Company__r.Id, d.Company__c, (Select Employee__r.Initials__c, Employee__r.FirstName, Employee__r.LastName, Employee__r.Name, Role__c  From Deal_Team__r) From Deal__c d";
+      var sQ = sDLQbase + " where d.Id in (" + sChk + ")";
+      var result = sforce.connection.query(sQ);  var records = result.getArray("records");
+      for (var iQ=0; iQ< records.length; iQ++)  { var dl = records[iQ];  dictMasterDeals[dl.Id]=dl; }       
+      var sQHist=" Select  (Select Date_of_Record__c, Grills_Rank__c, Fund__r.Acronym__c, Fund__r.Name, Fund__c, Carrying_Value_MM__c, Cost_MM__c, Grills_Value_MM__c, Original_Cost_MM__c, CurrencyIsoCode From Valuation_Reporting__r order by Date_of_Record__c desc),  d.Id,d.Name, (Select Field, CreatedDate From Histories order by CreatedDate desc)  From Deal__c d where d.Id in (" + sChk + ")";      
+      result = sforce.connection.query(sQHist);  records = result.getArray("records"); 
+      for (var iQ2=0; iQ2< records.length; iQ2++)  { var dl = records[iQ2]; if (dictMasterDeals[dl.Id]!=null )  {
+          if ( dl.Histories!=null ) dictMasterDeals[dl.Id].Histories=dl.Histories; 
+          if ( dl.Valuation_Reporting__r!=null ) dictMasterDeals[dl.Id].Valuation_Reporting__r=dl.Valuation_Reporting__r;
+          }
+          else { alert('Error - deal ' + dl.Name + ' was not properly initialized in the page'); }
+       } 
+}
+
+function funcDealListStart( AutoTableConfig, htmlTable,fldCfgs,records){
+    var sId="";
+  // gather deal records into  master dictionaries
+  var dictNewDeals = new Array(); var dictNewCos = new Array(); var listNewDeals = new Array(); var iNDx=0;
+  if (records.length!=0) {  
+  var dictDealChunks = new Array(); var iChunkDealCnt=0; var iChunkCnt=0; var sChunk="";
+  for(var iR =0; iR < records.length; iR++) {
+        var deal = bDealTeamBasedQuery ?  records[iR].Deal__r : records[iR];
+        // initialize dictionary of deals
+        if (deal.Id!=null && dictMasterDeals[deal.Id]==null && dictNewDeals[deal.Id]==null ) {
+               dictNewDeals[deal.Id]=deal.Id; listNewDeals[iNDx]=deal.Id; var qx = listNewDeals[iNDx]; iNDx=iNDx+1;
+             }
+        if (deal.Company__r!=null && deal.Company__r.Id!=null && dictMasterCos[deal.Company__r.Id]==null && dictNewCos[deal.Company__r.Id]==null  ) { 
+            dictNewCos[deal.Id]=deal.Company__r.Id;            
+          }
+        if (iChunkDealCnt<2) { if (sChunk != "") sChunk = sChunk + ",";  sChunk = sChunk + "'" + deal.Id + "'"; }
+        else { iChunkDealCnt=0; dictDealChunks[iChunkCnt]=sChunk; iChunkCnt=iChunkCnt+1; sChunk = "'" + deal.Id + "'"; }
+        iChunkDealCnt=iChunkDealCnt+1;
+    }
+  if (sChunk!="") { dictDealChunks[iChunkCnt]=sChunk;  iChunkCnt=iChunkCnt+1; }  
+  for(var iCk =0; iCk < iChunkCnt; iCk++) {
+      var sChk = dictDealChunks[iCk];
+      queryDealsForDictionaryWithIds(sChk);
+      }
+    }
+}  
+
+function fBaseSOQL(sDealTypes, bIncludeExited,bIncludeDead)
+    {     
+    var sByDealName = '{!SearchByDealNameText}';
+    var sEmp  = '{!EmpSearchId}';  if (sEmp!='') sEmp = " and d.Employee__r.Id = '" + sEmp + "'";
+    var sQ = "";
+    var sExited = bIncludeExited ? "" : " and d.Stage__c != 'Deal Exited Portfolio' ";
+    var sDead= bIncludeDead ? "!=" : "=";
+    if (sByDealName!='')
+    {
+        sQ = "Select d.Company__r.Id,  " + 
+          " d.Dead_Deal_Reason__c, d.Stage__c, d.Description__c, d.Key_Dates_Next_Steps__c, d.RecordType.Name, d.Name, d.Id,  " + 
+          " d.Sector__c, d.WP_Groups__c " + 
+          " From Deal__c d  where d.Dead_Deal_Reason__c " + sDead + " '' and d.RecordType.Name in (" + sDealTypes + ") " + sExited + "  and d.Name like '%" + sByDealName + "%' order by d.Name" ;         
+    }
+    else // must be for user or for other employee
+    {
+    var sExited = bIncludeExited ? "" : " and d.Deal__r.Stage__c != 'Deal Exited Portfolio' ";
+    sQ =  "Select d.Deal__r.Company__r.Id,  " + 
+          " d.Deal__r.Dead_Deal_Reason__c, d.Deal__r.Stage__c, d.Deal__r.Description__c, d.Deal__r.Key_Dates_Next_Steps__c, d.Deal__r.RecordType.Name, d.Deal__r.Name, d.Deal__r.Id, d.Deal__c , " + 
+          " Deal__r.Sector__c, Deal__r.WP_Groups__c " + 
+          " From Deal_Team__c d  where d.Deal__r.Dead_Deal_Reason__c " + sDead + " '' and d.Deal__r.RecordType.Name in (" + sDealTypes + ") " + sExited + " " ;         
+         var sUser = " and d.Employee__r.User_ID__c = '{!UserId}'";//005E0000001r27g'";
+         if (sEmp != '')  sQ= sQ + sEmp; else  sQ = sQ + sUser;
+         sQ += " order by d.Deal__r.Name";
+    }
+    
+    return sQ;
+ }
+
+function fDeadDealsSOQL () { 
+//return "Select d.Parent.Name, d.ParentId, d.OldValue, d.NewValue, d.Field, d.CreatedDate From Deal__History d where d.Field = 'Dead_Deal_Reason__c' and d.ParentId in (Select d.Deal__c From Deal_Team__c d where d.Deal__r.Dead_Deal_Reason__c != '' and d.Employee__r.Id = '003E000000TYzamIAD')";
+return fBaseSOQL("'Portfolio Company','Platform Deal','Addon Deal'", false, true);  
+}
+
+function fPortfolioSOQL() { return fBaseSOQL("'Portfolio Company'", false, false);  }
+function fActiveDealsSOQL () { return fBaseSOQL("'Platform Deal','Addon Deal'", false, false);  }
+function funcColHeader(atCfg,tblCell,fldCfg,iC) { 
+    if (iC==0) { tblCell.parentNode.className="headerRow"; tblCell.style.width="30%";  } else if (iC==1) tblCell.style.width="40%"; else if (iC==2) tblCell.style.width="20%"; else if (iC==3) tblCell.style.width="10%";
+ }
+function funcShowDead(cbX)
+{
+var s= parent.document.location.href;
+s =s.replace('showdead=true','');
+s = s.replace('showdead=false','');
+var sq=parent.document.location.href;
+if (sq.indexOf("?")==-1) s = s + '?';
+s = s+'&showdead=' +( cbX.checked ? 'true' : 'false');
+parent.document.location.href=s;
+
+
+
+}
+   $j = jQuery.noConflict();
+
+
+   $j(document).ready(function() {
+   $j( document ).tooltip();
+   $j("#txtProfessional").val( "{!DealListDescription}");
+   $j("#txtProfessional").autocomplete({
+ 
+    select: function(event, ui) { parent.document.location.href="/apex/DealList?emp="+ui.item.value;return false; return false; },
+    focus: function(event, ui) { $j("#txtProfessional").val(ui.item.label); return false; } ,
+    source: function(request, response) {
+            var sT = $j("#txtProfessional").val();
+
+            var s = '{!$Page.DealListDropSearchResults}?dropsearch=' + sT;
+                $j.ajax({
+                    url: s,
+                    data: { 'core.apexpages.devmode.url' : '1' },
+                    dataType: "json",
+                    success : function(data) {
+                        response($j.map(data, function(item) { 
+                        return { label : item.label, value : item.value} }));
+                    } 
+                });
+            }       
+       });
+   });
+  </script>
+  
+  <div id="logarea" style="display: none; border: 1px solid black;">
+       <textarea id="sayText" rows="3" style="font-size: xx-small;" cols="90"></textarea>
+       messages:<br />
+       <apex:messages /> <br />
+       <br />
+       </div> 
+       <div><br/>
+       
+       
+       <table width="100%" border="0" cellpadding="0" cellspacing="0">
+       <tr><td>
+              <h1>Professional:</h1>&nbsp;&nbsp;<input style="height:17px;width:200px;" type="text" id="txtProfessional" name="txtProfessional" class="blk" />
+          </td><td width="25%" align="right"  style="padding-top:5px;"><h1>Show Dead Deals?</h1>&nbsp;</td><td align="left" style="padding-top:1px;" ><input type="checkbox"  id="cbShowDead" onclick="funcShowDead(this)"   ></input>
+            </td></tr></table>
+      </div>
+       <br/>
+       
+       <div class="bRelatedList">
+       <div class="hotListElement">
+      <div class="bPageBlock brandSecondaryBrd secondaryPalette"> 
+      <div > <h1>Portfolio Deals</h1></div>
+      <div id="dvPortfDeals" class="pbBody" ><i>working...</i>
+<!--      
+      <c:autotable BusyText="working..." TableClassName="list"  DefaultCellClass="dataCell" showColumnHeaders="true" TblID="atPrt" IncludeDeleteColumn="false"    funcDeleteRow="null"
+                        funcNameCellComplete="funcCell"  funcNameColHeaderComplete="funcColHeader"   funcNameRowComplete="null"
+                        funcNameTableComplete="null" funcNameTableStarting="funcDealListStart"   ContainingDiv="dvPortfDeals"
+                        FieldConfig="Deal Name::::#EMG Comment::::#Key Dates / Next Steps::::#Status::::#"
+                        FuncRetrieveSOQLQuery="fPortfolioSOQL"></c:autotable>
+-->
+</div>
+</div>
+</div>
+</div>
+
+
+       <br/><br/>
+
+   
+   
+   
+      
+       <div class="bRelatedList">
+       <div class="hotListElement">
+      <div class="bPageBlock brandSecondaryBrd secondaryPalette"> 
+      <div><h1>In Review</h1></div>                        
+      <div id="dvNewDeals" class="pbBody" > <i>working...</i>
+<!--
+        <c:autotable BusyText="working..."  TableClassName="list" DefaultCellClass="dataCell" showColumnHeaders="true"    TblID="atNew" IncludeDeleteColumn="false"    funcDeleteRow="null"
+                        funcNameCellComplete="funcCell"  funcNameColHeaderComplete="funcColHeader"   funcNameRowComplete="null"
+                        funcNameTableComplete="null" funcNameTableStarting="funcDealListStart"   ContainingDiv="dvNewDeals"
+                        FieldConfig="Deal Name::::#EMG Comment::::#Key Dates / Next Steps::::#Status::::#"
+                        FuncRetrieveSOQLQuery="fActiveDealsSOQL"></c:autotable>
+-->
+      </div>
+    </div>
+    </div>
+    </div>
+   
+   
+
+  <br/><br/>
+  
+  
+    <apex:outputPanel rendered="{!ShowDead}">
+       <div class="bRelatedList">
+       <div class="hotListElement">
+      <div class="bPageBlock brandSecondaryBrd secondaryPalette"> 
+      <div > <h1> Dead Deals</h1></div>                        
+      <div id="dvDeadDeals" class="pbBody" > <i>working...</i>
+<!--
+        <c:autotable BusyText="working..."   TableClassName="list" DefaultCellClass="dataCell" showColumnHeaders="true"    TblID="atDead" IncludeDeleteColumn="false"    funcDeleteRow="null"
+                        funcNameCellComplete="funcCell"  funcNameColHeaderComplete="funcColHeader"   funcNameRowComplete="null"
+                        funcNameTableComplete="null" funcNameTableStarting="funcDealListStart"   ContainingDiv="dvDeadDeals"
+                        FieldConfig="Deal Name::::#EMG Comment::::#Key Dates / Next Steps::::#Status::::#"
+                        FuncRetrieveSOQLQuery="fDeadDealsSOQL"></c:autotable>
+-->
+      </div>
+    </div>
+    </div>
+    </div>
+</apex:outputPanel>
+
+    <script>
+function setCBs()
+{
+ge("cbShowDead").checked={!ShowDead};
+}
+addWindowOnLoadEvent(setCBs);
+
+</script>
+
+
+
+</apex:form>        
+</apex:page>

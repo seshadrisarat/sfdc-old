@@ -1,0 +1,129 @@
+<apex:page controller="OSF_Calendar.SelectUsers" showHeader="false" sidebar="false" tabStyle="Calendar__tab">
+    <apex:stylesheet value="{!URLFOR($Resource.OSF_Calendar__Styles, 'style.css')}" /> 
+    <apex:includeScript value="{!URLFOR($Resource.OSF_Calendar__Styles, 'js/JQueryMin.js')}"/>
+    <script type="text/javascript">var __sfdcSessionId = '{!GETSESSIONID()}';</script>
+    <script src="/soap/ajax/26.0/connection.js" type="text/javascript"></script>
+    <script type="text/javascript">
+        sforce.connection.serverUrl = '{!sfBaseUrl}/services/Soap/u/26.0';
+    </script>
+    <script>
+    
+        $.noConflict();
+        
+        jQuery(document).ready(function($) {
+            var usersList = getUsers();
+            $('.osf-leftNavigation .selectUsers td').each(function (i) {
+                if(i%2 == 1) 
+                    $(this).addClass('odd');
+                else 
+                    $(this).addClass('even');
+                var inputId = $(this).children('input').val();
+                
+                usersList[inputId] = usersList[inputId] == undefined ? '000000' : usersList[inputId];
+                $(this).css('border-left-color', '#' + usersList[inputId]);
+            });
+        });
+
+        function getUsers() {
+            var users = new Array();
+            var accessible = true;
+            
+            var describe = sforce.connection.describeSObject("OSF_Calendar__User_Color__c");
+            var fieldsList = ["OSF_Calendar__User_Id__c", "OSF_Calendar__Picklist_color__c"];
+            var filters = "OSF_Calendar__Picklist_color__c";
+            if (describe.queryable && checkDescribeSObject(describe, fieldsList, filters)) {
+                var result = sforce.connection.query("SELECT OSF_Calendar__User_Id__c, OSF_Calendar__Picklist_color__c FROM OSF_Calendar__User_Color__c WHERE OSF_Calendar__Picklist_color__c != null ORDER BY OSF_Calendar__FirstName__c, Name LIMIT 1000");
+                var queryMore = true;
+                while (queryMore) {
+                    var records = result.getArray("records");
+                    for (var i = 0; i < records.length; i++) {
+                        users[records[i].OSF_Calendar__User_Id__c] = records[i].OSF_Calendar__Picklist_color__c;
+                    }
+                    if (result.getBoolean("done")) {
+                        queryMore = false;
+                    } else {
+                        result = sforce.connection.queryMore(result.queryLocator);
+                    }
+                }
+            }
+            return users;
+        }
+        
+        function checkDescribeSObject(describeSObject, fieldsList, filters) {
+            var check = true;
+            var list = "";
+            for (var i=0; i<describeSObject.fields.length; i++) {
+                list += describeSObject.fields[i].name + ",";
+            }
+            for (var i=0; i<fieldsList.length; i++)
+                if (list.indexOf(fieldsList[i]) < 0)
+                    check = false;
+            for (var i=0; i<describeSObject.fields.length; i++)
+                if (filters.indexOf(describeSObject.fields[i]) > 0 && !describeSObject.fields[i].filterable)
+                    check = false;
+            return check;
+        }
+        
+    </script>
+    
+    <div class="osf-leftNavigation">
+        <div class="pop-up">
+            <div class="itemHeader">Users</div>
+            <div class="itemContent">
+                <div class="itemContent">
+                <apex:form >
+                    <div class="selectUsersBody">
+                        <apex:selectCheckboxes value="{!selectedUsers}" styleClass="selectUsers" layout="pageDirection">
+                            <apex:selectOptions value="{!items}"/>
+                        </apex:selectCheckboxes>
+                    </div>
+                    <div class="selectUsersAction">
+                        <apex:commandLink value="Refresh calendar" action="{!selectUsers}" target="_top">
+                            <apex:param name="selected" value="{!selectedUsers}"/>
+                        </apex:commandLink> 
+                    </div>
+                </apex:form>
+            </div>
+            </div>
+        </div>
+    
+    
+        <div class="pop-up">
+            <div class="itemHeader">Legend</div>
+            <div class="itemContent">
+                <div class="even">
+                    <img alt="Task (resolved)" src="{!URLFOR($Resource.OSF_Calendar__Styles, 'images/icon_task_resolved.png')}"/>
+                    Task (resolved)
+                </div>
+                <div class="odd">
+                    <img alt="Task (delayed)" src="{!URLFOR($Resource.OSF_Calendar__Styles, 'images/icon_task_delayed.png')}"/>
+                    Task (delayed)
+                </div>
+                <div class="even">
+                    <img alt="Task (unresolved)" src="{!URLFOR($Resource.OSF_Calendar__Styles, 'images/icon_task_unresolved.png')}"/>
+                    Task (unresolved)
+                </div>
+                <div class="odd">
+                    <img alt="Email (sent)" src="{!URLFOR($Resource.OSF_Calendar__Styles, 'images/icon_sent_email.png')}"/>
+                    Email (sent)
+                </div>
+                <div class="even">
+                    <img alt="Email (received)" src="{!URLFOR($Resource.OSF_Calendar__Styles, 'images/icon_received_email.png')}"/>
+                    Email (received)
+                </div>
+                <div class="odd">
+                    <img alt="Appointment (accepted)" src="{!URLFOR($Resource.OSF_Calendar__Styles, 'images/icon_accepted_appointment.png')}"/>
+                    Appointment (accepted)
+                </div>
+                <div class="even">
+                    <img alt="Appointment (declined)" src="{!URLFOR($Resource.OSF_Calendar__Styles, 'images/icon_declined_appointment.png')}"/>
+                    Appointment (declined)
+                </div>
+                <div class="odd">
+                    <img alt="Appointment (new)" src="{!URLFOR($Resource.OSF_Calendar__Styles, 'images/icon_new_appointment.png')}"/>
+                    Appointment (new)
+                </div>
+            </div>
+        </div>
+    </div>
+</apex:page>

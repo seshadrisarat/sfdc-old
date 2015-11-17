@@ -1,0 +1,228 @@
+<apex:component controller="SL_IntranetEventsController" id="Events">
+	
+	<apex:attribute assignTo="{!compImpl}" name="aComponentImpl" type="WidgetAbstract" description="component implementation object" required="true"/>
+	
+	<style>
+		.wc-page .wc-widget.SL_IntranetEvents .info h3 a{ 
+			font-style:{!compImpl.properties['fontstyle']};
+			color:{!compImpl.properties['fontcolor']};
+		}	
+	</style>
+	
+	<apex:outputPanel id="eventName">
+		<div id="{!id}widgetPrevIntranetType" style="display:none;">
+				{!MyImpl.strIntranetEventType}
+		</div>
+	</apex:outputPanel>
+	
+	<apex:outputPanel id="deptId">
+		<div id="{!id}widgetDeptId" style="display:none;">
+			{!MyImpl.strDeptId}
+		</div>
+	</apex:outputPanel>
+	
+	<span id="detailwidgetSL_IntranetEvents">
+		<div class="wc-widget SL_IntranetEvents" id="widget{id}" style="margin-bottom:25px;">
+			<apex:form id="theform">
+				
+				<apex:actionFunction id="getMoreRecordsAF" 
+					name="widget{!id}getMoreRecordsAF" action="{!getMoreRecords}"  rerender="theform, headerOpId" status="loader" >
+					<apex:param name="eventType" assignTo="{!MyImpl.strIntranetEventType}" value="" />  
+					<apex:param name="numberOfRecords" assignTo="{!MyImpl.numOfRecordeToBedisplayed}" value="" /> 
+					<apex:param name="deptId" assignTo="{!MyImpl.strDeptId}" value="" />  
+				</apex:actionFunction>
+				
+				<apex:actionFunction id="getMoreMobileRecords"  
+					name="widget{!id}getMoreMobileRecords" action="{!myImpl.getMoreMobileRecords}"  rerender="opMobile" status="loader" >
+					<apex:param name="eventType" assignTo="{!MyImpl.strIntranetEventType}" value="" />  
+					<apex:param name="numberOfRecords" assignTo="{!MyImpl.mobileEventsPageSize}" value="" />   
+				</apex:actionFunction>
+				
+				<apex:actionFunction id="toggleCalendarViews" 
+					name="widget{!id}.toggleCalendarViews" action="{!getIntranetevents}"  rerender="theform, CalendarHeading, headerOpId, opMobile, eventName" status="loader" oncomplete="resizeImage();">
+					<apex:param name="eventType" assignTo="{!MyImpl.strIntranetEventType}" value="" />
+					<apex:param name="deptId" assignTo="{!MyImpl.strDeptId}" value=""/>   
+				</apex:actionFunction>
+				
+				 <!-- Newly created for Department -->
+	            <apex:actionFunction id="getFilteredByDepartment" 
+	            	name="widget{!id}.getFilteredByDepartment" action="{!MyImpl.getFilteredByDepartment}" status="loader" rerender="opEvents, deptId" onComplete="reRenderCss();">
+	                <apex:param name="deptId" assignTo="{!MyImpl.strDeptId}" value=""/>
+	                <apex:param name="previousEventName" assignTo="{!MyImpl.strPreviousEventName}" value=""/>
+	            </apex:actionFunction>
+	            <!-- End of Newly created for Department -->
+		
+				<div id="tab1" >
+					<apex:outputPanel id="opEvents">
+					
+						<!-- Start : Displaying Event type -->
+						<div class="headline" >
+						    <apex:outputPanel id="CalendarHeading">
+						    	<h2>{!MyImpl.mapEventTypeNameToLabel[MyImpl.strIntranetEventType]}</h2>
+						    </apex:outputPanel>
+						</div> 
+						<!-- End : Displaying Event type -->
+						 
+						<!-- When No results found -->
+		                <apex:outputPanel rendered="{!If(OR(MyImpl.lstIntranetEvents.size < 1),true,false)}" layout="none"><br />
+		                    <span class="noResult">No results found.</span>
+		                </apex:outputPanel> 
+		                <!-- End of No results found section -->
+		                
+						<!-- Start : Displaying Event records -->
+		                <div id="IntranetEvents" style="margin-top: 5px;">
+	                        <apex:repeat value="{!MyImpl.lstIntranetEvents}" var="event" id="listofIntranetEvents" rows="{!MyImpl.numOfRecordeToBedisplayed}">
+		                        <apex:outputPanel rendered="{!If(MyImpl.lstEventInfoFields.size > 0,true,false)}" layout="none">   
+		 							<div class="headline">
+			                            <h2 >
+			                                <apex:outputText value="{0,date,MMMM, yyyy}" rendered="{!event.isDisplayheader}"> 
+			                                     <apex:param value="{!event.objIntranetEvent.Date_of_Event__c}" /> 
+			                                </apex:outputText>
+			                            </h2>    
+			                        </div>
+		                            <div class="event" style="padding:5px 0px 5px 0px;">
+		                                <div class="info">  
+		                                	<h3>
+		                                    	<a style="cursor: pointer;text-decoration: none;" 
+		                                    	        onclick="widget{!id}.viewIntranetEvents('{!event.objIntranetEvent.Id}', false);">
+		                                    		{!event.objIntranetEvent.Name}
+		                                    	</a>
+		                                    	<br/>
+			                                </h3>
+			                                <span>   
+			                                    <em>
+			                                        <apex:outputText value="{0,date,MMMM d, yyyy}">
+			 											<apex:param value="{!event.objIntranetEvent.Date_of_Event__c}" /> 
+			                                        </apex:outputText>
+			                                        <apex:outputText value="{0,date, - MMMM d, yyyy}">
+			                                             <apex:param value="{!event.objIntranetEvent.End_Date__c}" /> 
+			                                        </apex:outputText><br/>
+			                                    </em>
+			                                     	<apex:repeat value="{!MyImpl.lstEventInfoFields}" var="eventField">
+				                                    	<apex:outputPanel style="width:100%;padding: 0 0 0 0px;{!If(AND(event.objIntranetEvent[eventField.fieldAPIName] != null,eventField.fieldAPIName != 'Comments__c', eventField.fieldAPIName != 'Name'),  
+				                                                                                               'display:block','display:none')};" >
+				 
+				                                            <apex:outputPanel rendered="{!If(OR(eventField.fieldAPIName == 'Comments__c', eventField.fieldAPIName == 'Name', eventField.fieldAPIName == 'Date_of_Event__c', eventField.fieldAPIName == 'End_Date__c',
+				                                                                              eventField.fieldType == 'DATE' ,eventField.fieldType == 'DATETIME'),false,true)}" layout="none">
+				                                                  <apex:outputField style="word-wrap: break-word;" value="{!event.objIntranetEvent[eventField.fieldAPIName]}" />
+				                                                  <br/>
+				                                            </apex:outputPanel>   
+				                                                      
+				                                            <apex:outputPanel rendered="{!If(AND(eventField.fieldType == 'DATE',eventField.fieldAPIName != 'Date_of_Event__c', eventField.fieldAPIName != 'End_Date__c'),true,false)}" layout="none">
+				                                                <apex:outputField value="{!event.objIntranetEvent[eventField.fieldAPIName]}"/>  
+				                                                <br/>
+				                                            </apex:outputPanel>     
+				                                                      
+				                                            <apex:outputPanel rendered="{!If(eventField.fieldType == 'DATETIME',true,false)}" layout="none">
+																<apex:outputField value="{!event.objIntranetEvent[eventField.fieldAPIName]}"/>
+				                                                <br/>
+				                                            </apex:outputPanel> 
+				                                                                          
+				                                         </apex:outputPanel>
+				                                           
+				                                         <apex:outputPanel style="width:100%;padding: 0 0 0 0px;" rendered="{!If(AND(eventField.fieldAPIName == 'Comments__c',event.objIntranetEvent.Comments__c != null),true,false)}" layout="none">
+				                                             <apex:outputField value="{!event.objIntranetEvent.Comments__c}" id="divCommentsInComments"/> 
+				                                         </apex:outputPanel>
+				                                    </apex:repeat> 
+			                                </span>
+		                                </div>
+		                            </div>
+		                        </apex:outputPanel>
+		                    </apex:repeat> 
+		                </div>
+		                <!-- End : Displaying Event records -->
+		
+		
+						<!-- To display more records -->
+						<apex:outputPanel rendered="{!(MyImpl.lstIntranetEvents.size - MyImpl.numOfRecordeToBedisplayed) > 0}" layout="none">
+						    <a href="javascript:widget{!id}getMoreRecordsAF('{!MyImpl.strIntranetEventType}', '{!MyImpl.numOfRecordeToBedisplayed}','{!MyImpl.strDeptId}');" class="see-more">See More</a>
+						</apex:outputPanel>
+						<!-- End of display more Section -->
+	      			</apex:outputPanel>
+				</div>
+			</apex:form>
+		</div>
+		
+		<div class="wc-widget-mobile SL_IntranetEvents mobile-content" style="margin-bottom:25px;">
+	        <apex:outputPanel id="opMobile">
+	            <section class="mobile-content">
+	                <apex:outputpanel id="eventPanel">
+	                    
+	                    <ul class="list" style="margin: 0px; padding-top: 18px; padding-bottom: 0px !Important; word-wrap:break-word;">
+		                    <apex:repeat id="mobIntranetEventsRows" value="{!MyImpl.lstIntranetMobileEvents}" var="events" rows="{!MyImpl.mobileEventsPageSize}">   
+		                        <li style="margin-left:0px;padding: 5px 18px 5px 18px;{!if(events.isDisplayheader, 'display:block','display:none')}">
+	                            	<h3 style="color:#BA0320;font: bold 22px Arial, Helvetica, sans-serif;">
+	                                    <apex:outputText value="{0,date,MMMM, yyyy}" rendered="{!events.isDisplayheader}"> 
+	                                         <apex:param value="{!events.objIntranetEvent.Date_of_Event__c}" /> 
+	                                    </apex:outputText>
+	                                </h3>
+	                            </li>
+		                        
+		                        <li style="margin-left:0px;padding: 5px 18px 0px 18px;">
+		                            <div class="info">
+		                                <h3 style="font: bold 22px Arial, Helvetica, sans-serif;">{!events.objIntranetEvent.Name}</h3>
+		                                
+		                                <span class="sub-info">
+	                                        <span>   
+	                                            <em>
+	                                                <apex:outputText value="{0,date,MMMM d, yyyy}">
+	                                                     <apex:param value="{!events.objIntranetEvent.Date_of_Event__c}" /> 
+	                                                </apex:outputText>
+	                                                <apex:outputText value="{0,date, - MMMM d, yyyy}">
+	                                                     <apex:param value="{!events.objIntranetEvent.End_Date__c}" /> 
+	                                                </apex:outputText><br/>
+	                                                <apex:outputpanel rendered="{!IF(events.objIntranetEvent.Venue__c !=null, true,false)}" layout="none">
+	                                                    Venue:&nbsp;<apex:outputText value="{!events.objIntranetEvent.Venue__c}">
+	                                                    </apex:outputText><br/>
+	                                                </apex:outputpanel>
+	                                                <apex:outputpanel rendered="{!IF(events.objIntranetEvent.Event_Type__c !=null, true,false)}" layout="none">
+	                                                    Event type:&nbsp;<apex:outputText value="{!events.objIntranetEvent.Event_Type__c}" >
+	                                                    </apex:outputText>
+	                                                </apex:outputpanel>
+	                                            </em>
+	                                        </span>    
+	                                    </span>
+	                                    
+	                                    <apex:outputField value="{!events.objIntranetEvent.Comments__c}" style="font: bold 18px Arial, Helvetica, sans-serif;"/>
+	
+		                            </div>
+		                        </li>
+		                    </apex:repeat>    
+		                     
+		                    <apex:outputpanel rendered="{!MyImpl.lstIntranetMobileEvents.size = 0}" layout="none">
+	                            <li style="margin-left:0px;padding: 5px 18px 0px 18px;"><h3 style="font: bold 22px Arial, Helvetica, sans-serif;">No Records found.</h3></li>
+	                        </apex:outputpanel>
+	                        
+		                </ul>
+	                    
+	                    <apex:outputPanel rendered="{!(MyImpl.lstIntranetMobileEvents.size - MyImpl.mobileEventsPageSize) > 0}" layout="none">
+	                    	<a href="javascript:widget{!id}getMoreMobileRecords('{!MyImpl.strIntranetEventType}', '{!MyImpl.mobileEventsPageSize}');" style="color: #a3a3a3;text-decoration: none;" class="see-more">{!$Label.SL_Pagination_SeeMore}</a>
+	                    </apex:outputPanel>  
+	                		
+	                </apex:outputpanel>   
+	            </section>
+	        </apex:outputPanel>
+	    </div>
+	    
+	    <script>
+			jQuery(document).ready(function($) 
+			{
+				resizeImage();
+			});
+			
+			function resizeImage()
+			{
+	      		var sectionwidth;
+			
+				$('.wc-page .wc-region .main').each(function(){
+					sectionwidth = $(this).width();
+				});
+				
+				$("[id*='divCommentsInComments']").find('Img').each(function(){
+					$(this).css('maxWidth', (sectionwidth) + 'px' );
+				});
+			}
+				
+		</script>
+	</span>
+</apex:component>

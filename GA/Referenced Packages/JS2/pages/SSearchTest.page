@@ -1,0 +1,191 @@
+<apex:page showHeader="false" sideBar="false" controller="ts2.s_TaxonomySelectorController" readonly="true">
+	<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, 'jquery-1.8.2.min.js')}" />
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__Tiny_mce3211, 'css/tree.css')}"/>
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__SSearch, 'res/css/s_style.css')}"/>
+
+<style>
+	span.m-folder {margin:0 2px; display:inline-block; height:14px; width:16px; background: url("{!URLFOR($Resource.Tiny_mce3211, 'img/folder-icon.png')}") no-repeat 0 0; //position:relative; //top:-2px}
+	span.m-folder.m-closed { background: url("{!URLFOR($Resource.Tiny_mce3211, 'img/folder-closed-icon.png')}") no-repeat 0 0;}
+	ul.m-first {padding-left:0}
+	ul.m-first li.m-parent {padding-left:0; background:none}
+	.m-plus {display:inline-block; width:12px; height:12px; margin-right:4px; cursor:pointer; background:url("{!URLFOR($Resource.Tiny_mce3211, 'img/treeview-icons.gif')}") no-repeat -80px -3px; //display:inline; //zoom:1; //position:relative; //top:-3px}
+	.m-minus {display:inline-block; width:12px; height:12px; margin-right:4px; cursor:pointer; background:url("{!URLFOR($Resource.Tiny_mce3211, 'img/treeview-icons.gif')}") no-repeat -64px -25px; //display:inline; //zoom:1; //position:relative; //top:-3px}
+
+	.b-tree-holder {background:#f8f6f2;}
+	#mainScroll {//zoom:1}
+	#mainScroll ul {list-style-type:none; padding:0; margin:0; //zoom:1}
+	#mainScroll ul.m-first {padding-left:0}
+	#mainScroll ul.m-first li.m-parent {padding-left:0; background:none}
+	#mainScroll ul li {color:#333; list-style-type:none; padding:3px 0 2px 16px; margin:0; background:url("{!URLFOR($Resource.Tiny_mce3211, 'img/treeview-line.png')}") no-repeat 0 0}
+	#mainScroll ul li.m-last { background-position: 0 -19990px;}
+</style>
+
+<script>
+	jQuery.noConflict();
+	var Scroll_param = 0;
+	var CurrentTaxonomyName = '';
+	var SelectedDOMElement;
+	function closeWin(refresh) {
+		parent.window.opener = self;
+		parent.window.close();
+	}
+	function SpaceClear(Element) {
+		var re = /^\s/i;
+		var sourcestring = Element.value;
+		var replacementpattern = "";
+		var result = sourcestring.replace(re, replacementpattern);
+		Element.value = result;
+	}
+	function Send() {
+		if (window.opener != null) {
+			jQuery(".m-folder").each(function(indx, element){
+				var EL = jQuery(element).prev();
+				if (EL.prop("checked") == true) {
+					CurrentTaxonomyName = parseString(jQuery(element).next().text());
+				}
+			});
+		}
+		sendFunc(CurrentTaxonomyName);
+		return false;
+	}
+	var m_searchKeyword;
+	var m_strToReplace;
+	function parseString(sourcestr) {
+		var reg = /\((\d)+\)$/g;
+		var result = sourcestr.replace(reg, "");
+		if (m_searchKeyword != null && m_strToReplace != null) {
+			m_searchKeyword = m_searchKeyword.toUpperCase();
+		}
+		reg = new RegExp ("\\[" +m_searchKeyword + "\\]", "g");
+		result = result.replace(reg, m_strToReplace);
+		return result;
+	}
+	
+	function spinnerVisible(element) {
+		jQuery(element).parent().find('.spinner_on').show();
+	}
+</script>
+
+<body style="margin: 10px 10px;">
+	<apex:form id="Button">
+		<apex:pageMessages id="system_messages" />
+		<apex:pageBlock title="{!$Label.TaxonomyPickerTitle}" mode="edit">
+			<apex:pageBlockButtons id="pbbsMainButtons" style="text-align: right;" location="bottom">
+				<apex:commandButton value="{!$Label.Submit}" onclick="Send();return false;" />
+				<apex:commandButton value="{!$Label.Cancel}" onclick="window.close();return(false);" />
+				<apex:actionFunction name="sendFunc" action="{!AddSkill}" rerender="Button" oncomplete="if ({!RunJS} == true) {if (window.opener != null) {window.opener.TaxonomyItemPopulate('{!JSENCODE(SenderId)}', CurrentTaxonomyName, SelectedDOMElement); } closeWin(false); }">
+					<apex:param id="CurrentTaxonomyNameIdB" name="CurrentTaxonomyName" value="" assignTo="{!CurrentTaxonomyName}"/>
+				</apex:actionFunction>
+				
+				<apex:actionFunction name="showChildById" action="{!ShowTaxonomyChilds}" rerender="Button">
+					<apex:param assignTo="{!SelectedTempId}" value="" name="SelectedTempId"/>
+				</apex:actionFunction>
+				<apex:actionFunction name="hideChildById" action="{!HideTaxonomyChilds}" rerender="Button">
+					<apex:param assignTo="{!SelectedTempId}" value="" name="SelectedTempId"/>
+				</apex:actionFunction>
+				<apex:actionFunction name="showParentSkillsById" action="{!ShowParentSkills_0}" rerender="Button">
+					<apex:param assignTo="{!SelectedTempId}" value="" name="SelectedTempId"/>
+				</apex:actionFunction>
+				<apex:actionFunction name="hideParentSkillsById" action="{!HideParentSkills_0}" rerender="Button">
+					<apex:param assignTo="{!SelectedTempId}" value="" name="SelectedTempId"/>
+				</apex:actionFunction>
+			</apex:pageBlockButtons>
+
+			<apex:pageBlockSection columns="1">
+				<apex:outputPanel layout="block" style="border: 1px red">
+					<apex:outputText value="{!$Label.TaxonomyPickerFind}" style="font: bold 100% Arial;"/>
+					<apex:InputText id="SearchStringId" value="{!SearchString}" style="margin-left: 5px;" onclick="SpaceClear(this); /*this.value=''*/"/>
+					<apex:commandButton value="{!$Label.TaxonomyPickerFindButton}" action="{!Find}" onclick="CurrentTaxonomyName = '';"/>
+					<apex:commandButton value="{!$Label.Cancel}" action="{!CollapseAll}" onclick="CurrentTaxonomyName = '';" rendered="{!SearchMode}"/>
+				</apex:outputPanel>
+			</apex:pageBlockSection>
+			<apex:pageBlockSection columns="1">
+
+				<apex:outputPanel layout="block" style="width: 530px;">
+					<div style="border: 1px solid #969696;border-bottom-width:0px;padding:5px; width: 520px;height: 20px">
+						<apex:outputText value="{!$Label.TaxonomyPickerTaxonomyPanel}" style="font: bold 120% Arial;"/>
+						<apex:commandButton value="{!$Label.TaxonomyPickerCollapse}" action="{!CollapseAll}" rendered="{!NOT(SearchMode)}" style="margin-left: 440px; margin-top: -17px;"/>
+						<apex:commandButton value="{!$Label.TaxonomyPickerCollapse}" action="{!Find}" rendered="{!SearchMode}" style="margin-left: 440px; margin-top: -17px;"/>
+					</div>
+					<div id="mainScroll" class="SpecialScrollClass, b-tree-holder" style="overflow-y:scroll; border: 1px solid #969696;height: 350px; width: 530px;background-color: #FFFFFF	;">
+						<ul class="m-first">
+							<li class="m-parent m-last">
+								<span class="m-minus" />
+								<script>
+									jQuery('#mainScroll').scrollTop(Scroll_param);
+									if (SelectedDOMElement != '') {
+										jQuery('#'+SelectedDOMElement).attr('checked', 'checked');
+									}
+								</script>
+								<ul>
+								<apex:repeat value="{!TaxonomyParentKeys}" var="TaxonomyParentKeys" id="MainRepeat" >
+									<li class="first_level" >
+										<apex:variable var="top_itemId" value="{!TaxonomyParentList[TaxonomyParentKeys].Taxonomy.Id_in}"/>
+										<apex:variable var="top_open"   value="{!TaxonomyParentList[TaxonomyParentKeys].Show_child_button}"/>
+										<apex:variable var="top_close"  value="{!NOT(TaxonomyParentList[TaxonomyParentKeys].Show_child_button)}"/>
+										
+										<apex:outputPanel onclick="spinnerVisible(this); showChildById('{!top_itemId}');" styleClass="m-plus" rendered="{!top_close}" />
+										<apex:outputPanel onclick="spinnerVisible(this); hideChildById('{!top_itemId}');" styleClass="m-minus" rendered="{!top_open}" />
+										<input id="{!TaxonomyParentList[TaxonomyParentKeys].Taxonomy.Id_in}" type="radio" name="defaultTerm" onclick="CurrentTaxonomyName = '{!TaxonomyParentList[TaxonomyParentKeys].Taxonomy.Name_in}'; SelectedDOMElement = this.id;" Style="margin-bottom: 2px; margin-top: -4px;"/>
+										<apex:outputPanel rendered="{!top_close}" layout="inline" styleClass="m-folder m-closed" />
+										<apex:outputPanel rendered="{!top_open}"  layout="inline" styleClass="m-folder" />
+										<apex:outputText styleClass="SkillName" value="{!TaxonomyParentList[TaxonomyParentKeys].Taxonomy.Name_in}" id="theValue"/>
+										<apex:outputText value="({!TaxonomyParentList[TaxonomyParentKeys].TotalFound})" rendered="{!SearchMode}"/>
+										<span class="spinner_on" style="padding-left: 15px; display:none" />
+										<ul style="margin-left: 0px; margin-top: 0px ;margin-bottom: 0px;">
+											<apex:repeat value="{!TaxonomyParentList[TaxonomyParentKeys].TaxonomyChildKeys}" var="TaxonomyChildKeys" id="TaxonomyChild" >
+												<apex:outputPanel id="tax_child_element" rendered="{!if(( NOT(ISBLANK(TaxonomyParentList[TaxonomyParentKeys].TaxonomyChildList[TaxonomyChildKeys].Taxonomy.Name_in)) && (TaxonomyParentList[TaxonomyParentKeys].Show_child)),true,false)}">
+													<li class="second_level">
+														<apex:variable var="itemId" value="{!TaxonomyParentList[TaxonomyParentKeys].TaxonomyChildList[TaxonomyChildKeys].Taxonomy.Id_in}"/>
+														<apex:variable var="open"   value="{!TaxonomyParentList[TaxonomyParentKeys].TaxonomyChildList[TaxonomyChildKeys].Show_child}"/>
+														<apex:variable var="close"  value="{!NOT(TaxonomyParentList[TaxonomyParentKeys].TaxonomyChildList[TaxonomyChildKeys].Show_child)}"/>
+														
+														<apex:outputPanel onclick="spinnerVisible(this); showParentSkillsById('{!itemId}');" styleClass="m-plus" rendered="{!close}"/>
+														<apex:outputPanel onclick="spinnerVisible(this); hideParentSkillsById('{!itemId}');" styleClass="m-minus" rendered="{!open}" />
+														<input id="{!TaxonomyParentList[TaxonomyParentKeys].TaxonomyChildList[TaxonomyChildKeys].Taxonomy.Id_in}" type="radio" name="defaultTerm" onclick="CurrentTaxonomyName = '{!TaxonomyParentList[TaxonomyParentKeys].TaxonomyChildList[TaxonomyChildKeys].Taxonomy.Name_in}'; SelectedDOMElement = this.id;" Style="margin-left: 5px;margin-bottom: 2px; margin-top: -4px;"/>
+														<apex:outputPanel layout="inline" styleClass="m-folder m-closed" rendered="{!close}"/>
+														<apex:outputPanel layout="inline" styleClass="m-folder" rendered="{!open}"/>
+														<apex:outputText styleClass="SkillName" value="{!TaxonomyParentList[TaxonomyParentKeys].TaxonomyChildList[TaxonomyChildKeys].Taxonomy.Name_in}" id="theValue"/>
+														<apex:outputText value="({!TaxonomyParentList[TaxonomyParentKeys].TaxonomyChildList[TaxonomyChildKeys].TotalFound})" rendered="{!SearchMode}"/>
+														<span class="spinner_on" style="padding-left: 15px; visibility:hidden;">&nbsp;</span>
+														<c:s_SkillsPopup rendered="{!TaxonomyParentList[TaxonomyParentKeys].TaxonomyChildList[TaxonomyChildKeys].Show_child}" ParentId="{!TaxonomyParentList[TaxonomyParentKeys].TaxonomyChildList[TaxonomyChildKeys].Taxonomy.Id_in}" SearchStr="{!SearchString}"/>
+													</li>
+												</apex:outputPanel>
+											</apex:repeat>
+										</ul>
+										<c:s_SkillsPopup rendered="{!TaxonomyParentList[TaxonomyParentKeys].Show_child_button}" ParentId="{!TaxonomyParentList[TaxonomyParentKeys].Taxonomy.Id_in}" SearchStr="{!SearchString}"/>
+									</li>
+								</apex:repeat>
+								</ul>
+								<script>
+									jQuery('#mainScroll ul span:last-child li.second_level').addClass('m-last');
+									jQuery('#mainScroll ul li.first_level:last-child').addClass('m-last');
+									jQuery('#mainScroll').scroll(function(){
+										Scroll_param = jQuery('#mainScroll').scrollTop();
+									});
+									/*---find(in bold)---*/
+									if ("{!JSENCODE(SearchString)}" != '' && "{!JSENCODE(SearchString)}" != null && "{!JSENCODE(SearchString)}" != ' ') {
+										jQuery(".SkillName").each(function(indx, element){
+											if(jQuery(element).text() != null && jQuery(element).text() != '') {
+												var re = /{!JSENCODE(SearchString)}/i;
+												var sourcestring = jQuery(element).text();
+												var matches = re.exec(sourcestring);
+												if (matches!= null && matches.length > 0) {
+													var replacementpattern = "<FONT COLOR='FF0000'>"+matches[0]+"</FONT>";
+													var result = "<b>"+sourcestring.replace(re, replacementpattern)+"</b>";
+													jQuery(element).html(result);
+												}
+											}
+										});
+									}
+								</script>
+							</li>
+						</ul>
+					</div>
+				</apex:outputPanel>
+			</apex:pageBlockSection>
+		</apex:pageBlock>
+	</apex:form>
+</body>
+
+</apex:page>

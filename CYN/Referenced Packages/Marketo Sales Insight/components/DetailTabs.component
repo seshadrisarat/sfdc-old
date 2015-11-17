@@ -1,0 +1,282 @@
+<apex:component controller="mkto_si.DetailTabsController" allowDML="true">
+    <apex:attribute name="mTabSObjectId" description="{!$Label.SFDC_object_Id}" type="String" required="true" assignTo="{!currentSObjectId}"/> 
+    <apex:attribute name="mTabSObjectType" description="{!$Label.SFDC_Object_Type}" type="String" required="true" assignTo="{!currentSObjectType}" />
+    <apex:attribute name="mTabSObjectName" description="{!$Label.SFDC Object Name}" type="String" required="true" assignTo="{!currentSObjectName}" />
+    <apex:attribute name="mTabFullList" description="{!$Label.Are_we_in_full_list_mode}" type="Boolean" required="false" default="false" assignTo="{!fullListMode}" />
+    <apex:variable var="attributesLoaded" value="{!attributesLoadedCallback}"/>
+    
+    <c:CssAndJavascript2 />
+
+    <div id="detail-tabs-page" class="{!cssClasses}">
+        <apex:sectionHeader title="{!pageTitle}" rendered="{!showPageHeader}" help="{!helpLink}"/>
+        
+        <apex:pageBlock title="{!AppName}" helpTitle="{!$Label.Help}"  helpURL="{!helpLink}" tabStyle="Marketo_Sales_Insight__tab">
+            <br class="mktDisplay-{!NOT(showHotBar)}" style="clear: both; margin-bottom: 14px;" />
+
+            <!-- HOT BAR (only shown if not in full list mode) -->
+            <apex:form id="mktHotBarForm" rendered="{!showHotBar}">
+                <div class="mktHotBar">
+                    <div class="mktHotBarPriority mktHotBarTab">
+                        <label>{!$Label.Priority_Detail_Header}:</label>&nbsp;&nbsp;
+                        <img id="mkt-urgency-image" src="{!$Resource.web}/mkto/images/fire{!urgencyValue}.png" title="{!urgencyTipText}" />
+                        <img src="{!$Resource.web}/mkto/images/star{!relativeScoreValue}.png" title="{!relativeScoreTipText}" />
+                        <span class="mktHotBarTab-right"></span>
+                    </div>
+                    
+                    <div class="mktHotBarWatchList mktHotBarTab mkt-show-{!isWatched}">
+                        <a href="{!$Page.dashboard}?view=MWL" title="{!$Label.View_Watch_List}" target="_top">
+                            <img src="{!$Resource.web}/mkto/images/eyeglasses.png" />
+                            <span>{!$Label.Watched}</span>
+                        </a>
+                        <span class="mktHotBarTab-right"></span>
+                    </div>
+
+                    <div class="mktHotBarActions mktHotBarTab mkt-show-{!inMarketo}">
+                        <label for="mktActions">{!$Label.Actions}:</label>&nbsp;&nbsp;
+                        <select id="mktActions" styleClass="mktActions" size="1">
+                            <option value="addToMarketoCampaign">{!$Label.Add_to_Marketo_Campaign}</option>
+                            <option value="sendMarketoEmail">{!$Label.Send_Marketo_Email}</option>
+                            <!--<option value="subscribe">Subscribe</option>-->
+                            <option value="leadDetail">{!$Label.View_In_Marketo}</option>
+                        </select>
+                        <select id="mkt-dynamic-actions" class="mkt-show-false">
+                            <option id="mkt-watch-list-add-action-item" value="addCurrentLeadToWatchList">{!$Label.Add_to_Watch_List}</option>
+                            <option id="mkt-watch-list-remove-action-item" value="removeCurrentLeadFromWatchList">{!$Label.Remove_from_Watch_List}</option>
+                        </select>
+                        <input type="button" id="mktGoButton" class="btn" value="{!$Label.Go}"/>
+                        <span class="mktHotBarTab-right"></span>
+                    </div>
+                    <br style="clear: both" />
+                </div>
+            </apex:form>
+            <!-- END OF HOT BAR -->
+            
+            <apex:form id="tabsform">
+                <!-- Functions to show tabs -->
+                <apex:actionFunction name="showIM" action="{!showIM}" rerender="detail-tabs-mainblock" status="tabs-status" immediate="true" />
+                <apex:actionFunction name="showWA" action="{!showWA}" rerender="detail-tabs-mainblock" status="tabs-status" immediate="true" />
+                <apex:actionFunction name="showSC" action="{!showSC}" rerender="detail-tabs-mainblock" status="tabs-status" immediate="true" />
+                <apex:actionFunction name="showME" action="{!showME}" rerender="detail-tabs-mainblock" status="tabs-status" immediate="true" />
+                
+                <apex:outputPanel id="detail-tabs-mainblock">
+                    <!-- Tabs -->
+                    <div id="detail-tabs" class="tabsNewBar">
+                        <div class="tabNavigation">
+                            <div class="tabBarLeft"></div>
+                            <table cellspacing="0" cellpadding="0" border="0" class="tab">
+                                <tbody>
+                                    <tr>
+                                        <td nowrap="nowrap" class="{!IF(currentTabView == 'IM', 'currentTab primaryPalette', '')}">
+                                            <div id="IM_Tab">
+                                                <a title="{!$Label.Interesting_Moments_Tab}" href="{!$Page.Lead_Full_List}?id={!currentSObjectId}&view=IM" onclick="showIM(); return false">{!$Label.Interesting_Moments_Tab}</a>
+                                            </div>
+                                        </td>
+                                        <td nowrap="nowrap" class="{!IF(currentTabView == 'WA', 'currentTab primaryPalette', '')}">
+                                            <div id="WA_Tab">
+                                                <a title="{!$Label.Web_Activity_Tab}" href="{!$Page.Lead_Full_List}?id={!currentSObjectId}&view=WA" onclick="showWA(); return false">{!$Label.Web_Activity_Tab}</a>
+                                            </div>
+                                        </td>
+                                        <td nowrap="nowrap" class="{!IF(currentTabView == 'SC', 'currentTab primaryPalette', '')}">
+                                            <div id="SC_Tab">
+                                                <a title="{!$Label.Score_Tab}" href="{!$Page.Lead_Full_List}?id={!currentSObjectId}&view=SC" onclick="showSC(); return false">{!$Label.Score_Tab}</a>
+                                            </div>
+                                        </td>
+                                        <td nowrap="nowrap" class="{!IF(currentTabView == 'ME', 'currentTab primaryPalette', '')}">
+                                            <div id="ME_Tab">
+                                                <a title="{!$Label.Email_Tab}" href="{!$Page.Lead_Full_List}?id={!currentSObjectId}&view=ME" onclick="showME(); return false">{!$Label.Email_Tab}</a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="tabBarRight"></div>
+                        </div>
+                    </div>
+                    
+                    <div id="detail-tabs-body" class="mkt-tabs-body">
+                        <div class="mkt-tabs-body-shadow-l"></div>
+                        <div class="mkt-tabs-body-shadow-r"></div>
+                        <div class="mkt-tabs-body-shadow-b">
+                            <div class="mkt-tabs-body-shadow-bl"></div>
+                            <div class="mkt-tabs-body-shadow-br"></div>
+                        </div>
+
+                        <apex:pageBlock >
+                            <!-- Loading -->
+                            <apex:actionStatus id="tabs-status" onStart="Marketo.setLoading(this.parentNode.parentNode)" onStop="Marketo.unsetLoading(this.parentNode.parentNode)" />
+                            
+                            <!-- ********** BODY SECTION ********** -->
+                            <apex:actionFunction name="sortByCount" action="{!sortByCount}" rerender="tab-components" status="tabs-status" immediate="true" />
+                            <apex:actionFunction name="sortByDate" action="{!sortByDate}" rerender="tab-components" status="tabs-status" immediate="true" />
+
+                            <apex:outputPanel id="tab-components">
+                            <c:InterestingMomentsTab setCon="{!setCon}" escape="{!escape}" currentSObjectName="{!currentSObjectName}" showName="{!showName}" showAccount="{!showAccount}" rendered="{!currentTabView == 'IM'}"/>
+                                <c:WebActivityTab setCon="{!setCon}" escape="{!escape}" currentSObjectName="{!currentSObjectName}" isGrouped="{!isGroupedWebActivity}" rendered="{!(currentTabView == 'WA')}"/>
+                                <c:ScoreTab setCon="{!setCon}" escape="{!escape}" currentSObjectName="{!currentSObjectName}" showName="{!showName}" showAccount="{!showAccount}" rendered="{!(currentTabView == 'SC')}"/>
+                                <c:EmailActivityTab setCon="{!setCon}" currentSObjectName="{!currentSObjectName}" escape="{!escape}" showName="{!showName}" showAccount="{!showAccount}" rendered="{!currentTabView == 'ME'}"/>
+                            </apex:outputPanel>
+                            
+                            <!-- ********** FOOTER SECTION ********** -->
+                            <apex:outputPanel id="navigation-panel">
+                                <apex:outputPanel styleClass="mktBottomToolbar" rendered="{!setCon.isValidList && setCon.resultSize > 0 && (NOT(fullListMode) || setCon.hasPrevious || setCon.hasNext)}">
+                                    <apex:outputLink rendered="{!NOT(fullListMode)}" value="{!fullListLink}" target="_parent" style="color:#015BA7; text-decoration:none;">
+                                        {!$Label.Go_to_list} ({!setCon.resultSize}) &raquo;
+                                        <apex:param name="id" value="{!currentSObjectId}"/>
+                                        <apex:param name="view" value="{!currentTabView}"/>
+                                    </apex:outputLink>
+                                    <apex:outputPanel rendered="{!fullListMode && (setCon.hasPrevious || setCon.hasNext)}" style="display: block; text-align:right;">
+                                        <apex:commandLink action="{!previous}" rendered="{!setCon.hasPrevious}" rerender="tab-components, navigation-panel" status="tabs-status" style="color:#015BA7; text-decoration:none;">&laquo; {!$Label.Previous_Page}</apex:commandLink>&nbsp;&nbsp;&nbsp;
+                                        <!--<apex:outputText value="Showing {!setCon.pageRowStart}-{!setCon.pageRowEnd} of {!setCon.resultSize}"/>&nbsp;&nbsp;&nbsp;-->
+                                        <apex:commandLink action="{!next}" rendered="{!setCon.hasNext}" rerender="tab-components, navigation-panel" status="tabs-status" style="color:#015BA7; text-decoration:none;">{!$Label.Next_Page} &raquo;</apex:commandLink>
+                                    </apex:outputPanel>
+                                </apex:outputPanel>
+                            </apex:outputPanel>
+                        </apex:pageBlock>
+                    </div>
+                </apex:outputPanel>
+            </apex:form>
+            
+            <!-- This image is served from documents, keep it as the last element -->
+            <img src="/servlet/servlet.FileDownload?file=01580000000qWGR" class="mktLogoButton" height="32" width="32"/>
+        </apex:pageBlock>
+    </div>
+    
+    <!-- Loading -->
+    <div id="detail-tabs-loading">
+        <div class="mkt-loading-dim"></div>
+        <div class="mkt-loading-image"></div>
+    </div>
+
+  <!-- This is the content of the modal dialog -->
+  <!-- <div id="mktAlertModal" style="display: none" >
+    <div class="hd">
+      <apex:outputText value="Email Subscription" />
+    </div> 
+    <div class="bd">
+      <apex:form >
+        <input type="hidden" name="currentSObjectType" value="{!currentSObjectType}" />
+        <input type="hidden" name="currentSObjectId" value="{!currentSObjectId}" />
+        <input type="hidden" id="mktAlertModalLead" name="imLead" value="" />
+        <input type="hidden" id="mktAlertModalAccount" name="imAccount" value="" />
+
+        <div>Subscribe to email alerts for this kind of Interesting Moment:</div><br />
+        <input type="radio" name="alertChoice" id="mktAlertModalChoice1" class="mktRadio" value="lead" checked="checked"/><label for="mktAlertModalChoice1" id="mktAlertModalChoice1Label"></label><br clear="all"/>
+        <input type="radio" name="alertChoice" id="mktAlertModalChoice2" class="mktRadio" value="account" /><label for="mktAlertModalChoice2" id="mktAlertModalChoice2Label"></label><br clear="all"/>
+        <br clear="all" />
+        <label style="width: 92px; padding-top: 8px;">Send Email to:</label><input type="text" name="alertEmail" id="mktAlertModalEmail" class="mktText" value="" title="One or more comma separated email addresses" />
+        <br clear="all" />
+        <div style="font-size: 10px; padding-left: 97px; padding-top: 4px;">Use comma separated for multiple addresses</div>
+        <br clear="all" />
+            
+        <div style="float: left"><a href="https://www.marketo.com/SI_Help_MobilePhone" target="_blank">Mobile Phone Options</a></div>
+          
+        <div style="text-align: right;" > -->
+          <!-- <apex:commandButton value="Subscribe" style="float: none;" onclick="if (Mkt.stream.checkRequiredFields()) Marketo.clockCursor(); else return false;" oncomplete="Marketo.unclockCursor(); Mkt.stream.hideAlertModal();" action="{!doCreateAlert}" />  -->
+          <!-- <apex:commandButton value="Cancel" style="float: none;" onclick="Mkt.stream.hideAlertModal(); return false;" oncomplete="return true;" />  -->
+        <!-- </div>
+      </apex:form>
+    </div>
+  </div>-->
+
+    <!-- 
+    // TODO: Get modal dialog working in Contact/Lead detail pages 
+    // Init modal dialog
+    // Mkt.stream.initAlertModal();
+    -->
+
+    <script type="text/javascript">
+    $j(function() {
+        // setup dynamic action items in actions list
+            var $actionsList = $j('#mktActions'),
+                    $dynamicActionsList = $j('#mkt-dynamic-actions');
+            
+        if({!isWatched}) {
+            $j('#mkt-watch-list-remove-action-item').prependTo($actionsList);
+        }
+        else {
+            $j('#mkt-watch-list-add-action-item').prependTo($actionsList);
+        }
+        
+        // make sure that first action selected
+      if ($actionsList.length > 0) {
+        $actionsList[0].selectedIndex = 0;
+      }
+
+            // add go button listener
+            $j('#mktGoButton').click(function() {
+                switch($j('#mktActions').val()) {
+                    case 'leadDetail':
+                  window.open('{!$Page.Marketo_Lead_Detail}?objType={!currentSObjectType}&objId={!currentSObjectId}');
+                  break;
+    
+                    case 'addCurrentLeadToWatchList':
+                        addToWatchList();
+                    break;
+    
+                    case 'removeCurrentLeadFromWatchList':
+                    removeFromWatchList();
+                    break;
+    
+                    case 'addToMarketoCampaign':
+                    window.top.location = '{!$Page.Add_to_Marketo_Campaign}?contactType={!currentSObjectType}&contactIds={!currentSObjectId}';
+                    break;
+    
+                    case 'sendMarketoEmail':
+                    window.top.location = '{!$Page.Send_Marketo_Email}?contactType={!currentSObjectType}&contactIds={!currentSObjectId}';
+                    break;
+    
+                    //case 'subscribe':
+                        //Mkt.stream.showSubscribeModal('{!currentSObjectName}', '{\!accountName}', '{\!currentEmail}');return false;
+                        //break;
+                }
+            });
+
+            function addToWatchList()
+            {
+                updateWatchList(true);
+            }
+
+            function removeFromWatchList()
+            {
+                updateWatchList(false);
+            }
+
+        function updateWatchList(isAdding)
+        {
+            updateWatchListUI(isAdding);
+            
+                Marketo.ajax(
+                    isAdding ? 'addToWatchList' : 'removeFromWatchList',
+                    {
+                        objectType: '{!currentSObjectType}',
+                        objectId: '{!currentSObjectId}'
+                    },
+                    function(data) {
+                        if(!data || !data.success) {
+                            // undo
+                            updateWatchListUI(!isDefrosting);
+                        }
+                    }
+                );
+        }
+        
+        function updateWatchListUI(isAdding)
+        {
+                var $actionToHide = $j('#mkt-watch-list-' + (isAdding ? 'add' : 'remove') + '-action-item'),
+                        $actionToShow = $j('#mkt-watch-list-' + (isAdding ? 'remove' : 'add') + '-action-item');
+                $actionToHide.replaceWith($actionToShow).appendTo($dynamicActionsList);
+                $actionsList[0].selectedIndex = 0;
+                
+            $j('.mktHotBarWatchList')[isAdding ? 'slideDown' : 'slideUp']();
+        }
+    });
+        
+        // TODO remove loading element and this code if not needed
+        var loading = document.getElementById('detail-tabs-loading');
+        if(loading) {
+            setTimeout(function() {
+                loading.style.display = 'none';
+            }, 500);
+        }
+    </script>
+</apex:component>

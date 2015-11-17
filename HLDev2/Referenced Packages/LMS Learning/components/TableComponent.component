@@ -1,0 +1,256 @@
+<apex:component controller="lmscons.TablePaginationController" allowDML="true">
+	<apex:attribute name="SOQLattr" type="string" description="SOQLattr" assignTo="{!SOQL_STRING}" required="true"/>
+	<apex:attribute name="Type" type="string" description="ComponentType" assignTo="{!ComponentType}" required="true"/>
+	<apex:attribute name="TypeB" type="string" description="ComponentType" assignTo="{!ButtonType}" required="false"/>
+	<apex:attribute name="visibleContent" type="string" description="visibleContent" assignTo="{!ContentType}" required="false"/>
+	<style>
+	.imageone {
+		background: url("/img/alohaSkin/sortArrows_sprite.png") no-repeat scroll 0px -16px;
+		height: 11px;
+		margin: 0 5px;
+		vertical-align: -2px;
+		width: 11px;
+		}
+	.imagetwo {
+		background: url("/img/alohaSkin/sortArrows_sprite.png") no-repeat scroll 0px 0px;
+		height: 11px;
+		margin: 0 5px;
+		vertical-align: -2px;
+		width: 11px;
+		}
+	.AllCheckbox{!ButtonType} {
+		//margin-left:0px !important;
+	}
+	
+	
+	</style>
+	
+	<!--[if IE 7]>
+	<style>
+
+	div.tablescroll_wrapper{
+		position: static !important;
+	}
+	.paginator{
+		position: static !important;
+	}
+	</style>
+<![endif]-->	
+	
+	
+
+	<script>
+		jQuery.noConflict();
+		var intSelectedItemsCount = 0;
+		var ScrollPosition = 0;
+		function openObjectLink (url) {
+			
+			window.open(url,"_blank");
+		}
+	</script>
+	<apex:pageMessages id="pageMessages" >
+	</apex:pageMessages>
+
+	<apex:pageBlock id="TraineesSections" mode="maindetail" title="{!ComponentType}" >
+		<apex:form id="HeaderForm">
+			<apex:outputPanel layout="block">
+				<apex:selectList value="{!Type}" id="SelectBlock" multiselect="false" size="1" styleClass="waiting_onchange{!ButtonType}">
+					<apex:selectOptions value="{!Types}"/>
+					<apex:actionSupport event="onchange" action="{!SelectType}" rerender="Pagination"/>
+				</apex:selectList>&nbsp;
+				<script>
+					var selectItem{!ButtonType} = document.getElementById('{!$Component.SelectBlock}');
+					var type = '{!ContentType}'
+					if (type != null && type != '') {
+						var selectOptions = selectItem{!ButtonType};
+						for(i=0; i<selectOptions.options.length; i++) {
+							if (selectOptions.options[i].value == type) {
+								selectOptions.options[i].selected = true;
+								break;
+							}
+						}
+					}
+				</script>
+				<apex:inputText value="{!SearchStr}" id="theSearchInput" style="width: 320px;">
+					<apex:actionSupport event="onkeypress" onsubmit="if(event.keyCode != '13'){ return true;}else{jQuery('.waitingHolder{!ButtonType}').css('visibility','visible'); jQuery('[id$=table_div{!ButtonType}]').css('visibility','hidden'); SearchbyStr{!ButtonType}(this.value);return false;}"/>
+					<apex:actionFunction action="{!SearchbyStr}" name="SearchbyStr{!ButtonType}" rerender="Pagination">
+						<apex:param name="firstParam" assignTo="{!SearchStr}" value="" />
+					</apex:actionFunction>
+				</apex:inputText>&nbsp;
+				<apex:commandButton action="{!SearchbyStr}" value="{!$Label.Search}" id="theButton" rerender="Pagination" styleClass="waiting{!ButtonType}"/>
+			</apex:outputPanel>
+		</apex:form>
+		<apex:form id="Pagination">
+		<apex:outputpanel id="TableBlock">
+			<!-- Pagination Start -->
+			<div id="main_div{!ButtonType}" style="white-space: nowrap; width:500px;" layout="block">
+				<div class="waitingHolder{!ButtonType}" style="visibility:visible; width: 50%; position:relative;z-index:1000; left:50%; top:80px;">
+					<img src="/img/loading.gif" class="waitingImage" title="{-!$Label.Please_wait}"/>
+					<span class="waitingDescription">{!$Label.loading_label}</span>
+				</div>
+				<div id="table_div{!ButtonType}" style=" visibility:hidden; background-color: white; border:1px solid #F2F3F3;" styleClass="">
+					<apex:pageBlockTable id="PaginationTable" value="{!records}" var="rec" columnClasses="scrollContent" headerClass="fixedHeader" style="table-layout: fixed;">
+						<apex:column headerClass="checkboxBlock" styleClass="checkBox">
+							<apex:facet name="header">
+								<apex:inputCheckbox onclick="checkAll{!ButtonType}(this)" id="selectAll" styleClass="AllCheckbox{!ButtonType}" />
+							</apex:facet>
+							<apex:inputCheckbox value="{!rec.checked}" id="selectLine" styleClass="SingleCheckbox{!ButtonType}" >
+								<apex:actionSupport event="onclick" action="{!ProcessSelected}" oncomplete="scrollToThis();jQuery('input.SingleCheckbox{!ButtonType}').removeAttr('disabled');jQuery('input.AllCheckbox{!ButtonType}').removeAttr('disabled');enableLinks();" reRender="TotalDevPlanmembers" onsubmit="ScrollPosition = jQuery('.tablescroll_wrapper').scrollTop(); if(true){jQuery('input.SingleCheckbox{!ButtonType}').attr('disabled', 'disabled');jQuery('input.AllCheckbox{!ButtonType}').attr('disabled', 'disabled');jQuery('input.AllCheckbox{!ButtonType}').attr('disabled', 'disabled');disableLinks();}">
+									<apex:param name="Idparam" value="{!rec.entity[rec.fieldList[0]]}" assignTo="{!CurrentId }"/>
+								</apex:actionSupport>
+							</apex:inputCheckbox>
+						</apex:column>
+						<apex:column style="text-align:left;" headerClass="tableTitleBlock" styleClass="tableTitleBlock">
+							<apex:facet name="header">
+								<apex:outputLabel value="{!$Label.Title}" style="margin-left: 8px;">
+									<img class="{!IF(OrderArrowUp,'imageone','imagetwo')}" src="data:image/gif;base64,R0lGODlhAQABAID/AMDAwAAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" style="display:{!IF(OrderField == 'Name' ,'inline','none')}"/>
+									<apex:actionSupport event="onclick" action="{!OrderByField}" reRender="TableBlock">
+										<apex:param name="OrderField" value="Name" assignTo="{!OrderField}"/>
+									</apex:actionSupport>
+								</apex:outputLabel>
+							</apex:facet>
+							<apex:outputLink style="margin-left: 8px;" value="javascript:openObjectLink('/{!rec.entity[rec.fieldList[0]]}')" title="{!IF(ComponentType == 'Available Content' || ComponentType == 'Included Content', rec.entity[rec.fieldList[1]], '')}"><apex:outputField value="{!rec.entity[rec.fieldList[1]]}" /></apex:outputLink>
+						</apex:column>
+					</apex:pageBlockTable>
+				</div>
+			</div>
+			<div class="paginator">
+				<span class="prevNextLinks">
+					<span class="prevNext,waiting{!ButtonType}">
+						<apex:commandLink styleClass="{!IF(hasPrevious,'waiting'+ButtonType,'')}" action="{!first}" rerender="Pagination"><img class="{!If(hasPrevious,'first','firstoff')}" alt="{-!$Label.First_Page_Dev_Plan_Alt}" title="{-!$Label.First_Page_Dev_Plan_Title}" src="/s.gif"/></apex:commandlink>
+					</span>
+					<span class="prevNext,waiting{!ButtonType}">
+						<apex:commandLink styleClass="{!IF(hasPrevious,'waiting'+ButtonType,'')}" action="{!previous}" style="{!If(hasPrevious,'','color:grey')}" rerender="Pagination"><img class="{!If(hasPrevious,'prev','prevoff')}" alt="{-!$Label.Previous_Page_Dev_Plan_Alt}" title="{-!$Label.Previous_Page_Dev_Plan_Title}" src="/s.gif"/>{!$Label.Pagination_Previous}</apex:commandlink>
+					</span>
+					<span class="prevNext,waiting{!ButtonType}">
+						<apex:commandLink styleClass="{!IF(hasNext,'waiting'+ButtonType,'')}" action="{!next}" style="{!If(hasNext,'','color:grey')}" onclick="if('{!NOT(hasNext)}'== true){return false;}" rerender="Pagination">{!$Label.Pagination_Next}<img class="{!If(hasNext,'next','nextoff')}" alt="{-!$Label.Next_Page_Dev_Plan_Alt}" title="{-!$Label.Next_Page_Dev_Plan_Title}" src="/s.gif"/></apex:commandlink>
+					</span>
+					<span class="prevNext,waiting{!ButtonType}">
+						<apex:commandLink styleClass="{!IF(hasNext,'waiting'+ButtonType,'')}" action="{!last}" rerender="Pagination"><img class="{!If(hasNext,'last','lastoff')}" alt="{-!$Label.Last_Page_Dev_Plan_Alt}" title="{-!$Label.Last_Page_Dev_Plan_Title}" src="/s.gif"/></apex:commandlink>
+					</span>
+				</span>
+			</div>
+			<!-- Pagination End -->
+			<apex:outputPanel style="visible:hidden" id="TrainessScript">
+				<script>
+					jQuery.noConflict();
+					jQuery.fn.tableScroll.defaults = {
+						flush: false, // makes the last thead and tbody column flush with the scrollbar
+						width: 500, // width of the table (head, body and foot), null defaults to the tables natural width
+						height: 300, // height of the scrollable area
+						containerClass: 'tablescroll' // the plugin wraps the table in a div with this css class
+					};
+					jQuery(document).ready(function(jQuery) {
+						jQuery('[id$=PaginationTable]').tableScroll({height:300});
+						jQuery('.waitingHolder{!ButtonType}').css('visibility','hidden');
+						jQuery('[id$=table_div{!ButtonType}]').css('visibility','visible');
+						jQuery('.tablescroll_wrapper').css('width','500px');
+						jQuery('.tablescroll_wrapper').css('overflow-x','hidden');
+						jQuery('.tablescroll').css('width','500px');
+						jQuery('.tablescroll_wrapper').css('height','300px');
+						jQuery('[id$=TraineesSections] .pbBody').css('width','500px');
+						jQuery('[id$=TraineesSections]').css('width','500px');
+						jQuery('[id$=table_div{!ButtonType}]').css('width','500px');
+					});
+					jQuery('.waiting{!ButtonType}').click(function(){
+						jQuery('.waitingHolder{!ButtonType}').css('visibility','visible');
+						jQuery('[id$=table_div{!ButtonType}]').css('visibility','hidden');
+					});
+					jQuery('.columnHeader').click(function(){
+						jQuery('.waitingHolder{!ButtonType}').css('visibility','visible');
+						jQuery('[id$=table_div{!ButtonType}]').css('visibility','hidden');
+					});
+					jQuery('.waiting_onchange{!ButtonType}').change(function(){
+						jQuery('.waitingHolder{!ButtonType}').css('visibility','visible');
+						jQuery('[id$=table_div{!ButtonType}]').css('visibility','hidden');
+					});
+
+					var isAllChecked{!ButtonType} ;
+					/*jQuery("input.SingleCheckbox{!ButtonType}").each(function(index, element) {
+						if(jQuery(element).attr('type') =='checkbox' && jQuery(element).attr("checked") != true) {
+							isAllChecked{!ButtonType} = false;
+						}
+					});*/
+					jQuery('.AllCheckbox{!ButtonType}').attr('checked',isAllChecked{!ButtonType});
+					jQuery("input.AllCheckbox{!ButtonType}").each(function(index, element) {
+						if(jQuery(element).attr('type') =='checkbox') {
+							jQuery(element).attr("checked", isAllChecked{!ButtonType});
+						}
+					});
+				</script>
+
+
+
+				
+				<apex:actionFunction action="{!AddItem}" name="AddItem{!ButtonType}"    oncomplete="reloadcurrentPage();"/>
+				<apex:actionFunction action="{!RemoveItem}" name="RemoveItem{!ButtonType}"   oncomplete="reloadcurrentPage();"/>
+				<apex:actionFunction action="{!ChangeType}" name="ChangeType{!ButtonType}" rerender="TableBlock"/>
+				<apex:actionFunction action="{!ProcessSelectedAll}" name="ProcessSelectedAll{!ButtonType}" rerender="TableBlock" oncomplete="enableLinks()"/>
+				<apex:actionFunction action="{!ProcessDeSelectedAll}" name="ProcessDeSelectedAll{!ButtonType}" rerender="TableBlock" oncomplete="enableLinks()"/>
+			</apex:outputPanel>
+			</apex:outputpanel>
+		</apex:form>
+	</apex:pageBlock>
+
+	<script  type="text/javascript">
+	jQuery.noConflict();
+
+	function handleKeyPressForGroup(e){
+		var eventInstance = window.event ? event : e;
+		var keyCode = eventInstance.charCode ? eventInstance.charCode : eventInstance.keyCode;
+		if (keyCode == 13) {
+			doSearchGroup();
+			return false;
+		}
+	}
+	function getType{!ButtonType}(){
+		var selectRecord = selectItem{!ButtonType}
+		var selectedValue = selectRecord.options[selectRecord.selectedIndex].value;
+		return selectedValue;
+	}
+
+	function handleKeyPressForTrainee(e){
+		var eventInstance = window.event ? event : e;
+		var keyCode = eventInstance.charCode ? eventInstance.charCode : eventInstance.keyCode;
+		if (keyCode == 13) {
+			doSearchTrainee();
+			return false;
+		}
+	}
+
+	function showRecords{!ButtonType}() {
+		jQuery('.waitingHolder{!ButtonType}').css('visibility','hidden');
+		jQuery('[id$=table_div{!ButtonType}]').css('visibility','visible');
+	}
+	function cleareTable{!ButtonType}() {
+		var tablePanel = document.getElementById('{!$Component.TableBlock}');
+		tablePanel.innerHTML = '';
+	}
+	function checkAll{!ButtonType}(cb) {
+
+		jQuery('.waitingHolder{!ButtonType}').css('visibility','visible');
+		jQuery('[id$=table_div{!ButtonType}]').css('visibility','hidden');
+		disableLinks();
+		//cleareTable{!ButtonType}();
+		/*jQuery("input.SingleCheckbox{!ButtonType}").each(function(index, element) {
+			if(jQuery(element).attr('type') == 'checkbox') {
+				jQuery(element).attr('checked', cb.checked);
+			}
+		});*/
+		if(cb.checked==true) {
+			ProcessSelectedAll{!ButtonType}();
+			isAllChecked{!ButtonType} = true;
+		} else {
+			ProcessDeSelectedAll{!ButtonType}();
+			isAllChecked{!ButtonType} = false;
+		}
+	}
+	
+	function scrollToThis() {
+		//jQuery('.tablescroll_wrapper').scrollTop(ScrollPosition);
+		jQuery('input.SingleCheckbox{!ButtonType}').removeAttr('disabled');
+		jQuery('input.AllCheckbox{!ButtonType}').removeAttr('disabled');
+	}
+	</script>
+
+</apex:component>

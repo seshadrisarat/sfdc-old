@@ -1,0 +1,473 @@
+<apex:page controller="g2maps.SettingsController" action="{!initialize}" title="G2Maps Settings">
+    <!-- Cloud Sherpas G2Maps, Copyright 2011, Cloud Sherpas, Inc. -->
+    <apex:stylesheet value="https://js.arcgis.com/3.8/js/esri/css/esri.css"/>
+    <apex:stylesheet value="https://js.arcgis.com/3.8/js/dgrid/css/skins/tundra.css"/>
+    <apex:includeScript value="https://js.arcgis.com/3.8/"/>
+    
+    <apex:sectionHeader title="Cloud Sherpas G2Maps" subtitle="Personal Settings" rendered="{!IsUser}"/>
+    <apex:sectionHeader title="Cloud Sherpas G2Maps" subtitle="Organization Settings" rendered="{!IsOrg}"/>
+    
+    <apex:pageMessages />
+    
+    <apex:form >
+        
+        <apex:actionFunction action="{!saveInclude}" name="saveInclude" rerender="GeoPanelInclude">
+            <apex:param name="iNorth" assignTo="{!North}" value="" />
+            <apex:param name="iEast" assignTo="{!East}" value="" />
+            <apex:param name="iWest" assignTo="{!West}" value="" />
+            <apex:param name="iSouth" assignTo="{!South}" value="" />
+        </apex:actionFunction>
+        <apex:actionFunction action="{!saveExclude}" name="saveExclude" rerender="GeoPanelExclude">
+            <apex:param name="eNorth" assignTo="{!North}" value="" />
+            <apex:param name="eEast" assignTo="{!East}" value="" />
+            <apex:param name="eWest" assignTo="{!West}" value="" />
+            <apex:param name="eSouth" assignTo="{!South}" value="" />
+        </apex:actionFunction>
+        
+        
+        <apex:tabPanel id="tabs1" switchType="server">
+            <apex:tab label="Layers" name="tab_layers" id="tab_layers" rendered="{!OR(IsOrg, IsSubAdministrator)}" >
+                <apex:pageBlock title="Layers">
+                    <apex:pageBlockButtons >
+                        <apex:commandButton action="{!NewLayer}" value="New"/>
+                        <apex:actionStatus startText="   Working..." stopText="" id="layerStatus"/>
+                    </apex:pageBlockButtons>
+                    <apex:pageBlockTable value="{!Layers}" var="o" id="layerTable">
+                          <apex:column ><apex:outputLink value="/{!o.Id}/e?retURL={!URLEncode($CurrentPage.URL)}">Edit</apex:outputLink></apex:column>
+                          <apex:column value="{!o.g2maps__Category__c}"></apex:column>
+                          <apex:column value="{!o.Name}"></apex:column>
+                          <apex:column value="{!o.g2maps__Default__c}"></apex:column>
+                          <apex:column value="{!o.g2maps__Type__c}"></apex:column>
+                          <apex:column value="{!o.g2maps__Object__c}"></apex:column>
+                          <apex:column value="{!o.g2maps__Sort_Order__c}"></apex:column>
+                          <apex:column value="{!o.g2maps__Display_Order__c}"></apex:column>
+                          <apex:column headerValue="Download" ><apex:outputLink value="/apex/KML?f=kml&l={!URLEncode(o.Name)}">KML</apex:outputLink></apex:column>
+                    </apex:pageBlockTable>
+                </apex:pageBlock>
+            </apex:tab>
+            
+            <apex:tab label="Geocoding" name="tab_geocode" id="tab_geocode" rendered="{!IsOrg}">
+                
+                <apex:actionPoller action="{!renderBatch}" rerender="geocodeTable" interval="15" status="geocodeStatus" />
+                                
+                <apex:actionFunction action="{!QueueBatch}" name="QueueBatch" rerender="geocodeTable" status="geocodeStatus">
+                    <apex:param name="EnrichmentName" assignTo="{!EnrichmentName}" value="" />
+                </apex:actionFunction>
+                
+                <apex:actionFunction action="{!AbortBatch}" name="AbortBatch" rerender="geocodeTable" status="geocodeStatus">
+                    <apex:param name="AbortBatchId" assignTo="{!AbortBatchId}" value="" />
+                </apex:actionFunction>
+                
+                <apex:pageBlock title="Geocode Settings">
+                    <apex:pageBlockButtons >
+                        <apex:commandButton action="{!NewGeocode}" value="New"/>
+                        <apex:outputText value="   {!GeocodesRemaining} Geocodes remaining"/>
+                        <apex:actionStatus startText="   Working..." stopText="" id="geocodeStatus"/>
+                    </apex:pageBlockButtons>
+                    <apex:pageBlockTable value="{!GeocodeLayers}" var="o" id="geocodeTable">
+                          <apex:column ><apex:outputLink value="/{!o.Id}/e?retURL={!URLEncode($CurrentPage.URL)}">Edit</apex:outputLink></apex:column>
+                          <apex:column value="{!o.Name}"></apex:column>
+                          <apex:column value="{!o.g2maps__Type__c}"></apex:column>
+                          <apex:column value="{!o.g2maps__Object__c}"></apex:column>
+                          
+                          <apex:column headerValue="Geocode Status">
+                              <apex:outputText rendered="{!AND(IsBlank(o.g2maps__Geocode_Batch_Status__c), o.g2maps__Geocode_Batch__c)}">
+                                  <a href="javascript:QueueBatch('{!JSEncode(o.Name)}');">Start</a>
+                              </apex:outputText>
+                              <apex:outputText rendered="{!NOT(IsBlank(o.g2maps__Geocode_Batch_Status__c))}">
+                                  {!o.Geocode_Batch_Status__c}
+                                  &nbsp;&nbsp;
+                                  <a href="javascript:QueueBatch('{!JSEncode(o.Name)}');">Restart</a>
+                                  &nbsp;&nbsp;
+                                  <a href="javascript:AbortBatch('{!JSEncode(o.Geocode_Batch_ID__c)}');">Cancel</a>
+                              </apex:outputText>
+                          </apex:column>
+                          
+                    </apex:pageBlockTable>
+                </apex:pageBlock>
+            </apex:tab>
+            
+            <apex:tab label="Location Tracking" name="tab_settings" id="tab_settings">
+                <apex:pageBlock >
+                    <apex:pageBlockButtons >
+                                <apex:commandButton action="{!SaveSettings}" value="Save"/>
+                                <apex:commandButton action="{!makeMine}" value="View personal profile" rendered="{!AND(IsAdministrator,IsOrg)}"/>
+                                <apex:commandButton action="{!clearMine}" value="View organization profile" rendered="{!AND(IsAdministrator,IsUser)}"/>
+                    </apex:pageBlockButtons>
+                    <apex:pageBlockSection title="Chatter" columns="2" rendered="{!IsOrg || orgSettings.g2maps__Override_Chatter__c}">
+                        <apex:inputField value="{!theSettings.g2maps__Chatter__c}"/>
+                        <apex:inputField value="{!theSettings.g2maps__Minimum_Chatter_Window__c}"/>
+                    </apex:pageBlockSection>
+                    <apex:pageBlockSection title="Activity History" columns="2" rendered="{!IsOrg || orgSettings.g2maps__Override_Activity__c}">
+                        <apex:inputField value="{!theSettings.g2maps__Activity__c}"/>
+                        <apex:inputField value="{!theSettings.g2maps__Minimum_Activity_Window__c}"/>
+                    </apex:pageBlockSection>
+                    <apex:pageBlockSection title="Location History" columns="2" rendered="{!IsOrg || orgSettings.g2maps__Override_History__c}">
+                        <apex:inputField value="{!theSettings.g2maps__History__c}"/>
+                        <apex:inputField value="{!theSettings.g2maps__Minimum_History_Window__c}"/>
+                    </apex:pageBlockSection>
+                    <apex:pageBlockSection title="Location Settings" columns="2" rendered="{!IsOrg || orgSettings.g2maps__Override_Location__c}">
+                        <apex:inputField value="{!theSettings.g2maps__Expiration__c}"/>
+                        <apex:inputField value="{!theSettings.g2maps__Minimum_LatLng_Window__c}"/>                      
+                        <apex:inputField value="{!theSettings.g2maps__CheckIn_Delay__c}"/>
+                        <apex:inputField value="{!theSettings.g2maps__Maximum_Accuracy__c}"/>
+                    </apex:pageBlockSection>
+                    <apex:pageBlockSection title="Date and Time" columns="2" rendered="{!IsOrg || orgSettings.g2maps__Override_Time__c}">
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Start Time" for="startTime"/>
+                            <apex:outputPanel id="startTime">
+                                <apex:selectList value="{!StartHour}" multiselect="false" size="1">
+                                    <apex:selectOption itemValue="00" itemLabel="00"/>
+                                    <apex:selectOption itemValue="01" itemLabel="01"/>
+                                    <apex:selectOption itemValue="02" itemLabel="02"/>
+                                    <apex:selectOption itemValue="03" itemLabel="03"/>
+                                    <apex:selectOption itemValue="04" itemLabel="04"/>
+                                    <apex:selectOption itemValue="05" itemLabel="05"/>
+                                    <apex:selectOption itemValue="06" itemLabel="06"/>
+                                    <apex:selectOption itemValue="07" itemLabel="07"/>
+                                    <apex:selectOption itemValue="08" itemLabel="08"/>
+                                    <apex:selectOption itemValue="09" itemLabel="09"/>
+                                    <apex:selectOption itemValue="10" itemLabel="10"/>
+                                    <apex:selectOption itemValue="11" itemLabel="11"/>
+                                    <apex:selectOption itemValue="12" itemLabel="12"/>
+                                    <apex:selectOption itemValue="13" itemLabel="13"/>
+                                    <apex:selectOption itemValue="14" itemLabel="14"/>
+                                    <apex:selectOption itemValue="15" itemLabel="15"/>
+                                    <apex:selectOption itemValue="16" itemLabel="16"/>
+                                    <apex:selectOption itemValue="17" itemLabel="17"/>
+                                    <apex:selectOption itemValue="18" itemLabel="18"/>
+                                    <apex:selectOption itemValue="19" itemLabel="19"/>
+                                    <apex:selectOption itemValue="20" itemLabel="20"/>
+                                    <apex:selectOption itemValue="21" itemLabel="21"/>
+                                    <apex:selectOption itemValue="22" itemLabel="22"/>
+                                    <apex:selectOption itemValue="23" itemLabel="23"/>
+                                    <apex:selectOption itemValue="24" itemLabel="24"/>
+                                </apex:selectList>
+                                :
+                                <apex:selectList value="{!StartMinute}" multiselect="false" size="1">
+                                    <apex:selectOption itemValue="00" itemLabel="00"/>
+                                    <apex:selectOption itemValue="15" itemLabel="15"/>
+                                    <apex:selectOption itemValue="30" itemLabel="30"/>
+                                    <apex:selectOption itemValue="45" itemLabel="45"/>
+                                </apex:selectList>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="End Time" for="endTime"/>
+                            <apex:outputPanel id="endTime">
+                                <apex:selectList value="{!EndHour}" multiselect="false" size="1">
+                                    <apex:selectOption itemValue="00" itemLabel="00"/>
+                                    <apex:selectOption itemValue="01" itemLabel="01"/>
+                                    <apex:selectOption itemValue="02" itemLabel="02"/>
+                                    <apex:selectOption itemValue="03" itemLabel="03"/>
+                                    <apex:selectOption itemValue="04" itemLabel="04"/>
+                                    <apex:selectOption itemValue="05" itemLabel="05"/>
+                                    <apex:selectOption itemValue="06" itemLabel="06"/>
+                                    <apex:selectOption itemValue="07" itemLabel="07"/>
+                                    <apex:selectOption itemValue="08" itemLabel="08"/>
+                                    <apex:selectOption itemValue="09" itemLabel="09"/>
+                                    <apex:selectOption itemValue="10" itemLabel="10"/>
+                                    <apex:selectOption itemValue="11" itemLabel="11"/>
+                                    <apex:selectOption itemValue="12" itemLabel="12"/>
+                                    <apex:selectOption itemValue="13" itemLabel="13"/>
+                                    <apex:selectOption itemValue="14" itemLabel="14"/>
+                                    <apex:selectOption itemValue="15" itemLabel="15"/>
+                                    <apex:selectOption itemValue="16" itemLabel="16"/>
+                                    <apex:selectOption itemValue="17" itemLabel="17"/>
+                                    <apex:selectOption itemValue="18" itemLabel="18"/>
+                                    <apex:selectOption itemValue="19" itemLabel="19"/>
+                                    <apex:selectOption itemValue="20" itemLabel="20"/>
+                                    <apex:selectOption itemValue="21" itemLabel="21"/>
+                                    <apex:selectOption itemValue="22" itemLabel="22"/>
+                                    <apex:selectOption itemValue="23" itemLabel="23"/>
+                                    <apex:selectOption itemValue="24" itemLabel="24"/>
+                                </apex:selectList>
+                                :
+                                <apex:selectList value="{!EndMinute}" multiselect="false" size="1">
+                                    <apex:selectOption itemValue="00" itemLabel="00"/>
+                                    <apex:selectOption itemValue="15" itemLabel="15"/>
+                                    <apex:selectOption itemValue="30" itemLabel="30"/>
+                                    <apex:selectOption itemValue="45" itemLabel="45"/>
+                                </apex:selectList>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Week Days" for="weekDays"/>
+                            <apex:selectCheckboxes value="{!Weekdays}" id="weekDays">
+                                <apex:selectOption itemValue="1" itemLabel="Sunday"/>
+                                <apex:selectOption itemValue="2" itemLabel="Monday"/>
+                                <apex:selectOption itemValue="3" itemLabel="Tuesday"/>
+                                <apex:selectOption itemValue="4" itemLabel="Wednesday"/>
+                                <apex:selectOption itemValue="5" itemLabel="Thursday"/>
+                                <apex:selectOption itemValue="6" itemLabel="Friday"/>
+                                <apex:selectOption itemValue="7" itemLabel="Saturday"/>
+                            </apex:selectCheckboxes>
+                        </apex:pageBlockSectionItem>
+                    </apex:pageBlockSection>
+                    <apex:pageBlockSection title="Include and Exclude" columns="1" rendered="{!IsOrg || orgSettings.g2maps__Override_Include__c || orgSettings.g2maps__Override_Exclude__c}">
+                        <script type="text/javascript">
+                            dojo.require("esri.map");
+                            dojo.require("esri.toolbars.draw");
+                        
+                            var IncludeMap, ExcludeMap;
+                            var IncludeTB, ExcludeTB;
+                            var firstLoad;
+                            
+                            function init() {
+                              var initExtent = new esri.geometry.Extent({"xmin":-12836528.782095946,"ymin":-939258.2035679615,"xmax":7200979.560687953,"ymax":9079495.967823988,"spatialReference":{"wkid":102100}});
+                              
+                              if (dojo.byId("Include_Map") != null) {
+                                 IncludeMap = new esri.Map("Include_Map",{extent:initExtent});
+                                 
+                                 dojo.connect(IncludeMap, "onLoad", initIncludeToolbar);
+                                 dojo.connect(IncludeMap,"onLoad",addExistingIncludeArea);
+                                
+                                 IncludeMap.addLayer(new esri.layers.{!JSENCODE(orgSettings.g2maps__Base_Type__c)}("{!JSENCODE(orgSettings.g2maps__Base_Endpoint__c)}"));
+                              }
+                              
+                              if (dojo.byId("Exclude_Map") != null) {
+                                 ExcludeMap = new esri.Map("Exclude_Map",{extent:initExtent});
+                                 
+                                 dojo.connect(ExcludeMap, "onLoad", initExcludeToolbar);
+                                 dojo.connect(ExcludeMap,"onLoad",addExistingExcludeArea);
+                                
+                                ExcludeMap.addLayer(new esri.layers.{!JSENCODE(orgSettings.g2maps__Base_Type__c)}("{!JSENCODE(orgSettings.g2maps__Base_Endpoint__c)}"));
+                              }
+                            }
+                            
+                            // Exclude
+                            
+                            function addExistingExcludeArea(myMap) {
+                                   var geometry = new esri.geometry.Extent({!NullValue(theSettings.g2maps__Exclude_West__c, -130)}, {!NullValue(theSettings.g2maps__Exclude_South__c, 20)}, {!NullValue(theSettings.g2maps__Exclude_East__c, -60)}, {!NullValue(theSettings.g2maps__Exclude_North__c, 45)}, new esri.SpatialReference({ "wkid":4326 }));
+                                   geometry = esri.geometry.geographicToWebMercator(geometry);
+                                   
+                                    var symbol = new esri.symbol.SimpleMarkerSymbol(esri.symbol.SimpleMarkerSymbol.STYLE_SQUARE, 10, new esri.symbol.SimpleLineSymbol(esri.symbol.SimpleLineSymbol.STYLE_SOLID, new dojo.Color([255,0,0]), 1), new dojo.Color([255,0,0,0.25]));//dojo.byId("symbol").value;
+                                    myMap.graphics.add(new esri.Graphic(geometry, symbol));
+                                    
+                                    myMap.setExtent(geometry.expand(2));
+                            }
+                            
+                            function initExcludeToolbar(map) {
+                                    ExcludeTB = new esri.toolbars.Draw(map);
+                                    dojo.connect(ExcludeTB, "onDrawEnd", addExcludeGraphic);
+                            }
+                                           
+                            function addExcludeGraphic(geometry) {
+                              var symbol = new esri.symbol.SimpleMarkerSymbol(esri.symbol.SimpleMarkerSymbol.STYLE_SQUARE, 10, new esri.symbol.SimpleLineSymbol(esri.symbol.SimpleLineSymbol.STYLE_SOLID, new dojo.Color([255,0,0]), 1), new dojo.Color([255,0,0,0.25]));//dojo.byId("symbol").value; 
+                              ExcludeMap.graphics.clear();
+                              ExcludeMap.graphics.add(new esri.Graphic(geometry, symbol));
+                              
+                              var geom = esri.geometry.webMercatorToGeographic(geometry);
+                              saveExclude(geom.ymax, geom.xmax, geom.xmin, geom.ymin);
+                              
+                            }
+                            
+                            // Include
+                            
+                            function addExistingIncludeArea(myMap) {
+                                   var geometry = new esri.geometry.Extent({!NullValue(theSettings.g2maps__Include_West__c, -130)}, {!NullValue(theSettings.g2maps__Include_South__c, 20)}, {!NullValue(theSettings.g2maps__Include_East__c, -60)}, {!NullValue(theSettings.g2maps__Include_North__c, 45)}, new esri.SpatialReference({ "wkid":4326 }));
+                                   geometry = esri.geometry.geographicToWebMercator(geometry);
+                                   
+                                    var symbol = new esri.symbol.SimpleMarkerSymbol(esri.symbol.SimpleMarkerSymbol.STYLE_SQUARE, 10, new esri.symbol.SimpleLineSymbol(esri.symbol.SimpleLineSymbol.STYLE_SOLID, new dojo.Color([0,255,0]), 1), new dojo.Color([0,255,0,0.25]));//dojo.byId("symbol").value;
+                                    myMap.graphics.add(new esri.Graphic(geometry, symbol));
+                                    
+                                    myMap.setExtent(geometry.expand(2));
+                            }
+                            
+                            function initIncludeToolbar(map) {
+                                    IncludeTB = new esri.toolbars.Draw(map);
+                                    dojo.connect(IncludeTB, "onDrawEnd", addIncludeGraphic);
+                            }
+                                           
+                            function addIncludeGraphic(geometry) {
+                              var symbol = new esri.symbol.SimpleMarkerSymbol(esri.symbol.SimpleMarkerSymbol.STYLE_SQUARE, 10, new esri.symbol.SimpleLineSymbol(esri.symbol.SimpleLineSymbol.STYLE_SOLID, new dojo.Color([0,255,0]), 1), new dojo.Color([0,255,0,0.25]));//dojo.byId("symbol").value; 
+                              IncludeMap.graphics.clear();
+                              IncludeMap.graphics.add(new esri.Graphic(geometry, symbol));
+                              
+                              var geom = esri.geometry.webMercatorToGeographic(geometry);
+                              saveInclude(geom.ymax, geom.xmax, geom.xmin, geom.ymin);
+                              
+                            }
+                            
+                            dojo.addOnLoad(init);
+                         </script>
+                        <apex:pageBlockSectionItem rendered="{!IsOrg || orgSettings.g2maps__Override_Include__c}">
+                            <apex:outputLabel value="Include"/>
+                            <apex:outputPanel >
+                                <apex:toolbar >
+                                    <input type="button" onclick="IncludeTB.activate(esri.toolbars.Draw.EXTENT);IncludeMap.hideZoomSlider();" Value="Draw"/>
+                                    <input type="button" onClick="IncludeTB.deactivate();IncludeMap.showZoomSlider();" Value="Pan"/>
+                                </apex:toolbar>
+                                <div class="Include_Map" style="width: 100%; height:300px;" id="Include_Map"></div>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        
+                        <apex:pageBlockSectionItem rendered="{!IsOrg || orgSettings.g2maps__Override_Exclude__c}" >
+                            <apex:outputLabel value="Exclude"/>
+                            <apex:outputPanel >
+                                <apex:toolbar >
+                                    <input type="button" onclick="ExcludeTB.activate(esri.toolbars.Draw.EXTENT);ExcludeMap.hideZoomSlider();" Value="Draw"/>
+                                    <input type="button" onClick="ExcludeTB.deactivate();ExcludeMap.showZoomSlider();" Value="Pan"/>
+                                </apex:toolbar>
+                                <div class="Exclude_Map" style="width: 100%; height:300px;" id="Exclude_Map"></div>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        
+                    </apex:pageBlockSection>
+                    <apex:pageBlockSection title="User Overrides" columns="2" rendered="{!IsOrg}">
+                        <apex:inputField value="{!theSettings.g2maps__Override_Chatter__c}"/>
+                        <apex:inputField value="{!theSettings.g2maps__Override_Location__c}"/>
+                        <apex:inputField value="{!theSettings.g2maps__Override_History__c}"/>
+                        <apex:inputField value="{!theSettings.g2maps__Override_Include__c}"/>
+                        <apex:inputField value="{!theSettings.g2maps__Override_Exclude__c}"/>
+                        <apex:inputField value="{!theSettings.g2maps__Override_Time__c}"/>
+                    </apex:pageBlockSection>
+                </apex:pageBlock>
+            </apex:tab>
+                
+            <apex:tab label="URLs and Endpoints" name="tab_urls" id="tab_urls" rendered="{!IsOrg}">
+                <apex:pageBlock >
+                    <apex:pageBlockButtons >
+                        <apex:commandButton action="{!SaveSettings}" value="Save"/>
+                    </apex:pageBlockButtons>
+                    <apex:pageBlockSection title="Security" columns="2" id="securitySection">
+                        <apex:inputField value="{!orgSettings.g2maps__Security__c}"/>
+                    </apex:pageBlockSection>
+                    <apex:pageBlockSection title="Base Map" columns="2" id="baseMapSection">
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Base Map Provider" for="BaseMapProvider"/>
+                            <apex:selectList value="{!orgSettings.g2maps__Base_Provider__c}" multiselect="false" size="1" id="BaseMapProvider">
+                                <apex:actionsupport event="onchange" rerender="baseMapSection" action="{!doNothing}"/>
+                                <apex:selectOption itemLabel="Esri ArcGIS" itemValue="ESRI"/>
+                                <apex:selectOption itemLabel="OpenStreetMap" itemValue="OSM"/>
+                            </apex:selectList>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem />
+                        
+                        <apex:pageBlockSectionItem rendered="{!orgSettings.g2maps__Base_Provider__c == 'ESRI' || orgSettings.g2maps__Base_Provider__c == null}">
+                            <apex:outputLabel value="Base Map Type" for="BaseMapType"/>
+                            <apex:selectList value="{!orgSettings.g2maps__Base_Type__c}" multiselect="false" size="1" id="BaseMapType">
+                                <apex:selectOption itemLabel="ArcGISDynamicMapServiceLayer" itemValue="ArcGISDynamicMapServiceLayer"/>
+                                <apex:selectOption itemLabel="ArcGISImageServiceLayer" itemValue="ArcGISImageServiceLayer"/>
+                                <apex:selectOption itemLabel="ArcGISTiledMapServiceLayer" itemValue="ArcGISTiledMapServiceLayer"/>
+                            </apex:selectList>
+                        </apex:pageBlockSectionItem>
+                        <apex:inputField value="{!orgSettings.g2maps__Base_Endpoint__c}" rendered="{!orgSettings.g2maps__Base_Provider__c == 'ESRI' || orgSettings.g2maps__Base_Provider__c == null}"/>
+                    </apex:pageBlockSection>
+                    
+                    <apex:pageBlockSection title="Esri Business Analyst" columns="2">
+                        <apex:inputField value="{!orgLocation.g2maps__BAO_Username__c}"/>
+                        <apex:inputField value="{!orgLocation.g2maps__BAO_Password__c}"/>
+                    </apex:pageBlockSection>
+                    
+                    <apex:pageBlockSection title="ArcGISOnline" columns="2">
+                        <!--<apex:inputField value="{!orgSettings.URL_AGOL__c}"/>
+                        <apex:outputText value=""></apex:outputText>-->
+                        <apex:inputField value="{!orgLocation.g2maps__AGOL_Username__c}"/>                        
+                        <apex:inputField value="{!orgLocation.g2maps__AGOL_Password__c}" style="-webkit-text-security: disc;"/>
+                        <!--<apex:pageBlockSectionItem >                        
+                            <apex:outputPanel >Users will use the anonymous (public) portal by default, and will be prompted for credentials (username and password) when necessary.</apex:outputPanel>
+                        </apex:pageBlockSectionItem>-->
+                    </apex:pageBlockSection>
+                    
+                    <apex:pageBlockSection title="Esri Endpoints" columns="2">
+                        <apex:inputField value="{!orgSettings.g2maps__URL_Proxy__c}"/>
+                        <apex:pageBlockSectionItem />
+                        
+                        <apex:inputField value="{!orgSettings.g2maps__URL_RouteTask__c}"/>
+                        <apex:inputField value="{!orgSettings.g2maps__URL_ServiceAreaTask__c}"/>
+                        
+                        <apex:inputField value="{!orgSettings.g2maps__URL_GeometryTask__c}"/>
+                        <apex:inputField value="{!orgSettings.g2maps__GeoCode_Endpoint__c}"/>
+                    </apex:pageBlockSection>
+                </apex:pageBlock>
+            </apex:tab>
+                
+            <apex:tab label="Standard Layer Setup" name="tab_std_layers" id="tab_std_layers" rendered="{!IsOrg}">
+                <apex:pageBlock >
+                    <apex:pageBlockButtons >
+                        <apex:commandButton action="{!SaveSettings}" value="Save"/>
+                    </apex:pageBlockButtons>
+                    <apex:pageBlockSection title="Lead Map" columns="2">
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Lead Layer"/>
+                            <apex:selectList value="{!orgSettings.g2maps__Std_Lead__c}" multiselect="false" size="1">
+                                <apex:selectOptions value="{!LeadOptions}" />
+                            </apex:selectList>
+                        </apex:pageBlockSectionItem>
+                    </apex:pageBlockSection>
+                    <apex:pageBlockSection title="Account Maps" columns="2">
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Account 1 Layer"/>
+                            <apex:selectList value="{!orgSettings.g2maps__Std_Account1__c}" multiselect="false" size="1">
+                                <apex:selectOptions value="{!AccountOptions}" />
+                            </apex:selectList>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Account 2 Layer"/>
+                            <apex:selectList value="{!orgSettings.g2maps__Std_Account2__c}" multiselect="false" size="1">
+                                <apex:selectOptions value="{!AccountOptions}" />
+                            </apex:selectList>
+                        </apex:pageBlockSectionItem>
+                    </apex:pageBlockSection>
+                    <apex:pageBlockSection title="Contact Maps" columns="2">
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Contact 1 Layer"/>
+                            <apex:selectList value="{!orgSettings.g2maps__Std_Contact1__c}" multiselect="false" size="1">
+                                <apex:selectOptions value="{!ContactOptions}" />
+                            </apex:selectList>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Contact 2 Layer"/>
+                            <apex:selectList value="{!orgSettings.g2maps__Std_Contact2__c}" multiselect="false" size="1">
+                                <apex:selectOptions value="{!ContactOptions}" />
+                            </apex:selectList>
+                        </apex:pageBlockSectionItem>
+                    </apex:pageBlockSection>
+                </apex:pageBlock>
+            </apex:tab>
+                
+            <apex:tab label="Quick Setup" name="tab_XMLSettings" id="tab_XMLSettings" rendered="{!IsOrg}">
+            
+                
+                <apex:pageBlock title="Setup">
+                    <apex:pageblocksection columns="1">
+                        <apex:pageblocksectionitem >
+                            <apex:outputLabel value="Install default fields"/>
+                            <apex:outputLink value="https://login.salesforce.com/packaging/installPackage.apexp?p0=04t90000000HaEE">Click here to install default fields (latitude, longitude, etc) for Salesforce.com Standard Objects</apex:outputLink>
+                        </apex:pageblocksectionitem>
+                    </apex:pageblocksection>
+                </apex:pageBlock>
+                
+                <apex:pageBlock title="Settings">
+                    <apex:pageBlockButtons >
+                        <apex:commandButton value=" Apply Settings " action="{!doXMLSettings}"/>
+                        <apex:commandButton value=" Load Default Settings " action="{!doDefaultSettings}" />
+                    </apex:pageBlockButtons>
+                    <apex:pageBlockSection columns="1">
+                        <apex:outputPanel >
+                            <apex:inputTextArea value="{!XMLSettings}" style="width: 100%; height: 100px;"/>
+                        </apex:outputPanel>
+                    </apex:pageBlockSection>
+                </apex:pageBlock>
+            </apex:tab>
+            
+            <apex:tab label="License" name="tab_license" id="tab_license">
+                <apex:outputPanel >
+                    <ol>
+                        <li><b>License Grant.</b> Subject to the terms and conditions of this Agreement, Cloud Sherpas hereby grants to you a non-exclusive, non-transferable right (without the right to sublicense) to use the Software and its related documentation (the "Documentation"). </li>
+                        <li><b>Term.</b> This Agreement is effective for an unlimited duration unless and until earlier terminated as set forth herein. This Agreement will terminate automatically if you fail to comply with any of the limitations or other requirements described herein.</li>
+                        <li><b>Ownership Rights.</b>  Cloud Sherpas owns and retains all right, title and interest in and to the Software, including all copyrights, patents, trade secret rights, trademarks and other intellectual property rights therein. Your possession, installation, or use of the Software does not transfer to you any title to the intellectual property in the Software, and you will not acquire any rights to the Software except as expressly set forth in this Agreement. </li>
+                        <li><b>Ownership of Data.</b>  You own and retain all right, title and interest in and to the data that you or your employees, parters, or customers upload Salesforce, subject to terms of your License agreement with Salesforce.com. Subject to these same terms, you are granted a perpetual, non-exclusive, non-transferable license to use geocoding results, driving directions, address correction, and demographic data imported automatically or manually into your Salesforce instance during the term of your license to use the Software.</li>
+                        <li><b>Restrictions.</b> You may not rent, lease, loan or resell the Software. You may not transfer any of the rights granted to you under this Agreement. You may not reverse engineer, decompile, or disassemble the Software. You may not modify, or create derivative works based upon, the Software in whole or in part.</li>
+                        <li><b>Warranty Disclaimer.</b> THE SOFTWARE IS PROVIDED "AS IS." Cloud Sherpas DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT WITH RESPECT TO THE SOFTWARE AND THE ACCOMPANYING DOCUMENTATION.  YOU ASSUME RESPONSIBILITY FOR SELECTING THE SOFTWARE TO ACHIEVE YOUR INTENDED RESULTS, AND FOR THE INSTALLATION OF, USE OF, AND RESULTS OBTAINED FROM THE SOFTWARE. WITHOUT LIMITING THE FOREGOING PROVISIONS, Cloud Sherpas MAKES NO WARRANTY THAT THE SOFTWARE WILL BE ERROR-FREE OR FREE FROM INTERRUPTIONS OR OTHER FAILURES OR THAT THE SOFTWARE WILL MEET YOUR REQUIREMENTS.  SOME STATES AND JURISDICTIONS DO NOT ALLOW LIMITATIONS ON IMPLIED WARRANTIES, SO THE ABOVE LIMITATION MAY NOT APPLY TO YOU. The foregoing provisions shall be enforceable to the maximum extent permitted by applicable law.</li>
+                        <li><b>Limitation of Liability.</b> UNDER NO CIRCUMSTANCES AND UNDER NO LEGAL THEORY, WHETHER IN TORT, CONTRACT, OR OTHERWISE, SHALL Cloud Sherpas BE LIABLE TO YOU OR TO ANY OTHER PERSON FOR ANY INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES OF ANY CHARACTER INCLUDING, WITHOUT LIMITATION, DAMAGES FOR LOSS OF USE, LOSS OF DATA, LOST PROFITS OR REVENUES, LOSS OF GOODWILL, WORK STOPPAGE, COMPUTER FAILURE OR MALFUNCTION, OR FOR ANY AND ALL OTHER DAMAGES OR LOSSES. SOME STATES AND JURISDICTIONS DO NOT ALLOW THE EXCLUSION OR LIMITATION OF INCIDENTAL OR CONSEQUENTIAL DAMAGES, SO THIS LIMITATION AND EXCLUSION MAY NOT APPLY TO YOU. The foregoing provisions shall be enforceable to the maximum extent permitted by applicable law.</li>
+                        <li><b>Export Controls.</b> Neither the Software nor the Documentation and underlying information or technology may be downloaded or otherwise exported or re-exported (a) into (or to a national or resident of) Cuba, Iran, Iraq, Libya, North Korea, Sudan, Syria or any other country to which the United States has embargoed goods; or (b) to anyone on the United States Treasury Department's list of Specially Designated Nations or the United States Commerce Department's Table of Denial Orders. By downloading or using the Software you are agreeing to the foregoing and you are certifying that you are not located in, under the control of, or a national or resident of any such country or on any such list.</li>
+                        <li><b>Miscellaneous.</b> This Agreement is governed by the laws of the United States and the State of California, without reference to conflict of laws principles. The application of the United Nations Convention of Contracts for the International Sale of Goods is expressly excluded. This Agreement sets forth all rights for the user of the Software and is the entire agreement between the parties. This Agreement supersedes any other communications with respect to the Software and Documentation. This Agreement may not be modified except by a written addendum issued by a duly authorized representative of Cloud Sherpas. No provision hereof shall be deemed waived unless such waiver shall be in writing and signed by a duly authorized representative of Cloud Sherpas. If any provision of this Agreement is held invalid, the remainder of this Agreement shall continue in full force and effect. </li>
+                        <li><b>CLOUD SHERPAS CUSTOMER CONTACT.</b> If you have any questions concerning these terms and conditions, or if you would like to contact Cloud Sherpas for any other reason, please call (858) 356-5201, or write: Cloud Sherpas, Inc.  Attn:  G2Maps Customer Service, 760 Garden View Ct, Suite 120. Encinitas, CA 92024. http://www.cloudsherpas.com/</li>
+                    </ol>
+                </apex:outputPanel>
+            </apex:tab>
+        </apex:tabPanel>
+    </apex:form>
+</apex:page>

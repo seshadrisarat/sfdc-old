@@ -1,0 +1,163 @@
+<apex:page controller="ts2.EmailAttachmentSub" action="{!SetSelectedRecords}" tabstyle="Contact" sidebar="false" showHeader="false" title="Send Email">
+	<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, 'jquery-1.8.2.min.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__stcode, 'res/js/ui-2.js')}" />
+	<apex:includeScript value="/apexpages/fckeditor/fckeditor.js"/>
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__stcode, 'res/css/ui-2.css')}"/>
+
+<script language="javascript">
+function closeWin() {
+	parent.window.opener = self;
+	parent.window.close();
+}
+</script>
+
+<body width="100%" style="margin:10px;">
+
+<apex:form id="frm">
+
+	<apex:pageMessages id="pageMessages" />
+
+	<apex:pageBlock id="pbSendEmail" title="{!$Label.SendEmail}">
+		<apex:pageBlockButtons id="pbbsMainButtons" style="text-align: right;" location="bottom">
+			<span id="pbsMainButtons_spinner" class="spinner_indicator">&nbsp;</span>
+			<apex:commandButton value="{!$Label.Send}" title="{!$Label.Send}" action="{!SendEmail}" rendered="{!NOT(Completed)}" onclick="setValueFromEditor({!HtmlView});jQuery('#pbsMainButtons_spinner').addClass('spinner_on');jQuery('[id$=pbSendEmail] input.btn').attr('disabled','disabled').addClass('btnDisabled');" rerender="frm" />
+			<apex:commandButton value="{!$Label.SelectTemplate}" title="{!$Label.SelectTemplate}" rendered="{!NOT(Completed)}" onclick="openTemplateSelectorWindow();return(false);" />
+			<apex:commandButton value="{!$Label.DialogCancel}" title="{!$Label.DialogCancel}" rendered="{!NOT(Completed)}" onclick="closeWin();return(false);" />
+			<apex:commandButton value="{!$Label.DialogClose}" title="{!$Label.DialogClose}" rendered="{!Completed}" onclick="closeWin();return(false);" />
+		</apex:pageBlockButtons>
+
+		<apex:pageBlockSection columns="1" title="{!$Label.EmailEdit}" collapsible="false" rendered="{!NOT(Completed)}">
+			<apex:pageBlockSectionItem rendered="{!IsOnBehalfOf}">
+				<apex:outputLabel value="{!$Label.OnBehalfOf}" />
+				<apex:outputPanel layout="block" styleClass="requiredInput">
+					<apex:outputPanel layout="block" styleClass="requiredBlock" />
+					<apex:inputField value="{!EventOnBehalfOf.OwnerId}" />
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem rendered="{!IsDeferred}">
+				<apex:outputLabel value="{!$Label.DeferredDate}" />
+				<apex:inputField value="{!EventOnBehalfOf.StartDateTime}" />
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="ecndSubject" value="{!$Label.Subject}" />
+				<apex:outputPanel layout="none" id="ecndSubject">
+					<apex:outputPanel layout="block" styleClass="requiredInput">
+						<apex:outputPanel layout="block" styleClass="requiredBlock" />
+						<apex:inputText rendered="{!AllowEmailEdit}" value="{!EmailSubject}" size="70" />
+						<apex:inputText rendered="{!NOT(AllowEmailEdit)}" value="{!EmailSubject}" size="70" disabled="true" />
+					</apex:outputPanel>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="ecndMessage" value="{!$Label.Message}" />
+				<apex:outputPanel layout="none" id="ecndMessage">
+					<apex:inputTextArea rendered="{!AllowEmailEdit}"  id="theTextarea" value="{!EmailBody}" readonly="false" style="width:450px;height:120px;color:#000000;border:1px solid #666666;" />
+					<apex:inputTextArea rendered="{!NOT(AllowEmailEdit) && NOT(HtmlView)}" value="{!EmailBody}" readonly="true" style="width:450px;height:120px;color:#666666;border:1px solid #666666;" />
+					<apex:outputPanel layout="none" rendered="{!HtmlView && AllowEmailEdit}">
+						<script type="text/javascript">
+							RerenderEditor();
+						</script>
+					</apex:outputPanel>
+
+					<apex:outputPanel layout="block" rendered="{!HtmlView && NOT(AllowEmailEdit)}" style="width:450px;height:120px;color:#666666;border:1px solid #666666;overflow: auto;">
+						<!-- SFDC Security Review: Unescaped output is necessary to render html content and does not constitute possible vulnerability -->
+						<apex:outputText rendered="{!HtmlView && NOT(AllowEmailEdit)}" value="{!EmailBody}" escape="false" style="color:#666666;"/>
+					</apex:outputPanel>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+
+		<apex:pageBlockSection columns="1" title="{!$ObjectType.Attachment.LabelPlural}" collapsible="false" rendered="{!NOT(Completed)}">
+			<apex:pageBlockTable value="{!AttachmentsList}" var="item" width="100%" >
+				<apex:column width="23px" rendered="{!AttachmentsList.SIZE>0}">
+					<apex:inputCheckbox value="{!item.selected}" />
+				</apex:column>
+				<apex:column rendered="{!AttachmentsList.SIZE>0}" headerValue="{!$ObjectType.Attachment.Fields.Name.Label}" value="{!item.attachment.Name}" />
+				<apex:column rendered="{!AttachmentsList.SIZE=0}" headerValue="{!$Label.NoAttachments}" headerClass="noRowsHeader" value="{!item.attachment.Name}" />
+			</apex:pageBlockTable>
+			<apex:pageMessage rendered="{!AttachmentsLimitReached}" summary="{!$Label.AttachmentsLimitReached}" severity="warning" strength="2" />
+		</apex:pageBlockSection>
+
+		<apex:pageBlockSection id="pbsCompleted" columns="1" rendered="{!Completed}" >
+			<apex:pageMessage summary="{!$Label.EmailsSentStatusSuccess}" severity="confirm" strength="2" rendered="{!EmailsErrorsCount=0}" />
+			<apex:pageMessage summary="{!SUBSTITUTE($Label.EmailsSentStatusError,'{0}',EmailsFirstError)}" severity="error" strength="2" rendered="{!EmailsErrorsCount>0}" />
+			<apex:pageBlockSectionItem labelStyle="width:50%">
+				<apex:outputLabel value="{!$Label.SelectedContacts}" for="cntCount" />
+				<apex:outputText id="cntCount" value="{!TotalContactsCount}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem labelStyle="width:50%">
+				<apex:outputLabel value="{!$Label.EmailsSent}" for="cntSent" />
+				<apex:outputText id="cntSent" value="{!EmailsSentSuccess}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem labelStyle="width:50%">
+				<apex:outputLabel value="{!$Label.MissingEmailAddress}" for="cntMissing" />
+				<apex:outputText id="cntMissing" value="{!EmailsMissingCount}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem labelStyle="width:50%">
+				<apex:outputLabel value="{!$Label.EmailOptOutSelected}" for="cntOptOut" />
+				<apex:outputText id="cntOptOut" value="{!EmailsOptOut}" />
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+
+		<div style="display:none;" class="waitingSearchDiv waitingSearchDivOpacity"></div>
+		<div style="display:none;" class="waitingSearchDiv"><span class="waitingSearchHolder" style="top:16px;"><img src="/img/loading.gif" class="waitingImage"/><span class="waitingDescription"></span></span></div>
+	</apex:pageBlock>
+
+
+	<apex:actionFunction name="SelectTemplateAction" action="{!SelectTemplateAction}" rerender="frm">
+		<apex:param name="var1" value="" assignTo="{!TemplateId}" />
+	</apex:actionFunction>
+
+</apex:form>
+
+</body>
+
+<script type="text/javascript">
+	jQuery.noConflict();
+	jQuery(document).ready(function() {
+		gfxInit();
+	});
+	function gfxInit() {
+		a1=new Image; a1.src="{!URLFOR($Resource.stcode, 'res/img/spinner.gif')}";
+	}
+
+	function openTemplateSelectorWindow() {
+		var pageURL = '{!$Page.s_EmailTemplate}';
+		pageURL = (typeof(pageURL)=='string') ? pageURL : "/apex/s_EmailTemplate";
+		var url = pageURL;
+		var features = 'directories=no,menubar=no,titlebar=no,toolbar=no,scrollbars=yes,resizable=yes,width=600,height=300';
+		win = window.open(url, 'template', features);
+	}
+	function setTemplateId(templateId) {
+		LoadingElementShow(jQuery("[id$=pbSendEmail]").find("div.pbBody").get(0), '{!JSENCODE($Label.Candidates_LABEL_Loading)}');
+		SelectTemplateAction(templateId);
+	}
+		function RerenderEditor() {
+		var NameEditor = jQuery('[id$=theTextarea]').attr('name');
+		var editor  = new FCKeditor(NameEditor, null, 300);
+			editor.BasePath = '/apexpages/fckeditor/';
+			editor.Config['CustomConfigurationsPath'] = '/apexpages/richtext.config.js';
+			editor.ToolbarSet = 'SalesforceBasic';
+			editor.Config['SkinPath'] = editor.BasePath + 'editor/skins/sfdc/';
+			editor.Config['DefaultLanguage'] = 'en-us';
+			editor.Config['EditorAreaStyles'] = ['/sCSS/23.0/sprites/1323209069000/Theme3/default/gc/HtmlDetailElem.css'];
+			editor.Config['ImageUpload'] = true;
+			editor.Config['SitesPath'] =  '';
+			editor.ReplaceTextarea();
+	}
+
+	function setValueFromEditor(needUpdate) {
+		if (needUpdate == false) return true;
+		var NameEditor = jQuery('[id$=theTextarea___Frame]');
+		EditorValue = NameEditor.contents().find("iframe").contents().find("body").html();
+		EditorValue = jQuery.trim(EditorValue);
+		jQuery('[id$=theTextarea]').val(EditorValue);
+		return true;
+	}
+
+</script>
+
+</apex:page>

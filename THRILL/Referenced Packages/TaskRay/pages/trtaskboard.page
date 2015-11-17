@@ -1,0 +1,387 @@
+<apex:page showHeader="true" sidebar="false" showChat="false" controller="TASKRAY.trTaskBoardController" tabStyle="TaskRay__tab" title="{!$Label.taskray__TaskRay_PageTitle}">
+     <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+      <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
+    <![endif]-->
+
+
+    <link href="{!URLFOR($Resource.trplugins, 'bootstrap3/css/bootstrap.css')}" rel="stylesheet" type="text/css" />
+    <link href="{!URLFOR($Resource.trplugins, 'glyphicons/css/glyphicons.css')}" rel="stylesheet" type="text/css" />
+
+    <link href="{!URLFOR($Resource.trplugins, 'css/trtaskboard.css')}" rel="stylesheet" type="text/css" />
+
+    <link href="{!URLFOR($Resource.trplugins, 'css/animate.css')}" rel="stylesheet" type="text/css" />
+    <link href="{!URLFOR($Resource.trplugins, 'sds/salesforce-lightning-design-system-vf.css')}" rel="stylesheet" type="text/css" />
+    <link href="{!URLFOR($Resource.trplugins, 'plugins/bootstrap3-editable/css/bootstrap-editable.css')}" rel="stylesheet" type="text/css" />
+    <link href="{!URLFOR($Resource.trplugins, 'plugins/introjs/introjs.min.css')}" rel="stylesheet" type="text/css" />
+    <!-- Conditional Style Sheet -->
+    <apex:outputPanel layout="none" rendered="{!IF(customStyleSheet != '',true,false)}">
+    <!-- User provided Style Sheet -->
+    <link href="/resource/{!HTMLENCODE(customStyleSheet)}" rel="stylesheet" type="text/css" />
+    </apex:outputPanel>
+
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/jquery-1.10.2.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'bootstrap3/js/bootstrap.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'plugins/typeahead.bundle.js')}" />
+
+    <script>
+      /**
+       * Protect window.console method calls, e.g. console is not defined on IE
+       * unless dev tools are open, and IE doesn't define console.debug
+       * 
+       * Chrome 41.0.2272.118: debug,error,info,log,warn,dir,dirxml,table,trace,assert,count,markTimeline,profile,profileEnd,time,timeEnd,timeStamp,timeline,timelineEnd,group,groupCollapsed,groupEnd,clear
+       * Firefox 37.0.1: log,info,warn,error,exception,debug,table,trace,dir,group,groupCollapsed,groupEnd,time,timeEnd,profile,profileEnd,assert,count
+       * Internet Explorer 11: select,log,info,warn,error,debug,assert,time,timeEnd,timeStamp,group,groupCollapsed,groupEnd,trace,clear,dir,dirxml,count,countReset,cd
+       * Safari 6.2.4: debug,error,log,info,warn,clear,dir,dirxml,table,trace,assert,count,profile,profileEnd,time,timeEnd,timeStamp,group,groupCollapsed,groupEnd
+       * Opera 28.0.1750.48: debug,error,info,log,warn,dir,dirxml,table,trace,assert,count,markTimeline,profile,profileEnd,time,timeEnd,timeStamp,timeline,timelineEnd,group,groupCollapsed,groupEnd,clear
+       */
+      (function() {
+        // Union of Chrome, Firefox, IE, Opera, and Safari console methods
+        var methods = ["assert", "assert", "cd", "clear", "count", "countReset",
+          "debug", "dir", "dirxml", "dirxml", "dirxml", "error", "error", "exception",
+          "group", "group", "groupCollapsed", "groupCollapsed", "groupEnd", "info",
+          "info", "log", "log", "markTimeline", "profile", "profileEnd", "profileEnd",
+          "select", "table", "table", "time", "time", "timeEnd", "timeEnd", "timeEnd",
+          "timeEnd", "timeEnd", "timeStamp", "timeline", "timelineEnd", "trace",
+          "trace", "trace", "trace", "trace", "warn"];
+        var length = methods.length;
+        var console = (window.console = window.console || {});
+        var method;
+        var noop = function() {};
+        while (length--) {
+          method = methods[length];
+          // define undefined methods as noops to prevent errors
+          if (!console[method])
+            console[method] = noop;
+        }
+      })();
+      var $j = window.jQuery.noConflict();
+      window.jQuery=false;
+      //Comment test
+      var isWebKit = 'WebkitAppearance' in document.documentElement.style;
+    
+      var session = '{!$Api.Session_ID}';
+      var currentUserLocale='{!JSENCODE(userLocale)}';
+      currentUserLocale=currentUserLocale.replace('_','-');
+      var currentUserDateFormat;
+
+      var trChecklistPageURL = '{!URLFOR($Page.trChecklistAction)}';
+      var trProjectPageURL = '{!URLFOR($Page.trprojectinline)}';
+      var trProjectTaskPageURL = '{!URLFOR($Page.trprojecttaskinline)}';
+      function popNewStdRecordTab(id){
+        var url = trProjectTaskPageURL.replace('TASKRAY__trprojecttaskinline',id);
+        url = url.replace('trprojecttaskinline',id);
+        url = url.replace('/apex','');
+        if(url.indexOf('TASKRAY__') !== -1){
+          url = url.replace('TASKRAY__','');
+        }
+        var win = window.open(url);
+        win.focus();
+      }
+      var trPrefsURL = '{!URLFOR($Page.trprefs)}';
+      var trSetupWizardURL = '{!URLFOR($Page.trsetupwizard)}';
+      var ajaxLoaderCircleURL = '{!URLFOR($Resource.trplugins, 'images/ajax-loader.gif')}';
+      var headerImgURL = '{!URLFOR($Resource.trplugins, 'images/tr-header-logo-o.png')}';
+      var turntablegif = '{!URLFOR($Resource.trplugins, 'images/turntable_loader.gif')}';
+
+      var sdsIconActionSprite = '{!URLFOR($Resource.trplugins, 'sds/icons/action-sprite.svg')}';
+      var sdsIconCustomSprite = '{!URLFOR($Resource.trplugins, 'sds/icons/custom-sprite.svg')}';
+      var sdsDoctypeCustomSprite = '{!URLFOR($Resource.trplugins, 'sds/icons/doctype-sprite.svg')}';
+      var sdsIconStandardSprite = '{!URLFOR($Resource.trplugins, 'sds/icons/standard-sprite.svg')}';
+      var sdsIconUtilitySprite = '{!URLFOR($Resource.trplugins, 'sds/icons/utility-sprite.svg')}';
+
+      var trCurrentView = '{!JSENCODE(currentView)}';
+
+      var listNameArr=JSON.parse("{!JSENCODE(listNamesJson)}");
+      var listNameMap=JSON.parse("{!JSENCODE(listNamesMapJson)}");
+      function findListNameMapMatch(listName){
+        if(listNameMap[listName] !== undefined){ return listNameMap[listName]; }
+        else if(listName !== undefined && listName !== null){
+          //Account for a ' in the col label name
+          var itemToFind=listName.replace('\'','\\\'');
+          if(listNameMap[itemToFind] !== undefined){ return listNameMap[itemToFind]; }  
+        } 
+        else{ return 0;}
+      }
+      var lastListName=listNameArr[listNameArr.length-1];
+      var priorityFieldInfo = JSON.parse("{!JSENCODE(priorityFieldInfo)}");
+      var columnSortingFields = JSON.parse("{!JSENCODE(columnSortingFields)}");
+      var foreheadFields = JSON.parse("{!JSENCODE(global_foreheadFields)}");
+      
+
+      /*Views*/
+      var viewFilterArr = JSON.parse("{!JSENCODE(getViewFiltersForUserJSON)}");
+      var userSettings_currentViewFilter = "{!JSENCODE(userSettings_currentViewFilter)}";
+      /*End Views*/
+
+      var global_listColors = JSON.parse("{!JSENCODE(global_listColorsJSON)}");
+      var global_runConcurrency ={!global_runConcurrency};
+      var global_pollingInterval = {!global_pollingInterval};
+      
+      var userSettings = JSON.parse("{!JSENCODE(userSettingsJSON)}");
+
+      var defaultListObj=JSON.parse("{!JSENCODE(getDefaultList)}");
+      var defaultListIndex=defaultListObj['index'];
+      var defaultListName=listNameArr[defaultListIndex];
+
+      var projectCreateable = {!$ObjectType.Project__c.createable};
+      var projectDeletable = {!$ObjectType.Project__c.deletable};
+      var taskCreateable = {!$ObjectType.Project_Task__c.createable};
+      var taskDeletable = {!$ObjectType.Project_Task__c.deletable};
+      
+      var userSettings_selectedLists = "{!JSENCODE(userSettings_selectedLists)}";
+
+      var userId = '{!JSENCODE($User.Id)}';
+
+      chatterGroupInfo = JSON.parse("{!JSENCODE(chatterGroupInfoJSON)}");
+      sidebarProjectInfo = JSON.parse("{!JSENCODE(sidebarProjectInfoJSON)}");
+      viewAsUserInfo = JSON.parse("{!JSENCODE(viewAsUserInfo)}");
+
+      taskInfo = [];
+      contributorInfo = [];
+      sidebarFileInfo = [];
+
+      var labels = JSON.parse("{!JSENCODE(customLabelJSON)}");
+
+      if(typeof(TASKRAY.trController) === 'undefined'){
+        TASKRAY.trController=TASKRAY.trTaskBoardController;
+      }
+
+      var newTaskRayUI = true;
+
+      var inlineEditsFromModal = false;
+
+      var projectIdPrefix = "{!JSENCODE(projectIdPrefix)}";
+      var taskIdPrefix = "{!JSENCODE(taskIdPrefix)}";
+      var processBoardInfoDeferreds=[];
+
+      var showLoadingMaskOnTaskMove=false;
+      var processBoardAfterTaskMove=false;
+
+      var availableViews = ['column','deadline','planning'];
+
+      var isUserSysAdmin = {!isUserSysAdmin};
+      function isFirstDayOfWeekMonday(firstDayOfWeekString){
+        var firstDayOfWeekArr = firstDayOfWeekString.split('-');
+        var firstDayOfWeekYear = parseInt(firstDayOfWeekArr[0]);
+        var firstDayOfWeekMonth = parseInt(firstDayOfWeekArr[1])-1;
+        var firstDayOfWeekDay = parseInt(firstDayOfWeekArr[2]);
+        var firstDayOfWeekDate = new Date(firstDayOfWeekYear, firstDayOfWeekMonth, firstDayOfWeekDay, 0, 0, 0, 0);  
+        var weekHasMondayStart = (firstDayOfWeekDate.getDay()===0) ? false : true;
+        return weekHasMondayStart;
+      }
+      
+      //figure out if someone is a monday start or not
+      var weekHasMondayStart = isFirstDayOfWeekMonday("{!JSENCODE(firstDayOfTheWeek)}");
+
+      var forceMetaDataCacheRefresh = {!forceUpdateOfMetadataCache};
+      var taskListMetadataCache = JSON.parse("{!JSENCODE(taskListMetadataJSON)}");
+
+      var recordTypeLoadInfo = {};
+      recordTypeLoadInfo['taskRecordTypesForUser'] = JSON.parse("{!JSENCODE(taskRecordTypesForUserJSON)}");
+      recordTypeLoadInfo['projectRecordTypesForUser'] = JSON.parse("{!JSENCODE(projectRecordTypesForUserJSON)}");
+      recordTypeLoadInfo['currentTaskRecordTypeForUser'] = JSON.parse("{!JSENCODE(currentTaskRecordTypeForUserJSON)}");
+      recordTypeLoadInfo['currentProjectRecordTypeForUser'] = JSON.parse("{!JSENCODE(currentProjectRecordTypeForUserJSON)}");
+      recordTypeLoadInfo['taskRecordTypeMetadata']=("{!JSENCODE(taskRecordTypeMetadataJSON)}") ? JSON.parse("{!JSENCODE(taskRecordTypeMetadataJSON)}") : [];
+      recordTypeLoadInfo['allProjectRecordTypes'] = JSON.parse("{!JSENCODE(allProjectRecordTypesForUserJSON)}");
+      recordTypeLoadInfo['allTaskRecordTypes'] = JSON.parse("{!JSENCODE(allTaskRecordTypesForUserJSON)}");
+
+      var taskRecordTypesEnabled = {!taskRecordTypesEnabled};
+      var projectRecordTypesEnabled = {!projectRecordTypesEnabled};
+      var pollingWebWorkerJS = "{!URLFOR($Resource.trplugins, 'customjs/trtaskboard_pollingwebworker.js')}";
+      var lodashURL = "{!URLFOR($Resource.trplugins, 'plugins/lodash.compat.min.js')}";
+      var RemoteActionWebWorkerJS = "{!URLFOR($Resource.trplugins, 'customjs/modules/remote.action.webworker.js')}";
+      var taskRecordTypesInCurrentPayload = {};
+
+      var taskFieldSets = JSON.parse("{!JSENCODE(taskFieldSets)}");
+      var projectFieldSets = JSON.parse("{!JSENCODE(projectFieldSets)}");
+    </script>
+
+    <!-- start Mixpanel --><script type="text/javascript">(function(f,b){if(!b.__SV){var a,e,i,g;window.mixpanel=b;b._i=[];b.init=function(a,e,d){function f(b,h){var a=h.split(".");2==a.length&&(b=b[a[0]],h=a[1]);b[h]=function(){b.push([h].concat(Array.prototype.slice.call(arguments,0)))}}var c=b;"undefined"!==typeof d?c=b[d]=[]:d="mixpanel";c.people=c.people||[];c.toString=function(b){var a="mixpanel";"mixpanel"!==d&&(a+="."+d);b||(a+=" (stub)");return a};c.people.toString=function(){return c.toString(1)+".people (stub)"};i="disable track track_pageview track_links track_forms register register_once alias unregister identify name_tag set_config people.set people.set_once people.increment people.append people.track_charge people.clear_charges people.delete_user".split(" ");
+for(g=0;g<i.length;g++)f(c,i[g]);b._i.push([a,e,d])};b.__SV=1.2;a=f.createElement("script");a.type="text/javascript";a.async=!0;a.src="//cdn.mxpnl.com/libs/mixpanel-2-latest.min.js";e=f.getElementsByTagName("script")[0];e.parentNode.insertBefore(a,e)}})(document,window.mixpanel||[]);
+mixpanel.init("ec1307c86f23aa7b8c66951a12a65303");</script><!-- end Mixpanel -->
+    <script type="text/javascript">
+      mixpanel.identify('{!JSENCODE($User.Id)}');
+      mixpanel.register({
+        "userId": '{!JSENCODE($User.Id)}',
+        "orgId": '{!JSENCODE($Organization.Id)}',
+        "orgName": '{!JSENCODE($Organization.Name)}',
+        "userLocale": currentUserLocale
+      });
+
+      navigator.sayswho= (function(){
+        var ua= navigator.userAgent, tem, 
+        M= ua.match(/(opera|chrome|safari|firefox|msie|trident(?=\/))\/?\s*(\d+)/i) || [];
+        if(/trident/i.test(M[1])){
+            tem=  /\brv[ :]+(\d+)/g.exec(ua) || [];
+            return 'IE '+(tem[1] || '');
+        }
+        if(M[1]=== 'Chrome'){
+            tem= ua.match(/\bOPR\/(\d+)/)
+            if(tem!= null) return 'Opera '+tem[1];
+        }
+        M= M[2]? [M[1], M[2]]: [navigator.appName, navigator.appVersion, '-?'];
+        if((tem= ua.match(/version\/(\d+)/i))!= null) M.splice(1, 1, tem[1]);
+        return M.join(' ');
+      })();
+      mixpanel.register({"Browser Version" : navigator.sayswho});
+    </script>
+    <script type="text/javascript">
+      // Include the UserVoice JavaScript SDK (only needed once on a page)
+      UserVoice=window.UserVoice||[];(function(){var uv=document.createElement('script');uv.type='text/javascript';uv.async=true;uv.src='//widget.uservoice.com/u7F1mkEtnHSiWHnPEvWCw.js';var s=document.getElementsByTagName('script')[0];s.parentNode.insertBefore(uv,s)})();
+
+      //
+      // UserVoice Javascript SDK developer documentation:
+      // https://www.uservoice.com/o/javascript-sdk
+      //
+
+      // Set colors
+      UserVoice.push(['set', {
+        accent_color: '#448dd6',
+        trigger_color: 'white',
+        trigger_background_color: 'rgba(46, 49, 51, 0.6)',
+        position: 'right',
+        menu_enabled: true,
+        target: false
+      }]);
+
+      // Identify the user and pass traits
+      // To enable, replace sample data with actual user traits and uncomment the line
+      UserVoice.push(['identify', {
+        email:'{!JSENCODE($User.Email)}', // User’s email address
+        name:'{!JSENCODE($User.FirstName)} {!JSENCODE($User.LastName)}' // User’s real name
+      }]);
+
+
+      // Or, use your own custom trigger:
+      // UserVoice.push(['addTrigger', '#bracket-labs-feedback', { mode: 'contact' }]);
+      UserVoice.push(['autoprompt', {}]);
+    </script>
+
+    <div id="tr-app-container" class="tr-bootstrap slds" style="display:inline-block; width:100%;" aria-label="TaskRay App">
+
+    </div>
+
+    <style type="text/css" title="dynamic-doc-css">
+     
+      @font-face {
+        font-family: ProximaNovaSoft-Regular;
+        src: url({!URLFOR($Resource.trSF1Resources, 'bootstrap-sf1/fonts/proximanovasoft-regular.woff')});
+      }
+      @font-face {
+        font-family: ProximaNovaSoft-SemiBold;
+        src: url({!URLFOR($Resource.trSF1Resources, 'bootstrap-sf1/fonts/proximanovasoft-semibold.woff')});
+      }
+      
+      /* Planning view classes with custom gradients */
+      <apex:variable var="colInt" value="{!0}" /> 
+      <apex:repeat value="{!global_listColors}" var="listColorMap">
+        .progress-div-{!colInt}{
+          color: #ffffff;
+          text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
+          background-color: {!listColorMap['color']};
+        }
+
+        .planning-view-list-{!colInt}:before{
+          color: {!listColorMap['color']} !important;
+        }
+
+        .taskcard-next-icon-hover-{!colInt}:hover:before{
+          color: {!listColorMap['color']} !important;
+        }
+
+        <apex:variable var="colInt" value="{!colInt+1}"/>
+      </apex:repeat>
+
+      .tr-spinner-container {
+        opacity: 1;
+        left: -moz-calc(50% - 37px);
+        left: -webkit-calc(50% - 37px);
+        left: calc(50% - 37px);
+        top: -moz-calc(50% - 37px);
+        top: -webkit-calc(50% - 37px);
+        top: calc(50% - 37px);
+        position: absolute;
+        width: 75px;
+        height: 75px;
+        overflow:hidden;
+      }
+
+      .tr-spinner {
+        width: 300px;
+        height: 75px;
+        background: url({!URLFOR($Resource.trplugins, 'images/loader.sprite.png')}) left center;
+        -webkit-animation: play 2s steps(4) infinite;
+        -moz-animation: play 2s steps(4) infinite;
+        -ms-animation: play 2s steps(4) infinite;
+        -o-animation: play 2s steps(4) infinite;
+        animation: play 2s steps(4) infinite;
+        margin-left: -225px;
+      }
+
+      
+        @-webkit-keyframes play {
+           from { -webkit-transform: translateX(0) }
+             to { -webkit-transform: translateX(300px) }
+        }
+
+        @-moz-keyframes play {
+           from { -moz-transform: translateX(0) }
+             to { -moz-transform: translateX(300px) }
+        }
+
+        @-ms-keyframes play {
+           from { ms-transform: translateX(0) }
+             to { ms-transform: translateX(300px) }
+        }
+
+        @-o-keyframes play {
+           from { transform: translateX(0) }
+             to { transform: translateX(300px) }
+        }
+
+        @keyframes play {
+           from { transform: translateX(0) }
+             to { transform: translateX(300px) }
+        }
+
+        .tr-spinner-text{
+          opacity: 1;
+          width: 100%;
+          text-align: center;
+          top: -moz-calc(50% + 38px);
+          top: -webkit-calc(50% + 38px);
+          top: calc(50% + 38px);
+          position: absolute;
+          padding-top: 4px;
+          color: white;
+          font-size: 20px;
+        }
+    </style>
+    <script type='text/javascript' src="//wurfl.io/wurfl.js"></script>
+    <!--<script type="text/javascript" src="//cdn.raygun.io/raygun4js/raygun.min.js"></script>
+    <script>
+      Raygun.init('dcde9j8yIQrgfWaQUeZI5w==').attach();
+      //handler method
+      var beforeSend = function(payload) {
+          var stacktrace = payload.Details.Error.StackTrace;
+
+          var normalizeFilename = function(filename) {
+              var indexOfJsRoot = filename.indexOf("js");
+              return 'https://bracketlabs-source.com/' + filename.substring(indexOfJsRoot);
+          }
+
+          for(var i = 0 ; i < stacktrace.length; i++) {
+              var stackline = stacktrace[i];
+              stackline.FileName = normalizeFilename(stackline.FileName);
+          }
+          return payload;
+      }
+
+      //attaching the handler to the Raygun provider
+      Raygun.onBeforeSend(beforeSend);
+    </script>-->
+    <script src="{!URLFOR($Resource.trplugins, 'customjs/react-bundle.js')}" />
+
+</apex:page>

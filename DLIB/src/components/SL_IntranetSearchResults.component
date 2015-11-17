@@ -1,0 +1,491 @@
+<apex:component controller="SL_IntranetSearchResultsController" allowDML="true" id="SearchResults">
+	<apex:attribute assignTo="{!compImpl}" name="aComponentImpl" type="WidgetAbstract" description="component implementation object" required="true"/>
+	
+	<link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/css/icons.css')}" />
+    <link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/css/icons-mobile.css')}" />
+    <link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/css/categories.css')}" />
+    
+    <span id="detailwidgetSL_IntranetSearchResults">
+	    <div class="wc-widget SL_IntranetSearchResults" id="widget{!id}" >
+			<apex:form id="SearchResultsForm">
+				<apex:actionFunction id="getResults" 
+					name="widget{!id}.getResults" 
+					action="{!getSearchResults}" 
+					rerender="EmployeeDirectory, Documents, Posts, Calendars, Sobject, mobSearchResults" 
+					status="loader" onComplete="reRenderCss(); initAddFocusClass();" 
+					onbeforedomupdate="widget{!id}.actionFuncCB('getResults')"> 
+				    <apex:param name="objectAPI" value="" assignTo="{!MyImpl.strSobject}"/>
+				    <apex:param name="objectLabel" value="" assignTo="{!MyImpl.strLabel}"/>
+				    <apex:param name="objectFieldsetToDisp" value="" assignTo="{!MyImpl.strFieldsetToDisplay}"/>
+				    <apex:param name="objectFieldsetToSrch" value="" assignTo="{!MyImpl.strFieldsetToSearch}"/>
+				    <apex:param name="txtSearch" value="" assignTo="{!MyImpl.searchText}"/>    
+				</apex:actionFunction>
+			
+				<apex:actionFunction id="getMoreRecords" name="widget{!id}getMoreRecords" 
+					action="{!getMoreRecords}" rerender="EmployeeDirectory, Documents, Posts, Calendars" 
+					status="loader" onComplete="reRenderCss();"/>
+				
+				<apex:actionFunction id="getMoreRecordsForMobile" name="widget{!id}getMoreRecordsForMobile" 
+					action="{!getMoreRecordsForMobile}" rerender="mobSearchResults" 
+					status="loader" onComplete="reRenderCss();"/>
+				
+				<apex:actionFunction id="prev" name="widget{!id}prev" action="{!prevRecords}" oncomplete="$(window).scrollTop(0);" rerender="Documents" 	status="loader"/>
+				
+				<apex:actionFunction id="next" name="widget{!id}next" action="{!nextRecords}" oncomplete="$(window).scrollTop(0);" rerender="Documents" status="loader"/>
+				
+				<apex:actionFunction id="goToPage" name="widget{!id}goToPage" action="{!goToPage}" oncomplete="$(window).scrollTop(0);" rerender="Documents" status="loader"> 
+				    <apex:param name="pageNo" value=""/> 
+				</apex:actionFunction>
+				
+				<!-- Start : Notification Pagination -->
+			     <apex:actionFunction id="prevSobject" name="widget{!id}prevSobject" action="{!prevRecords}" oncomplete="$(window).scrollTop(0);" rerender="Sobject" status="loader"/> 
+			     <apex:actionFunction id="nextSobject" name="widget{!id}nextSobject" action="{!nextRecords}" oncomplete="$(window).scrollTop(0);" rerender="Sobject" status="loader"/>
+			     <apex:actionFunction id="goToPageSobject" name="widget{!id}goToPageSobject" action="{!goToPage}" oncomplete="$(window).scrollTop(0);" rerender="Sobject" status="loader"> 
+			         <apex:param name="pageNo" value=""/> 
+			     </apex:actionFunction>
+			     <!-- End : Notification Pagination -->
+			</apex:form>
+			
+			<script>
+	    		if(loadingCategory != '')
+	    		{
+	    			var arr = loadingCategory.split('#-#-#');
+	    			widget{!id}.getResults(arr[0], arr[1], arr[2], arr[3], arr[4]);
+	    			loadingCategory = '';
+	    		}
+	    	</script>
+	    	
+		    <!-------------------- page body starts from here  --------------------->
+		    <div id="content" >
+		        <div>
+		            <fieldset>
+		                <!------------------------ Start of employee Directory section  ----------------------->
+		                <apex:outputpanel id="EmployeeDirectory">
+		                    <apex:outputPanel rendered="{!MyImpl.strSobject == 'User' && MyImpl.showComponent}" layout="none">
+		                        <div class="headline">
+		                            <h2 style="padding-top : 2px;">{!MyImpl.strLabel}</h2>
+		                            <span class="search-for" >Search for: {!MyImpl.searchText}</span>
+		                        </div> 
+		                        <apex:repeat id="emplDirRows" value="{!MyImpl.lstUserSearchResults}" var="emp" rows="{!MyImpl.configuration.numOfRecordeToBedisplayed}" rendered="{!MyImpl.lstUserSearchResults.size > 0}"> 
+			                            <div class="feed">
+			                                <apex:outputPanel rendered="{!MyImpl.isSmallPhotoSelected}" layout="none">
+			                                    <div class="avatar">
+			                                        <a href="SL_Intranet?page=Employee Profile&id={!emp['id']}">
+			                                            <img src="{!emp['SmallPhotoUrl']}" alt="image description" width="50" height="50" />
+			                                        </a>    
+			                                    </div>
+			                                </apex:outputPanel>
+			                                <div class="info">
+			                                    <apex:repeat id="emplDirRows2" value="{!MyImpl.lstObjectFieldNeedToDisplay}" var="fldName">
+			                                        <apex:outputPanel rendered="{!IF(fldName == 'Name', true, false)}" layout="none">
+	                                                     <h3><a href="SL_Intranet?page=Employee Profile&id={!emp['id']}">{!emp[fldName]}</a></h3>
+	                                                </apex:outputPanel>
+	                                                <apex:outputPanel rendered="{!IF(fldName == 'Title' && !ISNULL(emp[fldName]) && !ISBLANK(emp[fldName]), true, false)}" layout="none">
+	                                                    <strong class="title"><b>{!emp[fldName]}</b></strong>
+	                                                </apex:outputPanel>
+		                                            <p style="margin-bottom: 5px;">      
+		                                               	<apex:outputPanel rendered="{!IF((fldName == 'Title' || fldName == 'Name' || fldName == 'SmallPhotoUrl' || fldName == 'Office__c' || fldName == 'Extension' || fldName == 'Phone' || fldName == 'Email' || fldName == 'FullPhotoUrl'), false, true)}" layout="none">
+		                                                   	<apex:outputpanel rendered="{!IF(emp[fldName] == '' || emp[fldName] == null, false, true)}" layout="none">
+		                                                        <apex:outputPanel rendered="{!IF(fldName == 'MobilePhone' , true, false)}" layout="none">
+		                                                         	Mobile: 
+		                                                         	<span style="font-size: 11px;display:{!IF(emp[fldName] == '' || emp[fldName] == null,'none','')};">
+		                                                         		{!emp[fldName]}
+		                                                         	</span>
+		                                                        </apex:outputPanel>
+		                                                        <apex:outputPanel rendered="{!IF(fldName == 'MobilePhone', false, true)}" layout="none">
+																	<apex:outputPanel rendered="{!If(MyImpl.mapFieldAPINameToFieldLabel[fldName] != null && MyImpl.mapFieldAPINameToFieldLabel[fldName] != '', true, false)}">
+																		{!MyImpl.mapFieldAPINameToFieldLabel[fldName]}  
+																	</apex:outputPanel>
+																		: <apex:outputField value="{!emp[fldName]}"/>
+		                                                        </apex:outputPanel>
+		                                                   	</apex:outputpanel>
+		                                               	</apex:outputPanel>
+		                                                <apex:outputPanel rendered="{!IF(fldName == 'Phone', true, false)}" layout="none">
+		                                                 	Phone: 
+		                                                	<span style="font-size: 11px;display:{!IF(emp[fldName] == '' || emp[fldName] == null,'none','')};">
+		                                                		{!emp[fldName]}  
+		                                                	</span>
+			                                            </apex:outputPanel>
+			                                            <apex:outputPanel rendered="{!IF(fldName == 'Email', true, false)}" layout="none">
+		                                                 	Email: 
+		                                                	<span style="font-size: 11px;display:{!IF(emp[fldName] == '' || emp[fldName] == null,'none','')};">
+		                                                		{!emp[fldName]}  
+		                                                	</span>
+			                                            </apex:outputPanel>
+			                                            <apex:outputPanel rendered="{!IF(fldName == 'FullPhotoUrl', true, false)}" layout="none">
+		                                                 	Url for full-sized Photo : 
+		                                                	<span style="font-size: 11px;display:{!IF(emp[fldName] == '' || emp[fldName] == null,'none','')};">
+		                                                		{!emp[fldName]}  
+		                                                	</span>
+			                                            </apex:outputPanel>
+		                                            </p>
+			                                    </apex:repeat>
+			                                </div>
+			                            </div>
+		                        </apex:repeat>
+		                                    
+		                        <apex:outputPanel rendered="{!MyImpl.lstUserSearchResults.size == 0}" layout="none"><br />
+		                            <p class="noResult"> No results found, please try a different search term.</p>
+		                        </apex:outputPanel> 
+		                     
+		                        <apex:outputPanel rendered="{!(MyImpl.lstUserSearchResults.size - MyImpl.configuration.numOfRecordeToBedisplayed) > 0}" layout="none">
+		                            <a href="javascript:widget{!id}getMoreRecords();" class="see-more">{!$Label.SL_Pagination_SeeMore}</a>
+		                        </apex:outputPanel>
+		 
+		                    </apex:outputPanel>
+		                </apex:outputpanel>
+		                <!------------------- End of Employee Directory section ------------------->
+		                             
+		                                        
+		                <!------------------- Start of Content Section  ---------------------------->
+		                <apex:outputPanel id="Documents" >
+		                    <apex:outputpanel rendered="{!MyImpl.strSobject == 'ContentVersion' && MyImpl.showComponent}" layout="none">		                        
+		                        <div class="filter-block page-heading search-heading">
+		                            <h2 style="padding-top : 2px;">{!MyImpl.strLabel}</h2>
+		                            <span class="search-for">Search for: {!MyImpl.searchText}</span> 
+		                        </div>
+		                        <apex:variable var="index" value="{!0}" />
+		                        <apex:repeat id="contentRows" value="{!MyImpl.lstContentSearchResults}" first="{!MyImpl.startIndex}" rows="{!MyImpl.rowsPerPage}" var="C" rendered="{!MyImpl.lstContentSearchResults.size > 0}">
+		                            <apex:outputPanel rendered="{!C.FileType == 'LINK'}" layout="none">
+		                                <div class="feed" style="padding: 10px 0px 10px 0px;width:470px;word-wrap:break-word;">
+		                                    <div class="icon" style="float: left;margin-top: 3px;">
+		                                        <span class="{!C.FileType}" style="padding-right: 16px;">&nbsp;</span>
+		                                    </div>
+		                                    <div class="info">
+		                                        <h3><a href="{!$Site.Prefix}{!C.ContentUrl}" target="_blank">{!C.Title}</a></h3>
+		                                        <div style="word-wrap:break-word;">{!C.Description}</div>
+		                                    
+			                                    <apex:repeat id="displayedFieldsRows" value="{!MyImpl.lstObjectFieldNeedToDisplay}" var="contentField">
+													<apex:outputPanel style="{!If(C[contentField] != null, 'display:block','display:none')};" layout="none">
+														<apex:outputField value="{!C[contentField]}" />
+														<br/>
+													</apex:outputPanel>
+												</apex:repeat>
+											</div>
+		                                </div>
+		                            </apex:outputPanel>
+		                                                
+		                            <apex:outputPanel rendered="{!C.FileType != 'LINK'}" layout="none">
+		                                <div class="feed" style="padding: 10px 0px 10px 0px;width:470px;word-wrap:break-word;">
+		                                    <div class="icon" style="float:left;">
+	                                            <div class="{!C.FileType}" style="cursor: pointer;height:16px;width:16px;" onclick="javascript:document.getElementById('overlay{!C.Id}').style.display = 'block'; document.documentElement.style.overflow = 'hidden';">&nbsp;</div>
+	                                        </div>
+		                                    <div class="info">
+		                                        <h3><a href="{!$Site.Prefix}/sfc/servlet.shepherd/version/download/{!C.Id}">{!C.Title}</a></h3>
+		                                        <div style="word-wrap:break-word;">{!C.Description}</div>
+		                                    
+			                                    <apex:repeat id="displayedFieldsRows2" value="{!MyImpl.lstObjectFieldNeedToDisplay}" var="contentField">
+													<span style="{!If(C[contentField] != null, 'display:block','display:none')};">
+														<apex:outputField value="{!C[contentField]}" />
+														<br/>
+													</span>
+												</apex:repeat>
+											</div>
+		                                </div>
+		                            </apex:outputPanel> 
+		                                                
+		                            <div id="overlay{!C.Id}" class="docViewerPanel" style="display: none;position: absolute;">
+		                                <div  role="dialog" aria-live="assetive" aria-describedby="docViewerOverlayTitle" class="overlayDialog docViewerOverlay" style="width: 730px; height: 500px; display: block; visibility: visible; left: 318px; top: 29px;">
+		                                    <div class="topRight">
+		                                        <a title="Start of Dialog" style="width:2px;height:2px;position:absolute;border:0;margin:0;padding:0;background:none;outline:none;z-index:-1;cursor:none;" onclick="return false;" href="javascript:void(0)">Start of Dialog</a>
+		                                        <div class="topLeft">
+		                                            <a class="dialogClose" href="javascript:void(0)" onclick="javascript:document.getElementById('overlay{!C.Id}').style.display = 'none';" onmouseout="this.className = 'dialogClose'" onmouseover="this.className = 'dialogCloseOn'" tabindex="0" title="Close" >Close</a>
+		                                        </div>
+		                                    </div>
+		                                    <div class="middle">
+		                                        <div  class="innerContent" >
+		                                            <div  class="docViewerContainerParent" style="height: 484px;">
+		                                                <div class="docViewerContainer">
+		                                                    <embed  width="100%" height="100%" align="middle" type="application/x-shockwave-flash" wmode="opaque" pluginspage="http://www.adobe.com/go/getflashplayer" allowfullscreen="true" allowscriptaccess="sameDomain" name="renditionLarge" bgcolor="#f3f3f3" quality="high" flashvars="shepherd_prefix=/sfc/servlet.shepherd&v={!C.Id}&mode=chatter_bubble&in_tests=false" src="{!$Site.Prefix}/_swf/121310/sfc/flex/DocViewer.swf"/>
+		                                                    <noembed>&lt;p&gt;Flash file preview&lt;/p&gt;</noembed>
+		                                                </div>
+		                                            </div>
+		                                        </div>
+		                                    </div>
+		                                    <div class="bottomRight">
+		                                        <input type="text" style="width:2px;height:2px;position:absolute;border:0;margin:0;padding:0;background:none;outline:none;z-index:-1;cursor:none;" />
+		                                        <div class="bottomLeft"/>
+		                                    </div>
+		                                </div>
+		                            </div>
+		                            <apex:variable var="index" value="{!index + 1}"/>                     
+		                        </apex:repeat>
+		                        
+		                        <apex:outputPanel rendered="{!MyImpl.lstContentSearchResults.size == 0}" layout="none"><br />
+		                            <p class="noResult"> No results found, please try a different search term.</p>
+		                        </apex:outputPanel> 
+		                                        
+		                        <!------------- Display Pagination -------------->
+		                        <apex:outputpanel rendered="{!IF(MyImpl.lstContentSearchResults.size > 0, true, false)}" layout="none">
+		                            <ul class="paging" id="widget{!id}pagingDiv">
+		                                <li id="widget{!id}fstBtn" class="first"><a href="javascript:widget{!id}prev();">PREV</a></li>
+		                                <span id="widget{!id}paging"></span>
+		                                <li id="widget{!id}lstBtn" class="last"><a href="javascript:widget{!id}next();">NEXT</a></li>
+		                            </ul>
+		                        </apex:outputpanel>
+		                        
+		                        <script>
+		                        	widget{!id}.renderPagination('{!id}', {!MyImpl.totalPages}, {!MyImpl.pageNo});   
+		                        </script>
+		                      
+		                    </apex:outputpanel>
+		                </apex:outputPanel>
+		                <!------------------- End of Content Section  ---------------------------->
+		                                        
+		                
+		                <!-- ---------------- Start of Post section  ------------------------------>
+		                <apex:outputPanel id="Posts">
+		                    <apex:outputPanel rendered="{!MyImpl.strSobject == 'FeedItem' && MyImpl.showComponent}" layout="none">
+		                        <h2>{!MyImpl.strLabel}</h2>
+		                        <span class="search-for">Search for: {!MyImpl.searchText}</span>
+		                        <apex:outputpanel rendered="{!LEN(TRIM(MyImpl.searchText)) >0}" layout="none">
+									<script>
+                                        var chatterWidget{!id} = new SL_IntranetChatterPlugIn('{!id}');
+                                    </script>
+		                        	<c:SL_IntranetChatterPlugIn id="chatterPlugInAtSearch" objectRecordId="" chatterImpl="{!MyImpl.Chatter}" chatterId="{!id}" searchText="{!MyImpl.searchText}"/>		                          	
+	                        	</apex:outputpanel>     
+	                        	<apex:outputpanel styleClass="noResult" rendered="{!LEN(TRIM(MyImpl.searchText)) ==0}" layout="none">
+	                        		No results found, please try a different search term.
+	                        	</apex:outputpanel>       
+		                   
+		                    </apex:outputPanel>
+		                                
+		                </apex:outputPanel>
+		                <!------------------- End of Post section  -------------------------------->
+		                            
+		                            
+		                <!------------------- Start of Calendars Entries section  ------------------> 
+		                <apex:outputPanel id="Calendars">
+		                    <apex:outputPanel rendered="{!MyImpl.strSobject == 'Intranet_Event__c' && MyImpl.showComponent}" layout="none"> 
+		                        
+		                        <div class="filter-block page-heading search-heading">
+		                            <h2 style="padding-top : 2px;">{!MyImpl.strLabel}</h2>
+		                            <span class="search-for">Search for: {!MyImpl.searchText}</span>
+		                        </div>
+		                        <apex:repeat id="eventsRow" value="{!MyImpl.lstEventSearchResults}" rows="{!MyImpl.configuration.numOfRecordeToBedisplayed}" var="h" rendered="{!MyImpl.lstEventSearchResults.size > 0}">
+		                            <div class="feed">
+		                             <div class="info">
+		                                     
+		                                 <h3 ><a onclick="widget{!id}.viewIntranetEvents('{!h['Id']}',false, '');" style="cursor: pointer;">{!h['Name']}</a></h3>
+		                                 
+		                                 <p>{!h['RecordType.Name']}</p>
+		                                 
+										 <apex:repeat id="eventsRow2" value="{!MyImpl.lstSObjectInfoFields}" var="eventField">
+											<span style="{!If(AND(h[eventField.fieldAPIName] != null,eventField.fieldAPIName == 'Date_of_Event__c'), 'display:block','display:none')};">
+												<em>
+													<apex:outputField value="{!h['Date_of_Event__c']}"/>
+												</em>
+											</span>
+											<span style="{!If(AND(h[eventField.fieldAPIName] != null,eventField.fieldAPIName == 'End_Date__c'), 'display:block','display:none')};">
+												<em>
+													<apex:outputField value="{!h['End_Date__c']}"/>
+												</em>
+											</span>
+											<span style="{!If(AND(h[eventField.fieldAPIName] != null,eventField.fieldAPIName == 'Comments__c'), 'display:block','display:none')};">
+												<p><apex:outputField value="{!h['Comments__c']}" /></p>
+											</span>
+											<span style="{!If(AND(h[eventField.fieldAPIName] != null,eventField.fieldAPIName != 'Date_of_Event__c',eventField.fieldAPIName == 'End_Date__c',eventField.fieldAPIName == 'Comments__c') , 'display:block','display:none')};">
+												<apex:outputText value="{!h[eventField.fieldAPIName]}" />
+											</span>
+										</apex:repeat>
+		                             </div>
+		                            </div>
+		                        </apex:repeat> 
+		                                    
+		                        <!-- When No results found -->
+		                        <apex:outputPanel rendered="{!MyImpl.lstEventSearchResults.size == 0}" layout="none"><br />
+		                            <p class="noResult"> No results found, please try a different search term.</p>
+		                        </apex:outputPanel> 
+		                        <!-- End of No results found section -->
+		                    
+		                        <!-- To display more records -->
+		                        <apex:outputPanel rendered="{!(MyImpl.lstEventSearchResults.size - MyImpl.configuration.numOfRecordeToBedisplayed) > 0}" layout="none">
+		                            <a href="javascript:widget{!id}getMoreRecords();" class="see-more">{!$Label.SL_Pagination_SeeMore}</a>
+		                        </apex:outputPanel>
+		                         <!-- End of display more Section -->
+		                    
+		                    </apex:outputPanel>
+		                </apex:outputPanel>
+		                <!------------------- End of Calendars Entries section  -------------------->
+		                
+		                 <!------------------- Start of Sobject section  -------------------->
+		                 <apex:outputPanel id="Sobject">
+		                    <apex:outputPanel rendered="{!If(MyImpl.strSobject != 'FeedItem' && MyImpl.strSobject != 'Intranet_Event__c' && MyImpl.strSobject != 'ContentVersion' && MyImpl.strSobject != 'User' && MyImpl.showComponent, true, false)}" layout="none">
+		                        <h2>{!MyImpl.strLabel}</h2>  
+		                        <span class="search-for">Search for: {!MyImpl.searchText}</span>
+					            <ul style="list-style: none; padding: 0px 0 13px;margin-top: 0px;width:473px;">
+					                 <apex:repeat id="sobjectRows" value="{!MyImpl.lstSobject}" var="obj" first="{!MyImpl.startIndex}" rows="{!MyImpl.rowsPerPage}">
+					                      <li style="border-bottom: 1px solid #ededed;padding: 5px 0px 5px 0px;">
+					                           <h3>
+					                           		<apex:outputpanel rendered="{!LEFT(obj['Id'],3) != null}" layout="none">  
+					                           		<a style="cursor: pointer;" onclick="
+					                           					if('{!JSENCODE(myimpl.strSobject)}' == 'Notification__c')
+					                           					{
+					                           						widget{!id}.viewNotifications('{!obj['Id']}', false);
+					                           					}
+					                           					else if('{!JSENCODE(myimpl.strSobject)}' == 'Intranet_Event__c')
+					                           					{
+					                           						widget{!id}.viewIntranetEvents('{!obj['Id']}',false, '');
+					                           					}
+					                           					else
+					                           					{
+					                           						widget{!id}.viewSobject('{!obj['Id']}', '{!myimpl.strSobject}', false);
+					                           					
+					                           					}
+					                           					" >
+					                           			{!obj['Name']}
+					                           		</a>
+					                           		</apex:outputpanel>
+					                           	</h3>
+					                           <p></p>
+													<apex:repeat id="sobjectRows2" value="{!MyImpl.lstSObjectInfoFields}" var="fieldName">
+														<apex:outputpanel rendered="{!If(AND(obj[fieldName.fieldAPIName] != null,fieldName.fieldAPIName != 'Name',fieldName.fieldType != 'DATE',fieldName.fieldType != 'DATETIME'), true,false)}" style="word-wrap: break-word;" layout="none">
+															<apex:outputText value="{!obj[fieldName.fieldAPIName]}" escape="false" />
+															<br/>
+														</apex:outputpanel>
+														<apex:outputpanel rendered="{!If(AND(obj[fieldName.fieldAPIName] != null,fieldName.fieldType == 'DATE'), true,false)}" style="word-wrap: break-word;" layout="none">
+															<apex:outputField value="{!obj[fieldName.fieldAPIName]}" />
+															<br/>
+														</apex:outputpanel>
+														<apex:outputpanel rendered="{!If(AND(obj[fieldName.fieldAPIName] != null,fieldName.fieldType == 'DATETIME'), true,false)}" style="word-wrap: break-word;" layout="none">
+															<apex:outputField value="{!obj[fieldName.fieldAPIName]}" />
+															<br/>
+														</apex:outputpanel>
+													</apex:repeat>
+					                      </li>
+					                 </apex:repeat>
+					            </ul>
+					            <apex:outputpanel rendered="{!Myimpl.lstSobject.size == 0}" layout="none">
+				               		<p class="noResult"> No results found, please try a different search term.</p>
+				           		</apex:outputpanel>
+				            	 
+				            <!-------------Start : Display Pagination for Sobject -------------->
+				            <apex:outputpanel rendered="{!IF(MyImpl.lstSobject.size > 0 , true, false)}" layout="none">
+				                 <ul class="paging" id="widget{!id}pagingDivSobject">
+				                     <li id="widget{!id}fstBtnSobject" class="first"><a href="javascript:widget{!id}prevSobject();">prev</a></li>
+				                     <span id="widget{!id}pagingSobject"></span>
+				                     <li id="widget{!id}lstBtnSobject" class="last"><a href="javascript:widget{!id}nextSobject();">next</a></li>
+				                 </ul>
+				             </apex:outputpanel> 
+				             
+				             <script>
+				             	 widget{!id}.renderPagination('{!id}', {!MyImpl.totalPages}, {!MyImpl.pageNo}, true);
+				             </script>
+				             <!-------------End : Display Pagination for Sobject -------------->
+							</apex:outputpanel>
+						</apex:outputPanel>
+						 <!-- End - Sobject -->
+		            </fieldset>
+		        </div>
+		    </div>
+		    <!-- Page body ends here -->
+			<br/>
+		</div>
+ 		
+		<div class="wc-widget-mobile SL_IntranetSearchResults" >
+			<apex:outputPanel id="mobSearchResults">
+				<div class="content-holder">
+			        <ul class="list links" >
+			           <apex:repeat id="mobSobjectRows" value="{!Myimpl.lstSobject}" var="emp" rendered="{!$CurrentPage.parameters.type == 'Emp'}" rows="{!Myimpl.configuration.numOfRecordsToBedisplayed_Mobile}">
+			               <li style="margin-left:0px;">
+			                   <apex:outputPanel rendered="{!Myimpl.isSmallPhotoSelected}" layout="none">
+			                       <div class="avatar">
+			                           <a href="SL_Intranet?Page=Employee Profile&id={!emp.id}&searchText={!Myimpl.searchText}"><img src="{!emp['SmallPhotoUrl']}" alt="image description" width="66" height="63" /></a>
+			                       </div>
+			                   </apex:outputPanel>
+			                   
+			                   <div class="info">
+			                       <apex:repeat id="mobSobjectRows2" value="{!Myimpl.lstObjectFieldNeedToDisplay}" var="fldName">
+			                           <apex:outputPanel rendered="{!IF(fldName == 'Name', true, false)}" layout="none">
+			                               <h3><a href="SL_Intranet?Page=Employee Profile&id={!emp.id}&searchText={!Myimpl.searchText}">{!emp[fldName]}</a></h3>
+			                           </apex:outputPanel>
+			                           <apex:outputPanel rendered="{!IF(fldName == 'Title' && !ISNULL(emp[fldName]) && !ISBLANK(emp[fldName]), true, false)}" layout="none">
+			                               <span class="sub-info">{!emp[fldName]}</span>
+			                           </apex:outputPanel>
+			                           <apex:outputPanel rendered="{!IF(fldName == 'Title' && (ISNULL(emp[fldName]) || ISBLANK(emp[fldName])), true, false)}" layout="none">
+			                               <span class="sub-info"><b>&nbsp;</b></span>
+			                           </apex:outputPanel>
+			                           <apex:outputPanel rendered="{!IF(fldName == 'Phone', true, false)}" layout="none">
+			                               <p>Phone: <a style="font-size: 30px;cursor:pointer;display:{!IF(emp[fldName] == '' || emp[fldName] == null,'none','')};" href="">{!emp[fldName]} <img height="25px" width="15px" src="{!URLFOR($Resource.SL_IntranetHUB,'/IntranetHub/images/icon-phone.png')}"/></a></p>
+			                           </apex:outputPanel>
+			                           <apex:outputPanel rendered="{!IF(fldName == 'Email', true, false)}" layout="none">
+			                               <p>Email: {!emp[fldName]}</p>
+			                           </apex:outputPanel>
+			                           
+			                           
+			                           <apex:outputPanel rendered="{!IF((fldName == 'Title' || fldName == 'Name' || fldName == 'SmallPhotoUrl' || fldName == 'Phone' || fldName == 'Email'), false, true)}" layout="none">
+			                               <apex:outputpanel rendered="{!IF(emp[fldName] == '' || emp[fldName] == null, false, true)}" layout="none">
+			                                   <p>{!fldName}: {!emp[fldName]}</p>
+			                               </apex:outputpanel>
+			                               <apex:outputpanel rendered="{!IF(emp[fldName] == '' || emp[fldName] == null, true, false)}" layout="none">
+			                                   <p>{!fldName}:&nbsp;</p>
+			                               </apex:outputpanel>
+			                           </apex:outputPanel>
+			                           
+			                       </apex:repeat>
+			                   </div>
+			               </li>
+			           </apex:repeat>
+			           
+			           <apex:repeat id="mobContentRows" value="{!Myimpl.lstContentSearchResults}" var="C" rendered="{!$CurrentPage.parameters.type == 'Docs'}" rows="{!Myimpl.configuration.numOfRecordsToBedisplayed_Mobile}">
+			               <li style="margin-left:0px;">
+			                   <apex:outputPanel rendered="{!C.FileType == 'LINK'}" layout="none">
+			                       <div class="avatar">
+			                           <div class="{!C.FileType}1" style="height:32px;width:32px;">&nbsp;</div>
+			                       </div>
+			                       <div class="info">
+			                           <h3><a href="{!C.ContentUrl}" target="_blank">{!C.Title}</a></h3>
+			                           <div style="word-wrap:break-word;">{!C.Description}</div>
+			                       </div>
+			                   </apex:outputPanel>
+			                   
+			                   <apex:outputPanel rendered="{!C.FileType != 'LINK'}" layout="none">
+			                           <div class="avatar">
+			                               <div class="{!C.FileType}1" style="height:32px;width:32px;">&nbsp;</div>
+			                           </div>
+			                           <div class="info">
+			                               <h3><a href="/sfc/servlet.shepherd/version/download/{!C.Id}">{!C.Title}</a></h3>
+			                               <div style="word-wrap:break-word;">{!C.Description}</div>
+			                           </div>
+			                   </apex:outputPanel> 
+			               </li>
+			           </apex:repeat>
+			          
+			           <apex:outputpanel rendered="{!Myimpl.lstSobject.size == 0 && $CurrentPage.parameters.type == 'Emp' && MyImpl.showComponent}" layout="none">
+			               <li style="margin-left:0px;"><h3 style="font-weight: bold; padding-top: 10px;">No results found, please try a different search term.</h3></li>
+			           </apex:outputpanel>
+			           
+			           <apex:outputPanel rendered="{!Myimpl.lstContentSearchResults.size == 0 && $CurrentPage.parameters.type == 'Docs' && MyImpl.showComponent}" layout="none"><br />
+			               <li style="margin-left:0px;"><h3 style="font-weight: bold; padding-top: 10px;">No results found, please try a different search term.</h3></li>
+			           </apex:outputPanel> 
+			           
+			           <apex:outputPanel rendered="{!IF((Myimpl.lstSobject.size - Myimpl.configuration.numOfRecordsToBedisplayed_Mobile) > 0 && $CurrentPage.Parameters.type == 'Emp' && MyImpl.showComponent, true, false)}" layout="none">
+			               <li style="padding: 0 0 0 0;border-bottom: none;margin-left:0px;"><a onclick="widget{!id}getMoreRecordsForMobile();" style="font-size: 2.4em;color: #a3a3a3;" class="see-more">{!$Label.SL_Pagination_SeeMore}</a></li>
+			           </apex:outputPanel>
+			           
+			           <apex:outputPanel rendered="{!IF((Myimpl.lstContentSearchResults.size - Myimpl.configuration.numOfRecordsToBedisplayed_Mobile) > 0 && $CurrentPage.Parameters.type == 'Docs' && MyImpl.showComponent, true, false)}" layout="none">
+			               <li style="padding: 0 0 0 0;border-bottom: none;margin-left:0px;"><a href="javascript:widget{!id}getMoreRecordsForMobile();" style="font-size: 2.4em;color: #a3a3a3;" class="see-more">{!$Label.SL_Pagination_SeeMore}</a></li>
+			           </apex:outputPanel>
+			       </ul>
+		    	</div>
+			</apex:outputPanel>
+		</div> 
+		
+		 
+	</span>
+	
+	<script type="text/javascript">
+        /* Closing doc on press of ESC key */
+        $(document).keyup(function(e) 
+        {
+            var code = (e.keyCode ? e.keyCode : e.which);
+            if (code == 27) {
+                $('.docViewerPanel').hide();
+                document.documentElement.style.overflow = 'auto';
+            } 
+        });
+        
+        hideAddressBar1();
+    </script> 
+		    
+</apex:component>

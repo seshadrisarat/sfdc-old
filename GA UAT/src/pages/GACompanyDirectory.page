@@ -1,0 +1,168 @@
+<!-- ************************************************************************************************************
+* Name          : GACompanyDirectory (controller = GACompanyDirectoryController)
+* Created Date  : 2 May 2013
+* Created By    : Appirio Offshore (Hemant)
+* Description   : [To display the Search results for the contacts (GA Company Employees)]
+* Related Story : S-105969  
+************************************************************************************************************ -->
+
+<apex:page controller="GACompanyDirectoryController" tabStyle="GA_Company_Directory__tab" readOnly="true" id="pg">
+    <script>
+    function checkEnter(e){
+      if(e && e.keyCode == 13)
+      {
+          e.preventDefault();
+          document.getElementById('pg:frm:pgBlock:PBButtons:SearchButton').onclick();
+      }
+    }
+  </script>     
+  <apex:form id="frm">
+  <apex:sectionHeader title="GA Company Directory"/>
+  
+    <apex:pageMessages id="pgMessage"></apex:pageMessages>
+    <apex:pageBlock id="pgBlock">
+            
+        <apex:pageBlockSection columns="2" title="Employee Search Criteria" collapsible="false" id="PBS_ESC">
+            <apex:pageBlockSectionItem >
+                <apex:outPutlabel >User Name</apex:outPutlabel>
+                <apex:inputText style="width:60%;" value="{!contName}" onkeydown="checkEnter(event)" alt="Enter User Name" id="searchinput"/>             
+            </apex:pageBlockSectionItem>
+            
+            <apex:pageBlockSectionItem >
+              <apex:outPutlabel >Location</apex:outPutlabel>
+              <apex:selectList value="{!selectedLocation}" multiselect="false" size="1">
+                  <apex:selectOptions value="{!locationList}"/>
+              </apex:selectList>              
+            </apex:pageBlockSectionItem>
+                                
+           <apex:pageBlockSectionItem >
+              <apex:outPutlabel >Title</apex:outPutlabel>
+              <apex:inputText style="width:60%;" value="{!selectedTitle}" alt="Enter Title"/>
+          </apex:pageBlockSectionItem>
+                    
+          <apex:pageBlockSectionItem >
+             <apex:outPutlabel >Record Type</apex:outPutlabel>
+             <apex:selectList value="{!selectedRecordType}" multiselect="false" size="1">
+                 <apex:selectOptions value="{!recordTypeList}"/>
+             </apex:selectList>              
+          </apex:pageBlockSectionItem>
+                                
+        </apex:pageBlockSection>
+        
+        <apex:pageBlockButtons location="bottom" id="PBButtons"> 
+            <apex:CommandBUtton value="Search" action="{!retriveContactData}" rerender="frm" status="viewPageStatusGo" id="SearchButton"/>
+            &nbsp;&nbsp;&nbsp;
+            <apex:CommandButton action="{!exportPDF}" value="Export To PDF" status="viewPageStatusGo" rendered="{!IF(contLst.size > 0, true,false)}" id="exportButton"/> 
+            &nbsp;&nbsp;&nbsp;
+            <apex:actionStatus stopText="" id="viewPageStatusGo">
+              <apex:facet name="start">
+                  <font color="gray" >Please wait...</font>&nbsp;<img src="/img/loading.gif" />
+              </apex:facet>
+            </apex:actionStatus>
+        </apex:pageBlockButtons>
+      </apex:pageBlock>
+        
+      <apex:pageBlock id="pgBlock_SR">  
+        <apex:pageBlockSection columns="1" title="Search Results" collapsible="false" rendered="{!showData}">
+            
+            <!-- Output Panel If NO records exist   -->
+            <apex:outputPanel rendered="{!IF(contLst.size > 0, false, true)}">
+                <apex:outPutlabel value="No records to display."/>
+            </apex:outputPanel>
+            
+            <!-- Show Pagination Headers Start -->
+            <apex:outputPanel layout="block" styleClass="pSearchShowMore" rendered="{!IF(contLst.size > 0, true, false)}">  
+              Total Records Found: <apex:outputText rendered="{!IF(Con.resultSize==10000,true,false)}">10000 +</apex:outputText><apex:outputText rendered="{!IF(Con.resultSize < 10000,true,false)}">{!Con.resultSize}</apex:outputText>&nbsp;  
+                  
+                  <apex:commandLink action="{!First}" title="First Page" value="First" rendered="{!Con.HasPrevious}" rerender="pgBlock_SR" status="waitStatusTop"/>&nbsp;  
+                  <apex:outputPanel styleClass="pShowLess noLink" style="color:grey" rendered="{!NOT(Con.HasPrevious)}">First</apex:outputPanel>
+                  
+                  <apex:commandLink action="{!Previous}" title="Previous Page" value="Previous" rendered="{!Con.HasPrevious}" rerender="pgBlock_SR" status="waitStatusTop"/>&nbsp;  
+                  <apex:outputPanel styleClass="pShowLess noLink" style="color:grey" rendered="{!NOT(Con.HasPrevious)}">Previous</apex:outputPanel>           
+                  
+                  &nbsp;({!IF(Con.PageNumber == 1,1,((Con.PageNumber -1) * Con.PageSize)+1)}-{!IF(Con.resultSize < Con.PageSize,Con.resultSize,Con.PageNumber * Con.pageSize)})&nbsp;&nbsp;  
+                  
+                  <apex:outputPanel styleClass="pShowLess noLink" style="color:grey" rendered="{!NOT(Con.HasNext)}">Next</apex:outputPanel>           
+                  <apex:commandLink title="Next Page" value="Next" rendered="{!Con.HasNext}" action="{!Next}" rerender="pgBlock_SR" status="waitStatusTop"/>&nbsp; 
+                  
+                  <apex:outputPanel styleClass="pShowLess noLink" style="color:grey" rendered="{!NOT(Con.HasNext)}">Last</apex:outputPanel>           
+                  <apex:commandLink title="Last Page" value="Last" rendered="{!Con.HasNext}" action="{!Last}" rerender="pgBlock_SR" status="waitStatusTop"/>&nbsp; 
+                  
+                  &nbsp;&nbsp;&nbsp;
+                        <apex:actionStatus stopText="" id="waitStatusTop">
+                          <apex:facet name="start">
+                              <font color="gray" >Please wait...</font>&nbsp;<img src="/img/loading.gif" />
+                          </apex:facet>
+                        </apex:actionStatus>            
+          </apex:outputPanel>
+           <!-- Show Pagination Headers End -->    
+            
+            <!-- Show data If records exist     -->
+            <apex:pageBlockTable value="{!contLst}" var="cont" rendered="{!IF(contLst.size > 0, true, false)}">
+                                        
+                    <apex:column headerValue="">
+                    <apex:image url="{!cont.User__r.SmallPhotoUrl}" width="50" height="50" alt="{!cont.User__r.Name}" rendered="{!!ISNULL(cont.User__c)}"/>
+                    <apex:image url="/img/social/unknown_profile_pic.png" width="50" height="50" alt="{!cont.User__r.Name}" rendered="{!ISNULL(cont.User__c)}"/>
+                  </apex:column>
+                  
+                  <apex:column headerValue="Name">
+                    <a href="/{!cont.Id}" target="_blank"><apex:outputLabel value="{!cont.LastName}, {!cont.FirstName}"/></a>
+                  </apex:column>
+                  
+                  <apex:column headerValue="Title">
+                    <apex:outputLabel value="{!cont.Title}"/>
+                  </apex:column>
+                  
+                  <apex:column headerValue="Location">
+                    <apex:outputLabel value="{!cont.MailingCity}"/>
+                  </apex:column>
+                  
+                  <apex:column headerValue="Work Phone">
+                    <apex:outputLabel value="{!cont.Phone}"/>
+                  </apex:column>
+                  
+                  <apex:column headerValue="Mobile Phone">
+                    <apex:outputLabel value="{!cont.MobilePhone}"/>
+                  </apex:column>
+                  
+                  <apex:column headerValue="Email">
+                    <apex:outputLabel value="{!cont.Email}"/>
+                  </apex:column>
+                  
+                  <apex:column headerValue="Record Type">
+                    <apex:outputLabel value="{!cont.RecordType.Name}"/>
+                  </apex:column>
+                                    
+                    </apex:pageBlockTable>
+                    
+                    <!-- Show Pagination Headers Start -->
+            <apex:outputPanel layout="block" styleClass="pSearchShowMore" rendered="{!IF(contLst.size > 0, true, false)}">  
+              Total Records Found: <apex:outputText rendered="{!IF(Con.resultSize==10000,true,false)}">10000 +</apex:outputText><apex:outputText rendered="{!IF(Con.resultSize < 10000,true,false)}">{!Con.resultSize}</apex:outputText>&nbsp;  
+                  
+                  <apex:commandLink action="{!First}" title="First Page" value="First" rendered="{!Con.HasPrevious}" rerender="pgBlock_SR" status="waitStatusBottom"/>&nbsp;  
+                  <apex:outputPanel styleClass="pShowLess noLink" style="color:grey" rendered="{!NOT(Con.HasPrevious)}">First</apex:outputPanel>
+                  
+                  <apex:commandLink action="{!Previous}" title="Previous Page" value="Previous" rendered="{!Con.HasPrevious}" rerender="pgBlock_SR" status="waitStatusBottom"/>&nbsp;  
+                  <apex:outputPanel styleClass="pShowLess noLink" style="color:grey" rendered="{!NOT(Con.HasPrevious)}">Previous</apex:outputPanel>           
+                  
+                  &nbsp;({!IF(Con.PageNumber == 1,1,((Con.PageNumber -1) * Con.PageSize)+1)}-{!IF(Con.resultSize < Con.PageSize,Con.resultSize,Con.PageNumber * Con.pageSize)})&nbsp;&nbsp;  
+                  
+                  <apex:outputPanel styleClass="pShowLess noLink" style="color:grey" rendered="{!NOT(Con.HasNext)}">Next</apex:outputPanel>           
+                  <apex:commandLink title="Next Page" value="Next" rendered="{!Con.HasNext}" action="{!Next}" rerender="pgBlock_SR" status="waitStatusBottom"/>&nbsp; 
+                  
+                  <apex:outputPanel styleClass="pShowLess noLink" style="color:grey" rendered="{!NOT(Con.HasNext)}">Last</apex:outputPanel>           
+                  <apex:commandLink title="Last Page" value="Last" rendered="{!Con.HasNext}" action="{!Last}" rerender="pgBlock_SR" status="waitStatusBottom"/>&nbsp; 
+                  
+                  &nbsp;&nbsp;&nbsp;
+                        <apex:actionStatus stopText="" id="waitStatusBottom">
+                          <apex:facet name="start">
+                              <font color="gray" >Please wait...</font>&nbsp;<img src="/img/loading.gif" />
+                          </apex:facet>
+                        </apex:actionStatus>            
+          </apex:outputPanel>
+           <!-- Show Pagination Headers End --> 
+                    
+        </apex:pageBlockSection>
+        </apex:pageBlock>
+    </apex:form>
+</apex:page>

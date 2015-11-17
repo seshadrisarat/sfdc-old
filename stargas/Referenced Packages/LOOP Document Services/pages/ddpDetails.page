@@ -1,0 +1,560 @@
+<apex:page doctype="html-5.0" standardController="Loop__DDP__c" extensions="Loop.ddpDetailsExt" id="apage">
+    <apex:stylesheet value="https://code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css" />
+    <style>
+        div.fixed-table-container-inner table tr.odd { background: #EEE; }
+        td.selectCell { vertical-align: top; }
+        td.selectCell.first { width: 250px; vertical-align: top; }
+        td.buttonCell { width: 45px; }
+        td.selectCell.last { width: 275px; vertical-align: top; }
+        .duelingListBox table.layout td.last { vertical-align: top; }
+        
+        .editPage .bPageBlock .detailList .list.outputFiles tr td,
+        .editPage .bPageBlock .detailList .list.inputFiles tr td {
+            border-bottom: 2px solid #e3deb8;
+        }
+        
+        div.fixed-table-container-inner {
+            overflow-y: auto;
+            height: 100%;
+        }
+        div.header-background {
+            background-color: #F2F3F3;
+            border: solid 1px #C0C0C0;
+            height: 25px;
+            position: absolute;
+            top: 0;
+            right: 0;
+            left: 0;
+            border-bottom: solid 2px rgb(192, 192, 192);
+            border-collapse: separate;
+            border-left: solid 1px rgb(224, 227, 229);
+            border-right: solid 1px rgb(224, 227, 229);
+            border-top: solid 1px rgb(224, 227, 229);
+            display: table-header-group;
+        }
+        div.fixed-table-container {
+            position: relative;
+            width: 99%;
+            height: 190px;
+            border: 1px solid #e0e3e5;
+            margin: 10px auto;
+            background-color: white;
+            position: relative;
+            padding-top: 30px;
+        }
+        .header-background {
+            background-color: #D5ECFF;
+            height: 30px;
+            position: absolute;
+            top: 0;
+            right: 0;
+            left: 0;
+            /*border-bottom: 1px solid black;*/
+        }
+        .fixed-table-container-inner {
+            overflow-x: hidden;
+            overflow-y: auto;
+            height: 100%;
+        }
+        div.fixed-table-container-inner table {
+            background-color: white;
+            width: 100%;
+            overflow-x: hidden;
+            overflow-y: auto;
+            display: table;
+            border-collapse: collapse;
+            border-color: gray;
+            margin-top: -10px;
+        }
+        .th-inner {
+            position: absolute;
+            top: 0;
+            line-height: 28px;
+        }
+        .apexp .detailList .list td {
+            text-align: left;
+        }
+        .btn.move {
+            cursor: move;
+        }
+        img.btn {
+            margin: 0;
+        }
+        .truncate {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+        }
+        td.selectCell.first option {
+            width: 250px;
+        }
+        input.btn.saveChange {
+            color: #FF6A00;
+            border-color: #FF6A00;
+        }
+        div.fixed-table-container-inner table.list.outputFiles th:first-child {
+            width: 250px;
+        }
+        
+        div.fixed-table-container-inner table.list.inputFiles th:first-child {
+            width: 90px;
+        }
+        div.fixed-table-container-inner table.list.inputFiles th:nth-child(2) {
+            width: 70px;
+        }
+        div.fixed-table-container-inner table.list.inputFiles th:nth-child(3) {
+            width: 60px;
+        }
+        div.fixed-table-container-inner table.list.inputFiles th:nth-child(4) {
+            width: 30px;
+        }
+        tr.selected { background-color: #7FCEFF; }
+        #fileOptionsDialog {
+            width: 300px;
+        }
+    </style>
+    <script src="{!URLFOR($Resource.Scripts, 'jquery-code.js')}"></script>
+    <script src="{!URLFOR($Resource.Scripts, 'jquery.drawloop.js')}"></script>
+    <script>
+        jQuery.noConflict(); // Can not use $ because prototype and jQuery will have naming issues.
+                             // This command fixes that, but you must use "jQuery" instead of "$"
+                             // for jQuery commands.
+        
+        jQuery(function() {
+            jQuery('[id$="_ddpDetail"] div.pbSubheader:contains(Select Files)').next().remove();
+            jQuery('[id$="_ddpDetail"] div.pbSubheader:contains(Select Files)').remove();
+            jQuery('[id$="_ddpDetail"] div.pbSubheader:contains(Set Security)').next().remove();
+            jQuery('[id$="_ddpDetail"] div.pbSubheader:contains(Set Security)').remove();
+            jQuery('[id$="_ddpDetail"] div.pbSubheader:contains(Email Report To)').next().remove();
+            jQuery('[id$="_ddpDetail"] div.pbSubheader:contains(Email Report To)').remove();
+            
+            moveVfFormIntoDetail();
+            
+            jQuery.notifie({
+                allowCompatibilityView: false,
+                requiredVersion: 7,
+                containerSelector: '#ieMsgs',
+                compatibilityViewMessage: '{!JSENCODE($Label.IE_Compatibility_View_Warning)}',
+                versionMessage: '{!JSENCODE($Label.IE_Higher_Version_Required)}'
+            });
+            
+            checkNewerLDSVersionExists();
+        });
+        
+        function updateNewVersionMessage() {
+            $newVersionDiv = jQuery('span[id$="newVersionMsg"] div.messageText:contains("LOOP Document Services") h4');
+            $newVersionDiv.parent().after(
+                jQuery('<span></span>').append(
+                    jQuery('<a />')
+                        .attr('href', 'http://support.drawloop.com/lds/release-notes/')
+                        .attr('target', '_blank')
+                        .text('View the release notes.')
+                )
+            );
+            $newVersionDiv.wrapInner(
+                jQuery('<a />')
+                    .attr('href', 'https://appexchange.salesforce.com/listingDetail?listingId=a0N300000016Zn3EAE&tab=g')
+                    .attr('target', '_blank')
+            );
+        }
+        
+        function moveVfFormIntoDetail() {
+            var $form = jQuery('[id$=":aform"]');
+            console.log($form);
+            if ($form) {
+                var $sysInfoSection = jQuery('div.pbSubheader:contains(System Information)');
+                console.log($sysInfoSection);
+                if ($sysInfoSection && $sysInfoSection.length)
+                    $sysInfoSection.before($form);
+                else {
+                    $lastPbSubheader = jQuery('div.bPageBlock:first div.pbSubheader:last');
+                    console.log($lastPbSubheader);
+                    if ($lastPbSubheader && $lastPbSubheader.length)
+                        $lastPbSubheader.before($form);
+                    else
+                        jQuery('div.pbSubsection:first').after($form);
+                }
+            }
+        }
+        
+        /*function openFileOptionsDialog() {
+            var dialog_buttons = {}; 
+            dialog_buttons['Save'] = function(){ jQuery(this).dialog('close'); }
+            dialog_buttons['Cancel'] = function(){ jQuery(this).dialog('close'); } 
+            jQuery('#fileOptionsDialog').dialog({
+                modal: true,
+                autoOpen: false,
+                closeOnEscape: true,
+                buttons: dialog_buttons,
+                hide: "explode"
+            });
+            //jQuery('#fileOptionsDialog').dialog( "open" );
+        }
+        
+        function selectDdpFileRow(event) {
+            jQuery('tr.selected').removeClass('selected');
+            jQuery(event.target).parent().parent().parent().addClass('selected');
+        }
+        
+        function removeDdpFileRow(ddpFileOrder) {
+            if (confirm('Are you sure?')) {
+                jQuery('tr.selected').removeClass('selected');
+                removeDdpFile(ddpFileOrder);
+            }
+        }
+        
+        function removeInputRow(inputFileIndex) {
+            if (confirm('Are you sure?'))
+                removeInputFile(inputFileIndex);
+        }
+        
+        function optionTitles(visualforceElementId) {
+            jQuery('[id$=":'+visualforceElementId+'"] option').each(function(){
+                jQuery(this).attr('title', jQuery(this).text());
+            });
+        }
+        
+        function addFileCheck() {
+            if (jQuery('[id$=":availableFiles"] option:selected').size() < 1) {
+                alert('Please select a file to add.');
+                return false;
+            }
+            return true;
+        }
+        
+        function addInputFileCheck() {
+            if (!addFileCheck())
+                return false;
+            if (jQuery('[id$=":pbt"] tr.selected').size() < 1) {
+                alert('Please select a Word, PowerPoint or Excel output file from the middle grid.');
+                return false;
+            }
+            return true;
+        }
+        
+        function moveMiscFiles(elementId) {
+            var mouseX, mouseY, lastX, lastY = 0;
+            var moved = false;
+            jQuery().mousemove(function(e) { mouseX = e.pageX; mouseY = e.pageY; moved = true; });
+            var need_select_workaround = typeof jQuery(document).attr('onselectstart') != 'undefined';
+            //jQuery('input.btn.move').unbind('click');
+            jQuery('[id="apage:aform:'+elementId+'"] tr .btn.move').bind('mousedown', function (e) {
+                moved = false;
+                if (jQuery(e.target).hasClass('move')) {
+                    lastY = mouseY;
+                    var firstY = lastY;
+                    var tr = jQuery(this).parent().parent().parent();
+                    tr.fadeTo('fast', 0.2);
+                    jQuery('tr', tr.parent() ).not(tr.get(0)).mouseenter(function(){
+                        var thistr = jQuery(this);
+                        if (mouseY > lastY)
+                            thistr.after(tr);
+                        else
+                            thistr.before(tr);
+                        lastY = mouseY;
+                        var $container = jQuery('[id$=":pbtfop"]');
+                        var fold = $container.offset().top + $container.height();
+                        var bottomOffset = thistr.offset().top + thistr.height();
+                        if (bottomOffset > fold) {
+                            $container.animate({
+                                scrollTop: $container.scrollTop() + 70
+                            }, 500);
+                        }
+                    });
+                    jQuery('body').mouseup(function () {
+                        tr.fadeTo('fast', 1);
+                        jQuery('tr', tr.parent()).unbind('mouseenter');
+                        if (need_select_workaround)
+                            jQuery(document).unbind('selectstart');
+                        if (moved)
+                            tr.find('label').bind('click', function() { return false; });
+                        reorder(elementId);
+                        highlightSaveButton('saveDdpFilesButton');
+                    });
+                    e.preventDefault();
+                    if (need_select_workaround)
+                        jQuery(document).bind('selectstart', function () { return false; });
+                }
+                return false;
+            });
+        }
+        
+        function reorder(elementId) {
+            var position = 1;
+            var order = new Array();
+            jQuery('[id="apage:aform:'+elementId+'"] tbody tr input[id$=":order"]').each(function (i) {
+                jQuery(this).val(i);
+                jQuery(this).parent().parent().parent()
+                    .removeClass('even').removeClass('odd').addClass( i%2 ? 'odd' : 'even' );
+            });
+        }
+        
+        function scrollToBottom(visualforceElementId) {
+            jQuery('[id$=":'+visualforceElementId+'"]')
+                .animate({
+                    scrollTop: jQuery('[id$=":'+visualforceElementId+'"] tr:last').offset().top
+                }, 200);
+        }*/
+        
+        function fadeSuccessMessage(visualforceElementId) {
+            var messageElement = jQuery('[id$=":'+visualforceElementId+'"] div.message:contains("update complete")');
+            messageElement.fadeOut(5000);
+            return (messageElement.size() > 0);
+        }
+        
+        function setFocusOnLoad() {
+            // do nothing. We don't want to focus on the first available element here.
+        }
+        
+        function highlightSaveButton(visualforceElementId) {
+            jQuery('[id$=":'+visualforceElementId+'"]').addClass('saveChange');
+        }
+        
+        function javaScriptAction(type, data, callback) {
+            var ddpDetailsExtClass = typeof Loop === 'undefined' ? ddpDetailsExt : Loop.ddpDetailsExt;
+            if (type == 'query')
+                ddpDetailsExtClass.apexquery(data, function(result, event) { callbackWrapper(result, event, callback); } );
+            else if (type == 'upsert')
+                ddpDetailsExtClass.apexupsert(decodeURIComponent(data), function(result, event) { callbackWrapper(result, event, callback); } );
+            else if (type == 'delete')
+                ddpDetailsExtClass.apexdelete(data, function(result, event) { callbackWrapper(result, event, callback); } );
+            
+        }
+        function callbackWrapper(result, event, callback) {
+            var swf = document["apage:aform:pb:pbs:filesSwf:flash"];
+            result = jQuery('<div />').html(result).text();
+            swf.flexCallback(result, event, callback);
+        }
+    </script>
+    <apex:outputPanel id="testPanel">
+        <div id="ieMsgs" />
+        <apex:outputPanel id="newVersionMessagePanel" layout="block" style="height: 45px;">
+            <apex:pageMessage id="newVersionMsg" rendered="{!newerLDSVersionExists}" severity="info" strength="2"
+                title="A newer version of LOOP Document Services is available to be installed from the AppExchange." />
+        </apex:outputPanel>
+        
+        <apex:detail id="ddpDetail" inlineEdit="true" oncomplete="window.location.reload();" relatedList="true" subject="{!ddp.Id}" title="true" />
+        
+        <apex:form id="aform" style="margin-top: 15px;">
+            <apex:actionFunction action="{!checkNewerLDSVersionExists}" name="checkNewerLDSVersionExists" rerender="newVersionMessagePanel" oncomplete="updateNewVersionMessage();" />
+            <!--apex:outputPanel id="optionsDialogPanel">
+                <div id="fileOptionsDialog" title="{!selectedDdpFile.ddpFileRecord.Long_Name__c}">
+                    <apex:tabPanel switchType="client">
+                        <apex:tab label="FILENAME">
+                            basic stuff
+                        </apex:tab>
+                        <apex:tab label="more">
+                            more stuff
+                        </apex:tab>
+                    </apex:tabPanel>
+                </div>
+            </apex:outputPanel-->
+            
+            <apex:pageBlock id="pb" mode="maindetail">
+                <apex:pageBlockSection title="Select Files" columns="1" id="pbs" collapsible="true">
+                
+                    <apex:flash id="filesSwf" height="215" width="100%" src="{!$Resource.Loop__SelectDDPFilesSwf}" flashvars="ddpRT={!ddp.RecordType}&ddpId={!ddp.Id}&showErrors={!$Request.showErrors}&session_id={!$Api.Session_ID}&server_url={!$Api.Partner_Server_URL_300}" />
+                    
+                    <!--apex:pageMessages id="ddpFileMessages" />
+                    <apex:pageBlockSectionItem id="pbsi">
+                        <apex:outputPanel styleClass="duelingListBox">
+                            <table class="layout" style="width: 100%"> <tr>
+                                
+                                <td class="selectCell first">
+                                    <apex:outputPanel id="fileSelectPanel">
+                                        <apex:outputPanel layout="block" style="white-space: nowrap;  margin-top: 10px;">
+                                            <apex:selectList value="{!selectedListType}" size="1" style="width: 100%;">
+                                                <apex:selectOption itemValue="document" itemLabel="Document Folders" />
+                                                <apex:selectOption itemValue="content" itemLabel="Content Libraries" rendered="{!hasContent}" />
+                                                <apex:selectOption itemValue="report" itemLabel="Report Folders" />
+                                                <apex:selectOption itemValue="other" itemLabel="Other Types" />
+                                                <apex:actionSupport event="onchange" rerender="ddpFileMessages,fileSelectPanel" status="docTypeStatus" action="{!changeFolder}" />
+                                            </apex:selectList>
+                                            <apex:actionStatus stopText="" id="docTypeStatus" styleClass="nowrap">
+                                                <apex:facet name="start">
+                                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                                </apex:facet>
+                                            </apex:actionStatus>
+                                        </apex:outputPanel>
+                                        
+                                        <apex:outputPanel layout="block" style="white-space: nowrap;">
+                                            <apex:selectList value="{!selectedFolder}" size="1" style="width: 100%;">
+                                                <apex:selectOption itemLabel="--None--" itemValue="" />
+                                                <apex:selectOptions value="{!availableFolders}" />
+                                                <apex:actionSupport event="onchange" rerender="ddpFileMessages,fileSelectPanel" status="folderStatus" oncomplete="optionTitles('availableFiles');" action="{!changeFolder}" />
+                                            </apex:selectList>
+                                            <apex:actionStatus stopText="" id="folderStatus" styleClass="nowrap">
+                                                <apex:facet name="start">
+                                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                                </apex:facet>
+                                            </apex:actionStatus>
+                                        </apex:outputPanel>
+                                        
+                                        <apex:selectList value="{!selectedFiles}" multiselect="true" size="10" style="width: 100%; margin-bottom: 10px;" id="availableFiles">
+                                            <apex:selectOptions value="{!availableFiles}" />
+                                        </apex:selectList>
+                                    </apex:outputPanel>
+                                    
+                                    <apex:outputPanel layout="block">
+                                        <apex:commandButton value="New File" action="{!newFile}" rerender="ddpFileMessages,pbs" status="newFileStatus" />
+                                        <apex:actionStatus stopText="" id="newFileStatus" styleClass="nowrap">
+                                            <apex:facet name="start">
+                                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                            </apex:facet>
+                                        </apex:actionStatus>
+                                    </apex:outputPanel>
+                                </td>
+                                
+                                <td class="buttonCell">
+                                    <div class="text"><span style="white-space: nowrap;">Add as</span> Output</div>
+                                    <div class="text">
+                                        <apex:commandLink action="{!addOutputFile}" status="addOutputStatus" rerender="ddpFileMessages,pbtfop,pbtfip" onclick="if (!addFileCheck()) return false;" oncomplete="highlightSaveButton('saveDdpFilesButton');scrollToBottom('pbtfop');">
+                                            <apex:image styleClass="rightArrowIcon" alt="Add as Output" value="/s.gif" />
+                                        </apex:commandLink>
+                                        <apex:actionStatus stopText="" id="addOutputStatus" styleClass="nowrap">
+                                            <apex:facet name="start">
+                                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                            </apex:facet>
+                                        </apex:actionStatus>
+                                    </div>
+                                    <div class="text" style="line-height: 10px">&nbsp;</div>
+                                    <div class="text"><span style="white-space: nowrap;">Add as</span> Input</div>
+                                    <div class="text">
+                                        <apex:commandLink action="{!addInputFile}" status="addInputStatus" rerender="ddpFileMessages,pbtfip" onclick="if (!addInputFileCheck()) return false;" oncomplete="highlightSaveButton('saveDdpFilesButton');scrollToBottom('pbtfip');">
+                                            <apex:image styleClass="rightArrowIcon" alt="Add as Input" value="/s.gif" />
+                                        </apex:commandLink>
+                                        <apex:actionStatus stopText="" id="addInputStatus" styleClass="nowrap">
+                                            <apex:facet name="start">
+                                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                            </apex:facet>
+                                        </apex:actionStatus>
+                                    </div>
+                                </td>
+                                
+                                <td class="selectCell second">
+                                    <apex:outputPanel layout="block" styleClass="fixed-table-container">
+                                        <apex:outputPanel layout="block" styleClass="header-background" />
+                                        <apex:outputPanel styleClass="fixed-table-container-inner" layout="block" id="pbtfop">
+                                            
+                                            <apex:pageBlockTable value="{!ddpFiles}" var="file" id="pbt" styleClass="outputFiles">
+                                                <apex:column >
+                                                    <apex:facet name="header">
+                                                        <div class="th-inner" style="width: 250px;">Output File/Report</div>
+                                                    </apex:facet>
+                                                    <apex:outputPanel onclick="selectDdpFile('{!file.ddpFileRecord.Order__c}');">
+                                                        <apex:outputText value="{!NULLVALUE(file.ddpFileRecord.Long_Name__c,file.ddpFileRecord.Name)}"
+                                                            title="{!NULLVALUE(file.ddpFileRecord.Long_Name__c,file.ddpFileRecord.Name)}"
+                                                            styleclass="truncate" style="width: 250px; cursor: pointer;" />
+                                                    </apex:outputPanel>
+                                                </apex:column>
+                                                <apex:column >
+                                                    <apex:facet name="header">
+                                                        <div class="th-inner" style="width: 60px;">Start Page</div>
+                                                    </apex:facet>
+                                                    <apex:outputPanel layout="block" style="width: 60px;">
+                                                        <apex:inputField value="{!file.ddpFileRecord.First_Page__c}" style="width: 40px;" onchange="highlightSaveButton('saveDdpFilesButton');" />
+                                                    </apex:outputPanel>
+                                                </apex:column>
+                                                <apex:column >
+                                                    <apex:facet name="header">
+                                                        <div class="th-inner" style="width: 60px;">End Page</div>
+                                                    </apex:facet>
+                                                    <apex:outputPanel layout="block" style="width: 60px;">
+                                                        <apex:inputField value="{!file.ddpFileRecord.Last_Page__c}" style="width: 40px;" onchange="highlightSaveButton('saveDdpFilesButton');" />
+                                                    </apex:outputPanel>
+                                                </apex:column>
+                                                <apex:column >
+                                                    <apex:facet name="header">
+                                                        <div class="th-inner" style="width: 112px;">&nbsp;</div>
+                                                    </apex:facet>
+                                                    <apex:outputPanel layout="block" style="width: 112px;">
+                                                        <apex:inputHidden value="{!file.ddpFileRecord.Order__c}" id="order" />
+                                                        <apex:image value="{!URLFOR($Resource.Images, 'up-down-arrows.png')}" title="reorder" styleClass="btn move" />
+                                                        <apex:outputLink value="/{!file.ddpFileRecord.Document_ID__c}" target="_blank">
+                                                            <apex:image value="{!URLFOR($Resource.Images, 'grayarrow.png')}" title="open" styleClass="btn" />
+                                                        </apex:outputLink>
+                                                        <apex:image value="{!URLFOR($Resource.Images, 'graygear.png')}" title="options" styleClass="btn" onclick="openDdpFileOptions('{!file.ddpFileRecord.Order__c}');" />
+                                                        <apex:image value="{!URLFOR($Resource.Images, 'trash-can.png')}" onclick="removeDdpFileRow('{!file.ddpFileRecord.Order__c}');" title="remove" styleClass="btn" />
+                                                    </apex:outputPanel>
+                                                </apex:column>
+                                            </apex:pageBlockTable>
+                                            
+                                            <apex:actionFunction name="selectDdpFile" rerender="ddpFileMessages,pbtfip" status="saveDdpFileStatus" oncomplete="selectDdpFileRow(event);">
+                                                <apex:param name="ddpFileOrder" assignTo="{!selectedDdpFileOrder}" value="" />
+                                            </apex:actionFunction>
+                                            <apex:actionFunction name="removeDdpFile" rerender="ddpFileMessages,pbtfop,pbtfip" action="{!removeDdpFile}" status="saveDdpFileStatus">
+                                                <apex:param name="ddpFileOrder" assignTo="{!selectedDdpFileOrder}" value="" />
+                                            </apex:actionFunction>
+                                            <apex:actionFunction name="openDdpFileOptions" rerender="ddpFileMessages,optionsDialogPanel" status="saveDdpFileStatus" oncomplete="openFileOptionsDialog();">
+                                                <apex:param name="ddpFileOrder" assignTo="{!selectedDdpFileOrder}" value="" />
+                                            </apex:actionFunction>
+                                            
+                                            <script>moveMiscFiles('pb:pbs:pbsi:pbt');</script>
+                                            
+                                        </apex:outputPanel>
+                                    </apex:outputPanel>
+                                    <apex:outputPanel layout="block">
+                                        <apex:commandButton id="saveDdpFilesButton" value="Save DDP File Changes" action="{!saveDDPFiles}" rerender="ddpFileMessages,pbs" status="saveDdpFileStatus" oncomplete="if (!fadeSuccessMessage('ddpFileMessages')) highlightSaveButton('saveDdpFilesButton');" />
+                                        <apex:actionStatus stopText="" id="saveDdpFileStatus" styleClass="nowrap">
+                                            <apex:facet name="start">
+                                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                            </apex:facet>
+                                        </apex:actionStatus>
+                                    </apex:outputPanel>
+                                </td>
+                                
+                                <td class="selectCell last">
+                                    <apex:actionFunction name="removeInputFile" rerender="ddpFileMessages,pbtfip" action="{!removeInputFile}" status="saveDdpFileStatus" oncomplete="highlightSaveButton('saveDdpFilesButton');">
+                                        <apex:param name="inputFileIndex" assignTo="{!selectedInputFileIndex}" value="" />
+                                    </apex:actionFunction>
+                                    
+                                    <apex:outputPanel layout="block" styleClass="fixed-table-container">
+                                        <apex:outputPanel layout="block" styleClass="header-background" />
+                                        <apex:outputPanel styleClass="fixed-table-container-inner" layout="block" id="pbtfip">
+                                            <apex:pageBlockTable value="{!inputFiles}" var="input" id="pbti" styleClass="inputFiles">
+                                                <apex:column >
+                                                    <apex:facet name="header">
+                                                        <div class="th-inner" style="width: 90px">Input File/Report</div>
+                                                    </apex:facet>
+                                                    <apex:outputText value="{!input.fileOrReportName}" title="{!input.fileOrReportName}" style="width: 90px" styleclass="truncate" />
+                                                </apex:column>
+                                                <apex:column >
+                                                    <apex:facet name="header">
+                                                        <div class="th-inner" style="width: 70px">Sheet/Range</div>
+                                                    </apex:facet>
+                                                    <apex:inputText value="{!input.sheetOrRangeName}" style="width: 60px" />
+                                                </apex:column>
+                                                <apex:column >
+                                                    <apex:facet name="header">
+                                                        <div class="th-inner" style="width: 60px">Filter</div>
+                                                    </apex:facet>
+                                                    <apex:inputText value="{!input.filter}" style="width: 50px" />
+                                                </apex:column>
+                                                <apex:column >
+                                                    <apex:facet name="header">
+                                                        <div class="th-inner" style="width: 30px;">&nbsp;</div>
+                                                    </apex:facet>
+                                                    <apex:outputPanel layout="block" style="width: 30px;">
+                                                        <apex:image value="{!URLFOR($Resource.Images, 'trash-can.png')}" title="remove" styleClass="btn" onclick="removeInputRow({!JSINHTMLENCODE(TEXT(input.index))});" />
+                                                    </apex:outputPanel>
+                                                </apex:column>
+                                            </apex:pageBlockTable>
+                                        </apex:outputPanel>
+                                    </apex:outputPanel>
+                                </td>
+                            </tr> </table>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem dataStyle="text-align: center;">
+                        
+                    </apex:pageBlockSectionItem-->
+                    
+                </apex:pageBlockSection>
+                
+                <c:ddpSecurity ddpVar="{!ddp}" recordTypeId="{!ddp.RecordTypeId}" />
+                
+            </apex:pageBlock>
+        </apex:form>
+    </apex:outputPanel>
+</apex:page>

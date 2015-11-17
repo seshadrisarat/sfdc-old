@@ -1,0 +1,268 @@
+<apex:page standardController="lmscons__Training_Path__c" extensions="lmscons.CourseAssignController" title="{!$ObjectType.lmscons__Training_Path__c.Label}: {!lmscons__Training_Path__c.Name}">
+	<apex:includeScript value="{!URLFOR($Resource.lmscons__LMSSource, 'js/jquery-1.6.4.js')}"/>
+
+	<apex:sectionHeader title="{!$ObjectType.lmscons__Training_Path__c.Label}" subtitle="{!lmscons__Training_Path__c.Name}" />
+
+	<!-- Enhanced Action Status BEGIN -->
+	<apex:actionStatus id="loadStatus">
+		<apex:facet name="start">
+			<c:EnhancedActionStatus BackColor="#efefef" borderColor="#336699" borderSize="1" height="50px" width="120px" ImageUrl="/img/loading.gif" Message="{!$Label.Consumer_Global_Loading}..." messageStyle="color:darkred;font-size:11pt;font-weight:bold;"/>
+		</apex:facet>
+	</apex:actionStatus>
+	<!-- Enhanced Action Status END -->
+
+	<apex:outputPanel id="pageMessages">
+		<apex:pageMessages />
+	</apex:outputPanel>
+
+	<apex:form >
+		<apex:actionPoller action="{!statusUpdating}" rerender="pageMessages" interval="5" id="batchStatus" Enabled="{!isStop}"/>
+
+		<apex:actionFunction name="UpdateDataAssignments" action="{!UpdateDataAssignments}" rerender="pageMessages, tlr, batchStatus, panelForStatus" status="loadStatus" oncomplete="updatedDataAssignments()">
+			<apex:param name="courseid" assignTo="{!courseid}" value="{!lmscons__Training_Path__c.id}" />
+		</apex:actionFunction>
+		<apex:actionFunction name="addToMyTraining" action="{!addToMyTraining}" rerender="pageMessages, tlr" status="loadStatus">
+			<apex:param name="courseid" assignTo="{!courseid}" value="{!lmscons__Training_Path__c.id}" />
+		</apex:actionFunction>
+		<apex:actionFunction name="saveEditedSequence" action="{!saveEditedSequence}" status="loadStatus" rerender="none" oncomplete="redirme()">
+			<apex:param name="SequencedArray" assignTo="{!SequencedArray}" value="" />
+			<apex:param name="TrainingPathId" assignTo="{!TrainingPathId}" value="{!lmscons__Training_Path__c.id}" />
+		</apex:actionFunction>
+	</apex:form>
+
+	<apex:detail title="false" />
+
+	<apex:outputPanel id="panelForStatus">
+		<input type="hidden" id="bstatus" name="BatchStatus" value="{!STATUS}"/>
+	</apex:outputPanel>
+<script>
+var blockTmp;
+function SearchAllBlockCourseItems(o){
+
+	//alert(jQuery("H3:contains('{!$ObjectType.Training_Path_Item__c.LabelPlural}')").parent().parent().parent().parent().parent().parent().attr('class'));
+	blockTmp = jQuery("H3:contains('{!$ObjectType.Training_Path_Item__c.LabelPlural}')").parent().parent().parent().parent().parent().parent().parent();
+	return blockTmp
+	/*if(o.parent().attr('class')=='bPageBlock secondaryPalette'){
+		blockTmp = o.parent();
+		return blockTmp;
+	} else {
+		SearchAllBlockCourseItems(o.parent());
+	}*/
+}
+
+var ItemSeq = new Object();
+
+function createObj(o){
+
+	for(var k=0; k < o.length; ++k){
+		if(o.eq(k).text() == 'Edit'){
+			EditAccess = true;
+
+			/*var pattern = "^(([^:/\\?#]+):)?(//(([^:/\\?#]*)(?::([^/\\?#]*))?))?([^\\?#]*)(\\?([^#]*))?(#(.*))?$";
+			var rx = new RegExp(pattern);
+			var parts = rx.exec(o.eq(k).attr('href'));
+
+			str = parts[7];
+			var id = str.replace(/\//g,"");
+
+			ItemSeq[id] = '';*/
+
+		}
+
+		//alert(ActionColumn.eq(k).text());
+	}
+
+}
+
+var EditAccess = false;
+
+jQuery.noConflict();
+
+var IsPortalCanAssignCourse = {!IsPortalCanAssignCourse};
+if(IsPortalCanAssignCourse==false){
+	jQuery('[value$="Assign Course"]').attr('style', 'display:none');
+} else {
+}
+
+
+function getUrlVars(url)
+{
+	var vars = [], hash;
+	var hashes = url.slice(url.indexOf('?') + 1).split('&');
+	for(var i = 0; i < hashes.length; i++)
+	{
+		hash = hashes[i].split('=');
+		vars.push(hash[0]);
+		vars[hash[0]] = hash[1];
+	}
+	return vars;
+}
+
+	function updatedDataAssignments() {
+		var status = jQuery('#bstatus').val();
+		if(status == 'false'){
+			jQuery('input[name*=update_data_assignments]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+		}
+	}
+
+jQuery(document).ready(function(){
+
+	initItemSequence();
+
+	// hide "Edit sequence" button from hover menu
+	var interval = setInterval(function(){
+		if(jQuery('.linklet').length){
+			console.log(jQuery('.linklet'));
+			jQuery('.linklet').hover(function(){
+				var iframe = jQuery('#RLPanelFrame');
+				jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]', iframe.contents()).remove();
+				});
+			clearInterval(interval);
+		}
+	},1);
+	//*********************************************************************************
+
+	if({!isUpdateDataAssignemts}!=true){
+		jQuery('input[name*=update_data_assignments]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+	}
+	if({!isConsumerUser}!=1){
+		jQuery('input[name*=assign_training_path]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+		jQuery('input[name*=update_data_assignments]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+		jQuery('input[name*=add_to_my_training]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+		jQuery('input[name*=addcoursetolearningpath]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+		jQuery('input[name*=addcoursetocurriculum]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+		jQuery('input[value*=Prerequisites]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+		jQuery("[title$='{!$ObjectType.Catalog_Training_Path__c.label}']").attr('class', 'btnDisabled').attr('disabled', 'disabled');
+
+	}
+	if({!isAdminUser}!=1){
+		jQuery('input[value*=Prerequisite]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+		};
+
+	jQuery("[title$='{!$ObjectType.Catalog_Training_Path__c.Label}']").val('Add to Catalog');
+	jQuery("H3:contains('{!$ObjectType.Catalog_Training_Path__c.LabelPlural}')").text('Associated Catalogs');
+
+	jQuery("[name *='addcoursetocurriculum']").val('Add to Curriculum');
+	jQuery("H3:contains('{!$ObjectType.Curriculum_Item__c.LabelPlural}')").text('Associated Curriculums');
+
+	jQuery("[name *='addcoursetolearningpath']").val('Add to Learning Path');
+	jQuery("H3:contains('{!$ObjectType.Learning_Path_Item__c.LabelPlural}')").text('Associated Learning Paths');
+
+	jQuery("th").each(function(){
+		if(jQuery(this).html()=='Module link') jQuery(this).html("Title");
+	});
+
+});
+jQuery('input[value$="New Catalog Training Path"]').val('Catalog');
+
+jQuery('input[value$="New Catalog Course"]').val('Add to Catalog');
+
+if (!{!hasItems}) {
+	jQuery("[name*='addcoursetocurriculum']").prop("disabled", "true").addClass("btnDisabled");
+	jQuery("[name*='addcoursetolearningpath']").prop("disabled", "true").addClass("btnDisabled");
+	jQuery("input[title$='{!$ObjectType.Catalog_Training_Path__c.Label}']").prop("disabled", "true").addClass("btnDisabled");
+}
+// --- Edit Sequence ------
+	var seqdepth = 0;
+	var titledepth = 0;
+	var sequenceEnforced = false;
+	var cancelArray = [];
+	var resultArray = [];
+
+	function initItemSequence() {
+		var rlistHasTitle = false;
+		var rlistHasSequence = false;
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parents('.bPageBlock').find('.headerRow').children().each(function(index){
+			if(jQuery(this).text()=='Sequence') {
+				seqdepth = index;
+				rlistHasSequence = true;
+			}
+			if(jQuery(this).text()=='Title' || jQuery(this).text()=='Module Link' || jQuery(this).text()=='Module link') {
+				rlistHasTitle = true;
+				titledepth = index;
+			}
+		});
+		if (rlistHasSequence == true && rlistHasTitle == true) {
+			sequenceEnforced = true;
+		}
+		else {
+			sequenceEnforced = false;
+		}
+		if (sequenceEnforced == false){
+			jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+		}
+	}
+
+	function enableEdit() {
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parents('.bPageBlock').find('.dataRow').each(function(index){
+			jQuery(this).children().each(function(index1){
+				if (index1 == seqdepth) {
+					var sact = jQuery(this).text();
+					cancelArray[index] = sact;
+					jQuery(this).contents().replaceWith('<input type="text" style="text-align: right">');
+					jQuery(this).contents().val(sact);
+				}
+			});
+		});
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parents('.bPageBlock').find('.pShowMore').css('visibility', 'hidden');
+		var buttonSave = '<input type="button" value="Save" id="saveButton" class="btn" onclick="saveSeq()" />';
+		var buttonCancel = '<input type="button" value="Cancel" id="cancelButton" class="btn" onclick="cancelSeq()" />';
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parent().append(buttonSave + buttonCancel);
+		jQuery('input[value$="New Course Item"]').css('visibility', 'hidden');
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').css('visibility', 'hidden');
+
+	}
+
+	function saveSeq() {
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parents('.bPageBlock').find('.dataRow').each(function(index){
+			var loId;
+			var loSeq;
+			jQuery(this).children().each(function(index1){
+				if (index1 == titledepth) {
+					loId = jQuery(this).children().attr('href');
+					loId = loId.slice(-15);
+				}
+				if (index1 == seqdepth) {
+					loSeq = jQuery(this).contents().val();
+					loSeq = loSeq.replace(/[\xA0]/,'');
+					jQuery(this).contents().remove();
+					jQuery(this).append(loSeq);
+				}
+			});
+			resultArray[index] = loId + '::' + loSeq;
+		});
+		saveEditedSequence(getSequencedArray());
+		jQuery('#cancelButton').remove();
+		jQuery('#saveButton').remove();
+		jQuery('input[value$="New Course Item"]').css('visibility','visible');
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').css('visibility','visible');
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parents('.bPageBlock').find('.pShowMore').css('visibility', 'visible');
+	}
+
+	function getSequencedArray() {
+		var serialized = resultArray.join(";;");
+		return serialized;
+	}
+
+	function cancelSeq() {
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parents('.bPageBlock').find('.dataRow').each(function(index){
+			jQuery(this).children().each(function(index1){
+				if (index1 == seqdepth) {
+					jQuery(this).contents().remove();
+					jQuery(this).append(cancelArray[index]);
+				}
+			});
+		});
+		jQuery('#cancelButton').remove();
+		jQuery('#saveButton').remove();
+		jQuery('input[value$="New Course Item"]').css('visibility','visible');
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').css('visibility','visible');
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parents('.bPageBlock').find('.pShowMore').css('visibility', 'visible');
+	}
+
+	function redirme(){
+		window.location = window.location.href;
+	}
+</script>
+
+</apex:page>

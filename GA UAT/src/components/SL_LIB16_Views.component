@@ -1,0 +1,284 @@
+<apex:component controller="SL_LIB16_ViewsComponent" allowDML="true">
+
+<apex:attribute type="SL_LIB16_ViewsParams" name="viewparams" assignTo="{!params}" description="View component parameters" required="true"/>
+<!--<apex:attribute type="String" name="hideClass" assignTo="{!params.hideItemClass}" description="Items of this class would be hidden when edit view mode"/>-->
+<apex:attribute type="String" name="status" assignTo="{!params.status}" description="Item to show as a status."/>
+<apex:attribute type="String" name="rId" assignTo="{!params.rerenderId}" description="Item of this id would be rerendered on view component change" required="true"/>
+<apex:attribute type="String" name="jsFunc" assignTo="{!params.viewChangedJsTrigger}" description="JS function to trigger on view component change" required="true"/>
+<!--{!cb_target}-->
+<!--{!params}-->
+<apex:actionFunction action="{!init}" name="init" rerender="VCViews"></apex:actionFunction>
+<script>
+    jQuery(document).ready(function(){
+        if({!!initialized}){
+            init();
+        }
+    });
+    
+    function changeVieaAfterDel()
+    {
+    	try
+    	{
+    		errPl = document.getElementById("errorPl");
+    		childErrPl = (errPl.firstElementChild||errPl.firstChild);
+    		if(childErrPl.innerHTML==''){ {!params.viewChangedJsTrigger}(curViewId);}
+    	}
+    	catch(Exception)
+    	{
+    		{!params.viewChangedJsTrigger}(curViewId);
+    	}
+    	
+    }
+    
+</script>
+<!--<apex:form >-->
+<apex:outputPanel id="VCViews">
+<apex:outputPanel rendered="{!initialized}">
+    <table>
+        <tr>
+            <td>
+                <b>View:</b>&nbsp;
+                <apex:selectList value="{!strColumnsAndFiltersTemplate}" multiselect="false" size="1" Id="SelectListId">
+                    <apex:selectOptions value="{!lstColumnsAndFiltersTemplate}" />
+                </apex:selectList>
+                <apex:commandButton value="Go!" rerender="VCViews"
+                                               title="Here you can setup columns shown, reorder them or create filters."
+                                               action="{!btnGo}" style="width: 30px;height:23px;"
+                                               status="{!params.status}"
+                                               oncomplete="{!params.viewChangedJsTrigger}(curViewId);" />
+                <script> 
+                    var oViewMainList = document.getElementById("{!$Component.SelectListId}");
+                    var curViewId = "{!params.curViewID}";
+                </script>
+            </td>
+        <td>
+            <apex:commandLink value="Edit"
+                              action="{!fetchTemplateColumnAndFilterConditions}"
+                              rerender="VCViews, SelectListId"
+                              title="Here you can setup columns shown, reorder them or create filters."
+                              style="width: 125px;padding-left:10px;color: #015ba7;"
+                              status="{!params.status}">
+                <apex:param name="editMode" assignTo="{!editMode}" value="true" />
+                <apex:param name="isShowDeleted" assignTo="{!isShowDeleteButton}" value="true" />
+            </apex:commandLink>
+        </td>
+        <td>|</td>
+        <td><apex:commandLink value="Delete"
+                              action="{!deleteTemplateByname}"
+                              rerender="VCViews"
+                              title="Here you can delete view."
+                              style="width: 125px;color: #015ba7;" status="{!params.status}"
+                              oncomplete="changeVieaAfterDel()">
+        </apex:commandLink></td>
+        <td>|</td>
+
+        <td>
+            <apex:commandLink value="Create New View"
+                              action="{!lnkCreateNewView}" rerender="VCViews"
+                              title="Here you can setup columns shown, reorder them or create filters."
+                              style="width: 125px;color: #015ba7;" status="{!params.status}">
+                <apex:param name="editMode" assignTo="{!editMode}" value="true" />
+            </apex:commandLink>
+        </td>
+        <td id="errorPl"><apex:pageMessages /></td>
+        </tr>
+    </table>
+
+    <apex:pageBlock id="pb1" rendered="{!editMode}">
+                <apex:pageBlockButtons >
+                    <input type="button" value="Save" class="btn" onclick="saveColumn()" />
+                    <apex:commandButton value="Cancel" action="{!btnGo}"
+                        rerender="VCViews" status="{!params.status}">
+                        <apex:param name="editMode" assignTo="{!editMode}" value="false"/>
+                        <apex:param name="backLView"
+                            assignTo="{!strColumnsAndFiltersTemplate}" value="{!strView}" />
+                    </apex:commandButton>
+                </apex:pageBlockButtons>
+
+                <apex:actionFunction name="saveSelectedColumns"
+                    action="{!saveSelectedColumns}" rerender="VCViews"
+                    status="{!params.status}"
+                    oncomplete="{!params.viewChangedJsTrigger}(curViewId);" >
+                    <apex:param name="selCols" assignTo="{!selectedColumnsCallback}"
+                        value="" />
+                    <apex:param name="editMode" assignTo="{!editMode}"
+                        value="false" />
+                </apex:actionFunction>
+
+                <br />
+                <table>
+                    <tr>
+                        <td><b>View Name:</b>&nbsp;&nbsp;</td>
+                        <td>
+                            <div class="requiredInput" id="textbox">
+                                <div class="requiredBlock"></div>
+                                <apex:inputText value="{!strColumnsAndFiltersTemplate}" />
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+                <br />
+                <script>
+                    var varIsNewView = '{!isNewView}';
+                    var varStrView = '{!strView}';
+                    if(varIsNewView=='true' && varStrView!='' && varStrView!='null')
+                    {
+                        for(var i = 0; i < oViewMainList.length; i++)
+                        {
+                            if(oViewMainList.options[i].value == varStrView)
+                            oViewMainList.selectedIndex = i;
+                        }
+                    }
+                    //alert(oViewMainList.value);
+                </script>
+                <table class="multiSelectPicklistTable" border="0" cellspacing="1"
+                    cellpadding="1">
+                    <tbody>
+                    	<tr>
+                    		<td><b>Available</b></td>
+                    		<td></td>
+                    		<td><b>Selected</b></td>
+                    		<td></td>
+                    	</tr>
+                        <tr class="multiSelectPicklistRow">
+                            <td style="border: none;">
+	                           	<span><select id="__unselected" size="15" multiple="multiple" ondblclick="doSelect(document.getElementById('__unselected'), document.getElementById('__selected'));" style="width:200px;height:270px;">
+    								<apex:repeat value="{!UnselectedColumns}" var="col"><option value="{!col.Value}">{!col.Label}</option></apex:repeat>
+                                	</select></span>
+                            </td>
+                            <td class="multiSelectPicklistCell" style="border: none;"><a
+                                onclick="doSelect(document.getElementById('__unselected'), document.getElementById('__selected')); return false;"
+                                title="Add"> <img src="/s.gif" alt="Add"
+                                    class="picklistArrowRight" id="'+id+'_right_arrow"
+                                    style="cursor: pointer;" title="Add" />
+                            </a> <br /> <br /> <a
+                                onclick="doSelect(document.getElementById('__selected'), document.getElementById('__unselected')); return false;"
+                                title="Remove"> <img src="/s.gif" alt="Remove"
+                                    class="picklistArrowLeft" id="'+id+'_left_arrow"
+                                    style="cursor: pointer;" title="Remove" />
+                            </a></td>
+                            <td style="border: none;"><span> <select
+                                    id="__selected" size="15" multiple="multiple"
+                                    ondblclick="doSelect(document.getElementById('__selected'), document.getElementById('__unselected'));"
+                                    style="width:200px;height:270px;">
+                                        <apex:repeat value="{!SelectColumnsOrdered}" var="col">
+                                            <option value="{!col.Value}">{!col.Label}</option>
+                                        </apex:repeat>
+                                </select>
+                            </span></td>
+                            <td class="multiSelectPicklistCell" style="border: none;"><a
+                                onclick="moveUp(document.getElementById('__selected')); return false;"
+                                title="Up"> <img src="/s.gif" alt="Add" class="upArrowIcon"
+                                    id="'+id+'_up_arrow" style="cursor: pointer;" title="Up" />
+                            </a> <br /> <br /> <a
+                                onclick="moveDown(document.getElementById('__selected')); return false;"
+                                title="Down"> <img src="/s.gif" alt="Remove"
+                                    class="downArrowIcon" id="'+id+'_down_arrow"
+                                    style="cursor: pointer;" title="Down" />
+                            </a></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+
+
+                <script>
+
+function getColumnsList(sel){
+    var res = '';
+    for (var i=0; i < sel.options.length; i++){
+        res += ';' + sel.options[i].value;
+    }
+    if (res.length > 0) res = res.substring(1);
+    return res;
+}
+
+function doSelect(selFrom, selTo){
+    //var selFrom = document.getElementById('__unselected');
+    //var selTo = document.getElementById('__selected');
+    for (var ind = 0; ind < selFrom.options.length; ind++){
+        if (selFrom.options[ind].selected){
+            selTo.options[selTo.options.length] = new Option(selFrom.options[ind].innerHTML, selFrom.options[ind].value);
+        }
+    }
+    for (var ind = selFrom.options.length-1; ind >= 0; ind--){
+        if (selFrom.options[ind].selected){
+            for (var ind2 = ind; ind2 < selFrom.options.length-1; ind2++){
+                selFrom.options[ind2] = new Option(selFrom.options[ind2+1].innerHTML, selFrom.options[ind2+1].value, selFrom.options[ind2+1].selected);
+            }
+            selFrom.options.length -= 1;
+        }
+    }
+}
+
+function moveUp(sel){
+    var index = -1;
+    for (var i = 0; i < sel.options.length; i++){
+        if (sel.options[i].selected){
+            if (index==-1) index = i;
+            else {
+                alert('Select only one field.');
+                return false;
+            }
+        }
+    }   
+    if (index > 0){
+        var t = sel.options[index-1];
+        sel.options[index-1] = new Option(sel.options[index].innerHTML, sel.options[index].value, sel.options[index].selected);
+        sel.options[index] = t;
+        sel.selectedIndex = index-1;
+    }
+}
+
+function moveDown(sel){
+    var index = -1;
+    for (var i = 0; i < sel.options.length; i++){
+        if (sel.options[i].selected){
+            if (index==-1) index = i;
+            else {
+                alert('Select only one field.');
+                return false;
+            }
+        }
+    }   
+    if (index >= 0 && index < sel.options.length-1){
+        var t = sel.options[index+1];
+        sel.options[index+1] = new Option(sel.options[index].innerHTML, sel.options[index].value, sel.options[index].selected);
+        sel.options[index] = t;
+        sel.selectedIndex = index+1;
+    }
+}
+</script>
+
+                <script>
+function saveColumn()
+{
+    
+    if(jQuery('#textbox').children()[1].value == '')
+    {
+        alert('Please enter a valid name');
+        jQuery('#textbox').children()[1].focus();
+        return;
+    }
+    
+    var str = jQuery('#textbox').children()[1].value;
+      
+    if(!str.match(/^[0-9a-zA-Z_ ]+$/))
+    {
+        alert('Template name can contain only underscores and alphanumeric characters');
+        jQuery('#textbox').children()[1].focus();
+        return;
+    }
+    
+    var columns = getColumnsList(document.getElementById('__selected'));
+    saveSelectedColumns(columns, false);
+
+}
+</script>
+
+    </apex:pageBlock>
+    <!--</apex:form>-->
+</apex:outputPanel>
+<apex:outputPanel rendered="{!NOT(initialized)}"><apex:outputText >Views are being loaded...</apex:outputText></apex:outputPanel>
+</apex:outputPanel>
+</apex:component>

@@ -1,0 +1,351 @@
+<apex:page title="LOOP Merge by Drawloop" controller="Loop.LoopMergeExt" action="{!onload}" id="aPage" showHeader="{!showHeader}" sidebar="{!showSidebar}">
+<style type="text/css">
+    #wait
+    {
+        visibility: hidden;
+        display: block;
+        font-weight: bold;
+        margin-top: 5px;
+        margin-left: 2px;
+    }
+    .block
+    {
+        display: block;
+    }
+    li
+    {
+        clear: both;
+    }
+    #ddps, #optdiv
+    {
+        margin: 0px 15px 0 0;
+    }
+    .delivli
+    {
+        margin-top: 30px;
+        vertical-align: top;
+    }
+    .optdoclabel
+    {
+        display: block;
+        float: left;
+    }
+    .arg
+    {
+        margin-top: 0px !important;
+        margin-top: -1.2em;
+    }
+    .movedown
+    {
+        margin-top: 0px !important;
+        margin-top: 10px;
+    }
+    #delivdiv label
+    {
+        clear: both;
+    }
+    .buttondiv
+    {
+        clear: both;
+        margin-left: 40px;
+        padding-top: 25px !important;
+        padding-top: 0px;
+    }
+    .delivli table
+    {
+        font-size: 100%;
+        border-collapse: collapse;
+    }
+    .delivli td
+    {
+        padding: 0px;
+    }
+    #filename
+    {
+        padding: 0 2px 0 0;
+        margin: 0 1px 0 0;
+        width: 200px;
+    }
+    .extension
+    {
+        vertical-align: middle;
+        padding: 0 0 1px;
+    }
+    .error
+    {
+        color: #AA0000;
+    }
+    .invisible
+    {
+        display: none;
+    }
+    select option, select optgroup
+    {
+        padding-right: 15px;
+    }
+    #eTemp span
+    {
+        cursor: pointer;
+        text-decoration: underline;
+    }
+    #form_processing_img, #form_loading_img
+    {
+        margin: 5% 45%;
+        width: 65px;
+    }
+    #form_processing_img img
+    {
+        margin: 0px 14px;
+    }
+    #form_loading_img img
+    {
+        margin: 0px 5px;
+    }
+    #form_processing_img span, #form_loading_img span
+    {
+        float: left;
+        width: inherit;
+    }
+</style>
+<script type="text/javascript" src="{!URLFOR($Resource.JQuery)}"></script>
+<script src="{!URLFOR($Resource.Scripts, 'jquery.drawloop.js')}"></script>
+<script type="text/javascript" src="/js/functions.js"></script>
+<script type="text/javascript" src="/soap/ajax/22.0/connection.js"></script>
+<script type="text/javascript">
+jQuery.noConflict(); // Can't use $ because prototype and jQuery will have naming issues.
+                     // This command fixes that, but you must use "jQuery" instead of "$"
+                     // for jQuery commands.
+
+String.prototype.escapeHtml = function()
+{
+    return this.replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;');
+}
+</script>
+<apex:outputPanel id="onloadScript">
+<script type="text/javascript">
+jQuery(function()
+{
+    if ('{!JSENCODE(prefix)}' != '') {
+        //OLD ACTIVE TAB STYLE
+        jQuery('.currentTab, .primaryPalette').removeClass('currentTab primaryPalette');
+        jQuery('a[href$="/{!JSENCODE(prefix)}/o"]').parent().parent('td').addClass('currentTab primaryPalette');
+        //NEW ACTIVE TAB STYLE
+        jQuery('li.zen-active,li.phm.active').removeClass('zen-active primaryPalette active');
+        jQuery('li a[href$="/{!JSENCODE(prefix)}/o"]').parent().addClass('zen-active primaryPalette active');
+    }
+    if ('{!JSENCODE(ddpRecordType)}' != '' && '{!JSENCODE(ddpRecordType)}' != 'Custom Object')
+        jQuery("body").addClass('{!JSENCODE(ddpRecordType)}'.toLowerCase()+"Tab").removeClass("taskTab").removeClass("homeTab");
+    else if ('{!JSENCODE($Request.tabclass)}' != '')
+        jQuery("body").addClass('{!JSENCODE($Request.tabclass)}').removeClass("taskTab").removeClass("homeTab");
+    
+    if ('{!JSENCODE(emailTempId)}' != '')
+        setEmailTemplate('{!JSENCODE(emailTempId)}');
+    
+    if ('{!JSENCODE(loopSrc)}' != '')
+    {
+        if ('{!JSENCODE(loopConfirm)}' != '')
+        {
+            if (!confirm('{!JSENCODE(loopConfirm)}'))
+            {
+                jQuery('[id="aPage:aForm:cancel"]').click();
+                return;
+            }
+        }
+        var ser = jQuery('[id="aPage:aForm"]').serialize().split('&');
+        jQuery("#moreInputs").html('');
+        for (var i = 0; i < ser.length; i++) {
+            var inputVal = '';
+            if (ser[i].split(/=/).length > 1)
+                inputVal = decodeURIComponent(ser[i].split(/=/)[1].replace(/\+/g, ' ')).escapeHtml();
+            jQuery("#moreInputs").append('<input type="hidden" name="'+decodeURIComponent(ser[i].split(/=/)[0]) + '" value="' + inputVal + '" />');
+        }
+        jQuery("#myForm").submit();
+        jQuery("#lpIframe").css('margin-top', '-15px');
+    }
+    else 
+    {
+        if ('{!JSENCODE(breadCrumbUrl)}' != '')
+            jQuery('.bPageTitle:first').append('<div class="ptBreadcrumb"> « <a href="{!JSINHTMLENCODE(breadCrumbUrl)}" target="_top">Back to {!JSINHTMLENCODE(headerTitle)}</a></div>');
+    }
+    setTimeout(function() {
+        if ('{!JSENCODE(loopAlert)}' != '')
+        {
+            alert('{!JSENCODE(loopAlert)}');
+            jQuery('[id="aPage:aForm:cancel"]').click();
+            return;
+        }
+    }, 1);
+    
+    sforce.connection.sessionId = "{!JSENCODE(sessionId)}";
+    var tabs = sforce.connection.describeTabs();
+    var hasQueueTab = false;
+    for (var j = 0; j < tabs.length; j++)
+    {
+        for (var k = 0; k < tabs[j]['tabs'].length; k++)
+        {
+            if (tabs[j]['tabs'][k]['sobjectName'].toLowerCase() == '{!JSENCODE(documentRequestObjectName)}'.toLowerCase())
+            {
+                hasQueueTab = true;
+                break;
+            }
+        }
+        if (hasQueueTab)
+            break;
+    }
+    if (!hasQueueTab)
+        jQuery(':radio[value="queue"]').parent().remove();
+    jQuery.notifie({
+        allowCompatibilityView: false,
+        requiredVersion: 7,
+        containerSelector: '#ieMsgs',
+        compatibilityViewMessage: '{!JSENCODE($Label.IE_Compatibility_View_Warning)}',
+        versionMessage: '{!JSENCODE($Label.IE_Higher_Version_Required)}'
+    });
+});
+</script>
+</apex:outputPanel>
+<script type="text/javascript">
+function emailSelect()
+{
+    var eSelUrl = '{!JSENCODE($Page.selectemailtemplate)}?lm=true';
+    var eSelWin = window.open(eSelUrl, "SelectEmailTemplate", "directories=no,height=600,location=no,scrollbars=yes,menubar=no,toolbar=no,width=950");
+}
+
+function setEmailTemplate(id)
+{
+    jQuery('[id="aPage:aForm:emailTemplate"]').val(id);
+    jQuery("#ePrev").show();
+    jQuery("#eRemove").show();
+    jQuery("#eSel span").text("Change");
+}
+
+function emailPreview()
+{
+    window.open('/'+jQuery('[id="aPage:aForm:emailTemplate"]').val()+'/s?id='+jQuery('[id="aPage:aForm:emailTemplate"]').val()+'&previewMode=1');
+}
+
+function eRemove()
+{
+    jQuery('[id="aPage:aForm:emailTemplate"]').val('');
+    jQuery("#ePrev").hide();
+    jQuery("#eRemove").hide();
+    jQuery("#eSel span").text("Select Email Template");
+}
+</script>
+    <apex:sectionHeader title="{!headerTitle}" subtitle="DDP Enabled by Drawloop" />
+    <div id="ieMsgs" />
+    <apex:outputPanel id="looplusForm">
+        <form method="POST" id="myForm" style="height: 0px" target="lmIframe" action="{!loopUrl}/SFLogin.aspx">
+            <input type="hidden" name="sessionid" value="{!sessionId}" />
+            <input type="hidden" name="location" value="{!$Api.Partner_Server_URL_300}" />
+            <input type="hidden" name="auto" value="true" />
+            <input type="hidden" name="next" value="{!loopSrc}" />
+            <div id="moreInputs"></div>
+        </form>
+    </apex:outputPanel>
+    <apex:form id="aForm" styleClass="{!IF(loopSrc!='', 'invisible', '')}" target="lpIframe">
+        <apex:pageMessages />
+        <div class="bDescription">On this page you can select a contact (if applicable), select a document to merge, and choose how you want to deliver that document.</div>
+        <apex:outputPanel rendered="{!showMergeContactSel}" id="cpliContainer">
+            <ol>
+                <li id="cp">
+                    <div>
+                        <span class="block">
+                            <label for="contactpick">Specify the contact to merge with your document:</label>
+                        </span>
+                        <apex:selectList value="{!selectedContactId}" id="contactpick2" size="1">
+                            <apex:selectOption itemLabel="--None--" itemValue="" />
+                            <apex:selectOptions value="{!contacts}" />
+                        </apex:selectList>
+                    </div>
+                </li>
+            </ol>
+        </apex:outputPanel>
+        <ol start="{!IF(showMergeContactSel, 2, 1)}">
+            <li class="delivli">
+                <div id="ddps">
+                    <span class="block">
+                        <label for="ddpselect">Select the document to merge:</label>
+                    </span>
+                    <apex:selectList value="{!selectedDoc}" id="ddpselect2" size="10">
+                        <apex:selectOptions value="{!mergeDocs}" />
+                    </apex:selectList>
+                </div>
+            </li>
+            <li class="delivli">
+                <div>
+                    <span class="block">
+                        <label for="filename">Specify an output filename (optional):</label>
+                    </span>
+                    <apex:inputText value="{!mergeOutputName}" />
+                    <input type="hidden" name="filename" value="{!mergeOutputName}" />
+                    <span class="extension">.pdf</span>
+                </div>
+            </li>
+            <li class="delivli">
+                <div>
+                    Choose a delivery method for your document:
+                </div>
+                <div id="delivdiv">
+                    <apex:actionRegion >
+                        <apex:selectRadio value="{!mergeDelivery}" id="delivery" layout="pageDirection">
+                            <apex:selectOptions value="{!mergeDeliveries}" />
+                            <apex:actionSupport event="onclick" rerender="attachBackPanel,eTempContainer" />
+                        </apex:selectRadio>
+                    </apex:actionRegion>
+                    <apex:outputPanel id="attachBackPanel" layout="block">
+                        <apex:outputPanel rendered="{!showAttachBackMerge}">
+                            <table><tbody><tr><td>
+                                <apex:inputCheckbox value="{!attachBack}" id="attachback" />&nbsp;
+                                <apex:outputLabel for="attachback" value="Attach to {!headerTitle}" />
+                            </td></tr></tbody></table>
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                </div>
+            </li>
+        </ol>
+        <apex:outputPanel id="eTempContainer">
+            <apex:outputPanel rendered="{!showEmailTemp}">
+                <ol start="{!IF(showMergeContactSel, 5, 4)}">
+                    <li class="delivli" id="eTempLi">
+                        <div id="eTemp">
+                            <span style="display: none;" onclick="emailPreview();" id="ePrev">
+                                <img src="/img/icon/mail16.png" title="preview" alt="preview" />
+                                Preview
+                            </span>
+                            <span onclick="emailSelect();" id="eSel">
+                                <img src="/img/icon/documents16.png" title="change" alt="change" />
+                                <span>Select Email Template</span>
+                            </span>
+                            <span style="display: none;" onclick="eRemove();" id="eRemove">
+                                <img src="/s.gif" style="width: 6px;"/>
+                                None
+                            </span>
+                        </div>
+                        <apex:inputHidden id="emailTemplate" value="{!emailTempId}" />
+                    </li>
+                </ol>
+            </apex:outputPanel>
+        </apex:outputPanel>
+        
+        <div class="buttondiv">
+            <apex:commandButton action="{!submitLoopmerge}" value=" Run " rerender="looplusForm,aForm,onloadScript,lmdiv" onclick="jQuery('#wait').css('visibility', 'visible'); window.scrollTo(0, 0);" id="run" />
+            <apex:commandButton action="{!cancel}" value="Cancel" onclick="jQuery('[id=\'aPage:aForm\']').attr('target', '_top');" id="cancel" />
+            <span id="wait">Please wait...</span>
+        </div>
+    </apex:form>
+    
+    
+    <div id="form_loading_img" class="invisible">
+        <img src="https://apps.drawloop.com/images/widgets/throbber.gif" alt="loading" />
+        <span>loading...</span>
+    </div>
+    
+    
+    <div class="invisible">
+        <img src="https://apps.drawloop.com/graphics/backgrounds/fillBar2.png" />
+    </div>
+    <apex:outputPanel id="lmdiv" style="{!IF(loopAlert!='', 'visibility: hidden;', '')}">
+        <apex:iframe id="lmIframe" frameborder="0" rendered="true" height="600" scrolling="true" />
+    </apex:outputPanel>
+</apex:page>

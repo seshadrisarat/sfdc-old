@@ -1,0 +1,1529 @@
+<apex:page controller="kjoDealReportController" standardStylesheets="false" tabStyle="Deal__c">
+<style type="text/css">
+TABLE#deals,TABLE#financials {
+    border: 1px solid black;
+    border-collapse:collapse;
+    padding: .2em;
+    margin: .2em;
+    width:100%;
+}
+TABLE#deals TH,TABLE#financials TH{
+    border: 1px solid black;
+    text-align: center;
+    padding: .5em;
+    color: #ffffff;
+    background-color: #1797C0;
+    font-weight: bold;
+}
+TABLE#deals TD,TABLE#financials TD{
+    border: 1px solid black;
+    padding: .5em;
+    color: black;
+}
+
+TABLE#deals TD.ind-icon {
+    text-align:center;
+}
+
+TABLE#deals SPAN.ind-icon{
+    display:inline-block;
+}
+
+TABLE#deals TD.created-date{
+    white-space:nowrap;
+}
+
+TABLE#deals TD.date-received{
+    white-space:nowrap;
+}
+
+TABLE#deals TD.amount {
+    white-space:nowrap;
+    text-align: right;
+}
+
+TABLE.deal-status-tooltip TD {
+    padding-right:14px;
+}
+#edit-financials INPUT,SELECT {
+    text-align:right;
+}
+.money, .date{
+    text-align:right;
+}
+.period-type, .currency {
+    text-align:center;
+}
+.dropdown-menu LI {
+    text-align:left;
+}
+div.deal-name-title {
+    padding-left: 4px;
+    padding-right: 4px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    margin-bottom: 4px;
+    font-size: larger;
+    background-color: #ddd;
+    color: #fff;
+    border: 1px solid whitesmoke;
+}
+
+div.ui-tooltip {
+    max-width: 600px;
+    font-size: .9em;
+}
+div.dialog-update-status {
+    margin-top: 6px;
+}
+TR.comment-hide {
+    display:none;
+}
+
+#staff-initials span:not(:last-of-type)::after {
+  content: ", "    
+}
+
+.deal-icon {
+    width:16px;
+    height:16px;
+    background-size:16px 16px;
+    display:inline-block;    
+}
+
+.deal-review {
+    background-image:url("{!URLFOR($Resource.kjo_js_libs, 'libs/jquery-ui-1.10.0.custom/css/warburg-pincus/images/bullet_green.small.png')}");
+}
+.deal-portfolio {
+    background-image:url("{!URLFOR($Resource.kjo_js_libs, 'libs/jquery-ui-1.10.0.custom/css/warburg-pincus/images/bullet_blue.small.png')}");
+}
+.deal-dead {
+    background-image:url("{!URLFOR($Resource.kjo_js_libs, 'libs/jquery-ui-1.10.0.custom/css/warburg-pincus/images/bullet_red.small.png')}");
+}
+.deal-exited {
+    background-image:url("{!URLFOR($Resource.kjo_js_libs, 'libs/jquery-ui-1.10.0.custom/css/warburg-pincus/images/bullet_black.small.png')}");
+}
+
+#dealteam { list-style-type: none; margin: 2px; padding: 4px; width: 90%; }
+#dealteam li div { background-color: #eeeeee; position: relative; padding: 4px; margin:2px; border:1px black solid;}
+#dealteam li div span { position: absolute; right: 10px; display:inline-block;}
+#dealteam li div.hilite { border:1px red solid;}
+
+</style>
+
+<apex:stylesheet value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery-ui-1.10.0.custom/css/warburg-pincus/jquery-ui-1.10.0.custom.min.css')}" />
+<apex:stylesheet value="{!URLFOR($Resource.kjo_js_libs, 'libs/bootstrap/css/bootstrap.min.css')}"/>
+
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery-ui-1.10.0.custom/js/jquery-1.9.0.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/bootstrap/js/bootstrap.min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery-ui-1.10.0.custom/js/jquery-ui-1.10.0.custom.min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery.formatcurrency/jquery.formatCurrency-1.4.0.min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery.autonumeric/autoNumeric.js')}"/>
+
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/backbone/underscore-min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/backbone/backbone.js')}"/> 
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/handlebars/handlebars-1.0.rc.1.js')}"/>
+
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/tinymce/jscripts/tiny_mce/tiny_mce.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/tinymce/jscripts/tiny_mce/jquery.tinymce.js')}"/>
+
+<input type="text" id="curruser" name="curruser" class="blk" />
+
+<apex:pageBlock >
+    <h3>Active Deals</h3>
+    <div id='progressbar'></div>
+    <div class='dealslist'></div>
+</apex:pageBlock>
+
+<div style="display:none" id="editcommentarydialog" >
+    <div style="display:none" id="params"></div>
+    <div class='content-panel'>
+        <div class='deal-name-title'><span id="dealname"></span></div>
+        <div><textarea id="comment"></textarea></div>
+        <div class='dialog-update-status' style='position:relative;height:26px;line-height:26px;'>
+            <span id='user-onbehalf-sect'>
+                <span style="position:absolute;left:8px;vertical-align:middle;">
+                    Comment By:
+                </span> 
+                <input type="text" id="user-onbehalf" name="user-onbehalf" class="blk" 
+                    style='position:absolute;left:15%;height:26px;padding:0px;margin:0px;' />
+            </span>
+            <span style="position:absolute;right:12px;vertical-align:middle;" class='comment-record'>
+                Last updated by <span id="comment-user"></span> on <span id="comment-date"></span>
+            </span>
+        </div>
+    </div>
+    <div class='wait-panel'>
+        <div class='wait-panel-progress'></div>
+    </div>
+</div>
+
+<div id="financials-dialog" >
+    <div class='content-panel'>
+        <a style='float:right;padding-top:4px;padding-botton:4px;' id='new-financial' href='#'>New Financial</a>
+        <div id='financials-dialog-content'></div>    
+    </div>
+    <div class='wait-panel'>
+        <div class='wait-panel-progress'></div>
+    </div>
+</div>
+
+<div id="edit-financials-dialog" >
+    <div style="display:none" id="params"></div>
+    <div class='content-panel'>
+        <div id='edit-financials-dialog-content'></div>
+    </div>
+    <div class='wait-panel'>
+        <div class='wait-panel-progress'></div>
+    </div>
+</div>
+
+<div style="display:none" id="dialog-confirm" title="Delete the Record?">
+    <p>
+    <span class="ui-icon ui-icon-alert" style="float: left; margin: 0 7px 20px 0;"></span>
+    The record will be permanently deleted and cannot be recovered. Are you sure?
+    </p>
+</div>
+
+<div id="staffingdialog" >
+    <div style="display:none" id="dealid"></div>
+    <div class='content-panel'>
+        <div id="staffing-dialog-content"></div>
+    </div>
+    <div class='wait-panel'>
+        <div class='wait-panel-progress'></div>
+    </div>
+</div>
+
+<script id="staffing-dialog-template" type="text/x-handlebars-template">
+<div>
+    {{#if dealname}}
+        <div style="display:none">{{dealname}}</div>
+    {{/if}}
+    <input type='text' id='staff-searcher'></input>
+    <ul id='dealteam'>
+    {{#each staff}}
+        <li data-contact-id='{{this.contact_id}}' data-user-id='{{this.user_id}}'>
+        <div>
+            {{this.label}}
+            <a href='#' class='delete-user'>
+                <span class='ui-icon ui-icon-circle-close'></span>
+            </a>
+        </div>
+        </li>
+    {{/each}}
+    </ul>
+</div>
+</script>
+
+<script id="financials-template" type="text/x-handlebars-template">
+    <table id="financials" class="financials">
+    <tr>
+    <th>Type</th>
+    <th>Period Ended</th>
+    <th>Revenue</th>
+    <th>Net Income</th>
+    <th>EBITDA</th>
+    <th>Book Value</th>
+    <th>Enterprise Value</th>
+    <th>Market Cap.</th>
+    <th>Currency</th>
+    <th>Action</th>
+    </tr>
+    {{#each financials}}
+    <tr>
+    <td class='period-type'>{{Period_Type__c}}</td>
+    <td class='date'>{{date Period_Ended__c}}</td>
+    <td class='money'>{{money Revenues__c}}</td>
+    <td class='money'>{{money Net_Income__c}}</td>
+    <td class='money'>{{money EBITDA__c}}</td>
+    <td class='money'>{{money Book_Value__c}}</td>
+    <td class='money'>{{money Enterprise_Value__c}}</td>
+    <td class='money'>{{money Market_Cap__c}}</td>
+    <td class='currency'>{{CurrencyIsoCode}}</td>
+    <td align='center' style='text-align:center'>
+        <a href='#' data-financial-id='{{Id}}' data-company-id='{{Company__c}}' class='edit-financials'><span style='display:inline-block' class='ui-icon ui-icon-pencil'></span></a>
+        <a href='#' data-financial-id='{{Id}}' data-company-id='{{Company__c}}' class='delete-financials'><span style='display:inline-block' class='ui-icon ui-icon-circle-close'></span></a>
+    </td>
+    </tr>
+    {{/each}}
+    </table>
+</script>
+
+<script id="edit-financials-template" type="text/x-handlebars-template">
+    <table id="edit-financials" class="edit-financials">
+    <tr colspan='2'>
+    </tr>
+    <tr>
+    <td>Period Type</td>
+    <td>
+        <select id='period'>
+        {{#each periods}}
+        <option value='{{this}}' {{selected this ../fin.Period_Type__c}}>{{this}}</option>
+        {{/each}}
+        </select>
+    </td>
+    </tr>
+    <tr>
+    <td>Period Ended</td>
+    <td><input type='text' value='{{date fin.Period_Ended__c}}' id='datepicker'/></td>
+    </tr>
+    <tr>
+    <td>Revenues</td>
+    <td><input id='revenues' class='amount' type='text' value='{{fin.Revenues__c}}'/></td>
+    </tr>
+    <tr>
+    <td>Net Income</td>
+    <td><input id='netincome' class='amount' type='text' value='{{fin.Net_Income__c}}' /></td>
+    </tr>
+    <tr>
+    <td>EBITDA</td>
+    <td><input id='ebitda' class='amount' type='text' value='{{fin.EBITDA__c}}' /></td>
+    </tr>
+    <tr>
+    <td>Book Value</td>
+    <td><input id='bookvalue' class='amount' type='text' value='{{fin.Book_Value__c}}' /></td>
+    </tr>
+    <tr>
+    <td>Enterprise Value</td>
+    <td><input id='enterprisevalue' class='amount'  type='text' value='{{fin.Enterprise_Value__c}}' /></td>
+    </tr>
+    <tr>
+    <td>Market Cap.</td>
+    <td><input id='marketcap' class='amount'  type='text' value='{{fin.Market_Cap__c}}' /></td>
+    </tr>
+    <tr>
+    <td>Company Currency</td>
+    <td>
+        <select id='currency' disabled>
+        {{#each currencies}}
+        <option value='{{this}}' {{selected this ../fin.Company_Currency__c}}>{{this}}</option>
+        {{/each}}
+        </select>
+    </td>
+    </tr>
+    <tr>
+    <td>Currency Code</td>
+    <td>
+        <select id='isocode' disabled>
+        {{#each currencies}}
+        <option value='{{this}}' {{selected this ../fin.CurrencyIsoCode}}>{{this}}</option>
+        {{/each}}
+        </select>
+    </td>
+    </tr>
+    </table>
+</script>
+
+<script id="deals-template" type="text/x-handlebars-template">
+    <table id="deals" class="dealtable">
+    <tr>
+    <th>Deal</th>
+    <th>Description</th>
+    <th>Team</th>
+    <th>Info</th>
+    <th>EMG</th>
+    <th>Group</th>
+    <th>Highlight</th>
+    <th>EMG Comment</th>
+    <th>Actions</th>
+    </tr>
+    {{#each deals}}
+    {{#unless this.dealisexited}}
+    <tr class="dealdetail" data-deal-id="{{this.Id}}">
+    <td>
+        <div style="display:none">{{this.Id}}</div>
+        <div style="display:inline;">
+            {{{icon this.Stage__c dead=this.Dead_Deal_Reason__c}}}
+            <a href="#" class='showdealdetail' title="Deal Details">
+                <span class="ui-icon ui-icon-info" style="display:inline-block;float:right"></span>
+            </a>
+
+            <strong><a href='{{this._sf_e_url}}' label='Edit Deal'><span id='dealname'>{{this.Name}}</span></a></strong>
+
+        </div>
+
+        <div style="display:none">
+            <div class='deal-details'>
+                <table class='deal-status-tooltip'>
+                <tr><td>Sector</td><td>{{this.Sector__c}}</td></tr>
+                <tr><td>Received</td><td>{{date this.Date_Received__c}}</td></tr>
+                {{#if dealisdead }}
+                    <tr><td>Dead Date</td><td><strong>{{date Dead_Deal_Date__c}}</strong></td></tr>
+                    <tr><td>Dead Reason</td><td><strong>{{Dead_Deal_Reason__c}}</strong></td></tr>
+                    <tr><td>Dead Note</td><td><strong>{{Dead_Deal_Notes__c}}</strong></td></tr>
+                    <tr><td>Highest Stage</td><td><strong>{{Stage__c}}</strong></td></tr>
+                {{else}}
+                    <tr><td>Stage</td><td><strong>{{Stage__c}}</strong></td></tr>
+                {{/if}}
+                <tr><td>Code</td><td>{{Expense_Code__c}}</td></tr>
+                <tr><td>Type</td><td>{{Type__c}}</td></tr>
+                <tr><td><div style="display:none">{{WP_Ownership__c}}</td></tr>
+                <tr><td><div style="display:none">{{WP_Ownership_Diluted__c}}</td></tr>
+                <tr><td>Location(s)</td><td>{{Geographies__c}}</td></tr>
+                <tr><td>Stage of Life</td><td>{{Stage_of_Life_Cycle__c}}</td></tr>
+                <tr><td>Group(s)</td><td><strong>{{WP_Groups__c}}</strong></td></tr>
+                </table>
+            </div>
+        </div>
+    </td>
+    <td>
+         <div class="deal-description">{{this.Description__c}}</div>
+    </td>
+    <td>
+        <div id='staff-initials'>
+        {{#each this.Deal_Team__r}}
+            <span><a href="#" title="{{this.Employee__r.Name}}">{{this.Employee__r.Initials__c}}</a></span> 
+        {{/each}}
+        </div>
+    </td>
+    <td class='ind-icon'>
+            {{#if this.Valuation_Reporting__r}}
+                <span class='ui-icon ui-icon-tag ind-icon showvaldetail'></span> 
+            {{/if}}
+            <div style="display:none">
+                {{#if this.Valuation_Reporting__r}}
+                <div class='deal-valuation'>
+                {{#each this.Valuation_Reporting__r}}
+                    <div class='fund-valuation'>
+                    <table>
+                    <tr><td colspan="2"><strong>{{this.Fund__r.Name}}</strong></td></tr>
+                    <tr><td>Original Cost</td><td class='amount'>{{money this.Original_Cost__c millions=1}} MM</td></tr>
+                    <tr><td>Realizations to Date</td><td class='amount'>{{money this.Realizations_to_Date__c millions=1}} MM</td></tr>
+                    <tr><td>Current Cost</td><td class='amount'>{{money this.Cost__c millions=1}} MM</td> </tr>
+                    <tr><td>Carrying Value</td><td class='amount'>{{money this.Carrying_Value__c millions=1}} MM</td> </tr>
+                    <tr><td>Grills Rank</td><td class='amount'>{{this.Grills_Rank__c}}</td> </tr>
+                    <tr><td>Grills Value</td><td class='amount'>{{money this.Grills_Value__c millions=1}} MM</td></tr>
+                    <tr><td>Ownership (basic)</td><td class='amount'>{{this.WP_Ownership_Basic__c}} % </td></tr>
+                    <tr><td>Ownership (diluted)</td><td class='amount'>{{this.WP_Ownership_Fully_Diluted__c}} % </td></tr>
+                    </table>
+                    <br/>
+                    </div>
+                {{/each}}
+                </div>
+                {{/if}}
+            </div>              
+
+            <span class='ui-icon ui-icon-document ind-icon showcommentdetail'></span> 
+            <div style="display:none">
+                <div class='deal-comments'>
+                    <table>
+                    <tr><td><strong>Key Dates / Next Steps</strong></td></tr>
+                    <tr><td class='emg-nextsteps' style='padding-left:1em'>{{{this.Key_Dates_Next_Steps__c}}}</td></tr>
+                    <tr><td><hr/></td></tr>
+                    {{#if this.EMG_Comments__r}}
+                        {{#each this.EMG_Comments__r}}
+                            <tr><td><strong>EMG Comments</strong></td></tr>
+                            <tr><td class='emg-comment' data-comment-id='{{this.Id}}' style='padding-left:1em'>{{{this.EMG_Comment__c}}}</td></tr>
+                            <tr><td><small><strong><span class='update-info'>{{this.EMG_Last_Updated_By__r.Name}} {{date this.EMG_Last_Updated_Date__c}}</span></strong></small></td></tr>
+                        {{/each}}
+                    {{else}}
+                        <tr class='comment-hide'><td><strong>EMG Comments</strong></td></tr>
+                        <tr class='comment-hide'><td class='emg-comment' data-comment-id='' style='padding-left:1em'><emp>Nothing Entered</emp></td></tr>
+                        <tr class='comment-hide'><td><small><strong><span class='update-info'></span></strong></small></td></tr>
+                    {{/if}}
+                    </table>
+                </div>
+            </div>              
+
+    </td>
+    <td class='ind-icon'>
+        {{#if this.Circulate_to_EMG__c}}
+                <span class='ui-icon ui-icon-check ind-icon on-emg'></span>
+        {{else}}
+                <span class='ui-icon ui-icon-radio-off ind-icon not-emg'></span>
+        {{/if}}
+    </td>
+
+    <td class='ind-icon'>
+        {{#if this.Include_In_Group_Report__c}}
+            <span class='ui-icon ui-icon-check ind-icon on-group'></span>
+        {{else}}
+            <span class='ui-icon ui-icon-radio-off ind-icon not-group'></span>
+        {{/if}}
+    </td>
+
+    <td class='ind-icon'>
+        {{#if this.Highlight_In_Group_Report__c}}
+            <span class='ui-icon ui-icon-check ind-icon hilite-group'></span>
+        {{else}}
+            <span class='ui-icon ui-icon-radio-off ind-icon not-hilite'></span>
+        {{/if}}
+    </td>
+
+    <td>
+        {{#if this.EMG_Comments__r}}
+            {{#each this.EMG_Comments__r}}
+                <div class="emg-comment emg-comment-trunc" data-comment-id='{{this.Id}}'>{{{this.EMG_Comment__c}}}</div>
+                <small><strong><span class='update-info'>{{this.EMG_Last_Updated_By__r.Name}} {{date this.EMG_Last_Updated_Date__c}}</span></strong></small>
+            {{/each}}
+        {{else}}
+            <div class="emg-comment emg-comment-trunc" data-comment-id=''></div>
+            <small><strong><span class='update-info'></span></strong></small>
+        {{/if}}
+    </td>
+
+    <td align='center'>
+        <div class="btn-group">
+            <button class="btn btn-mini dropdown-toggle" id='action-button' data-deal-id="{{this.Id}}" data-toggle="dropdown">
+                Edit<span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu pull-right">
+                <li><a data-deal-id="{{this.Id}}" class="edit-emgcomment" href='#'>EMG Comment</a></li>
+                <li><a data-deal-id="{{this.Id}}" class="edit-emgparagraph" href='#'>EMG Paragraph</a></li>
+                <li><a data-deal-id="{{this.Id}}" class="edit-staffing" href='#'>Deal Team</a></li>
+                <li class='divider'></li>
+                <li><a data-deal-id="{{this.Id}}" data-company-id="{{this.Company__c}}" class="edit-financials" href='#'>Financials</a></li>
+            </ul>
+        </div>
+    </td>
+    </tr> 
+    {{/unless}}
+    {{/each}}
+    </table>
+</script>
+
+<script>
+    var inreview = new Array(
+        {status:'Committed-Deal Closed', liveclass:'portfolio'}, 
+        {status:'Committed-Deal Signed', liveclass:'review'}, 
+        {status:'Committed-Binding Bid Submitted', liveclass:'review'},
+        {status:'Serious-Exclusivity/Negotiations', liveclass:'review'}, 
+        {status:'Active-Detailed Diligence/Advisor(s) Engaged', liveclass:'review'}, 
+        {status:'Early-Indicative Bid Submitted', liveclass:'review'},
+        {status:'Early-Initial Diligence/Management Meeting', liveclass:'review'}, 
+        {status:'Early-Prospect', liveclass:'review'}, 
+        {status:'Deal Exited Portfolio', liveclass:'exited'}
+    );
+    
+    var deal_icon_styles = {};
+    _.each(inreview, function(elem, index){ deal_icon_styles[elem.status] = 'deal-' + elem.liveclass; });
+    
+    var USER_CONTACT_INFO = null;
+    
+</script>
+
+<script>
+    /* Template Helpers */
+    
+    Handlebars.registerHelper('date', function(context, block) {
+        if (context) {
+            var attrs = block.hash;
+            var format = attrs.format || "m/d/y";
+            return jQuery.datepicker.formatDate(format, new Date(context));
+        }
+        return "";
+    });
+
+    Handlebars.registerHelper('money', function(context, block) {
+        if (context) {
+            var attrs = block.hash;
+            var millions = attrs.millions || false;
+            var _value = millions ? (context / 1000000.0).toFixed(2) : context;
+            return _value.toString().replace(/(\d)(?=(\d\d\d)+(?!\d))/g, "$1,");
+        }
+        return "";
+    });
+    
+    Handlebars.registerHelper('selected', function(val1, val2) {
+        return val1 == val2 ? ' selected' : '';
+    });    
+    
+    Handlebars.registerHelper('icon', function(context, block) {
+        var _r = "";
+        if (context) {
+            var deal_status = context || 'none';
+            var attrs = block.hash
+            var dead = attrs.dead || false;
+            var _s;            
+            
+            if ( dead ) {
+                _r = "<span style='float:left' class='deal-icon deal-dead'></span>";
+            } else {
+                if ( deal_status in deal_icon_styles) {
+                    _s = deal_icon_styles[deal_status];
+                } else {
+                    _s = 'deal-icon';
+                }
+                _r = "<span style='float:left' class='deal-icon " + _s + "'></span>";
+            }
+        }
+        return _r;
+    });
+    /* End of Template Helpers */
+
+   var dealidtype = "{!$ObjectType.Deal__c}";
+   var dealidlen = {!LEN($ObjectType.Deal__c)};
+   var editactionlink =  "{!URLFOR($Action.Deal__c.view, $ObjectType.Deal__c + RIGHT('000000000000000', 15 - LEN($ObjectType.Deal__c)))}";
+
+   var $jq = jQuery.noConflict();
+
+/* Start of truncate function */
+/*
+ HTML Truncator for jQuery
+ by Henrik Nyh (henrik.nyh.se) 2008-02-28.
+ Free to modify and redistribute with credit.
+*/
+
+(function($jq) {
+
+  var trailing_whitespace = true;
+
+  $jq.fn.truncate = function(options) {
+
+    var opts = $jq.extend({}, $jq.fn.truncate.defaults, options);
+    
+    $jq(this).each(function() {
+
+      var content_length = $jq.trim(squeeze($jq(this).text())).length;
+      if (content_length <= opts.max_length)
+        return;  // bail early if not overlong
+
+      var actual_max_length = opts.max_length - opts.more.length - 3;  // 3 for " ()"
+      var truncated_node = recursivelyTruncate(this, actual_max_length);
+      var full_node = $jq(this).hide();
+
+      truncated_node.insertAfter(full_node);
+      
+      findNodeForMore(truncated_node).append(' (<a href="#show more content">'+opts.more+'</a>)');
+      findNodeForLess(full_node).append(' (<a href="#show less content">'+opts.less+'</a>)');
+      
+      truncated_node.find('a:last').click(function() {
+        truncated_node.hide(); full_node.show(); return false;
+      });
+      full_node.find('a:last').click(function() {
+        truncated_node.show(); full_node.hide(); return false;
+      });
+
+    });
+  }
+
+  // Note that the " (â€¦more)" bit counts towards the max length â€“ so a max
+  // length of 10 would truncate "1234567890" to "12 (â€¦more)".
+  $jq.fn.truncate.defaults = {
+    max_length: 100,
+    more: '...more',
+    less: 'less'
+  };
+
+  function recursivelyTruncate(node, max_length) {
+    return (node.nodeType == 3) ? truncateText(node, max_length) : truncateNode(node, max_length);
+  }
+
+  function truncateNode(node, max_length) {
+    var node = $jq(node);
+    var new_node = node.clone().empty();
+    var truncatedChild;
+    node.contents().each(function() {
+      var remaining_length = max_length - new_node.text().length;
+      if (remaining_length == 0) return;  // breaks the loop
+      truncatedChild = recursivelyTruncate(this, remaining_length);
+      if (truncatedChild) new_node.append(truncatedChild);
+    });
+    return new_node;
+  }
+
+  function truncateText(node, max_length) {
+    var text = squeeze(node.data);
+    if (trailing_whitespace)  // remove initial whitespace if last text
+      text = text.replace(/^ /, '');  // node had trailing whitespace.
+    trailing_whitespace = !!text.match(/ $/);
+    var text = text.slice(0, max_length);
+    // Ensure HTML entities are encoded
+    // http://debuggable.com/posts/encode-html-entities-with-jquery:480f4dd6-13cc-4ce9-8071-4710cbdd56cb
+    text = $jq('<div/>').text(text).html();
+    return text;
+  }
+
+  // Collapses a sequence of whitespace into a single space.
+  function squeeze(string) {
+    return string.replace(/\s+/g, ' ');
+  }
+  
+  // Finds the last, innermost block-level element
+  function findNodeForMore(node) {
+    var $node = $jq(node);
+    var last_child = $node.children(":last");
+    if (!last_child) return node;
+    var display = last_child.css('display');
+    if (!display || display=='inline') return $node;
+    return findNodeForMore(last_child);
+  };
+
+  // Finds the last child if it's a p; otherwise the parent
+  function findNodeForLess(node) {
+    var $node = $jq(node);
+    var last_child = $node.children(":last");
+    if (last_child && last_child.is('p')) return last_child;
+    return node;
+  };
+
+})(jQuery);
+/* End of Truncate function */
+   
+    $jq(document).ready(function() {
+   
+        var deals_template = Handlebars.compile($jq("#deals-template").html());           
+   
+        // Will hold our converted Apex data structures
+        var result_variable;
+        
+        function createSFLink(id) {
+            if ( id.length == 18 ) {
+                id = id.substring(0, 15);
+            }
+            var dealidre = new RegExp ( dealidtype + new Array( 15 - dealidlen + 1 ).join( '0' ) );        
+            return editactionlink.replace(dealidre, id);
+        }
+
+        var inreview_sorter = {};
+        _.each(inreview, function(elem, index){ inreview_sorter[elem.status] = index; });
+        
+        function sortByStage(deal1, deal2) {      
+              
+            var a = inreview_sorter[deal1.Stage__c];
+            var b = inreview_sorter[deal2.Stage__c];
+            var al = deal1.Dead_Deal_Reason__c != null;
+            var bl = deal2.Dead_Deal_Reason__c != null;
+            var an = deal1.Name;
+            var bn = deal2.Name;
+            
+            var ascore = 0;
+            var bscore = 0;
+            
+            /* Deadness */
+            if ( al ) { ascore += 100; }
+            if ( bl ) { bscore += 100; }
+            
+            /* Stage */
+            if ( a < b ) {
+                ascore += -10;
+            } else if ( a > b ) {
+                bscore += -10;
+            }
+            
+            /* Name */
+            if ( an < bn ) {
+                ascore += -1;
+            } else if ( an > bn ) {
+                bscore += -1;
+            }
+             
+            if ( ascore < bscore ) {
+                return -1;
+            } else if ( ascore > bscore ) {
+                return 1;
+            } else {
+                return 0;
+            };
+        }
+        
+        if ( USER_CONTACT_INFO == null ) {
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.kjoDealReportController.getContactInformation}',
+                function(result, event) {
+                    if ( event.status ) {
+                        if ( result && result.Id ) {
+                            USER_CONTACT_INFO = {
+                                user_id : result.User_ID__c, 
+                                name : result.Name, 
+                                contact_id : result.Id, 
+                                full_name : result.Full_Name__c,
+                                emg : result.EMG_Member__c,
+                                email : result.Email,
+                                employee_level : result.Employee_Level__c, 
+                                deal_professional : result.ISINVESTMENTPRO__c,
+                                initials : result.Initials__c,
+                                status : result.Status__c,
+                                title : result.Title,
+                                group : result.WP_Group__c                         
+                            };
+                        }
+                    }
+                }
+            );
+        }
+        
+        function updateDealList(userId) {
+        
+            if (!userId) {
+                alert("The selected contact doesn't appear to have an associated user record in the Salesforce system.\nPlease contact the Helpdesk.");
+                return;
+            }
+
+            $jq("#progressbar").show();
+            $jq("TABLE#deals").hide();
+            
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.kjoDealReportController.getUsersDeals}',
+                userId,
+                function(result, event) {
+                    if ( event.status ) {
+                        var deals = result;
+                        var exited_stati = _.filter(inreview, function(item) { return item.liveclass == 'exited'; });
+                        $jq.map(deals, function( e, i ) {
+                            e._sf_e_url = createSFLink(e.Id);
+                            e.dealisdead = (e.Dead_Deal_Reason__c != null);
+                            e.dealisexited = _.some( exited_stati, 
+                                function(item) {
+                                    return item.status == e.Stage__c;
+                                }
+                            );
+                            return e;
+                        });
+                        deals.sort( sortByStage );
+                        
+                        _.each( deals, convertUTCToLocalDeal );
+                        $jq('DIV.dealslist').html(deals_template({deals : deals}));
+                        
+                        $jq("TABLE#deals tr.dealdetail:odd").css("background-color", "#eeeeee");
+                        $jq("TABLE#deals tr.dealdetail:even").css("background-color", "#ffffff");
+                        
+                        $jq("TABLE#deals .deal-description").truncate({max_length:40});
+                        $jq("TABLE#deals .emg-comment-trunc").truncate({max_length:40});
+                        
+                        $jq("#progressbar").hide();
+                        $jq("TABLE#deals").fadeIn('slow');
+                    } else {
+                        alert('Error encountered while updating deal list.\n' + event.message);
+                    }
+                    
+                },
+                {escape:false}
+            );
+        }
+
+        function updateDealCommentary(dlg) {
+
+            var dealId = dlg.find("#params").attr('data-deal-id');
+            var commentId = dlg.find("#params").attr('data-comment-id');
+            var commentType = dlg.find("#params").attr('data-comment-type');
+            
+            var onBehalfOf = dlg.find("#user-onbehalf").val();
+            var names = dlg.find("#user-onbehalf").autocomplete( "option", "source" );
+            var onBehalfOfObj = _.find(names, function(obj){ return obj.value == onBehalfOf; });
+            
+            if ( !USER_CONTACT_INFO.deal_professional ) {
+                if ( !onBehalfOfObj ) {
+                    alert('You must select a deal professional on whose behalf you wish to submit the update');
+                    return false;
+                }
+            }
+            
+            var firstComment = commentId == '' ? true : false;
+            
+            var onBehalfOfId = null;
+            if ( onBehalfOfObj ) {
+                onBehalfOfId = onBehalfOfObj.contact_id;
+            }
+            
+            var dc = {
+                Id : commentId,
+                DealId : dealId,
+                /*Name : */
+                Comment : dlg.find("#comment").html(),                
+                /*UpdatedBy : */
+                /*UpdatedById : */
+                UpdatedOnBehalfOf : onBehalfOfId ? onBehalfOf : null,
+                UpdatedOnBehalfOfId : onBehalfOfId
+                /*UpdatedOn : */
+            };
+            
+            var end_point;
+            if (commentType == 'comment') {
+                end_point = '{!$RemoteAction.kjoDealReportController.updateEMGComment}';
+            } else if (commentType == 'paragraph') {
+                end_point = '{!$RemoteAction.kjoDealReportController.updateEMGParagraph}';
+            } else {
+                alert('Invalid comment type encountered - ' + commentType);
+            }
+
+            Visualforce.remoting.Manager.invokeAction(
+                end_point,
+                dc,
+                function(result, event) {
+                    if ( event.status ) {
+                        var elem;
+                        if ( commentType == 'comment' ) {
+                            if ( firstComment ) {
+                                elem = $jq("TR[data-deal-id=" + dealId + "] .emg-comment[data-comment-id='']");
+                                elem.attr('data-comment-id', result.Id);
+                            }
+                            
+                            elem = $jq("TR[data-deal-id=" + dealId + "] .emg-comment[data-comment-id=" + result.Id + "]");
+                            if ( elem.length > 0 ) {
+                                elem.html(result.Comment);
+                                $jq("TR[data-deal-id=" + dealId + "] .emg-comment-trunc").truncate({max_length:40});
+                                elem.parent('.comment-hide').removeClass('comment-hide').siblings('.comment-hide').removeClass('comment-hide');
+                            }
+                            
+                            elem = $jq("TR[data-deal-id=" + dealId + "] .update-info");
+                            if ( elem.length > 0 ) {
+                                elem.html((result.UpdatedOnBehalfOfId ? result.UpdatedOnBehalfOf : result.UpdatedBy) + ' ' + result.UpdatedOn);
+                            }
+                        }
+                        
+                        return true;
+                    } else {
+                        alert('Error encountered while updating commentary.\n' + event.message);
+                    }
+                },
+                {escape:false}
+            );
+            return true;
+        }
+        
+        function updateDealStaffing(dlg) {
+            var dealId = dlg.find("#dealid").text();
+            var staff = new Array();
+            $jq("#dealteam li[data-contact-id]").each(function(index, element){
+                staff.push($jq(this).attr('data-contact-id'));
+            });
+            
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.kjoDealReportController.updateDealStaffing}',
+                dealId,
+                staff,
+                function(result, event) {
+                    if ( event.status ) {
+                        var new_staff = result;
+                        elem = $jq("TR[data-deal-id=" + dealId + "] #staff-initials");
+                        elem.empty();
+                        _.each( new_staff, function( person ) {
+                            var link = $jq("<a>", {
+                                "href" : "#",
+                                title : person.label
+                            }).text(person.initials);
+                            var span = $jq("<span>").append(link);
+                            elem.append(span);
+                        });
+                    } else {
+                        alert(event.message);
+                    }
+                }
+            );
+            
+        }
+        
+        function getFinanceOptions() {
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.kjoDealReportController.getFinanceOptions}',
+                function(result, event) {
+                    alert(result);
+                },
+                {escape:false}
+            );
+        }
+        
+        function getCompanyFinancials(company_id, dlg) {
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.kjoDealReportController.getCompanyFinancials}',
+                company_id,
+                function(result, event) {
+                    if ( event.status ) {
+                        dlg.find('.content-panel').show();
+                        dlg.find('.wait-panel').hide();
+                    
+                        var financials_template = Handlebars.compile($jq("#financials-template").html());
+                        _.each(result, convertUTCToLocalFinance);
+                        dlg.find('#financials-dialog-content').html(financials_template({financials : result}));
+                        dlg.dialog("option", "position", ['center', 'center'] );
+                    } else {
+                        alert('Problem Encountered\n' + event.message);
+                    }
+                },
+                {escape:false}
+            );
+        }
+        
+        var periods = [
+            'Annual',
+            'LTM',
+            'YTD',
+            'Quarterly',
+            'L6M'
+        ];
+
+        var currencies = [
+            'USD',
+            'CAD',
+            'INR',
+            'GBP'
+        ];
+        
+        var TZ_offset = (60000 * (new Date()).getTimezoneOffset());
+        
+        function convertUTCToLocalFinance(fin_record) {
+            fin_record.Period_Ended__c += TZ_offset;
+        }
+                
+        function convertUTCToLocalDeal(deal) {
+            deal.Date_Received__c += TZ_offset;
+            deal.Dead_Deal_Date__c += TZ_offset
+        }
+
+        function getCompanyFinancialSingle(financial_id, dlg) {
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.kjoDealReportController.getCompanyFinancialSingle}',
+                financial_id,
+                function(result, event) {
+                    if ( event.status ) {
+                        dlg.find('.content-panel').show();
+                        dlg.find('.wait-panel').hide();
+                        var edit_financials_template = Handlebars.compile($jq("#edit-financials-template").html());
+                        _.each(result, convertUTCToLocalFinance);
+                        dlg.find('#edit-financials-dialog-content').html(edit_financials_template({fin : result[0], periods : periods, currencies : currencies}));
+                        dlg.find('#datepicker').datepicker();
+                        dlg.find('.amount').autoNumeric({mDec:0, vMin:-999999999999, vMax:999999999999});
+                        dlg.dialog("option", "position", ['center', 'center'] );
+                    } else {
+                        alert('Problem Encountered\n' + event.message);
+                    }
+                },
+                {escape:false}
+            );
+        }
+
+        function newCompanyFinancialSingle(company_id, dlg) {
+        
+            dlg.find('.content-panel').show();
+            dlg.find('.wait-panel').hide();
+            
+            var empty_financial = {
+                Period_Type__c : 'LTM',
+                Period_Ended__c : null,
+                Revenues__c : null,
+                Net_Income__c : null,
+                EBITDA__c : null,
+                Book_Value__c : null,
+                Enterprise_Value__c : null,
+                Market_Cap__c : null,
+                Company_Currency__c : 'USD',
+                CurrencyIsoCode : 'USD'
+            };
+            var edit_financials_template = Handlebars.compile($jq("#edit-financials-template").html()); 
+            dlg.find('#edit-financials-dialog-content').html(edit_financials_template({fin : empty_financial, periods : periods, currencies : currencies}));
+            dlg.find('#datepicker').datepicker();
+            dlg.find('.amount').autoNumeric({mDec:0, vMin:-999999999999, vMax:999999999999});
+            dlg.dialog("option", "position", ['center', 'center'] );
+        }
+        
+        function updateCompanyFinancial(dlg) {
+            
+            var company_id = dlg.find('#params').attr('data-company-id');
+            var financial_id = dlg.find('#params').attr('data-financial-id');
+            
+            var per = dlg.find('#period').val();
+            
+            var dte = new Date(dlg.find('#datepicker').val());
+            dte = dte.toUTCString();
+            var rev = dlg.find('#revenues').autoNumeric('get');
+            var nin = dlg.find('#netincome').autoNumeric('get');
+            var ebt = dlg.find('#ebitda').autoNumeric('get');
+            var bkv = dlg.find('#bookvalue').autoNumeric('get');
+            var env = dlg.find('#enterprisevalue').autoNumeric('get');
+            var mkc = dlg.find('#marketcap').autoNumeric('get');
+            var cur = dlg.find('#currency').val();
+            var iso = dlg.find('#isocode').val();
+            
+            var parent_dlg = $jq('#financials-dialog');
+            
+            parent_dlg.find('.content-panel').hide();
+            parent_dlg.find('.wait-panel').show();
+            
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.kjoDealReportController.upsertCompanyFinancial}',
+                company_id,
+                financial_id,
+                per,
+                dte,
+                rev == '' ? null : rev,
+                nin == '' ? null : nin,
+                ebt == '' ? null : ebt,
+                bkv == '' ? null : bkv,
+                env == '' ? null : env,
+                mkc == '' ? null : mkc,
+                cur,
+                iso,
+                function(result, event) {
+                    if ( event.status ) {
+                        getCompanyFinancials( company_id, parent_dlg );
+                    } else {
+                        alert('Problem Encountered\n' + event.message);
+                    }
+                },
+                {escape:false}
+            );            
+        }
+
+        function showFinancingDialog(event){
+        
+            var deal_id = $jq(this).attr('data-deal-id');
+            var company_id = $jq(this).attr('data-company-id');
+ 
+            event.preventDefault();
+            var btn = $jq("#action-button[data-deal-id='" + deal_id + "']");
+            if (btn.is(":visible"))
+                btn.click();
+        
+            var dlg = $jq("#financials-dialog");
+            dlg.find("#new-financial").attr('data-company-id', company_id);
+            
+            dlg.find('.content-panel').hide();
+            dlg.find('.wait-panel').show();
+            
+            dlg.dialog("open");
+            dlg.dialog("option" , "title" , "Financials");
+            dlg.dialog('option', 'position', 'center');
+            getCompanyFinancials(company_id, dlg);
+            return false;
+        }
+                
+        function showEditFinancialsDialog(event){
+
+            event.preventDefault();
+            var financial_id = $jq(this).attr('data-financial-id');
+            var company_id = $jq(this).attr('data-company-id');
+            var dlg = $jq("#edit-financials-dialog");
+
+            dlg.find("#params").attr('data-financial-id', financial_id);
+            dlg.find("#params").attr('data-company-id', company_id);
+            dlg.find('.content-panel').hide();
+            dlg.find('.wait-panel').show();
+
+            dlg.dialog("open");
+            dlg.dialog("option" , "title" , "Edit Financials");
+            dlg.dialog('option', 'position', 'center');
+
+            getCompanyFinancialSingle(financial_id, dlg);
+
+            return false;
+        }
+
+        function showDeleteFinancialsDialog(event){
+            event.preventDefault();
+            var financial_id = $jq(this).attr('data-financial-id');
+            var company_id = $jq(this).attr('data-company-id');
+            var dlg = $jq("#edit-financials-dialog");
+            
+            $jq( "#dialog-confirm" ).dialog({
+                resizable: false,
+                height:140,
+                width : 300,
+                modal: true,
+                buttons: {
+                    "Delete": function() {
+                        Visualforce.remoting.Manager.invokeAction(
+                            '{!$RemoteAction.kjoDealReportController.deleteCompanyFinancial}',
+                            financial_id,
+                            function(result, event) {
+                                if ( event.status ) {
+                                    getCompanyFinancials( company_id, $jq('#financials-dialog') );
+                                } else {
+                                    alert('Problem Encountered\n' + event.message);
+                                }
+                            },
+                            {escape:false}
+                        );
+                        $jq(this).dialog( "close" );
+                    },
+                    "Cancel" : function() {
+                        $jq(this).dialog( "close" );
+                    }
+                }
+            });
+
+            
+            return false;
+        }
+
+        function showNewFinancialsDialog(event){
+            event.preventDefault();
+            var company_id = $jq(this).attr('data-company-id');
+            var dlg = $jq("#edit-financials-dialog");
+            dlg.find("#params").attr('data-financial-id', '');
+            dlg.find("#params").attr('data-company-id', company_id);
+            dlg.dialog("open");
+            dlg.dialog("option" , "title" , "Add Financials");
+            dlg.dialog('option', 'position', 'center');
+            newCompanyFinancialSingle(company_id, dlg);
+            return false;
+        }
+        
+        function showStaffingDialog(event){
+ 
+            var deal_id = $jq(this).attr('data-deal-id');
+            var deal_name = $jq("TR[data-deal-id=" + deal_id + "] #dealname").text();
+
+            event.preventDefault();
+            var btn = $jq("#action-button[data-deal-id='" + deal_id + "']");
+            if (btn.is(":visible"))
+                btn.click();
+ 
+            var dlg = $jq("#staffingdialog");
+            dlg.find("#dealid").html(deal_id);
+            
+            dlg.find('.content-panel').hide();
+            dlg.find('.wait-panel').show();
+            
+            dlg.dialog("open");
+            dlg.dialog("option" , "title" , deal_name);
+            dlg.dialog('option', 'position', 'center');
+        
+            var dlg_template = Handlebars.compile($jq("#staffing-dialog-template").html());
+            
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.kjoDealReportController.getDealStaffing}',
+                deal_id,
+                function(result, event) {
+                    if ( event.status ) {
+                    
+                        dlg.find('.content-panel').show();
+                        dlg.find('.wait-panel').hide();
+                    
+                        $jq('#dealteam').empty();
+                        dlg.find('#staffing-dialog-content').html(dlg_template({dealname : deal_name, staff : result}));
+                        $jq('#dealteam').sortable();
+
+                        $jq( "#staff-searcher" ).autocomplete({
+                            source: user_list,
+                            minLength: 2,
+                            select: function( event, ui ) {
+                                if ( ui.item ) {
+                                    var entry = $jq("#dealteam li[data-contact-id='" + ui.item.contact_id + "']");
+                                    if ( entry.length == 0 ) {
+                                        var divelem = $jq('<div>');
+                                        divelem.append(ui.item.label);
+                                        divelem.append("<a href='#' class='delete-user'><span class='ui-icon ui-icon-circle-close'></span></a>");
+                                        var listelem = $jq('<li>');
+                                        listelem.attr('data-user-id', ui.item.id);
+                                        listelem.attr('data-contact-id', ui.item.contact_id);
+                                        listelem.append(divelem);                
+                                        $jq('#dealteam').append(listelem);
+                                    } else {
+                                        entry.children('div').stop().fadeOut(300).fadeIn(300);
+                                    }
+                                } else {
+                                    alert('Nothing Selected.');
+                                }
+                            }
+                        });
+                    
+                        $jq("#dealteam").on('click', 'a.delete-user', function(event) {
+                            $jq(this).parents('li').remove();
+                        });
+                        
+                                   
+                    } else {
+                        alert( event.message );
+                    }
+                },
+                {escape:false}
+            );
+            return false;
+        }
+
+        function showEditCommentaryDialog(event){
+        
+            var deal_id = $jq(this).attr('data-deal-id');
+
+            event.preventDefault();
+            var btn = $jq("#action-button[data-deal-id='" + deal_id + "']");
+            if (btn.is(":visible"))
+                btn.click();
+                
+            var commentary_type = event.data;
+            var dlg = $jq("#editcommentarydialog");
+            dlg.find("#params").attr('data-deal-id', deal_id);
+            
+            dlg.find('.content-panel').hide();
+            dlg.find('.wait-panel').show();
+            
+            dlg.dialog("open");
+            dlg.dialog("option" , "title" , "Edit " + commentary_type.charAt(0).toUpperCase() + commentary_type.slice(1));
+            dlg.dialog('option', 'position', 'center');
+            
+            Visualforce.remoting.Manager.invokeAction (
+                '{!$RemoteAction.kjoDealReportController.getDealCommentary}',
+                deal_id,
+                function(result, event) {
+                    if ( event.status ) {
+
+                        dlg.find('.content-panel').show();
+                        dlg.find('.wait-panel').hide();
+
+                        var commentary = result;
+                        var comment = commentary_type == 'paragraph' ? commentary.paragraph : commentary.comment;
+                        
+                        var params = dlg.find("#params");
+                        if ( params.attr('data-deal-id') != comment.DealId ) {
+                            alert('Unexpected Deal Identifier');
+                            return;
+                        }
+                        
+                        params.attr('data-comment-id', blankIfNullOrMissing(comment.Id));
+                        params.attr('data-comment-type', commentary_type);
+            
+                        dlg.find("#dealname").html(blankIfNullOrMissing(comment.DealName));
+                        
+                        dlg.find("#comment").html(blankIfNullOrMissing(comment.Comment));
+                        if ( comment.UpdatedOn ) {
+                            dlg.find(".comment-record").css('display','inline');
+                            dlg.find("#comment-user").text(blankIfNullOrMissing(comment.UpdatedBy));
+                            dlg.find("#comment-date").text(blankIfNullOrMissing(comment.UpdatedOn));
+                        } else {
+                            dlg.find(".comment-record").css('display','none');
+                        }
+                        
+                        if ( USER_CONTACT_INFO.deal_professional ) {
+                            dlg.find("#user-onbehalf-sect").css('display', 'none');
+                            dlg.find("#user-onbehalf").val('');
+                        } else {
+                            dlg.find("#user-onbehalf-sect").css('display', 'inline');
+                            dlg.find("#user-onbehalf").val(blankIfNullOrMissing(comment.UpdatedOnBehalfOf));
+                        }
+                    } else {
+                        alert(event.message);
+                    }
+                
+                },
+                {escape:false}
+            );
+            
+            return false;
+        }
+        
+        function blankIfNullOrMissing( value ) {
+            if ( value ) {
+                return value;
+            } else {
+                return '';
+            }
+        }
+        
+        var user_list = null;
+        
+        kjoDealReportController.getProfessionalsList(
+            '',
+            function(data, event) {
+                if ( user_list == null ) {
+                    user_list = $jq.map(data, function(item) { 
+                            return { label : item.label, value : item.label , id : item.user_id, contact_id : item.contact_id} 
+                        }
+                    );
+                }
+                $jq( "#curruser" ).autocomplete({
+                    source: user_list,
+                    minLength: 2,
+                    select: function( event, ui ) {
+                        event.preventDefault();
+                        if ( ui.item ) {
+                            updateDealList(ui.item.id);
+                        } else {
+                            alert('Nothing Selected.');
+                        }
+                    }
+                });
+             }
+        );                   
+ 
+ 
+        /* Live search - too chatty
+        **
+        $jq("#curruser").autocomplete({
+            minLength : 2,
+            source: function(request, response) {
+                kjoDealReportController.getProfessionalsList(
+                    request.term,
+                    function(data, event) {
+                        response($jq.map(data, function(item) { return { label : item.label, value : item.label, id : item.user_id, contact_id : item.contact_id} }));
+                    }
+                );                   
+            },           
+            select: function(event, ui) {
+                updateDealList(ui.item.id);
+            },
+            create: function(event, ui) {
+            }                
+        });
+        ** End of Live search 
+        */    
+
+        $jq("#curruser").on("click", function(){$jq(this).select();});
+
+        $jq(".dealslist").tooltip({
+            track : true,
+            items: 'A, SPAN.showcommentdetail, SPAN.showvaldetail, SPAN.on-emg, SPAN.not-emg, SPAN.on-group, SPAN.not-group, SPAN.hilite-group, SPAN.not-hilite',
+            content: function() {
+                var elem = $jq(this);
+                var l = null;
+                if ( elem.is('A[data-uuid]') ) {
+                    var id = elem.attr('data-uuid');
+                    var template = Handlebars.compile($jq("#tooltip-template").html());
+                    return template({id : id});
+                } else if (elem.is('.showvaldetail')) {
+                    l = elem.parents('.dealdetail').find('.deal-valuation');
+                    if ( l.length ) {
+                        return elem.parents('.dealdetail').find('.deal-valuation').html();
+                    } else {
+                        return 'No valuation information available.';
+                    }
+                } else if (elem.is('.showcommentdetail')) {
+                    l = elem.parents('.dealdetail').find('.deal-comments');
+                    if ( l.length ) {
+                        return elem.parents('.dealdetail').find('.deal-comments').html();
+                    } else {
+                        return 'No deal commentary available.';
+                    }
+                } else if (elem.is('.showdealdetail')) {
+                    l = elem.parents('.dealdetail').find('.deal-details');
+                    if ( l.length ) {
+                        return elem.parents('.dealdetail').find('.deal-details').html();
+                    } else {
+                        return null;
+                    }
+                } else if (elem.is('.on-emg')) {
+                    return 'This deal will appear on the EMG <emp>New Deals</emp> report.';
+                } else if (elem.is('.not-emg')) {
+                    return 'This deal will <strong>not</strong> appear on the EMG <emp>New Deals</emp> report.';
+                } else if (elem.is('.on-group')) {
+                    return 'This deal will appear on the group report.';
+                } else if (elem.is('.not-group')) {
+                    return 'This deal will <strong>not</strong> appear on the group report.';
+                } else if (elem.is('.hilite-group')) {
+                    return 'This deal will be highlighted on the group report.';
+                } else if (elem.is('.not-hilite')) {
+                    return 'This deal will <strong>not</strong> be highlighted on the group report.';
+                } else {
+                    return elem.attr('title') ? elem.attr('title') : null;
+                }
+            }
+        });
+
+        $jq("#edit-financials-dialog").dialog({
+            autoOpen: false, 
+            modal: true, 
+            position: 'center',
+            width: 'auto',
+            buttons: {
+                "Update": function() {
+                    updateCompanyFinancial($jq(this));
+                    $jq(this).dialog("close");
+                },
+                "Cancel": function() {
+                    $jq(this).dialog("close");
+                }
+            }              
+        });
+
+        $jq("#financials-dialog").dialog({
+            autoOpen: false, 
+            modal: true, 
+            position: 'center',
+            width: 'auto',
+            buttons: {
+                "Close": function() {
+                    $jq(this).dialog("close");
+                }
+            }              
+        });
+
+        $jq("#staffingdialog").dialog({
+            autoOpen: false, 
+            modal: true, 
+            position: 'center',
+            width: 400,
+            height: 500,
+            buttons: {
+                "Update": function() {
+                    updateDealStaffing($jq(this));
+                    $jq(this).dialog("close");
+                },
+                "Cancel": function() {
+                    $jq(this).dialog("close");
+                }
+            }              
+        });
+
+        $jq("#editcommentarydialog").dialog({ 
+            autoOpen: false, 
+            modal: true, 
+            position: 'center',
+            width: 780,
+            height: 440,
+            create: function(event, ui) {
+                if ( !tinyMCE.get('comment') ) {
+                    $jq(this).find("#comment").tinymce({
+                        width:"100%",
+                        height: 260,
+                        theme: "simple",                
+                        script_url : "{!URLFOR($Resource.kjo_js_libs, 'libs/tinymce/jscripts/tiny_mce/tiny_mce.js')}",
+                        inline_styles: false,
+                        formats : {
+                            underline : {inline : 'u', exact : true}
+                        },
+                        valid_elements : "strong/b,p,br,em/i,u,li,ul,ol"
+                    });
+                }
+            },
+            buttons: {
+                "Update": function() {
+                    if ( updateDealCommentary($jq(this)) ) {
+                        $jq(this).dialog("close");
+                    }
+                },
+                "Cancel": function() {
+                    $jq(this).dialog("close");
+                }
+            }              
+        });
+
+        kjoDealReportController.getProfessionalsList(
+            '',
+            function(data, event) {
+                if ( user_list == null ) {
+                    user_list = $jq.map(data, function(item) { 
+                            return { label : item.label, value : item.label , id : item.user_id, contact_id : item.contact_id} 
+                        }
+                    );
+                }
+                $jq( "#user-onbehalf" ).autocomplete({
+                  source: user_list,
+                  minLength: 1,
+                  select: function( event, ui ) {
+                    //alert( ui.item ? "Selected: " + ui.item.value + ", id: " + ui.item.id : "Nothing selected, input was " + this.value );
+                    return;
+                  }
+                });
+                $jq("#user-onbehalf").on("click", function(){$jq(this).select();});
+             }
+        );                   
+                
+        $jq("#progressbar").progressbar( {value : false} );
+        
+        $jq("#editcommentarydialog .wait-panel-progress").progressbar( {value : false} );
+        $jq("#staffingdialog .wait-panel-progress").progressbar( {value : false} );
+        $jq("#edit-financials-dialog .wait-panel-progress").progressbar( {value : false} );
+        $jq("#financials-dialog .wait-panel-progress").progressbar( {value : false} );
+        
+        $jq("#tab-comment-set").tabs();
+                
+        $jq("DIV.dealslist").on('click', '.edit-emgcomment', 'comment', showEditCommentaryDialog );            
+        $jq("DIV.dealslist").on('click', '.edit-emgparagraph', 'paragraph', showEditCommentaryDialog );            
+        $jq("DIV.dealslist").on('click', '.edit-staffing', showStaffingDialog );  
+        $jq("DIV.dealslist").on('click', '.edit-financials', showFinancingDialog );            
+
+        $jq("DIV#financials-dialog-content").on('click', '.delete-financials', showDeleteFinancialsDialog );            
+        $jq("DIV#financials-dialog-content").on('click', '.edit-financials', showEditFinancialsDialog );            
+        $jq("A#new-financial").on('click', showNewFinancialsDialog );            
+                  
+        $jq('.refreshdealsbutton').on('click', updateDealList);
+        $jq('#getcompanyfinancials').on('click', showFinancingDialog);
+        
+        $jq("#curruser").val("{!$User.LastName}, {!$User.FirstName}");
+        updateDealList("{!$User.Id}");
+        
+    });
+    
+</script>
+</apex:page>

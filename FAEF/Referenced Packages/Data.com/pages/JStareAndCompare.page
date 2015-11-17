@@ -1,0 +1,292 @@
+<apex:page label="JStareAndCompare" name="JStareAndCompare" title="Stare And Compare" standardController="Account" showHeader="true" tabStyle="account" extensions="jigsaw_clean.JStareAndCompareController" action="{!checkToken}">
+    <apex:form >
+        <apex:actionFunction action="{!doUpdate}" name="doUpdate" rerender="pageMessages,buttonGrp,loadingImg">
+            <apex:param name="firstParam" assignTo="{!jupdate}" value="" />
+        </apex:actionFunction>
+        <apex:actionFunction action="{!cancel}" name="cancel" />
+    </apex:form>
+    
+    <apex:includeScript value="{!URLFOR($Resource.jigsaw_clean__jquery, 'js/jquery-1.4.2.min.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.jigsaw_clean__jquery, 'js/xss.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.jigsaw_clean__jquery, 'js/jfs-utils.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.jigsaw_clean__jquery, 'js/field-mapping.js')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.jigsaw_clean__jquery, 'css/searchjdf2sfdc.css')}"/>
+    <style type="text/css">
+        table.cTable tr.cHeader td {
+            font-weight: bold;
+            font-size:14px;
+            padding-bottom: 10px;
+        }
+        table.cTable td.name {
+            font-weight: bold;
+        }
+        .cTable tbody td {
+            border-bottom:1px solid #DED7D7;
+            padding-bottom: 5px;
+            padding-top: 5px;
+        }
+        td.radio {
+            padding-top: 3px !important;
+        }
+        .different  {
+            background-color:#D9ECF9;
+            color:#333333;
+        }
+    </style>
+    <script type="text/javascript">
+        var jData = <apex:outputText value="{!json}" escape="false"/>;
+        var sUpdatedDate = "<apex:outputText value="{0,date,yyyy/MM/dd HH:mm:ss z}"><apex:param value="{!sUpdatedDate}"/></apex:outputText>";
+        
+        $(document).ready(function() {
+            if (jData == null) {
+                $("#syncBtn").hide();
+                return;
+            }
+
+            var c = jData;
+            var formattedRevenue = jfsFormatRevenue(c.revenue);
+            var mappedOwnership = getMappedOwnership(c.ownership);
+            $("#name").text(c.name);
+            $("#address").text(c.address);
+            $("#phone").text(c.phone);
+            $("#city").text(c.city);
+            $("#country").text(c.country);
+            $("#state").text(c.state);
+            $("#zip").text(c.zip);
+            $("#website").text(c.website);
+            $("#revenue").text(formattedRevenue > 0 ? formattedRevenue : "");
+            $("#employee").text(c.employeeCount > 0 ? c.employeeCount : "");
+            $("#ownership").text(mappedOwnership);
+            $("#industry").text(c.sfdcIndustry);
+            $("#ticker").text(c.stockTicker);
+
+            /*Create radiobuttons*/
+            compareAndCreate("name");
+            compareAndCreate("address");
+            compareAndCreate("phone");
+            compareAndCreate("city");
+            compareAndCreate("country");
+            compareAndCreate("state");
+            compareAndCreate("zip");
+            compareAndCreate("website");
+            compareAndCreate("revenue");
+            compareAndCreate("employee");
+            compareAndCreate("ownership");
+            compareAndCreate("industry");
+            compareAndCreate("ticker");
+            
+            if (typeof c.updatedDate != 'undefined' ) {
+                var jDate = parseDate(c.updatedDate);
+                var sDate = new Date(sUpdatedDate);
+                
+                $("#jupdatedDate").text(jDate.toUTCString());
+                $("#supdatedDate").text(sDate.toUTCString());
+            }
+            
+            //3. if the records are in sync, hide the 'Cancel' button and change the text of the 'Update' button to 'Records are in sync'
+            if ($(".updateJ").length == 0) {
+                $("#cancelBtn").hide();
+                $("#syncBtn").val("Records are in sync");
+            }
+            //safari fix
+            $('.updateJ').attr('checked','checked');
+            
+        });
+        
+        function parseDate(str) {
+            return new Date(str.replace(/-/g,'/').replace(/T/,' '));
+        }
+        
+        var index = 0;
+        
+        function compareAndCreate(idRb) {
+        	var val1 = $.trim($("#"+idRb).text());
+            var val2 = $.trim($("#s"+idRb).text());
+            var notEqual = false;
+            // ET-986: Don't show radio buttons if Data.com side is blank.
+            if (val1 != null && val1 != "" && val2 != null) {
+                if (idRb == "employee" || idRb == "revenue" ) {
+                    notEqual = (parseInt(val1) != parseInt(val2));
+                } else if (idRb == "phone") {
+                	notEqual = !jfsPhoneNumberEquals(val1, val2);
+                } else {
+                    notEqual = ($.trim(val1.toLowerCase()) != $.trim(val2.toLowerCase()));
+                }
+            }
+            if (notEqual){
+                $('#jd'+XSS.htmlspecialchars(idRb)).append('<input type=\"radio\" checked=\"checked\" value=\"'+XSS.htmlspecialchars(val1)+'\" idx=\"'+XSS.htmlspecialchars(index)+'\" name=\"'+'d'+XSS.htmlspecialchars(idRb)+'\" class=\"updateJ\" />');
+                $('#sd'+XSS.htmlspecialchars(idRb)).append('<input type=\"radio\" value=\"false\" name=\"'+'d'+XSS.htmlspecialchars(idRb)+'\" />');
+                $('.c'+XSS.htmlspecialchars(idRb)).addClass('different');
+            }
+            index++;    
+        }
+        function update() {
+            var update = ['null','null','null','null','null','null','null','null','null','null','null','null','null'];
+            $(".updateJ:checked").each(function(index) {
+                 update[$(this).attr('idx')] = this.value;
+            });
+            var buttonGrp = document.getElementById("{!$Component.buttonGrp}");
+            if (buttonGrp) {
+                buttonGrp.style.display = "none";
+            }
+            var loadingImg = document.getElementById("{!$Component.loadingImg}");
+            if (loadingImg) {
+                loadingImg.style.display = "block";
+            }
+            var updateStr = update.join("|CDATA|");
+            doUpdate(updateStr);
+        }
+    </script>
+    
+    <apex:outputText value="{!Account.jigsaw_clean__Jigsaw_Id__c}" rendered="false"/>
+    <apex:outputText value="{!Account.LastModifiedDate}" rendered="false"/>
+    <apex:outputText value="{!Account.Website}" rendered="false"/>
+    <apex:outputText value="{!Account.NumberOfEmployees}" rendered="false"/>
+    <apex:outputText value="{!Account.AnnualRevenue}" rendered="false"/>
+    <apex:outputText value="{!Account.TickerSymbol}" rendered="false"/>
+    
+    <apex:pageMessages id="pageMessages" showDetail="true" />
+    
+                <div class="columnRight">
+                    <div class="bPageTitle">
+                        <div class="ptBody spSecondaryPalette">
+                            <div class="content">
+                                <img title="Account" class="pageTitleIcon" alt="Account" src="/s.gif" style="background-position:0 -950px;"/>
+                                <h1><apex:outputField value="{!Account.Name}"/><span class="titleSeparatingColon">:</span></h1>
+                                <h1 style="padding-top: 5px;">Clean Account with Data.com</h1>
+                                <div class="blank"> </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--****************************-->
+                    <div id="jighsawSearchBlock" class="spbRelatedList">
+                            <div class="spBlock spSecondaryPalette"  style="border-top:3px solid #216DBD;">
+                                    <div class="pbHeader" style="text-align:center;">
+                                        <apex:outputPanel id="buttonGrp" layout="block">
+                                            <input type="button" value="Update" title="Update" onclick="update()" name="sync" class="btn" id="syncBtn"/>
+                                            <input type="button" value="Cancel" title="Cancel" onclick="cancel()" name="cancel" class="btn" id="cancelBtn" />
+                                        </apex:outputPanel>
+                                        <apex:outputPanel id="loadingImg" style="display:none;">
+                                            <img src="{!URLFOR($Resource.jigsaw_clean__jquery, 'img/loading.gif')}"/>
+                                        </apex:outputPanel>
+                                    </div>
+                                    <div class="pbBody">
+                                        <div class="dataTables_wrapper" id="searchResult_wrapper">
+                                        <table cellspacing="0" cellpadding="0" border="0" align="center" class="cTable">
+                                            <thead>
+                                                <tr class="cHeader">
+                                                    <td width="200"></td>
+                                                    <td width="30"></td>
+                                                    <td width="300">Data.com Has:<div id="jupdatedDate" style="font-size: 12px;"></div></td>
+                                                    <td width="30"></td>
+                                                    <td width="300">Salesforce Has:<div id="supdatedDate" style="font-size: 12px;"></div></td>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td class="name">Company Name</td>
+                                                    <td id="jdname" class="cname radio"></td>
+                                                    <td id="name" class="cname"></td>
+                                                    <td id="sdname" class="cname radio"></td>
+                                                    <td id="sname" class="cname"><apex:outputField value="{!Account.Name}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Headquarters</td>
+                                                    <td id="jdaddress" class="caddress radio"></td>
+                                                    <td id="address" class="caddress"></td>
+                                                    <td id="sdaddress" class="caddress radio"></td>
+                                                    <td id="saddress" class="caddress"><apex:outputField value="{!Account.BillingStreet}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">City</td>
+                                                    <td id="jdcity" class="ccity radio"></td>
+                                                    <td id="city" class="ccity"></td>
+                                                    <td id="sdcity" class="ccity radio"></td>
+                                                    <td id="scity" class="ccity"><apex:outputField value="{!Account.BillingCity}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">State</td>
+                                                    <td id="jdstate" class="cstate radio"></td>
+                                                    <td id="state" class="cstate"></td>
+                                                    <td id="sdstate" class="cstate radio"></td>
+                                                    <td id="sstate" class="cstate"><apex:outputField value="{!Account.BillingState}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Zip</td>
+                                                    <td id="jdzip" class="czip radio"></td>
+                                                    <td id="zip" class="czip"></td>
+                                                    <td id="sdzip" class="czip radio"></td>
+                                                    <td id="szip" class="czip"><apex:outputField value="{!Account.BillingPostalCode}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Country</td>
+                                                    <td id="jdcountry" class="ccountry radio"></td>
+                                                    <td id="country" class="ccountry"></td>
+                                                    <td id="sdcountry" class="ccountry radio"></td>
+                                                    <td id="scountry" class="ccountry"><apex:outputField value="{!Account.BillingCountry}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Website</td>
+                                                    <td id="jdwebsite" class="cwebsite radio"></td>
+                                                    <td id="website" class="cwebsite"></td>
+                                                    <td id="sdwebsite" class="cwebsite radio"></td>
+                                                    <td id="swebsite" class="cwebsite"><apex:outputText value="{!website}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Phone</td>
+                                                    <td id="jdphone" class="cphone radio"></td>
+                                                    <td id="phone" class="cphone"></td>
+                                                    <td id="sdphone" class="cphone radio"></td>
+                                                    <td id="sphone" class="cphone"><apex:outputField value="{!Account.Phone}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Industry</td>
+                                                    <td id="jdindustry" class="cindustry radio"></td>
+                                                    <td id="industry" class="cindustry"></td>
+                                                    <td id="sdindustry" class="cindustry radio"></td>
+                                                    <td id="sindustry" class="cindustry"><apex:outputField value="{!Account.Industry}"/></td>
+                                                </tr>                                                
+                                                <tr>
+                                                    <td class="name">Employees</td>
+                                                    <td id="jdemployee" class="cemployee radio"></td>
+                                                    <td id="employee" class="cemployee"></td>
+                                                    <td id="sdemployee" class="cemployee radio"></td>
+                                                    <td id="semployee" class="cemployee">
+                                                        <apex:outputText value="{0,number,#}">
+                                                            <apex:param value="{!numberOfEmployees}"/>
+                                                        </apex:outputText>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Revenue</td>
+                                                    <td id="jdrevenue" class="crevenue radio"></td>
+                                                    <td id="revenue" class="crevenue"></td>
+                                                    <td id="sdrevenue" class="crevenue radio"></td>
+                                                    <td id="srevenue" class="crevenue">
+                                                        <apex:outputText value="{0,number,#}">
+                                                            <apex:param value="{!annualRevenue}"/>
+                                                        </apex:outputText>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Ownership</td>
+                                                    <td id="jdownership" class="cownership radio"></td>
+                                                    <td id="ownership" class="cownership"></td>
+                                                    <td id="sdownership" class="cownership radio"></td>
+                                                    <td id="sownership" class="cownership"><apex:outputField value="{!Account.Ownership}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Ticker</td>
+                                                    <td id="jdticker" class="cticker radio"></td>
+                                                    <td id="ticker" class="cticker"></td>
+                                                    <td id="sdticker" class="cticker radio"></td>
+                                                    <td id="sticker" class="cticker"><apex:outputText value="{!tickerSymbol}"/></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                        </div>
+                                    </div>
+                            </div>
+                    </div>
+               </div>
+</apex:page>

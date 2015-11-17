@@ -1,0 +1,117 @@
+<apex:page controller="CAMPAIGNCAL.ccPlanningViewController" title="Planning View" label="Campaign Calendar Listing" sidebar="false" tabstyle="Campaign_Calendar__tab">
+  	<apex:styleSheet value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'jquery/jquery-ui-1.8.11.custom.css')}" /> 
+    <apex:styleSheet value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'calendar.css')}" />  
+    <apex:styleSheet value="{!URLFOR($Resource.CAMPAIGNCAL__ccPlanningViewCSS)}"/>
+    <script type="text/javascript" src="{!URLFOR($Resource.ccPlanningViewJS)}"></script>  
+    <apex:includeScript value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'jquery/jquery-1.5.2.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'jquery/jquery-ui-1.8.11.custom.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'jquery/plugins/jquery.loadmask-0.4.min.js')}" />   
+    <apex:includeScript value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'jquery/plugins/jquery.framedialog-1.1.2.min.js')}" />  
+    <apex:includeScript value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'jquery/plugins/jquery.hoverintent.min.js')}" />  
+    <style type="text/css">
+        .campaignCalendarListViewButton {background-position: -26px -55px;}
+    </style> 
+    <script type="text/javascript">
+        var listPage = '{!URLFOR($Page.ccPlanningView)}';
+        var calendarPage = '{!URLFOR($Page.CAMPAIGNCAL__ccPlanningViewPrint)}';
+        var campaignNewPage = '{!URLFOR($Page.ccNew)}';
+        var campaignEditPage = '{!URLFOR($Page.ccEdit)}';
+        var campaignDescriptionPage = '{!URLFOR($Page.ccDescription)}';
+        var feedbackPage = '{!URLFOR($Page.ccFeedback)}';
+        var colorSettingsPage = '{!URLFOR($Page.ccColorSettings)}';
+        var displayDates = {!DisplayDates};
+        var planningViewPage = true;
+        var campaignCalendarIcon = '{!URLFOR($Resource.ccZipfile, 'images/calendar32.png')}';
+        var blccFilterId = '{!JSENCODE(filterId)}';
+        var blccErrors = '{!JSENCODE(errors)}';
+        if (blccErrors != '') {
+            alert(blccErrors);
+        }
+        
+        // Get a reference to jQuery that we can work with 
+        $j = jQuery.noConflict();
+    </script>
+    <apex:form >
+    <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+                <td width="55%">
+                   <apex:sectionHeader id="pageTitleDate" title="Campaign Calendar" subtitle="Planning View {!currentYear}" />
+                </td>
+                <apex:outputPanel rendered="{$User.SobjectType.getDescribe().feedEnabled}"> <!-- outputPanel for rendering if chatter is enabled -Ken --> <!-- Chatter -->            
+                <td width="45%" align="right">
+                    <table>
+                        <tr>
+                            <td><img src="{!URLFOR($Resource.cczipfile, 'images/chatter_icon.png')}" height="22" width="22" style="margin-top: 1px;"/></td>
+                            <td><input type="text" value="What are you working on?" id="campaignCalendarPublisherField" class="campaignCalendarPublisherField" name="status" size="40" maxlength="1000" autocomplete="off" style="color: #999;" onfocus="this.value = (this.value == 'What are you working on?') ? '' : this.value; this.style.color = '#000'" onblur="this.value = (this.value != '') ? this.value : 'What are you working on?'; this.style.color = '#999'" /></td>
+                            <td><apex:commandButton styleClass="btnPrimary publishersharebutton" value="Share" title="Update your chatter feed" onclick="updateChatterStatus(); return false;"/></td>
+                        </tr>
+                    </table>
+                </td>
+                </apex:outputPanel>
+            </tr>
+        </table>
+       <apex:toolbar id="campaignCalendarToolbar" styleClass="campaignCalendarToolbar">
+            <apex:toolbarGroup itemSeparator="none" id="toolbarFilter">
+                <apex:outputLabel value="View:" style="padding-right: 5px;" />
+                <apex:selectList styleClass="campaignCalendarViewSelect" value="{!filterId}" size="1">
+                    <apex:actionSupport event="onchange" rerender="hiddenFilterId,BtnPrintCalendar" action="{!setFilterId}" oncomplete="loadAndRenderCampaignData('Loading...');" disableDefault="true"/> 
+                    <apex:selectOptions value="{!listViewOptions}" />
+                </apex:selectList>
+       </apex:toolbarGroup>
+            <apex:toolbarGroup itemSeparator="none" style="padding: 0 0 0 4px;" id="toobarGroupFilters">
+                <div style="width: 2em;"></div>
+                <apex:commandLink action="{!viewMonth}" styleClass="campaignCalendarMonthViewButton" id="viewMonth" title="Switch to the monthly view" />
+                <apex:commandLink action="{!viewList}" styleClass="campaignCalendarListViewButton" id="viewList" title="Switch to the list view" />
+                <div style="width: 2em;"></div>
+            </apex:toolbarGroup>
+            <apex:toolbarGroup itemSeparator="none" style="padding: 0 0 0 0;" id="toobarGroupNavigation">
+          <!--      <apex:outputLink id="BtnPrevMonth" styleClass="campaignCalendarPrevButton" value="#" title="View the previous years's campaigns" />
+               <apex:outputLink id="BtnNextMonth" styleClass="campaignCalendarNextButton" value="#" title="View next year's campaigns" />
+               -->
+               <apex:commandLink action="{!yearDown}" id="BtnPrevMonth" styleClass="campaignCalendarPrevButton" value="" title="View the previous years's campaigns" reRender="BtnPrintCalendar"/>
+               <apex:commandLink action="{!yearUp}" id="BtnNextMonth" styleClass="campaignCalendarNextButton" value="" title="View next year's campaigns" reRender="BtnPrintCalendar"/>
+               &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+               <span style="font-size: 13px; color: black;" id="year">{!currentYear}</span>
+               &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+               <apex:outputLink target="_blank" id="BtnPrintCalendar" styleClass="campaignCalendarPrintButton" title="Open the printable monthly view" value="{!URLFOR($Page.CAMPAIGNCAL__ccPlanningViewPrint)}"><apex:param name="filterId" value="{!filterId}" /><apex:param name="currentYear" value="{!currentYear}" /></apex:outputLink>
+               &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+               <label for="showDatesCheckbox"><apex:inputCheckbox onClick="javascript:toggleShowDates($j(this));" value="{!DisplayDates}" />Show Dates</label>&nbsp;&nbsp;&nbsp;&nbsp;
+               <apex:commandButton value="Color Settings" id="colorSettingsButton" styleClass="colorSettingsButton" title="Setup color preferences" rendered="{!displayColorSettingsButton}"/>&nbsp;&nbsp;&nbsp;
+               <apex:commandButton action="{!newCampaign}" value="New Campaign" id="newCampaignButton" styleClass="newCampaignButton" title="Create a new campaign" rendered="{!$ObjectType.Campaign.Createable}" />&nbsp;&nbsp;&nbsp;&nbsp;
+                <!-- Button hidden when user does not have create permission -Ken Hua -->
+            </apex:toolbarGroup>
+            <apex:toolbarGroup itemSeparator="none" style="padding: 0 2px 0 25px;" location="right" id="toobarStatusPublisher">
+                <apex:commandButton styleClass="btnImportant bracketLabsFeedbackButton" style="float: right;" value="Feedback" title="Submit feedback for the Campaign Calendar app" action="{!goFeedback}" />
+            </apex:toolbarGroup>
+        </apex:toolbar> 
+        <apex:outputPanel id="campaignList"><div class="bPageBlock apexDefaultPageBlock secondaryPalette"></div>
+            <div id="planningView" style="min-height:500px;">
+                <table id="planningViewTable">
+                    <thead>
+                        <tr>
+                            <th class="wide" style="text-align: left;" >Campaign</th>
+                            <th>&laquo;</th>
+                            <th>Jan</th>
+                            <th>Feb</th>
+                            <th>Mar</th>
+                            <th>Apr</th>
+                            <th>May</th>
+                            <th>Jun</th>
+                            <th>Jul</th>
+                            <th>Aug</th>
+                            <th>Sep</th>
+                            <th>Oct</th>
+                            <th>Nov</th>
+                            <th>Dec</th>
+                            <th>&raquo;</th>
+                            <th class="wide">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="planningViewData">
+                    </tbody>
+                </table>
+            </div>
+        </apex:outputpanel>
+        <apex:outputPanel id="hiddenFilterId"><input type="hidden" id="filterId" value="{!filterId}" /></apex:outputPanel>
+    </apex:form>
+</apex:page>

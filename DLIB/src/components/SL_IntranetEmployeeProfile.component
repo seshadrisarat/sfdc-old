@@ -1,0 +1,563 @@
+<apex:component controller="SL_IntranetEmployeeProfileController" allowDML="true" id="EmployeeProfile">
+    
+	<apex:attribute assignTo="{!compImpl}" name="aComponentImpl" type="WidgetAbstract" description="component implementation object" required="true"/>
+	
+	<apex:outputPanel rendered="{!$Setup.SL_IntranetGoogleMapKey__c.Google_Map_Key__c != ''}" layout="none">
+        <script src="http://maps.google.com/maps?file=api&amp;v=2&amp;sensor=false&amp;key={!$Setup.SL_IntranetGoogleMapKey__c.Google_Map_Key__c}" type="text/javascript"></script>
+    </apex:outputPanel>
+    
+    <script src="https://maps.googleapis.com/maps/api/js?v=3&sensor=false" type="text/javascript"/> 
+     
+	<div class="wc-widget SL_IntranetEmployeeProfile" id="widget{!id}" > 
+		<apex:form id="formEmpProfile"> 
+			
+			<apex:actionFunction id="cancelFunctionAF" 
+				name="widget{!id}.cancelFunctionAF" 
+				action="{!recetEditPopUpOnCancel}" status="loading" rerender="editProfile"/>
+				
+			<apex:actionFunction id="callDeletePhotoAF" 
+				name="widget{!id}.callDeletePhotoAF" 
+				action="{!deleteChatterPhoto}" oncomplete="window.location.reload();" />
+				
+			<apex:actionFunction id="updateUserInfoAF" 
+				name="widget{!id}.updateUserInfoAF" 
+				action="{!updateUserInfo}" rerender="pnlDummy, error" status="loading" >
+				<apex:param value="" name="aboutMe" assignTo="{!MyImpl.empPWConfig.strUserAboutMe}"/>
+			</apex:actionFunction>
+			<apex:outputPanel id="pnlDummy">
+				<apex:outputpanel rendered="{!IF(!MyImpl.empPWConfig.isError && !MyImpl.empPWConfig.isLoad, true, false)}" layout="none">
+					<script>
+						closePopup{!id}();
+						window.location.reload();
+					</script>
+				</apex:outputpanel>
+			</apex:outputPanel> 
+			
+			
+			<apex:outputpanel id="leftSideBarId">
+			     <apex:outputPanel rendered="{!compImpl.properties['showheader']}" layout="none">
+				    <h1 style ="word-wrap:break-word;" ><apex:outputText value="{!MyImpl.objUser.FirstName} {!MyImpl.objUser.LastName}"/></h1>
+				    
+				    <div class="visual" onmouseover="document.getElementById('photoUploadId').style.visibility = 'visible';" onmouseout="document.getElementById('photoUploadId').style.visibility = 'hidden';">
+				    	<img src="{!MyImpl.objUser.FullPhotoUrl}" alt="" width="200"/>
+				    	
+				    	<apex:outputpanel rendered="{!OR(AND($Setup.SL_Intranet_EmployeeProfile_Settings__c.Allow_Edit_Profile__c, MyImpl.strUserId == $User.Id), $Profile.Name == 'System Administrator')}" layout="none">
+					    	<div class="photoUploadSection" id="photoUploadId">
+					    		<b>
+					    			<apex:outputPanel rendered="{!CONTAINS(MyImpl.objUser.FullPhotoUrl,'005/F')}" onclick="openProfilePhotoUploadPopup{!id}('{!MyImpl.objUser.id}');">
+					    				Add Photo
+					    			</apex:outputPanel>
+					    			
+					    			<apex:outputPanel rendered="{!!CONTAINS(MyImpl.objUser.FullPhotoUrl,'005/F')}" layout="none">
+					    				<span onclick="openProfilePhotoUploadPopup{!id}('{!MyImpl.objUser.id}');">
+					    					Update
+					    				</span>
+							    		<span onclick="var q=confirm('Are you Sure?'); if(q)widget{!id}.callDeletePhoto();">
+					    					Delete
+					    				</span>	
+					    			</apex:outputPanel>
+					    		</b>
+					    	</div>
+				    	</apex:outputPanel>
+				    	
+				    </div>
+				    
+				    <table width="100%">
+				    	<tr>
+				    		<td> 
+<!-- 				    		word-break: break-word -->
+				    			 <h2 style="margin: 0px;width: 111px !important;float: left;word-wrap: break-word;">
+							        <apex:outputText value="About {!MyImpl.objUser.FirstName}" rendered="{!IF(NOT(ISNULL(MyImpl.objUser.FirstName)) && NOT(ISBLANK(MyImpl.objUser.FirstName)), true, false)}"/>
+							        <apex:outputText value="About {!MyImpl.objUser.LastName}" rendered="{!IF(ISNULL(MyImpl.objUser.FirstName) || ISBLANK(MyImpl.objUser.FirstName), true, false)}"/>
+							     </h2>
+				    		</td>
+				    		<td>
+				    			<apex:outputpanel rendered="{!OR(AND($Setup.SL_Intranet_EmployeeProfile_Settings__c.Allow_Edit_Profile__c, MyImpl.strUserId == $User.Id), $Profile.Name == 'System Administrator')}" layout="none">
+				    			<div class="editPencil" id="EditPencil" > 
+					    			 <a onclick="openPopup{!id}();">
+								        <img src="/img/func_icons/util/pencil12.gif" alt="Edit Profile" title="Edit Profile" />
+								    </a>
+				    			</div>
+				    			</apex:outputpanel>
+				    		</td>
+				    		
+				    		<td> 
+	                            <apex:commandButton value="Download vCard" onClick="vCard();" reRender="pnlDummy"/>
+	                        </td>
+				    	</tr>
+				    </table>
+			    </apex:outputPanel> 
+			    <ul class="about">
+			    <apex:repeat value="{!MyImpl.objUser}" var="listOfUser" id="userRows">
+ 					<apex:repeat value="{!MyImpl.lstEmployeeProfileFields}" var="userField" id="emplProfileFieldsRows">
+ 						<apex:outputpanel rendered="{!if(userField.fieldAPIName == 'User_Offices__c', false, true)}" layout="none">
+                            <apex:outputPanel rendered="{!IF(AND(listOfUser[userField.fieldAPIName] != null, userField.fieldType != 'DATE', userField.fieldType != 'DATETIME'),true,false)}" layout="none">
+                               <li> 
+                                   <dl>
+                                      <dt>{!userField.fieldLabel}</dt>
+                                      <dd style="word-wrap: break-word;">
+                                          <apex:outputText value="{!listOfUser[userField.fieldAPIName]}" escape="false"/>
+                                      </dd>
+                                   </dl>
+                               </li>
+                            </apex:outputPanel>
+                            
+                            <apex:outputPanel rendered="{!If(AND(listOfUser[userField.fieldAPIName] != null,userField.fieldType == 'DATE'),true,false)}" layout="none"> 
+                                <li> 
+                                    <dl>
+                                        <dt>{!userField.fieldLabel}</dt>
+                                        <dd style="word-wrap: break-word;">
+                                            <apex:outputText value="{0,date,MM'/'dd'/'yyyy}" >
+                                                <apex:param value="{!listOfUser[userField.fieldAPIName]}" /> 
+                                            </apex:outputText>
+                                        </dd>
+                                    </dl>
+                                </li>
+                            </apex:outputPanel> 
+                            
+                            <apex:outputPanel rendered="{!If(AND(listOfUser[userField.fieldAPIName] != null, userField.fieldType == 'DATETIME'),true,false)}" layout="none"> 
+                                <li> 
+                                    <dl>
+                                        <dt>
+                                        {!userField.fieldLabel}</dt>
+                                        <dd style="word-wrap: break-word;">
+                                            <apex:outputText value="{0,date,MM'/'dd'/'yyyy, hh:mm a}" >
+                                                <apex:param value="{!listOfUser[userField.fieldAPIName]}" /> 
+                                            </apex:outputText>
+                                        </dd>
+                                    </dl>
+                                </li>
+                           </apex:outputPanel> 
+                        </apex:outputpanel>
+                        
+                        <apex:outputpanel rendered="{!if(userField.fieldAPIName == 'User_Offices__c', true, false)}" layout="none"> 
+	                        <span style="{!If(listOfUser[userField.fieldAPIName] != null, 'display:block','display:none')}">
+                                <li> 
+                                    <dl>
+                                        <dt>{!userField.fieldLabel}</dt>
+                                    </dl>
+                                
+                                    <dd style="word-wrap: break-word;padding-left:10px;">
+                                        <apex:repeat value="{!MyImpl.empPWConfig.lstOfficeLocations}" var="v" >
+                                              <a href="SL_Intranet?page=Employee Directory&loc={!v}" value="{!v}"><apex:outputText value="{!v}"/></a><br/>
+                                        </apex:repeat> 
+                                    </dd>
+                                </li>
+                            </span>
+                        </apex:outputpanel>
+                    </apex:repeat> 
+                </apex:repeat>  
+			    </ul>
+			    <br/> 
+			</apex:outputpanel>	
+			
+			<apex:outputpanel id="editProfile">
+				<div id="eventBgId" style="display: none;" class="popupBackground"/>
+				<div id="eventPopUpId{!id}" style="display: none;">
+					<div aria-describedby="contactInfoTitle" aria-live="assertive" class="overlayDialog " id="contactInfo" role="dialog">
+				        <div class="topRight">
+				            <div class="topLeft">
+				                <a class="dialogClose" href="javascript:void(0)" id="contactInfoX" onclick="widget{!id}.cancelFunctionAF(); closePopup{!id}();" onmouseout="this.className = 'dialogClose'" onmouseover="this.className = 'dialogCloseOn'" tabindex="0" title="Close">Close</a>
+				                <h2 id="contactInfoTitle" >Edit Profile</h2>
+				            </div>
+				        </div>
+				        <div class="middle" style="max-height:350px;overflow: scroll;overflow-x: hidden;padding-top: 20px;" id="middleSectionId">
+							<apex:outputPanel id="error">
+								<apex:pageMessages id="messageId"/>
+							</apex:outputPanel> 
+							
+							<apex:outputPanel layout="none" rendered="{!(MyImpl.lstPopUpFields.size==0)}" >
+								<div id="topDiv" class="fieldInfo">
+									
+									<div class="leftInfo">
+										First Name<br/>
+										<apex:inputField id="fName" value="{!MyImpl.objUser.FirstName}" styleclass="textClass" />
+									</div>
+									<div class="rightInfo" >
+										<span style="color:#c00;font-size: 10px;">*</span>Last Name<span id="{!id}error_Name" class="errMsg"></span><br/>
+										<apex:inputField id="lastName" value="{!MyImpl.objUser.LastName}" styleclass="textClass"/>
+									</div>
+								</div>
+								<div class="fieldInfo">
+									<div class="leftInfo">
+										Title<br/>
+										<apex:inputField value="{!MyImpl.objUser.Title}" styleclass="textClass"/>
+									</div>
+									<div class="rightInfo" >
+										Department<br/>
+										<apex:inputField value="{!MyImpl.objUser.Department}" styleclass="textClass" /> 
+									</div>
+								</div>
+								<div class="fieldInfo">
+									<div class="leftInfo">
+										<span style="color:#c00;font-size: 10px;">*</span>Email<span id="{!id}error_email" class="errMsg"></span><br/>
+										<apex:inputField id="eMail" value="{!MyImpl.objUser.Email}" styleclass="textClass"/>
+									</div>
+									<div class="rightInfo" >
+										Work Phone<br/>
+										<apex:inputField value="{!MyImpl.objUser.Phone}" styleclass="textClass"/>
+									</div>
+								</div>
+								<div class="fieldInfo">
+									<div class="leftInfo">
+										Mobile Phone<br/>
+										<apex:inputField value="{!MyImpl.objUser.MobilePhone}" styleclass="textClass"/>
+									</div>
+									<div class="rightInfo" >
+										Fax<br/>
+										<apex:inputField value="{!MyImpl.objUser.Fax}" styleclass="textClass"/>
+									</div>
+								</div>
+								<div class="fieldInfo">
+									<div class="leftInfo" style="width:100%;">
+										Street Address<br/>
+										<apex:inputField value="{!MyImpl.objUser.Street}" styleclass="textClass" style="width: 92%;resize:vertical;"/>
+									</div>
+								</div>
+								<div class="fieldInfo">
+									<div class="leftInfo">
+										City<br/>
+										<apex:inputField value="{!MyImpl.objUser.City}" styleclass="textClass"/>
+									</div>
+									<div class="rightInfo" >
+										State/Province<br/>
+										<apex:inputField value="{!MyImpl.objUser.State}" styleclass="textClass"/>
+									</div>
+								</div>
+								<div class="fieldInfo">
+									<div class="leftInfo">
+										Zip/Postal Code<br/>
+										<apex:inputField value="{!MyImpl.objUser.PostalCode}" styleclass="textClass"/>
+									</div>
+									<div class="rightInfo" >
+										Country<br/>
+										<apex:inputField value="{!MyImpl.objUser.Country}" styleclass="textClass"/>
+									</div>
+								</div>
+								<div class="fieldInfo">
+									<div class="leftInfo" style="width:100%;margin-bottom: 40px;">
+										About Me<span style="font-size: 10px;"> (Max 1000 characters)</span><br/>
+										<textarea rows="3" class="textClass" style="width: 92%;resize:vertical;margin-bottom: 0px;" id="{!id}userAboutMeId" onKeyUp="widget{!id}.checklength(this)">{!MyImpl.empPWConfig.strUserAboutMe}</textarea>
+										<span id="{!id}aboutMeErrId" style="color: red;font-size: 10px;margin-right: 50px;float: left;"></span>
+									</div>
+								</div>
+							</apex:outputPanel>
+							
+							<!-- Profile Edit Block field display when we have fieldset --Start -->
+							<apex:repeat value="{!MyImpl.lstPopUpFields}" var="fieldToDisplay" id="popFieldsRows">
+								<apex:outputPanel layout="block" rendered="{!fieldToDisplay.fieldType == 'BOOLEAN'}" styleClass="fieldInfo">
+									<span class="leftInfo" style="height:63px;">
+										{!fieldToDisplay.fieldLabel} <br/>
+										<apex:inputField value="{!MyImpl.objUser[fieldToDisplay.fieldAPIName]}" /> 
+									</span>   
+								</apex:outputPanel>
+								
+								<apex:outputPanel layout="block" rendered="{!(fieldToDisplay.fieldType == 'REFERENCE')}" styleClass="fieldInfo">
+									<span class="leftInfo" id="refernceField">
+										{!fieldToDisplay.fieldLabel} <br/>
+										<apex:inputField value="{!MyImpl.objUser[SUBSTITUTE(fieldToDisplay.fieldAPIName, '.Name', 'Id')]}" styleclass="textClass"/>
+									</span>    
+								</apex:outputPanel>
+								
+								<apex:outputPanel layout="block" rendered="{!fieldToDisplay.fieldType == 'PICKLIST'}" styleClass="fieldInfo" >
+									<div class="leftInfo" style="height:63px;">
+											{!fieldToDisplay.fieldLabel} <br/>
+										<apex:inputField value="{!MyImpl.objUser[fieldToDisplay.fieldAPIName]}"  styleclass="textClass"/> 
+									</div>   
+								</apex:outputPanel>
+								
+								<apex:outputPanel layout="block" rendered="{!(fieldToDisplay.fieldType == 'PHONE'  || fieldToDisplay.fieldType == 'PERCENT' || fieldToDisplay.fieldType == 'CURRENCY')}" styleClass="fieldInfo" >
+									<div class="leftInfo" >
+										{!fieldToDisplay.fieldLabel} <br/>
+										<apex:inputField value="{!MyImpl.objUser[fieldToDisplay.fieldAPIName]}" styleclass="textClass" /> 
+									</div>   
+								</apex:outputPanel>
+								
+								<apex:outputPanel layout="block" rendered="{!(fieldToDisplay.fieldType == 'DATE' || fieldToDisplay.fieldType == 'DATETIME')}" styleClass="fieldInfo" >
+									<div class="leftInfo" id="dateSection">
+										{!fieldToDisplay.fieldLabel} <br/>
+										<apex:inputField value="{!MyImpl.objUser[fieldToDisplay.fieldAPIName]}" styleclass="textClass"/>
+									</div>   
+								</apex:outputPanel>
+								
+								<apex:outputPanel layout="block" rendered="{!fieldToDisplay.fieldType == 'EMAIL'}" styleClass="fieldInfo" >
+									<div class="leftInfo" >
+										<span style="color:#c00;font-size: 12px;">*</span>{!fieldToDisplay.fieldLabel}
+										<apex:inputField id="eMail" value="{!MyImpl.objUser[fieldToDisplay.fieldAPIName]}" styleclass="textClass"/>
+									</div>   
+								</apex:outputPanel>
+								
+								<apex:outputPanel layout="block" rendered="{!(fieldToDisplay.fieldType == 'STRING' && fieldToDisplay.fieldAPIName == 'LastName')}" styleClass="fieldInfo" >
+									<div class="leftInfo">
+										<span style="color:#c00;font-size: 12px;">*</span>{!fieldToDisplay.fieldLabel}
+										<apex:inputField id="lastName" value="{!MyImpl.objUser[fieldToDisplay.fieldAPIName]}" styleclass="textClass"/> 
+									</div> 
+								</apex:outputPanel>
+								
+								
+								<apex:outputPanel layout="block" rendered="{!(fieldToDisplay.fieldType == 'STRING' && fieldToDisplay.fieldAPIName != 'LastName')}" styleClass="fieldInfo" >
+									<div class="leftInfo" >
+										{!fieldToDisplay.fieldLabel} <br/>
+										<apex:inputField value="{!MyImpl.objUser[fieldToDisplay.fieldAPIName]}" styleclass="textClass"/> 
+									</div>
+								</apex:outputPanel>
+								
+								
+								<apex:outputPanel layout="block" rendered="{!fieldToDisplay.fieldType ==  'MULTIPICKLIST'}" styleClass="fieldInfo" >
+									<div id="multiPLBox" class="leftInfo" style="width: 110%;resize:vertical;margin-bottom: 0px;margin-right: 50px;float: left;">
+										{!fieldToDisplay.fieldLabel} <br/>
+										<apex:inputField value="{!MyImpl.objUser[fieldToDisplay.fieldAPIName]}" styleclass="textClass" style="min-width:'';"/> 
+									</div>
+								</apex:outputPanel>
+								
+								<apex:outputPanel layout="block" rendered="{!fieldToDisplay.fieldType == 'TEXTAREA'}" styleClass="fieldInfo" >
+									<apex:outputPanel rendered="{!(fieldToDisplay.fieldAPIName != 'AboutMe' && fieldToDisplay.fieldAPIName != 'User_Offices__c')}" layout="none">
+										<div class="leftInfo" style="width: 110%;resize:vertical;margin-bottom: 0px;margin-right: 50px;float: left;">
+											{!fieldToDisplay.fieldLabel} <br/>    
+											<apex:inputField value="{!MyImpl.objUser[fieldToDisplay.fieldAPIName]}" styleclass="textClass" style="resize:vertical;overflow-y:auto;"/>    
+										</div> 
+									</apex:outputPanel>
+									
+									<apex:outputPanel rendered="{!fieldToDisplay.fieldAPIName == 'AboutMe'}" layout="none">
+										<div class="leftInfo" style="width: 110%;margin-bottom: 0px;">
+											{!fieldToDisplay.fieldLabel} <br/>    
+											<textarea rows="3" class="textClass" style="resize:vertical;" id="{!id}userAboutMeId" onKeyUp="widget{!id}.checklength(this)">{!MyImpl.empPWConfig.strUserAboutMe}</textarea>
+											<span id="{!id}aboutMeErrId" style="color: red;font-size: 10px;margin-right: 50px;float: left;"></span>
+										</div> 
+									</apex:outputPanel>
+									
+									<apex:outputPanel rendered="{!fieldToDisplay.fieldAPIName == 'User_Offices__c'}" layout="none">
+										<div class="leftInfo" style="width: 110%;resize:vertical;margin-bottom: 0px;margin-right: 50px;float: left;">
+											{!fieldToDisplay.fieldLabel} <br/>    
+											<apex:inputField value="{!MyImpl.objUser[fieldToDisplay.fieldAPIName]}" styleclass="textClass" style="resize:none;overflow-y:auto;"/>    
+										</div> 
+									</apex:outputPanel>  
+								</apex:outputPanel> 
+							</apex:repeat>
+							
+							<!-- Profile Edit Block field display--End -->
+				        </div>
+				        <div class="topRight" style="background: none;padding: 0px;">
+				            <div class="middle" style="padding-top: 5px;">
+								<table width="100%" border="">
+									<tr>
+										<td style="width:50%;">
+											<input type="button" value="Save" class="btn" style="float:right;cursor: pointer;color: #737373;font-weight: bold;" 
+												onclick="widget{!id}.updateUserInfoAF($('#{!id}userAboutMeId').val().trim());"/>
+<!-- 												onclick="widget{!id}.updateUserInfo('{!$Component.formEmpProfile.lastName}', '{!$Component.formEmpProfile.email}');"/> -->
+										</td>
+										<td style="width:50%;">
+											<input type="button" value="Cancel" class="btn" style="cursor: pointer;color: #737373;font-weight: bold;" onclick="widget{!id}.cancelFunctionAF(); closePopup{!id}();"/>
+										</td>
+									</tr>
+								</table>	
+				            </div>
+				        </div>
+				        <div class="bottomRight">
+				            <div class="bottomLeft"></div>
+				        </div>
+				    </div>
+				    
+				</div>
+			</apex:outputpanel>
+		    
+			<script>
+				
+				$('#EditPencil').click(function(){
+				  $("div").removeClass("jcf-hidden");
+				});
+				
+				//To keep Date picker at right place.
+				$('#middleSectionId').click(function(e){
+					if($('#datePicker').is(":visible"))
+					{
+						$('#datePicker').css('top',e.pageY+11);
+					}
+					
+					/*
+					if($('#middleSectionId').scrollTop() > 192 || $('#dateSection').position()['top'] < 192)
+					{
+						var heightToSet = $('#dateSection').offset()['top'] + 44;
+						$('#datePicker').css('top',heightToSet);
+					}
+					
+					if($('#middleSectionId').scrollTop() < 192 && $('#dateSection').position()['top'] > 192)
+					{
+						var heightToSet = $('#dateSection').offset()['top'] -$('#datePicker').height();
+						$('#datePicker').css('top',heightToSet);
+					}
+					
+					*/
+				});
+										
+										
+				var curPopupWindow{!id} = '';
+				function setSelectedCompanyDetails{!Id}()
+				{
+					if(curPopupWindow{!id} != '' && curPopupWindow{!id} != null)
+						curPopupWindow{!id}.close();
+					
+					location.reload();
+				} 
+				
+				function openProfilePhotoUploadPopup{!id}(userId)
+				{
+					curPopupWindow{!id} = window.open('SL_FileUpload?isProfilePhoto=true&userId='+userId + '&wId={!id}', "_blank","width=500, height=200,dependent=no,toolbar=no,status=no,directories=no,menubar=no,scrollbars=0,resizable=0", true);
+				}
+				
+				function openPopup{!id}()
+				{
+			     	$('input').removeClass("jcf-hidden");
+	           		$('div').removeClass("jcf-hidden");
+	           		$('select').removeClass("jcf-hidden");
+	           		$('.select-textClass').remove(); //To make standard pick list
+	           		$('.chk-area').remove();		//To make standard check box
+	           		$('.dateFormat').remove();	
+	           		$('#multiPLBox img').removeClass('textClass'); //removing textClass to make select image proper incase of multipicklist fields	
+	           		$('#refernceField a').removeClass('textClass');
+	           		$('#refernceField span').removeClass('lookupInput');
+	           		$('select option').css('width','120px');	
+	         		if($('div').hasClass('datePicker'))
+	           		{
+	           			$('#calMonthPicker').removeClass("jcf-hidden"); 
+	           			$('#calYearPicker').removeClass("jcf-hidden");
+						$('.dateBar .select-area').css('display','none'); 
+						$('div').removeClass("dateOnlyInput");
+	           		}
+					document.getElementById('eventBgId').style.display = 'block';
+					document.getElementById('eventPopUpId{!id}').style.display = 'block';
+					document.body.style.overflow = "hidden";
+					document.getElementById('middleSectionId').scrollTop = 0;
+				} 
+		
+				function closePopup{!id}()
+				{
+					document.getElementById('eventBgId').style.display = 'none';
+					document.getElementById('eventPopUpId{!id}').style.display = 'none';
+					document.body.style.overflow = "visible";
+					document.getElementById('middleSectionId').scrollTop = 0;
+				}
+				
+				function vCard()
+                {
+                    window.open("SL_VCard?id={!$currentpage.parameters.id}");
+                }
+                
+	           		
+			</script>
+	
+		</apex:form>
+	</div>
+	
+	<!-- mobile content-->
+   <div class="wc-widget-mobile mobile-content" >
+       <!-- top-block -->
+       <div class="top-block">
+           <div class="avatar">
+               <img src="{!Myimpl.objUser.SmallPhotoUrl}" alt="image description"  width="66" height="63" />
+           </div>
+           <div class="info">
+               <h2 style="font: 22px Arial, Helvetica, sans-serif;">{!Myimpl.objUser.FirstName} {!Myimpl.objUser.LastName}</h2><br/>
+               <h3 style="font: 22px Arial, Helvetica, sans-serif;">{!Myimpl.objUser.Title}</h3>
+           </div>
+       </div>
+       <!-- information -->
+       <div class="information" style="padding:0px;margin:20px;word-wrap:break-word;">
+           <address style="font: 20px Arial, Helvetica, sans-serif;">
+               <strong>Contact Information</strong><br />
+               Phone: <a style="font-size: 30px;cursor:pointer; display:{!IF(ISBLANK(Myimpl.objUser.Phone) || ISNULL(Myimpl.objUser.Phone),'none','')};" href="">{!Myimpl.objUser.Phone} <img height="25px" width="15px" src="{!URLFOR($Resource.SL_IntranetHUB,'/IntranetHub/images/icon-phone.png')}"/></a><br />
+               Fax: <a style="cursor: pointer;" href="">{!Myimpl.objUser.Fax}</a><br />
+               Email: <a style="cursor: pointer;" href="">{!Myimpl.objUser.Email}</a>
+           </address>
+           <div class="map-block" style="margin: 0px;width: 100%;margin-bottom: 10px;">
+               
+               <script>
+                   var strAddress = '{!JSENCODE(Myimpl.empPWConfig.strUserAddressForMap)}';
+                   var results;
+                   var varLatitude;
+                   var varLongitude;
+                   geocoder = new google.maps.Geocoder();
+                   geocoder.geocode( { 'address': strAddress}, function(results, status) 
+                   {
+                       if (status == google.maps.GeocoderStatus.OK) 
+                       {
+                           varLatitude = results[0].geometry.location.lat();
+                           varLongitude = results[0].geometry.location.lng();
+                           getLocationMap();
+                       }
+                   });
+                   
+                   function getLocationMap()
+                   { 
+                       var projectPosition = new google.maps.LatLng(varLatitude,varLongitude);
+                       
+                       var mapOptions = {
+                                   center: projectPosition, 
+                                   zoom: 8,
+                                   mapTypeId: google.maps.MapTypeId.ROADMAP
+                                 };
+                       
+                       var map = new google.maps.Map(document.getElementById('map_canvas'),mapOptions);
+                       
+                       map.setCenter(projectPosition);  
+                       var marker = new google.maps.Marker(
+                       {
+                          map: map,
+                          position: projectPosition
+                       });
+                   }
+               </script>
+               <div id="map_canvas" style="height:438px;"></div>
+               
+           </div>
+           <address style="font: 20px Arial, Helvetica, sans-serif;">
+               <strong>{!$Label.SL_EmployeeAddress}</strong><br />
+               <a style="cursor:text; text-decoration: none;" href="" id="locationId">
+                   <apex:outputText value="{!Myimpl.objUser.Street}" rendered="{!if(ISBLANK(Myimpl.objUser.Street) || ISNULL(Myimpl.objUser.Street), 'false','true')}"/>
+                   <apex:outputText value="{!Myimpl.objUser.City}" rendered="{!if(ISBLANK(Myimpl.objUser.City) || ISNULL(Myimpl.objUser.City), 'false','true')}"><br/></apex:outputText>
+                   <apex:outputText value="{!Myimpl.objUser.State}" rendered="{!if(ISBLANK(Myimpl.objUser.State) || ISNULL(Myimpl.objUser.State), 'false','true')}">,&nbsp;</apex:outputText>
+                   <apex:outputText value="{!Myimpl.objUser.PostalCode}" rendered="{!if(ISBLANK(Myimpl.objUser.PostalCode) || ISNULL(Myimpl.objUser.PostalCode), 'false','true')}">&nbsp;</apex:outputText>
+                   <apex:outputText value="{!Myimpl.objUser.Country}" rendered="{!if(ISBLANK(Myimpl.objUser.Country) || ISNULL(Myimpl.objUser.Country), 'false','true')}"><br/></apex:outputText>
+               </a><br/>
+               <apex:outputpanel rendered="{!if(Myimpl.empPWConfig.lstOfficeLocations.size > 0 , true, false)}" layout="none">
+	               <strong>{!$Label.SL_EmployeeOfficeLocations}</strong><br />
+	               <apex:repeat value="{!Myimpl.empPWConfig.lstOfficeLocations}" var="v" >
+	                   <a style="cursor:text; text-decoration: none;font: 18px Arial, Helvetica, sans-serif;" href="" >
+	                       <apex:outputText value="{!v}"/>
+	                   </a><br/>
+	               </apex:repeat>
+               </apex:outputpanel>
+	           <apex:outputPanel rendered="{!IF(Myimpl.objUser.AboutMe != null,true,false)}" layout="none">
+		           <strong>About Me </strong><br/>
+		           <apex:outputText value="{!Myimpl.objUser.AboutMe}" style="font-size: 15px;"/><br />
+	           </apex:outputPanel>
+           </address>
+            <script>
+                function vCardMobile()
+                {
+                     window.open("SL_VCard?id={!$CurrentPage.parameters.id}");
+                }
+            </script>      
+       </div>
+   </div>
+	
+	<!-- Start of Action status --> 
+	<apex:actionstatus id="loading">
+        <apex:facet name="start">
+            <div id="salesforceSource_blurybackground" style="z-index:9999; position:fixed; left:1px; top:1px; width:100%;height:100%; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.4;filter:alpha(opacity=40)"></div>
+            <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 80%; display: ''; ">
+                <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+                    <table align="center" valign="middle" style="width: 100%; height: 30%">
+                        <tr align="center" valign="middle" style="width: 100%; height: 30%">
+                            <td valign="middle"><img src="/img/loading.gif"/><span class="waitingDescription"><b>Loading...</b></span></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; "></div>
+            <script>document.getElementById('ManageMembersViewport_loading').height = window.innerHeight * (3/4);</script>
+        </apex:facet>
+    </apex:actionstatus>
+	<!-- End of Action status -->
+	
+</apex:component>

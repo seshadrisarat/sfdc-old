@@ -1,0 +1,1086 @@
+<apex:component controller="sma.MAComponentCon">
+	<script type='text/javascript'>
+
+		var MAActionFramework = {
+		
+			//definitions for buttons that exist in the framework
+			standardActions: {
+				'Section': {
+					Label: 'Section', Type: 'Section', Modes: ['Desktop', 'Mobile'] 
+				},
+				'Blank Space': { 
+					Label: 'Blank Space', Type: 'Blank', Modes: ['Desktop', 'Mobile'], Requirements: [] 
+				}, 
+				'Set Reference Point': { 
+					Label: "Set Reference Point", Type: 'Standard Action', Modes: ['Desktop'], Layouts: ['Tooltip', 'MyPosition', 'POI'], Requirements: [], Action: 'Javascript', ActionValue: function (options) {
+	       				
+	       				MAListView.referencePoint = {};
+	       				
+	       				
+	       				//If this is a marker
+	       				jQuery.each(options.records || [], function (index, record) {
+	       					
+	       					MAListView.SetReferencePoint({
+	       					    formattedMarkerAddress : record.formattedMarkerAddress,
+	       					    latLng : record.latLng
+	       					});
+	       					
+	       				});
+	       				
+	       				//favorites
+	       				jQuery.each(options.favorites || [], function (index, favorite) {
+	       				    
+	       				});
+	       				
+	       				
+	       				//If this is POI or My Position
+	       				jQuery.each(options.customMarkers || [], function (index, customMarker) {
+	       				    
+	       				    if (customMarker.type)
+	       				    {
+	       				        if (customMarker.type == "POI")
+	       				        {
+                                    MAListView.SetReferencePoint({
+	       					            formattedMarkerAddress : customMarker.address,
+	       					            latLng : customMarker.latlng
+	       					        });
+	       				        }
+	       				        else if (customMarker.type == "MyPosition")
+	       				        {
+	       				            MAListView.SetReferencePoint({
+	       					            formattedMarkerAddress : customMarker.address,
+	       					            latLng : customMarker.latlng
+	       					        });
+	       				        }
+	       				        
+	       				    }
+	       				    
+	       				   
+	       				});
+	       				
+	       				//alert('Reference Point Set!');
+	       				
+	           		}
+	           	}, 
+				'Add to Trip': { 
+					Label: "{!$Label.MAActionFramework_Add_to_Trip}", Type: 'Standard Action', Modes: ['Desktop', 'Mobile'], Layouts: ['Tooltip', 'Mass', 'MyPosition', 'POI'], Requirements: [], Action: 'Javascript', ActionValue: function (options) {
+	       				//add each marker to the trip
+						ClearDirectionsFromMap();
+	       				jQuery.each(options.records || [], function (index, record) {
+	       					AddMarkerToTrip(record.marker);
+	       				});
+	       				jQuery.each(options.favorites || [], function (index, favorite) {
+	       					AddMarkerToTrip(favorite);
+	       				});
+	       				jQuery.each(options.customMarkers || [], function (index, customMarker) {
+	       					if (options.mode == 'Mobile') {
+	       						var $waypoint = jQuery(WayPointLI)
+		                            .attr('Lat', customMarker.latlng.lat())
+		                            .attr('Long', customMarker.latlng.lng())
+		                            .attr('Address', customMarker.address)
+		                            .attr('WayPointTitle', customMarker.title)
+		                            .attr('data-linkid', null)
+		                            .attr('baseobject', null)
+		                            .attr('savedqueryid', null)
+		                            .attr('tooltips', JSON.stringify([]))
+		                            .attr('data-locktype','unlocked')
+		                        ;
+
+		                        var lastWaypointLockType = jQuery('#sortable > li').last().attr('data-locktype') || '';
+							    if (lastWaypointLockType.indexOf('end') >= 0) {
+							        $waypoint.insertBefore('#sortable > li:last-child');
+							    }
+							    else {
+							        $waypoint.appendTo('#sortable');
+							    }
+							    $waypoint.find('input').val(customMarker.title).prop('disabled', true).addClass('DisabledWaypoint')
+		                        
+		                        jQuery('#sortable').find('input').textinput();
+		                        ShowDirectionsTab();
+		                        jQuery('#CurrentRouteTab').click();
+		                        MA.Map.InfoBubble.hide()
+		                        recalculateRowOrder();
+	       					}
+	       					else {
+		       					var $row = jQuery('#routing-templates .waypoint-row').clone().attr({ 
+							    	Lat				: customMarker.latlng.lat(), 
+							    	Long			: customMarker.latlng.lng(),
+							    	Address			: customMarker.address,
+							    	WayPointTitle	: customMarker.address,
+							    	savedQueryId	: ''
+							    });
+
+		       					if(customMarker.c2cRec) {
+		                        	$row.find('.name').attr('data-id',customMarker.c2cRec.id);
+		                        	$row.find('.name').attr('baseObject',customMarker.c2cRec.baseObject);
+		                        }
+
+							    jQuery('#Routing-Table .waypoint-row.end, #Routing-Table .waypoint-row.startend').length > 0 ? $row.insertBefore(jQuery('#Routing-Table .waypoint-row.end, #Routing-Table .waypoint-row.startend').last()) : $row.appendTo('#Routing-Table .waypoints');
+							    $row.find('.index').append(jQuery('#templates .svg-marker-waypoint').clone().wrap('<div/>').parent().html().replace(/__INDEX__/g, (MA.componentIndex++)+'_row').replace(/__TEXT__/g, ''));
+								$row.find('.address').attr('markerposition', JSON.stringify({ latitude: customMarker.latlng.lat(), longitude: customMarker.latlng.lng() }));
+							    $row.find('.name').val(customMarker.title).change().prop('readonly', true).addClass('DisabledWaypoint');
+							    $row.find('.address').val(customMarker.address).prop('disabled', true).addClass('DisabledWaypoint').prev().text(customMarker.address);
+							    $row.find('.timeoptions-waypointstart').html(jQuery('.timedefaults-routestart').html()).prepend(
+									jQuery('<option/>').attr('value', '???').text('???')
+								).val('???').change();
+								$row.find('.timeoptions-waypointduration').html(jQuery('.timedefaults-appointmentduration').html()).val(jQuery('.timedefaults-appointmentduration').val()).change();
+			                    $row.find('.notes').val('').change();
+						
+								OrderNumbersOnWaypoints();
+							    jQuery('#Routing-Table').slimScroll({ scrollBy: $row.position().top });
+							}
+	       				});
+	           			ShowDirectionsTab();
+	           			jQuery('#CurrentRouteTab').click();
+	           			
+	           			//hide the tooltip if this is not a mass action 
+	           			if (!options.isMassAction) {
+	           				MA.Map.InfoBubble.hide();
+	           			}
+	           		}
+	           	}, 
+	           	'Set Proximity Center': {
+	           		Label: "{!$Label.MAActionFramework_Set_Proximity_Center}", Type: 'Standard Action', Modes: ['Desktop', 'Mobile'], Layouts: ['Tooltip', 'Mass', 'MyPosition', 'POI'], Requirements: [], Action: 'Javascript', ActionValue: function (options) {
+	           			if (options.mode == 'Mobile') {
+	           				jQuery.each(options.records || [], function (index, record) {
+	           					AddOval(record.marker.Lat, record.marker.Long, record);
+	           				});
+	           				jQuery.each(options.customMarkers || [], function (index, customMarker) {
+	           					AddOval(customMarker.latlng.lat(), customMarker.latlng.lng());
+	           				});
+	           			}
+	           			else {
+	           				jQuery.each(options.records || [], function (index, record) {
+	           					addProximityLayer({ proximityType: 'Circle', latitude: record.marker.Lat, longitude: record.marker.Long, record: record });
+	           				});
+	           				jQuery.each(options.customMarkers || [], function (index, customMarker) {
+	           					addProximityLayer({ proximityType: 'Circle', latitude: customMarker.latlng.lat(), longitude: customMarker.latlng.lng() });
+	           				});
+	           			}
+	           			
+	           			//hide the tooltip if this is not a mass action 
+	           			if (!options.isMassAction) {
+	           				try{
+	           					MA.Map.InfoBubble.hide();
+	           				}
+	           				catch (e){
+	           					//do nothing
+	           				}
+	           			}
+	           		} 
+	           	},
+	           	'Remove Marker': { 
+	           		Label: "{!$Label.MAContext_Remove_Marker}", Type: 'Standard Action', Modes: ['Desktop', 'Mobile'], Layouts: ['Tooltip', 'Mass'], Requirements: [], Action: 'Javascript', ActionValue: function (options) {
+	           			if (options.mode == 'Mobile') {
+	           				
+	           				jQuery.each(options.records || [], function (index, record) {
+	           					RemoveMarker(record.marker);
+	           				});
+	           			}
+	           			else {
+	           				jQuery.each(options.records || [], function (index, record) {
+	           					RemoveMarker(record.marker);
+	           				});
+	           			}           			
+	                	
+						//hide the tooltip if this is not a mass action 
+	           			if (!options.isMassAction) {
+	           				try{
+	           					MA.Map.InfoBubble.hide();
+	           				}
+	           				catch (e){
+	           					//do nothing
+	           				}
+	           			}
+	           		} 
+	           	},
+	           	'Take Me There': { 
+	           		Label: "{!$Label.MAActionFramework_Take_Me_There}", Type: 'Standard Action', Modes: ['Mobile'], Layouts: ['Tooltip', 'POI'], Requirements: [], Action: 'Javascript', ActionValue: function (options) {
+
+	           			//get coordinates
+	           			var lat, lng;
+	           			if (options.records && options.records.length > 0) {
+	       					lat = options.records[0].markerLatitude;
+	       					lng = options.records[0].markerLongitude;
+	       				}
+	       				else if (options.customMarkers && options.customMarkers.length > 0) {
+	       					lat = options.customMarkers[0].latlng.lat();
+	       					lng = options.customMarkers[0].latlng.lng();
+				        }
+
+	           			//figure out which iOS version this is
+			            var versions;
+			            var address;
+			            if (/iP(hone|od|ad)/.test(navigator.platform)) {
+			 
+			                // supports iOS 2.0 and later: http://bit.ly/TJjs1V
+			                var v = (navigator.appVersion).match(/OS (\d+)_(\d+)_?(\d+)?/);
+			                versions = [parseInt(v[1], 10), parseInt(v[2], 10), parseInt(v[3] || 0, 10)];
+			            }
+
+			            //get the proper link depending on version
+			            var url = '';
+			            if (versions && versions[0] <= 5) {
+			                url = 'http://maps.google.com/maps?daddr=' + encodeURIComponent(lat+','+lng);   //native google maps
+			            }
+			            else if (versions) {
+			            	url = 'comgooglemaps://?saddr=&daddr=' + encodeURIComponent(lat+','+lng);
+			            }
+			            else {
+			                url = 'http://maps.google.com/maps?daddr=' + encodeURIComponent(lat+','+lng);   //not iOS
+			            }
+			            
+			            //open the link in sf1 or a new window
+			            if (sforce && sforce.one && window.navigator.userAgent.toLowerCase().indexOf('salesforce1') != -1) {
+			            	sforce.one.navigateToURL(url);
+			            }
+			            else {
+			            	window.open(url);
+			            }
+	           		} 
+	           	},
+	           	'Set Verified Location': { 
+	           		Label: "{!$Label.MAActionFramework_Set_Verified_Location}", Type: 'Standard Action', Modes: ['Desktop', 'Mobile'], RenderModes: ['Marker'], Layouts: ['Tooltip', 'Mass'], Requirements: ['Verified Location Support'], Action: 'Javascript', ActionValue: function (options) {
+				        if (options.mode == 'Mobile')
+				        {
+				        	jQuery.each(options.records || [], function (index, record) {
+	           					SetVerifiedLocation(record.marker);
+	           				});
+	                        MA.Map.InfoBubble.hide();
+				        }
+				        else 
+				        {
+					        MA.Map.InfoBubble.hide();
+					        jQuery.each(options.records || [], function (index, record) {
+					        
+					        	var marker = record.marker;
+					        	var currentLatLng = marker.getPosition();
+
+						        //make the marker draggable and listen for drag events
+						        marker.setDraggable(true);
+						        marker.setOpacity(0.4);
+								google.maps.event.addListenerOnce(marker, 'dragend', function (e) {
+								
+									//reset the marker to non-draggable
+									marker.setDraggable(false);
+									marker.setOpacity(1);
+									
+									//send request to update the verified lat/long for this record
+									var newLatLng = jQuery.extend({}, marker.getPosition());
+									var requestData = {
+										action			: 'set_verified_location',
+										baseObjectId	: marker.record.plottedQuery.data('baseObjectId'),
+										recordId		: marker.record.record.Id,
+										latitude		: newLatLng.lat(),
+										longitude		: newLatLng.lng()
+									};
+									jQuery.getJSON(MA.resources.Tooltip, requestData, function(response)
+								    { 
+								        if(response.success)
+								        {
+						                    //update the verified latitude and longitude on this marker
+								        	marker.Lat = marker.record.markerLatitude = marker.record.verifiedLatitude = newLatLng.lat();
+								        	marker.Long = marker.record.markerLongitude = marker.record.verifiedLongitude = newLatLng.lng();
+								        	marker.record.latLng = newLatLng;
+								        }
+								        else
+								        {
+								        	//show error and move marker back to where it was
+								        	growlError(jQuery('#growl-wrapper'), 'Unable to set verified location', 3000);
+								        	marker.setPosition(currentLatLng);
+								        }
+								    })
+								    .error(function() { 
+								    	growlError(jQuery('#growl-wrapper'), 'Unable to set verified location', 3000);
+								    	marker.setPosition(currentLatLng);
+									});
+								});
+							});
+						}
+	           		} 
+	           	},
+	           	'Add to Campaign': { 
+	           		Label: "{!$Label.MAActionFramework_Add_to_Campaign}", Type: 'Standard Action', Modes: ['Desktop'], Layouts: ['Tooltip', 'Mass'], Requirements: ['Contact Or Lead'], Action: 'Javascript', ActionValue: function (options) {
+	           			if (options.isMassAction) {
+	           				AddVisibleToCampaign(options.records);
+	           			}
+	           			else {
+	           				AddVisibleToCampaign(options.records[0].record.Id);
+	           			}
+				        MA.Map.InfoBubble.hide();
+	           		} 
+	           	},
+	           	'Change Owner': { 
+	           		Label: "{!$Label.MAActionFramework_Change_Owner}", Type: 'Standard Action', Modes: ['Desktop'], Layouts: ['Tooltip', 'Mass'], Requirements: [], Action: 'Javascript', ActionValue: function (options) {
+	           			var recordIds = [];
+	           			jQuery.each(options.records || [], function (index, record) {
+	           				recordIds.push(record.record.Id);
+	           			});
+				    	ChangeOwner(recordIds);
+				        MA.Map.InfoBubble.hide();
+	           		} 
+	           	},
+	           	'Send Email': { 
+	           		Label: "{!$Label.MAActionFramework_Send_Email}", Type: 'Standard Action', Modes: ['Desktop', 'Mobile'], Layouts: ['Tooltip', 'Mass'], Requirements: ['Activity Support'], Action: 'Javascript', ActionValue: function (options) {           		
+				    	jQuery.each(options.records || [], function (index, record) {
+					    	var recordId = record.record.Id;
+		           			var EmailURL = "/_ui/core/email/author/EmailAuthor?p2_lkid=" + recordId + "&rtype=" + recordId.substring(0,3) + "&retURL=%2F" + recordId;
+				            if(jQuery.inArray(recordId.substring(0,3), ['003', '00Q']) == -1)
+				            {
+				                EmailURL = "/_ui/core/email/author/EmailAuthor?p3_lkid=" + recordId + "&retURL=%2F" + recordId;
+				            }
+				            window.open(EmailURL);
+			            });
+	           		}
+	           	},
+	           	'Log a Call': { 
+	           		Label: "{!$Label.MAActionFramework_Log_a_Call}", Type: 'Standard Action', Modes: ['Desktop', 'Mobile'], Layouts: ['Tooltip', 'Mass'], Requirements: ['Activity Support'], Action: 'Javascript', ActionValue: function (options) {
+	           			jQuery.each(options.records || [], function (index, record) {
+					    	var recordId = record.record.Id;
+		           			var redirectURL = MA.resources.MapActions + '?action=log_call&id=' + recordId;
+	           				window.open(redirectURL);
+			            });
+	           		}
+	           	},
+	           	'New Task': { 
+	           		Label: "{!$Label.MAActionFramework_New_Task}", Type: 'Standard Action', Modes: ['Desktop', 'Mobile'], Layouts: ['Tooltip', 'Mass'], Requirements: ['Activity Support'], Action: 'Javascript', ActionValue: function (options) {
+	           			if (options.isMassAction) {
+				        	var recordIdMap = {};
+				        	jQuery.each(options.records || [], function (index, record) {
+				        		if (record.plottedQuery.data('supportsActivities')) {
+				        			recordIdMap[record.plottedQuery.data('baseObjectName')] = recordIdMap[record.plottedQuery.data('baseObjectName')] || { baseObjectLabel: record.plottedQuery.data('baseObjectLabel'), recordIds: [] };
+				        			recordIdMap[record.plottedQuery.data('baseObjectName')].recordIds.push(record.record.Id);
+					            }
+				        	});
+				            NewTask(recordIdMap);
+	           			}
+	           			else
+	           			{
+					    	var recordId = options.records[0].record.Id;
+					    	var redirectURL = MA.resources.MapActions + '?action=new_task&id=' + recordId;
+	           				window.open(redirectURL);
+				        }
+	           		}
+	           	},
+	           	'New Event': { 
+	           		Label: "{!$Label.MAActionFramework_New_Event}", Type: 'Standard Action', Modes: ['Desktop', 'Mobile'], Layouts: ['Tooltip', 'Mass'], Requirements: ['Activity Support'], Action: 'Javascript', ActionValue: function (options) {
+	           			if (options.isMassAction) {
+				            var recordIdMap = {};
+				        	jQuery.each(options.records || [], function (index, record) {
+				        		if (record.plottedQuery.data('supportsActivities')) {
+				        			recordIdMap[record.plottedQuery.data('baseObjectName')] = recordIdMap[record.plottedQuery.data('baseObjectName')] || { baseObjectLabel: record.plottedQuery.data('baseObjectLabel'), recordIds: [] };
+				        			recordIdMap[record.plottedQuery.data('baseObjectName')].recordIds.push(record.record.Id);
+					            }
+				        	});
+				            NewEvent(recordIdMap);
+	           			}
+	           			else
+	           			{
+					    	var recordId = options.records[0].record.Id;
+					    	var redirectURL = MA.resources.MapActions + '?action=new_event&id=' + recordId;
+	           				window.open(redirectURL);
+				        }
+	           		}
+	           	},
+	           	'Check In': { 
+	           		Label: "{!$Label.MAActionFramework_Check_In}", Type: 'Standard Action', Modes: ['Mobile'], Layouts: ['Tooltip'], Requirements: [], Action: 'Javascript', 
+	           		ActionValue: function (options) {
+	           			var $button = options.button;
+	           			var record = options.records[0];
+				    	var marker = options.records[0].marker;
+				    	
+	                    CheckIn(marker, function (response) {
+	                    	var CheckInId = response.taskId || response.eventId;
+	                        if (CheckInId) {
+	                        
+	                        	if (!MA.enabledFeatures.autoCheckOut) {
+	                        		$button.data('CheckInId', CheckInId).text("{!$Label.MAActionFramework_Check_Out}").attr('data-action', 'Check Out');
+	                        	}
+	                            
+	                            //add this check in record to the raw plot data
+	                            if (CheckInId.substring(0,3) == '00T') {
+		                            if (!record.record.Tasks) { record.record.Tasks = {records: []}; }
+		                            record.record.Tasks.records.push({
+		                                Id: CheckInId, 
+		                                IsClosed: MA.enabledFeatures.autoCheckOut
+		                            });
+		                        }
+		                        else {
+		                        	if (!record.record.Events) { record.record.Events = {records: []}; }
+		                            record.record.Events.records.push({
+		                                Id: CheckInId,
+		                                Subject: MA.enabledFeatures.autoCheckOut ? 'Check Out @' : 'Check In @'
+		                            });
+		                        }
+	                        }
+	                    });
+						MA.Map.InfoBubble.hide();
+	           		},
+	           		events: {
+	           			'ready': [
+	           				function (options) 
+	           				{
+	           					//try to pull activity type from this record
+	           					var postTo = '';
+	           					try {
+	           						postTo = JSON.parse(options.record.plottedQuery.data('baseObjectSettings')).CheckInPostTo;	
+	           					}
+	           					catch (err) { postTo = 'Task'; }
+	           					
+	           					//update check in button to check out if already checked in
+	           					if (postTo.indexOf('Task') != -1) {
+		                            if (options.record.record.Tasks)
+		                            {
+		                                 jQuery.each(options.record.record.Tasks.records, function (index, task) {
+		                                     if (!task.IsClosed)
+		                                     {
+		                                         options.button.data('CheckInId', task.Id).text("{!$Label.MAActionFramework_Check_Out}").attr('data-action', 'Check Out');
+		                                         return false;
+		                                     }
+		                                 });
+		                            }
+		                        }
+		                        else if (postTo.indexOf('Event') != -1) {
+		                        	if (options.record.record.Events)
+		                            {
+		                                 jQuery.each(options.record.record.Events.records, function (index, event) {
+		                                     if (event.Subject && event.Subject.indexOf('Check In @') == 0)
+		                                     {
+		                                         options.button.data('CheckInId', event.Id).text("{!$Label.MAActionFramework_Check_Out}").attr('data-action', 'Check Out');
+		                                         return false;
+		                                     }
+		                                 });
+		                            }
+		                        }
+	           				}
+	           			]
+	           		}
+	           	},
+	           	'Check Out': {
+	           		Label: "{!$Label.MAActionFramework_Check_Out}", Type: 'Standard Action', Modes: [], Layouts: [], Requirements: [], Action: 'Javascript', ActionValue: function (options) {
+	           			var $button = options.button;
+	           			var record = options.records[0];
+				    	var marker = options.records[0].marker;
+				    	
+	                    CheckOut(marker, $button.data('CheckInId'), function (CheckInId) {
+	                        $button.data('CheckInId', null).text('Check In');
+	                        
+	                        //update this check in record in the raw plot data
+	                        if (CheckInId.indexOf('00T') == 0) {
+	                        	jQuery.each(record.record.Tasks.records, function (index, task) {
+		                            if (task.Id == CheckInId) {
+		                                task.IsClosed = true;
+		                                return false;
+		                            }
+		                        });
+	                        }
+	                        else {
+	                        	jQuery.each(record.record.Events.records, function (index, event) {
+		                            if (event.Id == CheckInId) {
+		                                event.Subject = event.Subject.replace('Check In @', 'Check Out @');
+		                                return false;
+		                            }
+		                        });
+	                        }
+	                    });
+	                    MA.Map.InfoBubble.hide();
+	           		}
+	           	},
+	           	'Clear Coordinates': {
+	           		Label: "{!$Label.MAActionFramework_Clear_Coordinates}", Type: 'Standard Action', Modes: ['Desktop'], Layouts: ['Tooltip', 'Mass'], Requirements: [], Action: 'Javascript', ActionValue: function (options) {
+	           			if (options.isMassAction)
+	           			{
+	           				ClearCoordinates_Prompt(options.records);
+	           			}
+	           			else
+	           			{
+	           				MA.Map.InfoBubble.hide();
+	           			
+	           				//show a status message
+				        	var $status = growlLoading(jQuery('#growl-wrapper'), 'Clearing...').data({ batchCount: 0, failureCount: 0 });
+				        	
+				        	//start building request data
+				        	var recordToClear = options.records[0];
+				        	var queriesToClear = [];
+				        	var queriesToUpdate = [];
+				        	
+				        	//create a new QueryToClear that contains the information to be sent in the request
+			            	var queryToClear = {
+			            		recordIds: [],
+			            		coordinateFields: recordToClear.plottedQuery.data('coordinateFields')
+			            	};
+			            	queriesToClear.push(queryToClear);
+			            	
+			            	//create a new QueryToUpdate that contains information about the markers that are being removed.  this is used to update the plotted query later
+			            	var queryToUpdate = { 
+			            		plottedQuery: recordToClear.plottedQuery,
+			            		recordsToRemove: {} 
+			            	};
+			            	queriesToUpdate.push(queryToUpdate);
+			            	
+			            	//either send this Id or the address parent Id depending on how the coordinate fields are configured
+	                    	if (queryToClear.coordinateFields.Latitude.indexOf('.') == -1) {
+	                    		//there is no '.' in the coordinate field so this is not cross-object.  just use the record id
+	                    		queryToClear.recordIds.push(recordToClear.record.Id);
+	                    	}
+	                    	else {
+	                    		//there is a '.' so we want the Id of the parent.  get to the parent by using what is before the '.' in the coordinate field 
+	                    		queryToClear.recordIds.push(recordToClear.record[queryToClear.coordinateFields.Latitude.split('.')[0]].Id);
+	                    	}
+	                        
+	                        //keep track of the markers that will need to be removed from the map
+	                        //THERE IS AN ISSUE HERE IF WE'RE USING CROSS-OBJECT ADDRESSES AND THE OBJECT FAILS TO UPDATE.  WE WON'T KNOW WHICH MARKER FAILED.  IGNORING THIS FOR NOW
+	                        queryToUpdate.recordsToRemove[recordToClear.record.Id] = recordToClear;
+	                        
+	                        //send request
+	                        ClearCoordinates_SendBatch($status, queriesToClear, 1, queriesToUpdate);
+	                        
+	                        //done sending batches, update status message
+	           				$status.find('span').text('Clearing...1 batch remaining');
+	           				
+	           				//set an interval to track when all the batches have returned
+				           	$status.data(
+				           		'batchInterval',
+				           		setInterval(function () {
+				            	
+				            		if ($status.data('batchCount') == 0) 
+				            		{
+				            			//clear this interval because we're done
+						            	clearInterval($status.data('batchInterval'));
+						            	
+						            	//status update
+				            			$status = growlLoading($status, 'Removing Markers');
+						            	
+						            	//remove the needed markers from the map by looping over the queries to update
+						            	jQuery.each(queriesToUpdate, function (index, queryToUpdate) {
+						            	
+						            		//loop over the markers in this query, add them to our list to remove from the map, and actually remove them from the plotted query
+						            		var markerCount = 0;
+						            		var clusterMarkersToRemove = [];
+						            		var $plottedQuery = queryToUpdate.plottedQuery;
+						            		jQuery.each(queryToUpdate.recordsToRemove, function (recordId, record) {
+						            			markerCount++;
+						            			
+						            			if ($plottedQuery.find('.renderButtons-button.markers').is('.on') && record.marker && record.isVisible) {
+								            		record.marker.setMap(null);
+						                        }
+						                        if ($plottedQuery.find('.renderButtons-button.cluster').is('.on') && record.clusterMarker && record.isClustered) {
+							                        clusterMarkersToRemove.push(record.clusterMarker);
+						                        }
+						                        if ($plottedQuery.find('.renderButtons-button.scatter').is('.on') && record.scatterMarker && record.isScattered) {
+					                               	record.scatterMarker.setMap(null);
+					                            }
+					                            
+						            			delete queryToUpdate.plottedQuery.data('records')[recordId];
+						            		});
+						            		if (clusterMarkersToRemove.length > 0) {
+						            			$plottedQuery.data('clusterGroup').removeMarkers(clusterMarkersToRemove);
+						            		}
+						            		
+						            		//update query info
+						            		updateQueryInfo(queryToUpdate.plottedQuery);
+						            	});
+						            	
+				            			//show success
+				            			$status = growlSuccess($status, 'Done');
+						            }
+				                
+				               	}, 1000)
+							);
+	           			}
+	           		}
+	           	},
+	           	'Chatter Post': { 
+	           		Label: 'Chatter Post', Type: 'Standard Action', Modes: ['Desktop'], Layouts: ['Tooltip', 'Mass'], Requirements: ['Chatter Support'], Action: 'Javascript', ActionValue: function (options) {
+			        	var recordIds = [];
+			        	jQuery.each(options.records || [], function (index, record) {
+			        		if (record.plottedQuery.data('supportsChatter')) {
+				            	recordIds.push(record.record.Id);
+				            }
+			        	});
+			            ChatterPost(recordIds);
+	           		}
+	           	},
+	           	'Follow': {
+	           		Label: "{!$Label.MAActionFramework_Follow}", Type: 'Standard Action', Modes: ['Desktop'], Layouts: ['Mass'], Requirements: [], Action: 'Javascript', ActionValue: function (options) {
+	           			updateChatterSubscriptions(true, options.records);
+	           		}
+	           	},
+	           	'Unfollow': {
+	           		Label: "{!$Label.MAActionFramework_Unfollow}", Type: 'Standard Action', Modes: ['Desktop'], Layouts: ['Mass'], Requirements: [], Action: 'Javascript', ActionValue: function (options) {
+	           			updateChatterSubscriptions(false, options.records);
+	           		}
+	           	},
+	           	'Update Field': {
+	           		Label: "{!$Label.MAActionFramework_Update_Field}", Type: 'Standard Action', Modes: ['Desktop'], Layouts: ['Mass'], Requirements: [], Action: 'Javascript', ActionValue: function (options) {
+	           			UpdateFieldOfVisible(options.records);
+	           		}
+	           	},
+	           	'Create Favorite': {
+	           		Label: "{!$Label.MAActionFramework_Create_Favorite}", Type: 'Standard Action', Modes: ['Mobile'], Layouts: ['Tooltip', 'MyPosition', 'POI'], Requirements: [], Action: 'Javascript', ActionValue: function (options) {
+	           			if (options.records && options.records.length > 0) {
+	           				CreateFavorite({ latlng: options.records[0].latLng, address: options.records[0].markerAddress, name: options.records[0].marker.title });
+	           			}
+	           			else if (options.customMarkers && options.customMarkers.length > 0) {
+	           				CreateFavorite({ latlng: options.customMarkers[0].latlng, address: options.customMarkers[0].address, name: options.customMarkers[0].title });
+	           			}
+	           			try {
+	           				MA.Map.InfoBubble.hide();
+	           			}
+	           			catch (e) {
+	           				//do nothing
+	           			}
+	           		}
+	           	},
+	           	'Create Record': {
+	           		Label: "Click2Create<sup>TM</sup>", Type: 'Standard Action', Modes: ['Desktop', 'Mobile'], Layouts: ['MyPosition', 'POI'], Requirements: [], Action: 'Javascript', ActionValue: function (options) {
+	           			
+	           			//console.log(options);
+	           			
+	           			
+	           			
+	           			if (options.customMarkers && options.customMarkers.length > 0) 
+	           			{
+	           			    
+	           			    if (options.mode && options.mode == 'Mobile' && options.customMarkers[0].type == 'MyPosition')
+    	           			{
+    	           			    
+    	           			    //let's update the "my position" 
+    	           			     navigator.geolocation.getCurrentPosition(
+                                    function(position) {
+                                        
+                                        var geocoder = new google.maps.Geocoder();
+                                        geocoder.geocode({ latLng: new google.maps.LatLng(position.coords.latitude, position.coords.longitude) }, function(results, status) {
+                                            if (status == google.maps.GeocoderStatus.OK) {
+                                                
+                                                
+                                                CreateRecord_Launch({ type: options.customMarkers[0].type, position: new google.maps.LatLng(position.coords.latitude, position.coords.longitude), 
+                    	           			        address: results[0].formatted_address, name: options.customMarkers[0].title, 
+                    	           			        phone: options.customMarkers[0].phone || '', 
+                    	           			        website: options.customMarkers[0].website || '', 
+                    	           			        place: options.customMarkers[0].place });
+                                            }
+                                            else {
+                                                MA.log('Bad Reverse Geocode', status);
+                                                
+                                                
+                                                 CreateRecord_Launch({ type: options.customMarkers[0].type, position: new google.maps.LatLng(position.coords.latitude, position.coords.longitude), 
+                    	           			        address: options.customMarkers[0].address, name: options.customMarkers[0].title, 
+                    	           			        phone: options.customMarkers[0].phone || '', 
+                    	           			        website: options.customMarkers[0].website || '', 
+                    	           			        place: options.customMarkers[0].place });
+                                                
+                                            }
+                                        });
+                                        
+                                        
+                                        //Call Default ShowMyPositionSuccess so we can update the marker
+                                        HideMyPosition();
+                                        ShowMyPositionSuccess(position);
+                                    },
+                                    function (e) {
+                                        
+                                        //log error
+                                        MALog(e);
+                                        
+                                        //show error
+                                        //NotifyError("Error Getting Position", "Location could not be determined");
+                                        
+                                        //Let's go with what we have already
+                                        CreateRecord_Launch({ type: options.customMarkers[0].type, position: options.customMarkers[0].latlng, 
+            	           			        address: options.customMarkers[0].address, name: options.customMarkers[0].title, 
+            	           			        phone: options.customMarkers[0].phone || '', 
+            	           			        website: options.customMarkers[0].website || '', 
+            	           			        place: options.customMarkers[0].place });
+                                    },
+                                    {
+                                        enableHighAccuracy: true,
+                                        maximumAge: 0,
+                                        timeout: 10000
+                                    }
+                                );
+    	           			    
+    	           			}
+    	           			else
+    	           			{
+    	           			    CreateRecord_Launch({ type: options.customMarkers[0].type, position: options.customMarkers[0].latlng, 
+    	           			        address: options.customMarkers[0].address, name: options.customMarkers[0].title, 
+    	           			        phone: options.customMarkers[0].phone || '', 
+    	           			        website: options.customMarkers[0].website || '', 
+    	           			        place: options.customMarkers[0].place });
+    	           			}
+	           			    
+	           			    
+	           			    
+	           				
+	           			}
+	           			try {
+	           				MA.Map.InfoBubble.hide();
+	           			}
+	           			catch (e) {
+	           				//do nothing
+	           			}
+	           		}
+	           	},
+	           	'Street View': {
+	           		Label: "Street View", Type: 'Standard Action', Modes: ['Desktop'], Layouts: ['Tooltip', 'MyPosition', 'POI'], Requirements: [], Action: 'Javascript', ActionValue: function (options) {
+	           			options.button.text('Searching...');
+
+	           			var pos;
+	           			if (options.records && options.records.length > 0) {
+	           				pos = options.records[0].latLng;
+	           			}
+	           			else if (options.customMarkers && options.customMarkers.length > 0) {
+	           				pos = options.customMarkers[0].latlng;
+	           			}
+	           			
+	           			//console.log('pos');
+	           			//console.log(pos);
+	           			
+	           			 //If the radius is 50 meters or less, the panorama returned will be the nearest panorama to the given location.
+	           			var radius = 50; //meters
+	           			
+	           			
+	           			//Find closed point that has street view
+	           			
+                        new google.maps.StreetViewService().getPanoramaByLocation(pos, radius, function (data1, status1) {
+                                
+                            //console.log(data1);
+                            //console.log(status1);
+                            
+                            if (status1 == google.maps.StreetViewStatus.OK) 
+                            {
+                                //return data.location.latLng;
+                                
+                                MA.Map.InfoBubble.hide();
+	           					MA.map.getStreetView().setOptions({ position: data1.location.latLng, visible: true });
+                            }
+                            else
+                            {
+                                //Try again with a larger radius
+                                radius = radius * 2;
+                                
+                                new google.maps.StreetViewService().getPanoramaByLocation(pos, radius, function (data2, status2) {
+                                    //console.log(data2);
+                                    //console.log(status2);
+                                    
+                                    if (status2 == google.maps.StreetViewStatus.OK) 
+                                    {
+                                        MA.Map.InfoBubble.hide();
+	           					        MA.map.getStreetView().setOptions({ position: data2.location.latLng, visible: true });
+                                    }
+                                    else
+                                    {
+                                        //Try again with a larger radius
+                                        radius = radius * 2;
+                                
+                                        new google.maps.StreetViewService().getPanoramaByLocation(pos, radius, function (data3, status3) {
+                                            //console.log(data3);
+                                            //console.log(status3);
+                                            
+                                            if (status3 == google.maps.StreetViewStatus.OK) 
+                                            {
+                                                MA.Map.InfoBubble.hide();
+        	           					        MA.map.getStreetView().setOptions({ position: data3.location.latLng, visible: true });
+                                            }
+                                            else
+                                            {
+                                                options.button.text('Not Available');
+                                            }
+                                    
+                                            
+                                        });
+                                    }
+                            
+                                    
+                                });
+                                
+                            }
+
+                        });
+	           			
+	           			
+	           			
+                        
+                        /*
+	           			if (pos) {
+	           				pos = MA.Geocoding.findNearestStreetView(pos);
+	           				
+	           				console.log('pos1');
+	           			    console.log(pos);
+	           				
+	           				if (pos) {
+	           					MA.Map.InfoBubble.hide();
+	           					MA.map.getStreetView().setOptions({ position: data.location.latLng, visible: true });
+	           				}
+	           				else {
+	           					options.button.text('Not Available');
+	           				}
+	           			}
+	           			else {
+	           				options.button.text('Error');
+	           			}
+	           			*/
+	           		}
+	           	}
+	        },
+	        
+	        //placeholder for custom actions that will be injected into the framework
+	        customActions: {},
+
+	        //settings for marker layouts
+	        markerLayouts: {
+	            tooltip         : { fieldName: 'TooltipLayout__c', selector: '.layout-tooltip', defaultHTML: '<div class="section-dropzone ui-droppable"></div><div class="buttonset-section"><div class="buttonset-section-header ui-draggable"><div class="buttonset-section-name editable">Actions</div></div><div class="buttonset-section-columns"><div class="buttoncolumn"><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div><div class="buttonset-button ui-draggable"><div class="actionbutton Tooltip Mass MyPosition POI ui-draggable" data-type="Standard Action" data-action="Add to Trip">Add to Route</div><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div></div><div class="buttoncolumn"><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div><div class="buttonset-button ui-draggable"><div class="actionbutton Tooltip Mass MyPosition POI ui-draggable" data-type="Standard Action" data-action="Set Proximity Center">Set Proximity Center</div><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div></div><div class="buttoncolumn"><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div><div class="buttonset-button ui-draggable"><div class="actionbutton Tooltip Mass ui-draggable" data-type="Standard Action" data-action="Remove Marker">Remove Marker</div><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div><div class="buttonset-button ui-draggable"><div class="actionbutton Tooltip ui-draggable" data-type="Standard Action" data-action="Check In">Check In</div><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div></div></div><div class="section-dropzone ui-droppable"></div></div><div class="buttonset-section"><div class="buttonset-section-header ui-draggable"><div class="buttonset-section-name editable">Admin</div></div><div class="buttonset-section-columns"><div class="buttoncolumn"><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div><div class="buttonset-button ui-draggable"><div class="actionbutton Tooltip Mass ui-draggable" data-type="Standard Action" data-action="Set Verified Location">Set Verified Location</div><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div></div><div class="buttoncolumn"><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div><div class="buttonset-button ui-draggable"><div class="actionbutton Tooltip Mass ui-draggable" data-type="Standard Action" data-action="Clear Coordinates">Clear Coordinates</div><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div></div><div class="buttoncolumn"><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div><div class="buttonset-button ui-draggable"><div class="actionbutton Tooltip Mass ui-draggable" data-type="Standard Action" data-action="Change Owner">Change Owner</div><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div></div></div><div class="section-dropzone ui-droppable"></div></div><div class="buttonset-section"><div class="buttonset-section-header ui-draggable"><div class="buttonset-section-name editable">Activities</div></div><div class="buttonset-section-columns"><div class="buttoncolumn"><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div><div class="buttonset-button ui-draggable"><div class="actionbutton Tooltip Mass ui-draggable" data-type="Standard Action" data-action="Log a Call">Log a Call</div><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div></div><div class="buttoncolumn"><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div><div class="buttonset-button ui-draggable"><div class="actionbutton Tooltip Mass ui-draggable" data-type="Standard Action" data-action="Send Email">Send Email</div><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div></div><div class="buttoncolumn"><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div><div class="buttonset-button ui-draggable"><div class="actionbutton Tooltip Mass ui-draggable" data-type="Standard Action" data-action="New Event">New Event</div><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div><div class="buttonset-button ui-draggable"><div class="actionbutton Tooltip Mass ui-draggable" data-type="Standard Action" data-action="Add to Campaign">Add to Campaign</div><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div></div></div><div class="section-dropzone ui-droppable"></div></div>' },
+	            myPosition      : { fieldName: 'MyPositionLayout__c', selector: '.layout-myposition', defaultHTML: '<div class="section-dropzone ui-droppable"></div><div class="buttonset-section"><div class="buttonset-section-header ui-draggable"><div class="buttonset-section-name editable">Actions</div></div><div class="buttonset-section-columns"><div class="buttoncolumn"><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div><div class="buttonset-button ui-draggable"><div class="actionbutton Tooltip Mass MyPosition POI ui-draggable" data-type="Standard Action" data-action="Add to Trip">Add to Route</div><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div></div><div class="buttoncolumn"><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div><div class="buttonset-button ui-draggable"><div class="actionbutton Tooltip Mass MyPosition POI ui-draggable" data-type="Standard Action" data-action="Set Proximity Center">Set Proximity Center</div><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div></div><div class="buttoncolumn"><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div></div><div class="section-dropzone ui-droppable"></div></div>' },
+	            poi             : { fieldName: 'POILayout__c', selector: '.layout-poi', defaultHTML: '<div class="section-dropzone ui-droppable"></div><div class="buttonset-section"><div class="buttonset-section-header ui-draggable"><div class="buttonset-section-name editable">Actions</div></div><div class="buttonset-section-columns"><div class="buttoncolumn"><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div><div class="buttonset-button ui-draggable"><div class="actionbutton Tooltip Mass MyPosition POI ui-draggable" data-type="Standard Action" data-action="Add to Trip">Add to Route</div><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div></div><div class="buttoncolumn"><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div><div class="buttoncolumn"><div class="button-dropzone"><div class="button-dropzone-handle ui-droppable"></div></div></div></div><div class="section-dropzone ui-droppable"></div></div>' }
+	        },
+
+			getAction: function (type, action) {
+				return type == 'Custom Action'
+					? MAActionFramework.customActions[action] || null
+					: MAActionFramework.standardActions[action] || null;
+			},
+
+			buildLayoutFromContentsListView: function (layoutContents, options) {
+
+	        	jQuery.extend({
+	        		queryMetadata: { supportsActivities: false, supportsChatter: false },
+	        		record: { record: { Id: '' } },
+	        		renderType: ''
+	        	}, options);
+
+	        	var ActionsArr = [];
+				jQuery.each(layoutContents, function (sectionIndex, section) {
+				
+					//add this section
+					var obj = {
+						label : section.Label,
+						type : null,
+						action : null,
+						header : true
+					};
+					ActionsArr.push(obj);
+					
+					//loop over each column in this section
+					jQuery.each(section.Columns, function (columnIndex, column) {
+						
+						//loop over each button in this column
+						jQuery.each(column, function (buttonIndex, button) {
+							
+							//find the definition of this button in the action framework
+							var buttonDefinition = {};
+							if (button.Type == 'Custom Action' && MAActionFramework.customActions[button.Label]) {
+								jQuery.extend(buttonDefinition, MAActionFramework.customActions[button.Label]);
+
+								//disable Iframe on nearby for now
+								var ActionType = MAActionFramework.customActions[button.Label].Action;
+								if(MA.IsMobile && ActionType == 'Iframe') {
+									return;
+								}
+							}
+							else if (MAActionFramework.standardActions[button.Label]) {
+								jQuery.extend(buttonDefinition, MAActionFramework.standardActions[button.Label]);
+							}
+							else {
+								return;
+							}
+
+							var actButton = {
+								label : buttonDefinition.Label,
+								type : buttonDefinition.Type,
+								action : button.Label,
+								header : false
+							}
+
+							//validate that this button meets mode requirements.  if it doesn't then disable it
+							if ((MA.IsMobile && jQuery.inArray('Mobile', buttonDefinition.Modes) == -1) || (!MA.IsMobile && jQuery.inArray('Desktop', buttonDefinition.Modes) == -1)) {
+								actButton['disabled'] = true;
+								//ActionsArr.push(actButton);
+								return;
+							}
+
+							//validate that this button meets visibility requirements.  if it doesn't then disable it
+							jQuery.each(buttonDefinition.Requirements, function (index, requirement) {
+								if (requirement == 'Activity Support' && !options.queryMetadata.supportsActivities) {
+									actButton['disabled'] = true;
+									//ActionsArr.push(actButton);
+									return false;
+								}
+								else if (requirement == 'Verified Location Support' && options.queryMetadata.coordinateFields && !(options.queryMetadata.coordinateFields.VerifiedLatitude && options.queryMetadata.coordinateFields.VerifiedLongitude)) {
+									actButton['disabled'] = true;
+									//ActionsArr.push(actButton);
+									return false;
+								}
+								else if (requirement == 'Contact Or Lead' && jQuery.inArray(options.record.record.Id.substring(0, 3), ['003', '00Q']) == -1) {
+									actButton['disabled'] = true;
+									//ActionsArr.push(actButton);
+									return false;
+								}
+								else if (requirement == 'Chatter Support' && !options.queryMetadata.supportsChatter) {
+									actButton['disabled'] = true;
+									//ActionsArr.push(actButton);
+									return false;
+								}
+							});
+							//validate that this button meets render type requirements
+		                    if (buttonDefinition.RenderModes && jQuery.inArray(options.markerType, buttonDefinition.RenderModes) == -1) {
+		                    	actButton['disabled'] = true;
+		                    	//return false;
+			                }
+
+			                //check if this is a duplicate
+			                if(actButton.label == "Add to Trip" || actButton.label == "{!$Label.MAActionFramework_Add_to_Trip}" || actButton.label == "{!$Label.MAActionFramework_Check_In}" || actButton.label == "{!$Label.MAActionFramework_Check_Out}" || actButton.label == "{!$Label.MAActionFramework_Take_Me_There}") {
+			                	actButton['disabled'] = true;
+			                	//return false;
+			                }
+			                if(!actButton.disabled) {
+			                	ActionsArr.push(actButton);
+			                }
+						});
+						
+					});
+				});
+
+				return ActionsArr;
+	        },
+			
+	        buildLayoutFromContents: function (layoutContents, options) {
+
+	        	jQuery.extend({
+	        		queryMetadata: { supportsActivities: false, supportsChatter: false },
+	        		record: { record: { Id: '' } },
+	        		renderType: ''
+	        	}, options);
+
+				var $layout = jQuery('<div/>');
+				jQuery.each(layoutContents, function (sectionIndex, section) {
+				
+					//add this section
+					var $section = jQuery('#templates .buttonset-section').clone().appendTo($layout);
+					$section.find('.buttonset-section-header').text(section.Label);
+					
+					//loop over each column in this section
+					jQuery.each(section.Columns, function (columnIndex, column) {
+						
+						//loop over each button in this column
+						var $column = $section.find('.buttoncolumn').eq(columnIndex);
+						jQuery.each(column, function (buttonIndex, button) {
+						
+							//find the definition of this button in the action framework
+							var buttonDefinition = {};
+							if (button.Type == 'Custom Action' && MAActionFramework.customActions[button.Label]) {
+								jQuery.extend(buttonDefinition, MAActionFramework.customActions[button.Label]);
+							}
+							else if (MAActionFramework.standardActions[button.Label]) {
+								jQuery.extend(buttonDefinition, MAActionFramework.standardActions[button.Label]);
+							}
+							else {
+								return;
+							}
+							
+							//add this button
+							var $button = jQuery('<div class="actionbutton" />').attr({'data-type': buttonDefinition.Type, 'data-action': button.Label}).html(buttonDefinition.Label).appendTo($column);
+							
+							//validate that this button meets mode requirements.  if it doesn't then disable it
+							if ((MA.IsMobile && jQuery.inArray('Mobile', buttonDefinition.Modes) == -1) || (!MA.IsMobile && jQuery.inArray('Desktop', buttonDefinition.Modes) == -1)) {
+								$button.addClass('disabled'); return;
+							}
+							
+							//validate that this button meets visibility requirements.  if it doesn't then disable it
+							jQuery.each(buttonDefinition.Requirements, function (index, requirement) {
+								if (requirement == 'Activity Support' && !options.queryMetadata.supportsActivities) {
+									$button.addClass('disabled'); return false;
+								}
+								else if (requirement == 'Verified Location Support' && !(options.queryMetadata.coordinateFields.VerifiedLatitude && options.queryMetadata.coordinateFields.VerifiedLongitude)) {
+									$button.addClass('disabled'); return false;
+								}
+								else if (requirement == 'Contact Or Lead' && jQuery.inArray(options.record.record.Id.substring(0, 3), ['003', '00Q']) == -1) {
+									$button.addClass('disabled'); return false;
+								}
+								else if (requirement == 'Chatter Support' && !options.queryMetadata.supportsChatter) {
+									$button.addClass('disabled'); return false;
+								}
+							});
+							
+							//validate that this button meets render type requirements
+		                    if (buttonDefinition.RenderModes && jQuery.inArray(options.markerType, buttonDefinition.RenderModes) == -1) {
+		                    	$button.addClass('disabled');
+			                }
+						
+						});
+						
+					});
+				});
+
+				return $layout;
+	        },
+	        
+	        //events that will be fired by this framework.  developers can hook onto these events using the on method
+	        events: {
+	        	'ready': []
+	        },
+	        
+	        //used to attach handlers to action framework events
+	        on: function (event, method) {
+	        	try {
+	        		this.events[event].push(method);
+	        	}
+	        	catch (err) {
+	        		MALog('Invalid Event: ' + event);
+	        	}
+	        },
+	        
+	        //used to refresh the custom actions and 
+	        refresh: function () {
+	        
+	        	var me = this;
+	        
+	        	//remove existing custom actions from the framework
+	        	me.customActions = {};
+	        
+	        	//look for custom actions that need to be injected into the framework
+				jQuery.ajax({
+			        url: MA.resources.Admin+'?securityToken={!securityToken}&action=get_customactions',
+			        type: 'POST',
+			        dataType: 'JSON',
+			        data: {},
+			        success: function (response) 
+			        {
+			        	//add each custom action to the available buttons
+			        	jQuery.each(response.results, function (index, action) {
+			        		removeNamespace('{!namespace}', action);
+			        		me.customActions[action.Name] = {
+			        			Id				: action.Id,
+			        			Label			: action.Name,
+			        			Type			: 'Custom Action',
+			        			Modes			: action.Modes__c ? action.Modes__c.split(';') : [],
+			        			Layouts			: ['Tooltip','MyPosition','POI','Mass'],
+			        			Requirements	: action.Requirements__c ? action.Requirements__c.split(';') : [],
+			        			Action			: action.Action__c,
+			        			ActionValue		: action.ActionValue__c,
+			        			Options			: action.Options__c ? JSON.parse(action.Options__c) : {method:'GET',addRecords:false}
+			        		};
+			        	});
+			        	
+			        	//fire ready events
+			        	jQuery.each(me.events['ready'], function (index, method) {
+			        		method();
+			        	});
+			        },
+			        error: function (response) { MALog('Error getting custom actions: ' + response.details); }
+			    });
+	        
+	        },
+	        
+	        //an index to be used and incremented by anything interacting with the framework to ensure uniqueness
+	        componentIndex: 1
+	        
+		};
+		
+		//refresh the framework on ready
+		jQuery(function () {
+			MAActionFramework.refresh();
+		});
+	
+	</script>
+</apex:component>

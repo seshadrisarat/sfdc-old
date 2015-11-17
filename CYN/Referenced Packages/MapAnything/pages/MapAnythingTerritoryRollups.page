@@ -1,0 +1,2293 @@
+<apex:page title="MapAnything Territory Rollups" controller="sma.MapAnythingBaseObjects" setup="true">
+	
+	<!-- jQuery -->
+    <script type='text/javascript' src="{!URLFOR($Resource.MapAnything, 'js/jquery-1.7.1.min.js')}"></script>
+    
+    <!-- jQuery UI -->
+    <script type='text/javascript' src="{!URLFOR($Resource.MapAnything, 'jquery/jquery-ui.min.js')}"></script>
+	<link rel='stylesheet' type='text/css' href="{!URLFOR($Resource.MapAnything, 'jquery/jquery-ui.css')}"></link>
+	
+	<!-- jsTree -->
+	<script type='text/javascript' src="{!URLFOR($Resource.MapAnything, 'jstree/jquery.jstree2.js')}"></script>
+	
+	<!-- JS Date -->
+	<script type='text/javascript' src="{!URLFOR($Resource.QueryEditor, 'js/date.js')}"></script>
+	
+	<!-- JS Color -->
+    <apex:includeScript value="{!URLFOR($Resource.sma__MapAnything, 'jscolor/jscolor.js')}"/>
+    
+    <!-- Moment (date parsing) -->
+    <script src="{!URLFOR($Resource.MapAnything, 'js/moment.js')}" type="text/javascript"></script>
+	
+	<!-- Combobox -->
+	<script type='text/javascript' src="{!URLFOR($Resource.QueryEditor, 'js/combobox/jquery.combobox.js')}"></script>
+    <link rel='stylesheet' type='text/css' href="{!URLFOR($Resource.QueryEditor, 'js/combobox/jquery.combobox.css')}"></link>
+	
+	<!-- jQuery Multiselect (depends on jQuery UI) -->
+    <script src="{!URLFOR($Resource.QueryEditor, 'js/multiselect/jquery.multiselect.min.js')}" type="text/javascript"></script>
+    <script src="{!URLFOR($Resource.QueryEditor, 'js/multiselect/jquery.multiselect.filter.js')}" type="text/javascript"></script>
+    <link rel="stylesheet" type="text/css" href="{!URLFOR($Resource.QueryEditor, 'js/multiselect/jquery.multiselect.css')}" />
+    <link rel="stylesheet" type="text/css" href="{!URLFOR($Resource.QueryEditor, 'js/multiselect/jquery.multiselect.filter.css')}" />
+	
+	<!-- JS -->
+	<c:JSHelperFunctions />
+	<c:MATerritoryTree />
+	<script type='text/javascript'>
+		var rollup;
+		var globalIndex = 0;        //this is used to generate unique names for elements like radio buttons.  hoping to replace this with a nice form plugin
+		$(function () {
+			
+			$('.territory-rollup-tree').MATerritoryRollupTree().bind({
+			
+				'MATerritoryRollupTree.select': function (event, data) {
+				
+					/*************************
+					* Populate Existing Values
+					**************************/
+					$.ajax({
+		                url: "/apex/MATerritoryAJAXResources?securityToken={!securityToken}&action=getTerritoryRollupContents&core.apexpages.devmode.url=0",
+		                type: 'POST',
+		                dataType: 'JSON',
+		                data:{
+		                	id	: data.id
+		                },
+		                success: function (response)
+		                {
+		                	clearRollup();
+		                	if(response.data.content.length > 0)
+		                	{
+		                		rollup = response.data.content[0];
+		                		rollupOptions = response.data.options;
+		                		$('#TerritoryRollupEditor .rollup-update-save').show();
+		                		$('#TerritoryRollupEditor .rollup-save-new').hide();
+		                		$.each(response.data.content, function (index, content)
+		                		{
+		                			removeNamespace('{!namespace}', content);
+		                		
+		                			var colorRules = JSON.parse(content.ColorRules__c);
+		                			$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select').attr('data-update', 'true');
+		                			$('#TerritoryRollupEditor .rollup-aggregate-table').find('.aggregate-field').attr('data-update', 'true');
+		                			$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-name').val(content.Name);
+		                			$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-object-select').val(content.Object__c).change().next().find('input').val($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-object-select option:selected').text());
+									$('#TerritoryRollupEditor .color-row').remove();
+									$.each(colorRules, function (index, color)
+									{
+										var $colorRow = $('#Templates .color-row.template').clone().removeClass('template');
+										$colorRow.find('.aggregate-label').val(color.label);
+										$colorRow.find('.aggregate-from-range').val(color.rangeStart);
+										$colorRow.find('.aggregate-to-range').val(color.rangeEnd);
+										$colorRow.find('.aggregate-color').val(color.color);
+										$colorRow.appendTo('.color-table');
+										jscolor.init();
+									});
+		                		});
+		                		if(response.data.options.length > 0)
+		                		{
+		                			if(rollup.FilterLogic__c != 'null')
+		                			{
+		                				$('#TerritoryRollupEditor .filterlogiclink').click();
+		                				$('#TerritoryRollupEditor .filterlogic').val(rollup.FilterLogic__c);
+		                			}
+		                			$.each(response.data.options, function (index, options)
+		                			{
+		                				if(options.Type__c == 'Filter')
+		                				{
+		                					$(".rollup-aggregate-filters .fieldfilters").attr('data-update', 'true');
+		                				}
+		                				else if(options.Type__c == 'Cross Filter')
+		                				{
+		                					$(".rollup-aggregate-filters .crossfilters").attr('data-update', 'true');
+		                				}
+		                			});
+		                		}
+		                	}
+		                	else
+		                	{
+		                		clearRollup();
+		                	}
+		                }
+	                });
+				}
+			});
+			
+			/***************************************
+			*	Territory Rollup Editor
+			****************************************/
+			//init combobox
+			$('#TerritoryRollupEditor .rollup-combobox').combobox();
+			
+			//populate object options
+			$.ajax({
+                url: "/apex/MATerritoryAJAXResources?securityToken={!securityToken}&action=getRollupObject&core.apexpages.devmode.url=0",
+                type: 'POST',
+                dataType: 'JSON',
+                data:{},
+                success: function (response)
+                {
+                	$.each(response.data, function(index, baseObj) {
+                  		$('<option></option>').attr('value', baseObj.itemValue).text(baseObj.itemLabel).appendTo($('#TerritoryRollupEditor .rollup-name-table .rollup-object-select'));
+                  	});
+                }
+            });
+		
+			//populate fields on object selection
+			$('#TerritoryRollupEditor .rollup-name-table').on('change', '.rollup-object-select', function ()
+			{
+				//Clear fields on previous change
+				$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select').empty();
+				$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-parent').next().hide();
+				$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent').empty();
+				$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent').next().hide();
+				
+				//Remove Filters on Base object change
+				$('#TerritoryRollupEditor .rollup-aggregate-filters .deletelink').click();
+				$('#TerritoryRollupEditor .aggregate-radio:first').click();
+				$('#TerritoryRollupEditor .aggregate-filters-table').hide();
+				if($('#TerritoryRollupEditor .filterlogiclink').text() == 'Add') {
+					$('#TerritoryRollupEditor .filterlogic').click();
+				}
+				
+				//Enters base object as name if blank
+				if($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-name').val() == '')
+				{
+					$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-name').val($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-object-select option:selected').text());
+				}
+				
+				//populate base object selection
+				$.ajax({
+	                url: "/apex/MATerritoryAJAXResources?securityToken={!securityToken}&action=getRollupObjectFields&core.apexpages.devmode.url=0",
+	                type: 'POST',
+	                dataType: 'JSON',
+	                data:{
+	                	baseObject : $('#TerritoryRollupEditor .rollup-name-table .rollup-object-select').val()
+	                },
+	                success: function (response)
+	                {
+	                	$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select').append($('<option />').attr('value', '--Select a Field--').text('--Select a Field--'));
+	                	$.each(response.data.fieldoptions, function(index, object) {
+	                    	$('<option></option>').attr('value', object.itemValue).text(object.itemLabel).appendTo($('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select'));
+	                    });
+	                    $('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select').val('option:first').next().find('input').val($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select option:selected').text());
+	                    
+		                //Populate Existing Values
+		                if($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select').attr('data-update') == 'true')
+		                {
+		                	$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select').removeAttr('data-update');
+			                if(rollup.ParentField__c != 'null')
+							{
+								$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select').val(rollup.Field__c).change().next().find('input').val($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select option:selected').text());
+	   							$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-parent').attr('data-update', 'true');
+	   						}
+	   						else
+	   						{
+	   							$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select').val(rollup.Field__c).next().find('input').val($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select option:selected').text());
+	   							var aggradio = rollup.AggregateType__c.toUpperCase();
+								$(":radio[value="+aggradio+"]").click();
+	   						}
+	               		}
+	                }
+                });
+			});
+			
+			//initial territory selection
+			$('#TerritoryRollupEditor .rollup-name-table').on('change', '.rollup-territory-select', function ()
+			{
+				//clear fields on previous change
+				$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-parent').empty();
+				$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-parent').next().hide();
+				$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent').empty();
+				$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent').next().hide();
+				
+				//populate territory field
+				$.ajax({
+	                url: "/apex/MATerritoryAJAXResources?securityToken={!securityToken}&action=getRollupObjectFields&core.apexpages.devmode.url=0",
+	                type: 'POST',
+	                dataType: 'JSON',
+	                data:{
+	                	baseObject 	: $('#TerritoryRollupEditor .rollup-name-table .rollup-object-select').val(),
+	                	parentField	: $('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select').val()
+	                },
+	                success: function (response)
+	                {
+	                	if(response.data.current != 'MATerritory__c')
+	                	{
+	                		$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-parent').next().show();
+	                		
+	                		$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-parent').append($('<option />').attr('value', '--Select a Field--').text('--Select a Field--'));
+		                	$.each(response.data.fieldoptions, function(index, object)
+	                    	{
+	                    		$('<option></option>').attr('value', object.itemValue).text(object.itemLabel).appendTo($('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-parent'));
+	                    	});
+	                    	
+		                    $('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-parent').combobox();
+		                    $('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-parent').val('option:first').next().find('input').val($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-parent option:selected').text());
+	                	}
+	                	else
+	                	{
+	                		$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-parent').hide();
+	                		$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-parent').empty();
+	                	}
+	                	
+	                	//handle updating fields on rollup select
+	                	if($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-parent').attr('data-update') == 'true')
+		                {
+		                	$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-parent').removeAttr('data-update');
+			                if(rollup.GrandParentField__c != 'null')
+							{
+								$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-parent').val(rollup.ParentField__c).change().next().find('input').val($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-parent option:selected').text());
+	   							$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-grandparent').attr('data-update', 'true');
+	   						}
+	   						else
+	   						{
+	   							$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-parent').val(rollup.ParentField__c).next().find('input').val($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-parent option:selected').text());
+	   							var aggradio = rollup.AggregateType__c.toUpperCase();
+								$(":radio[value="+aggradio+"]").click();
+	   						}
+	               		}
+	                }
+                });
+			});
+			
+			//2nd teritory selection
+			$('#TerritoryRollupEditor .rollup-name-table').on('change', '.rollup-territory-select-parent', function ()
+			{
+				//hide fields on previous change
+				$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent').empty();
+				$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent').next().hide();
+				
+				//populate 2nd territory options
+				$.ajax({
+	                url: "/apex/MATerritoryAJAXResources?securityToken={!securityToken}&action=getRollupObjectFields&core.apexpages.devmode.url=0",
+	                type: 'POST',
+	                dataType: 'JSON',
+	                data:{
+	                	baseObject 			: $('#TerritoryRollupEditor .rollup-name-table .rollup-object-select').val(),
+	                	parentField			: $('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select').val(),
+	                	grandParentField	: $('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-parent').val()
+	                },
+	                success: function (response)
+	                {
+	                	if(response.data.current != 'MATerritory__c')
+	                	{
+		                	$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent').next().show();
+		                	$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent').append($('<option />').attr('value', '--Select a Field--').text('--Select a Field--'));
+		                	$.each(response.data.fieldoptions, function(index, object) {
+	                    		$('<option></option>').attr('value', object.itemValue).text(object.itemLabel).appendTo($('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent'));
+	                    	});
+		                    $('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent').combobox();
+		                    $('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-grandparent').val('option:first').next().find('input').val($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-grandparent option:selected').text());
+		                }
+	                	else
+	                	{
+	                		$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent').hide();
+	                		$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent').empty();
+	                	}
+	                	
+	                	//handle updating fields on rollup select
+	                	if($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-grandparent').attr('data-update') == 'true')
+		                {
+		                	$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-grandparent').removeAttr('data-update');
+			                if(rollup.GrandParentField__c != 'null')
+							{
+								$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-grandparent').val(rollup.GrandParentField__c).next().find('input').val($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select-grandparent option:selected').text());
+	   							var aggradio = rollup.AggregateType__c.toUpperCase();
+								$(":radio[value="+aggradio+"]").click();
+								$('#TerritoryRollupEditor .rollup-aggregate-table').find('.aggregate-field').attr('data-update', 'true');
+	   						}
+	               		}
+	                }
+                });
+			});
+			
+			//Objects table next button
+			$('#TerritoryRollupEditor .rollup-name-table').on('click', '.rollup-object-next', function ()
+			{
+				$('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field').empty();
+				$.ajax({
+	                url: "/apex/MATerritoryAJAXResources?securityToken={!securityToken}&action=getAggregateFields&core.apexpages.devmode.url=0",
+	                type: 'POST',
+	                dataType: 'JSON',
+	                data:{
+	                	baseObject 	: $('#TerritoryRollupEditor .rollup-name-table .rollup-object-select').val()
+	                },
+	                success: function (response)
+	                {
+	                	$.MAWizard.showStep({ wizard: $('.MAWizard'), step: 1, buttons: ['back', 'next'] });
+	                	
+	                	if(response.data.length != 0)
+	                	{
+		                	$.each(response.data, function(index, object) {
+	                    		$('<option></option>').attr('value', object.itemValue).text(object.itemLabel).appendTo($('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field'));
+	                    	});
+	                    	$('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field').combobox();
+	                    	$('#TerritoryRollupEditor .rollup-aggregate-table').find('.aggregate-field').val('option:first').next().find('input').val($('#TerritoryRollupEditor .rollup-aggregate-table').find('.aggregate-field option:selected').text());
+	                    }
+	                    else
+	                    {
+	                    	$('<option></option>').attr('value', 'none').text('--None--').appendTo($('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field'));
+	                    	$('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field').combobox();
+	                    	$('#TerritoryRollupEditor .rollup-aggregate-table').find('.aggregate-field').val('option:first').next().find('input').val($('#TerritoryRollupEditor .rollup-aggregate-table').find('.aggregate-field option:selected').text());
+	                    }
+	                    
+	                    if($('#TerritoryRollupEditor .rollup-aggregate-table .radio:checked').is('.aggregate-count'))
+	                    {
+		                    $('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field').next().find("input, button").prop("disabled", true);
+							$('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field').next().find("a.ui-button").button("disable");
+						}
+						else
+						{
+							$('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field').next().find("input, button").prop("disabled", false);
+							$('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field').next().find("a.ui-button").button("enable");
+						}
+						
+						//Populate Existing Values
+						if($('#TerritoryRollupEditor .rollup-aggregate-table').find('.aggregate-field').attr('data-update') == 'true')
+		                {
+							var aggField = ''+rollup.AggregateField__c+'~~'+rollup.AggregateFieldType__c.toUpperCase()+'';
+							$('#TerritoryRollupEditor .rollup-aggregate-table').find('.aggregate-field').val(aggField).next().find('input').val($('#TerritoryRollupEditor .rollup-aggregate-table').find('.aggregate-field option:selected').text());
+	                		$('#TerritoryRollupEditor .rollup-aggregate-table').find('.aggregate-field').removeAttr('data-update');
+	                	}
+	                }
+                });
+                
+                
+			});
+			
+			//manage radio options on click in aggregate table
+            $('#TerritoryRollupEditor .rollup-aggregate-table').on('change', '.radio', function ()
+			{
+				if($(this).is('.aggregate-count'))
+				{
+					$('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field').next().find("input, button").prop("disabled", true);
+					$('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field').next().find("a.ui-button").button("disable");
+				}
+				else
+				{
+					$('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field').next().find("input, button").prop("disabled", false);
+					$('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field').next().find("a.ui-button").button("enable");
+				}
+			});
+			
+			//Aggregate table next button
+			$('#TerritoryRollupEditor .rollup-aggregate-table').on('click', '.rollup-aggregate-next', function ()
+			{
+				$('#TerritoryRollupEditor .rollup-aggregate-filters .rollup-filter').empty();
+				$('#TerritoryRollupEditor .rollup-aggregate-filters .rollup-crossfilter').empty();
+				$('#TerritoryRollupEditor .color-row').on('click', '.deletelink', function ()
+				{ 
+					$(this).closest('.color-row').remove();
+				});
+				
+				//get field filters
+				$.ajax({
+	                url: "/apex/MATerritoryAJAXResources?securityToken={!securityToken}&action=getObjectFieldFilters&core.apexpages.devmode.url=0",
+	                type: 'POST',
+	                dataType: 'JSON',
+	                data:{
+	                	baseObject 	: $('#TerritoryRollupEditor .rollup-name-table .rollup-object-select').val()
+	                },
+	                success: function (response)
+	                {
+	                	//show step 3
+	                	$.MAWizard.showStep({ wizard: $('.MAWizard'), step: 2, buttons: ['back', 'next'] });
+	                	
+	                	$('<option></option>').attr('value', 'none').text('--None--').appendTo($('#TerritoryRollupEditor .aggregate-filters-table .rollup-filter'));
+	                	$.each(response.data, function(index, object)
+                    	{
+                    		$('<option></option>').attr('value', object.itemValue).text(object.itemLabel).appendTo($('#TerritoryRollupEditor .aggregate-filters-table .rollup-filter'));
+                    	});
+                    	
+                    	//Populate Existing Values
+	                    if($(".rollup-aggregate-filters .fieldfilters").attr('data-update') == 'true')
+                		{
+                			$(":radio[value=limit-accounts]").click();
+                			$.each(rollupOptions, function (index, options)
+                			{
+                				if(options.Type__c == 'Filter')
+                				{
+	                				var $loader = $('.ajaxload.template').clone().removeClass('template').appendTo($('.fieldfilters > .listbox'))
+				                    $loader.slideDown(
+				                        400,
+				                        function ()
+				                        {
+				                            var $newFilter = $('.filter.template').clone().removeClass('template').attr('data-baseobject', options.BaseObject__c);
+				                            $newFilter.find('.fieldoptions .combobox').append($("<option></option>").attr('value', options.Field__c));
+				                            $newFilter.find('.fieldoptions .combobox').val(options.Field__c);
+				                            $newFilter.find('.parentfieldoptions .combobox').append($("<option></option>").attr('value', options.parentField__c));
+				                            $newFilter.find('.parentfieldoptions .combobox').val(options.parentField__c);
+				                            $newFilter.find('.grandparentfieldoptions .combobox').append($("<option></option>").attr('value', options.grandparentField__c));
+				                            $newFilter.find('.grandparentfieldoptions .combobox').val(options.grandparentField__c);
+				                            
+				                            updateFilter($newFilter, $loader, options.Operator__c, options.Value__c, options.Value2__c);
+				                        }
+				                    );
+				                }	
+                			});
+                			$(".rollup-aggregate-filters .fieldfilters").removeAttr('data-update');
+                		}
+	                }
+                });
+                
+                //manage radio options on click in aggregate table
+                $('#TerritoryRollupEditor .rollup-aggregate-filters').on('change', '.aggregate-radio', function ()
+				{
+					if($(this).is('.aggregate-all'))
+					{
+						$('#TerritoryRollupEditor .rollup-aggregate-filters .aggregate-filters-table').hide(300);
+						$('#TerritoryRollupEditor .rollup-aggregate-filters .aggregate-crossfilters-table').hide(300); 
+					}
+					else
+					{
+						$('#TerritoryRollupEditor .rollup-aggregate-filters .aggregate-filters-table').show(400);
+						$('#TerritoryRollupEditor .rollup-aggregate-filters .aggregate-crossfilters-table').show(400);
+					}
+				});
+				
+                //get cross filters
+                $.ajax({
+	                url: "/apex/MATerritoryAJAXResources?securityToken={!securityToken}&action=getObjectCrossFilters&core.apexpages.devmode.url=0",
+	                type: 'POST',
+	                dataType: 'JSON',
+	                data:{
+	                	baseObject 	: $('#TerritoryRollupEditor .rollup-name-table .rollup-object-select').val(),
+	                	parentField	: $('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select').val()
+	                },
+	                success: function (response)
+	                {
+	                	$('<option></option>').attr('value', 'none').text('--None--').appendTo($('#TerritoryRollupEditor .aggregate-crossfilters-table .rollup-crossfilter'));
+	                	$.each(response.data, function(index, object)
+                    	{
+                    		$('<option></option>').attr('value', object.itemValue).text(object.itemLabel).appendTo($('#TerritoryRollupEditor .aggregate-crossfilters-table .rollup-crossfilter'));
+                    	});
+                    	//Populate Existing Values
+                    	if($(".rollup-aggregate-filters .crossfilters").attr('data-update') == 'true')
+                		{
+                			$(":radio[value=limit-accounts]").click();
+                			$.each(rollupOptions, function (index, crossFilter)
+                			{
+                				if(crossFilter.Type__c == 'Cross Filter')
+                				{
+	                				//add new cross filter
+				                    var $loader = $('.ajaxload.template').clone().removeClass('template').appendTo($('.crossfilters > .listbox'));
+				                    $loader.slideDown(
+				                        200,
+				                        function ()
+				                        {
+				                            var $newCrossFilter = $('.crossfilter.template').clone().removeClass('template').attr('data-baseobject', crossFilter.BaseObject__c).attr('data-index', 'AND');
+				                            $newCrossFilter.find('.fieldlabel .baseobject').text(crossFilter.BaseObject__c);
+				                            $newCrossFilter.find('.fieldoptions .combobox').append($("<option></option>").attr('value', crossFilter.Field__c));
+				                            $newCrossFilter.find('.fieldoptions .combobox').val(crossFilter.Field__c);
+				                            $newCrossFilter.find('.operator .combobox').val(crossFilter.Operator__c);
+				                            $newCrossFilter.find('.crossobjectoptions .combobox').append($("<option></option>").attr('value', crossFilter.CrossObject__c));
+				                            $newCrossFilter.find('.crossobjectoptions .combobox').val(crossFilter.CrossObject__c);
+				                            $newCrossFilter.find('.crossfieldoptions .combobox').append($("<option></option>").attr('value', crossFilter.CrossField__c));
+				                            $newCrossFilter.find('.crossfieldoptions .combobox').val(crossFilter.CrossField__c);
+				                            if(crossFilter.CrossFilterLogic__c != null)
+				                            {
+				                            	$newCrossFilter.find('.crossfilterlogic .crossfilterlogiclink').text('Remove');
+				                            	$newCrossFilter.find('.crossfilterlogic .crosslogic').show();
+				                            	$newCrossFilter.find('.crossfilterlogic .crosslogic').val(crossFilter.CrossFilterLogic__c);
+				                            }
+				                            
+				                            //add subfilters
+				                            $.each(rollupOptions, function (index, filter)
+				                            {
+				                            	if(filter.Type__c == 'Subfilter')
+                								{
+					                                var $subloader = $('.ajaxload.template').clone().removeClass('template').appendTo($newCrossFilter.find('.subfilters'));
+					                                $subloader.slideDown(
+					                                    200,
+					                                    function ()
+					                                    {
+					                                        var $newFilter = $('.filter.template').clone().removeClass('template').attr('data-baseobject', $newCrossFilter.find('.crossobjectoptions .combobox').val());
+					                                        $newFilter.find('.fieldoptions .combobox').append($("<option></option>").attr('value', filter.Field__c));
+					                                        $newFilter.find('.fieldoptions .combobox').val(filter.Field__c);
+					                                        $newFilter.find('.parentfieldoptions .combobox').append($("<option></option>").attr('value', filter.ParentField__c));
+					                                        $newFilter.find('.parentfieldoptions .combobox').val(filter.ParentField__c);
+					                                        $newFilter.find('.grandparentfieldoptions .combobox').append($("<option></option>").attr('value', filter.GrandParentField__c));
+					                                        $newFilter.find('.grandparentfieldoptions .combobox').val(filter.GrandParentField__c);
+					                                        updateFilter($newFilter, $subloader, filter.Operator__c, filter.Value__c, filter.Value2__c);
+					                                    }
+					                                );
+					                            }
+				                            });
+				                    
+				                            updateCrossFilter($newCrossFilter, $loader);
+				                        }
+				                    );
+				                }	
+                			});
+                			$(".rollup-aggregate-filters .crossfilters").removeAttr('data-update');
+                		}
+	                }
+                });
+			});
+			
+			//Aggregate filter next button
+			$('#TerritoryRollupEditor .rollup-aggregate-filters').on('click', '.rollup-aggregate-next', function ()
+			{
+				$.MAWizard.showStep({ wizard: $('.MAWizard'), step: 3, buttons: ['back', 'save'] });
+				
+				//initialize color pickers
+            	jscolor.init();
+			});
+			
+			//back buttons
+			$('#TerritoryRollupEditor').on('click', '.rollup-aggregate-back, .rollup-color-back', function ()
+			{
+				$.MAWizard.showStep({ wizard: $('.MAWizard'), step: $('.MAWizard .steps > div.selected').index() - 1 });
+			});
+			
+			//Save Territory Rollup
+			$('#TerritoryRollupEditor').on('click', '.rollup-save', function ()
+			{
+				var territorySelect = $('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select').val();
+				var territoryParent = $('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-parent').val();
+				var territoryGrand = $('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent').val();
+				var TerritoryField = '';
+				if(territoryParent == null && territoryGrand == null)
+				{
+					TerritoryField = territorySelect;
+				}
+				else if(territoryGrand == null)
+				{
+					TerritoryField = ''+territorySelect+'.'+territoryParent+'';
+				}
+				else
+				{
+					TerritoryField = ''+territorySelect+'.'+territoryParent+'.'+territoryGrand+'';
+				}
+				var ColorRules = [];
+				$.each($('.color-table .color-row'), function () {
+					var color = {};
+	                    color['label'] = $(this).find('.aggregate-label').val();
+	                    color['rangeStart'] = $(this).find('.aggregate-from-range').val();
+	                    color['rangeEnd'] = $(this).find('.aggregate-to-range').val();
+	                    color['color'] = $(this).find('.aggregate-color').val();
+	                    ColorRules.push(color);
+				});
+				
+				//manage proper folderId selection
+				var folderId;
+				var Rollup;
+				if($('.territory-rollup-tree').jstree('get_selected').attr('data-id') == 'Rollups' || $('.territory-rollup-tree').jstree('get_selected').attr('rel') == 'rollup' && $.jstree._reference('.territory-rollup-tree')._get_parent($('.territory-rollup-tree').jstree('get_selected')).attr('data-id') == 'Rollups')
+				{
+					folderId = Rollup;
+				}
+				else if ($('.territory-rollup-tree').jstree('get_selected').attr('rel') == 'rollup')
+				{
+					folderId = $.jstree._reference('.territory-rollup-tree')._get_parent($('.territory-rollup-tree').jstree('get_selected')).attr('data-id');
+				}
+				else
+				{
+					folderId = $('.territory-rollup-tree').jstree('get_selected').attr('data-id');
+				}
+               	$.ajax({
+	                url: "/apex/MATerritoryAJAXResources?securityToken={!securityToken}&action=saveTerritoryRollup&core.apexpages.devmode.url=0",
+	                type: 'POST',
+	                dataType: 'JSON',
+	                data:{
+	                	Object 				: $('#TerritoryRollupEditor .rollup-name-table .rollup-object-select').val(),
+	                	TerritoryField		: TerritoryField,
+	                	Field				: territorySelect,
+	                	FilterLogic			: $('#TerritoryRollupEditor .filterlogiclink').text() == 'Add' ? null : $('#TerritoryRollupEditor .filterlogic').val(), 
+	                	ParentField			: territoryParent,
+	                	GrandParentField	: territoryGrand,
+	                	AggregateField		: $('#TerritoryRollupEditor .rollup-aggregate-table .radio:checked').val() == 'COUNT' ? null : $('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field').val().split('~~')[0],
+	                	AggregateType		: $('#TerritoryRollupEditor .rollup-aggregate-table .radio:checked').val(),
+	                	AggregateFieldType	: $('#TerritoryRollupEditor .rollup-aggregate-table .radio:checked').val() == 'COUNT' ? 'Integer' : $('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field').val().split('~~')[1],
+		                FolderId			: folderId,
+		                RollupName			: $('#TerritoryRollupEditor .rollup-name-table .rollup-name').val(),
+		                ColorRules			: JSON.stringify(ColorRules),
+		                serializedQuery		: JSON.stringify(buildQuery())
+	                },
+	                success: function (response)
+	                {
+	                	if(response.message == 'success')
+	                	{
+		                	$('#TerritoryRollupEditor .rollup-aggregate-filters .deletelink').click();
+		                	$('#TerritoryRollupEditor .rollup-aggregate-table .radio:first').click();
+		                	$('.territory-rollup-tree').jstree('refresh');
+		                	clearRollup ();
+		                }
+		                else
+		                {
+		                	alert('Invalid Query, Please check your filters and filter logic.');
+		                }
+	                }
+                });
+			});
+			
+			//Update Saved Territory Rollup
+			$('#TerritoryRollupEditor').on('click', '.rollup-update', function ()
+			{
+				var territorySelect = $('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select').val();
+				var territoryParent = $('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-parent').val();
+				var territoryGrand = $('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent').val();
+				var TerritoryField = '';
+				if(territoryParent == null && territoryGrand == null)
+				{
+					TerritoryField = territorySelect;
+				}
+				else if(territoryGrand == null)
+				{
+					TerritoryField = ''+territorySelect+'.'+territoryParent+'';
+				}
+				else
+				{
+					TerritoryField = ''+territorySelect+'.'+territoryParent+'.'+territoryGrand+'';
+				}
+				var ColorRules = [];
+				$.each($('.color-table .color-row'), function () {
+					var color = {};
+	                    color['label'] = $(this).find('.aggregate-label').val();
+	                    color['rangeStart'] = $(this).find('.aggregate-from-range').val();
+	                    color['rangeEnd'] = $(this).find('.aggregate-to-range').val();
+	                    color['color'] = $(this).find('.aggregate-color').val();
+	                    ColorRules.push(color);
+				});
+				//get folderID
+				var folderId;
+				var Rollup;
+				if($('.territory-rollup-tree').jstree('get_selected').attr('data-id') == 'Rollups' || $('.territory-rollup-tree').jstree('get_selected').attr('rel') == 'rollup' && $.jstree._reference('.territory-rollup-tree')._get_parent($('.territory-rollup-tree').jstree('get_selected')).attr('data-id') == 'Rollups')
+				{
+					folderId = Rollup;
+				}
+				else if ($('.territory-rollup-tree').jstree('get_selected').attr('rel') == 'rollup')
+				{
+					folderId = $.jstree._reference('.territory-rollup-tree')._get_parent($('.territory-rollup-tree').jstree('get_selected')).attr('data-id');
+				}
+				else
+				{
+					folderId = $('.territory-rollup-tree').jstree('get_selected').attr('data-id');
+				}
+               	$.ajax({
+	                url: "/apex/MATerritoryAJAXResources?securityToken={!securityToken}&action=updateSavedTerritoryRollup&core.apexpages.devmode.url=0",
+	                type: 'POST',
+	                dataType: 'JSON',
+	                data:{
+	                	RollupId			: $('.territory-rollup-tree').jstree('get_selected').attr('data-id'),
+	                	Object 				: $('#TerritoryRollupEditor .rollup-name-table .rollup-object-select').val(),
+	                	TerritoryField		: TerritoryField,
+	                	Field				: territorySelect,
+	                	FilterLogic			: $('#TerritoryRollupEditor .filterlogiclink').text() == 'Add' ? null : $('#TerritoryRollupEditor .filterlogic').val(), 
+	                	ParentField			: territoryParent,
+	                	GrandParentField	: territoryGrand,
+	                	AggregateField		: $('#TerritoryRollupEditor .rollup-aggregate-table .radio:checked').val() == 'COUNT' ? null : $('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field').val().split('~~')[0],
+	                	AggregateType		: $('#TerritoryRollupEditor .rollup-aggregate-table .radio:checked').val(),
+	                	AggregateFieldType	: $('#TerritoryRollupEditor .rollup-aggregate-table .radio:checked').val() == 'COUNT' ? 'Integer' : $('#TerritoryRollupEditor .rollup-aggregate-table .aggregate-field').val().split('~~')[1],
+		                FolderId			: folderId,
+		                RollupName			: $('#TerritoryRollupEditor .rollup-name-table .rollup-name').val(),
+		                ColorRules			: JSON.stringify(ColorRules),
+		                serializedQuery		: JSON.stringify(buildQuery())
+	                },
+	                success: function (response)
+	                {
+	                	if(response.message == 'success')
+	                	{
+		                	$('#TerritoryRollupEditor .rollup-aggregate-filters .deletelink').click();
+		                	$('#TerritoryRollupEditor .rollup-aggregate-table .radio:first').click();
+		                	$('.territory-rollup-tree').jstree('refresh');
+		                	clearRollup ();
+		                }
+		                else
+		                {
+		                	alert('Invalid Query, Please check your filters and filter logic.');
+		                	MALog(response);
+		                }
+	                }
+                });
+			});
+			
+			//Update Saved Territory Rollup
+			$('#TerritoryRollupEditor').on('click', '.rollup-delete', function ()
+			{
+				var rollupName = $('#TerritoryRollupEditor .rollup-name-table .rollup-name').val();
+				var r=confirm("You are about to delete "+rollupName+".\nAre you sure?");
+                if (r==true)
+                {
+                    //Just continue
+                }
+                else
+                {
+                    //Cancel
+                    return;
+                }
+				$.ajax({
+	                url: "/apex/MATerritoryAJAXResources?securityToken={!securityToken}&action=deleteTerritoryRollup&core.apexpages.devmode.url=0",
+	                type: 'POST',
+	                dataType: 'JSON',
+	                data:{
+	                	RollupId	: $('.territory-rollup-tree').jstree('get_selected').attr('data-id')
+	                },
+	                success: function (response)
+	                {
+	                	$('.territory-rollup-tree').jstree('refresh');
+	                	clearRollup ();
+	                }
+                });
+			});
+			
+			//handle adding new filters
+            $('.htab-content-button.add').click(function () {
+            	var baseObject = $('#TerritoryRollupEditor .rollup-name-table .rollup-object-select').val();
+                if ($(this).closest('.htab-content').is('.fieldfilters'))
+                {
+                    var $loader = $('.ajaxload.template').clone().removeClass('template').appendTo($('.fieldfilters > .listbox'))
+                    $loader.slideDown(
+                        200,
+                        function ()
+                        {
+                            var $newFilter = $('.filter.template').clone().removeClass('template').attr('data-baseobject', baseObject);
+                            $newFilter.find('.fieldoptions .combobox').append($("<option></option>").attr('value', 'Name'));
+                            $newFilter.find('.fieldoptions .combobox').val('Name');
+                            
+                            updateFilter($newFilter, $loader);
+                        }
+                    );
+                }
+                else if ($(this).closest('.htab-content').is('.crossfilters'))
+                {
+                    
+                    //make sure we don't already have 2 cross filters
+                    if ($('.crossfilters .listbox > div').length > 1)
+                    {
+                        alert('Only 2 cross filters are allowed.');
+                        return;
+                    }
+                    
+                    var $loader = $('.ajaxload.template').clone().removeClass('template').appendTo($('.crossfilters .listbox'));
+                    $loader.slideDown(
+                        200,
+                        function ()
+                        {
+                            var $newCrossFilter = $('.crossfilter.template').clone().removeClass('template').attr('data-baseobject', baseObject).attr('data-index', 'AND');
+                            $newCrossFilter.find('.fieldlabel .baseobject').text($('#TerritoryRollupEditor .rollup-name-table .ui-combobox:first').find('input').val());
+                            $newCrossFilter.find('.fieldoptions .combobox').append($("<option></option>").attr('value', 'Id'));
+                            $newCrossFilter.find('.fieldoptions .combobox').val('Id');
+                            //$newCrossFilter.find('.crossobjectoptions .combobox').append($("<option></option>").attr('value', query.initialCrossObject));
+                            //$newCrossFilter.find('.crossobjectoptions .combobox').val(query.initialCrossObject);
+                            //$newCrossFilter.find('.crossfieldoptions .combobox').append($("<option></option>").attr('value', query.initialCrossField));
+                            //$newCrossFilter.find('.crossfieldoptions .combobox').val(query.initialCrossField);
+                            
+                            updateCrossFilter($newCrossFilter, $loader);
+                        }
+                    );
+                }
+            });
+			
+			//handle adding a color row
+			$('#TerritoryRollupEditor').on('click', '.add-color-row', function ()
+			{
+				var $Row = $('#Templates .color-row.template').clone().removeClass('template');
+				$Row.appendTo('.color-table');
+				jscolor.init();
+				
+			});
+			
+			//handle deleting a color row
+			$('#TerritoryRollupEditor').on('click', '.color-row .deletelink', function ()
+			{ 
+				$(this).closest('.color-row').remove();
+			});
+			
+			/**************************************
+             *  FILTER HANDLERS
+             **************************************/
+            
+            //filter delete link
+            $('#TerritoryRollupEditor').on('click', '.filter .deletelink', function () 
+            {
+                $(this).closest('.filter').slideUp(
+                    500, 
+                    function () { 
+                        $(this).remove();
+                        refreshIndices();
+                        refreshCrossIndices();
+                    }
+                ); 
+            });
+            
+            
+            $('#removeFiltersLink').click(function ()
+            {
+                $('#queryfilters .filter .deletelink, #queryfilters .crossfilter .deletelink').click();
+            });
+            
+            //handling selecting a new field for a filter
+            $('#TerritoryRollupEditor').on('change', '.filter .fieldoptions .combobox, .filter .parentfieldoptions .combobox, .filter .grandparentfieldoptions .combobox', function ()
+            {
+                updateFilter($(this).closest('.filter'));
+            });
+            
+            //handling selecting a new operator for a filter
+            $('#TerritoryRollupEditor').on('change', '.filter .operator .combobox', function ()
+            {
+                var $updatedFilter = $(this).closest('.filter');
+            
+            	//handle the range operator
+                if ($(this).val() == 'range')
+                {
+                    $updatedFilter.find('.range').show(500);
+                    $updatedFilter.find('.nextlast').hide(500);
+                }
+                else if ($(this).val() == 'next' || $(this).val() == 'last')
+                {
+                    $updatedFilter.find('.range').hide(500);
+                    $updatedFilter.find('.nextlast').show(500);
+                }
+                else
+                {
+                    $updatedFilter.find('.range').hide(500);
+                    $updatedFilter.find('.nextlast').hide(500);
+                }
+                
+                //handle the in and not in operators
+                if ($(this).val() == 'in' || $(this).val() == 'not in')
+                {
+                	$updatedFilter.find('.idfiltervalue').hide();
+                	$updatedFilter.find('.queryfiltervalue').show();
+                }
+                else
+                {
+                	$updatedFilter.find('.queryfiltervalue').hide();
+                	$updatedFilter.find('.idfiltervalue').show();
+                }
+                
+                //the range operator affects validity so revalidate
+                $updatedFilter.find('.value input').change();
+            });
+            
+            //filter logic link
+            $('#TerritoryRollupEditor .filterlogiclink').click(function ()
+            {
+                if ($(this).text() == 'Add')
+                {
+                    var filterArr = [];
+                    $('.fieldfilters .filter').each(function () { filterArr.push($(this).find('.indexlabel').text()); } );
+                    $('.filterlogic').val('(' + filterArr.join(' AND ') + ')').show(500);
+                    $(this).text('Remove');
+                }
+                else
+                {
+                    $('.filterlogic').hide(500);
+                    $(this).text('Add');
+                }
+            });
+            
+            /************************************
+             *  CROSS FILTER HANDLERS
+             ************************************/
+            
+            //handle changing field on a cross filter
+            $('#TerritoryRollupEditor').on('change', '.crossfilter > table .fieldoptions .combobox, .crossfilter .crossobjectoptions .combobox', function ()
+            {
+            	//remove all subfilters if the cross object is changing
+            	if ($(this).is('.crossobjectoptions .combobox')) {
+            		$(this).closest('.crossfilter').find('.subfilters .filter .deletelink').click();
+            	}
+            
+                updateCrossFilter($(this).closest('.crossfilter'));
+            });
+            
+            //handle clicking links on a cross filter
+            $('#TerritoryRollupEditor').on('click', '.crossfilter .crossfilteractions span.link', function ()
+            {
+                if ($(this).text() == 'Show Advanced')
+                {
+                    $(this).closest('.crossfilter').find('.advanced').show('slide');
+                    $(this).text('Hide Advanced');  
+                }
+                else if ($(this).text() == 'Hide Advanced')
+                {
+                    $(this).closest('.crossfilter').find('.advanced').hide('slide');
+                    $(this).text('Show Advanced');  
+                }
+                else if ($(this).text() == 'Delete')
+                {
+                    $(this).closest('.crossfilter').slideUp(
+                    500, 
+                    function () { 
+                        $(this).remove();
+                        refreshIndices();
+						refreshCrossIndices();
+                    }
+                ); 
+                }
+            });
+            
+            //handle subfilter links
+            $('#TerritoryRollupEditor').on('click', '.crossfilter .addfilter span.link', function ()
+            {
+                var $updatedCrossFilter = $(this).closest('.crossfilter');
+            
+                var $loader = $('.ajaxload.template').clone().removeClass('template').appendTo($updatedCrossFilter.find('.subfilters'));
+                $loader.slideDown(
+                    200,
+                    function ()
+                    {
+                        var $newFilter = $('.filter.template').clone().removeClass('template').attr('data-baseobject', $updatedCrossFilter.find('.crossobjectoptions .combobox').val());
+                        updateFilter($newFilter, $loader);
+                    }
+                );
+            });
+            
+            //crossfilter logic link
+            $('#TerritoryRollupEditor').on('click', '.crossfilterlogiclink', function ()
+            {
+                if ($(this).text() == 'Add')
+                {
+                    var crossfilterArr = [];
+                    $(this).closest('.crossfilter').find('.subfilters > .filter').each(function () { crossfilterArr.push($(this).find('.indexlabel').text()); } );
+                    $(this).closest('.crossfilterlogic').find('.crosslogic').val('(' + crossfilterArr.join(' AND ') + ')').show(500);
+                    $(this).text('Remove');
+                }
+                else
+                {
+                    $(this).closest('.crossfilterlogic').find('.crosslogic').hide(500);
+                    $(this).text('Add');
+                }
+            });
+            
+            
+            $('#TerritoryRollupEditor').on('click', '.dateliteralpicker', function () 
+            {
+                //open the date literal autocomplete list when clicking the date literal picker icon
+                $(this).siblings('.datejs').autocomplete("search", "").focus();
+            });
+            
+            /***********************************************************
+			*	Wizard
+			***********************************************************/
+			
+			//init the wizard
+			$('.MAWizard').MAWizard();
+			
+		}); //end onready
+		
+		/*******************
+		* Functions
+		********************/
+		function disableFilter($filter)
+	       {
+	           if ($filter.is('.crossfilter')) {
+	       		$filter.find('.crossfilter-fields td.indexlabel').text('').append($('img.loader.template').clone().show());
+	       	}
+	       	else {
+	           	$filter.find('td.indexlabel').text('').append($('img.loader.template').clone().show());
+	           }
+	           return $filter;
+	       }
+	       function enableFilter($filter)
+	       {
+	           if ($filter.is('.crossfilter')) {
+	       		$filter.find('.crossfilter-fields td.indexlabel').empty().text($filter.attr('data-index'));
+	       	}
+	       	else {
+	           	$filter.find('td.indexlabel').empty().text($filter.attr('data-index'));
+	           }
+	           return $filter;
+	       }
+	       function extractValue1($filter)
+        {
+            switch ($filter.attr('data-basetype'))
+            {
+                case 'STRING':
+                    return $filter.find('.value .STRING > input').val();
+                    break;
+                case 'PICKLIST':
+                    var selectedOptions = [];
+                    $filter.find('.value .PICKLIST select.multiselect').multiselect('widget').find('input[type="checkbox"]:checked').each(function () { selectedOptions.push($(this).attr('value'))});
+                    //$filter.find('.value .PICKLIST select.multiselect > option:checked').each(function () { selectedOptions.push($(this).val()); } );
+                    return selectedOptions.join('~~');
+                    break;
+                case 'BOOLEAN':
+                    return $filter.find('.value .BOOLEAN input:radio:checked').val() == undefined ? 'NULL' : $filter.find('.value .BOOLEAN input:radio:checked').val();
+                    break;
+                case 'DATE':
+                    var stringVal = $filter.find('.value .DATE > input.datejs').val();
+                    
+                    //check if the value is a date literal
+                    for (var i in dateLiterals)
+                    {
+                        //check if the label matches and the value is not blank (blank value denotes a dynamic date literal and cannot be matched directly)
+                        if (dateLiterals[i].label == stringVal && dateLiterals[i].value != 'DYNAMIC')
+                        {
+                            //this is a date literal, so the text itself is our value
+                            return dateLiterals[i].value;
+                        }
+                    }
+                    
+                    //check if the value is a dynamic date literal
+                    try {
+                        var stringParts = stringVal.split(' ');
+                        if (stringParts[0] == 'NEXT' || stringParts[0] == 'LAST') {
+                            if (!isNaN(parseInt(stringParts[1]))) {
+                                if (stringParts.length == 3 && $.inArray(stringParts[2], ['DAYS', 'QUARTERS', 'YEARS']) != -1) {
+                                    return stringParts[0] + '_N_' + stringParts[2] + ':' + parseInt(stringParts[1]); 
+                                }
+                                else if (stringParts.length == 4 && stringParts[2] == 'FISCAL') {
+                                    if (stringParts[3] == 'QUARTERS' || stringParts[3] == 'YEARS') {
+                                        return stringParts[0] + '_N_FISCAL_' + stringParts[3] + ':' + parseInt(stringParts[1]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (err) { }
+                    
+                    //if we made it this far, we aren't dealing with a date literal so parse the date
+                    try
+                    {
+                        if ($filter.attr('data-fieldtype') == 'DATE')
+                        {
+                            return moment(stringVal).format('YYYY-MM-DD');
+                        }
+                        else
+                        {
+                        	return moment(stringVal).utc().format('YYYY-MM-DDTHH:mm:ss\\Z');
+                        }
+                    }
+                    catch (err)
+                    {
+                        return 'NULL';
+                    }
+                    break;
+                case 'ID':
+                	var operator = $filter.find('.operator .combobox').val();
+                	if (operator == 'in' || operator == 'not in')
+                	{
+                		return $filter.find('.value .ID .queryfiltervalue .combobox').val();
+                	}
+                	else
+                	{
+                		return $filter.find('.value .ID .idfiltervalue').val();
+                	}
+                	break;
+                default:
+                    return '';
+            }
+        }
+        function extractValue2($filter)
+        {
+            switch ($filter.attr('data-basetype'))
+            {
+                case 'STRING':
+                    return $filter.find('.value .STRING .range input').val();
+                    break;
+                case 'DATE':
+                    var stringVal = $filter.find('.value .DATE .range input.datejs').val();
+                
+                    //check if the value is a date literal
+                    for (var i in dateLiterals)
+                    {
+                        //check if the label matches and the value is not blank (blank value denotes a dynamic date literal and cannot be matched directly)
+                        if (dateLiterals[i].label == stringVal && dateLiterals[i].value != 'DYNAMIC')
+                        {
+                            //this is a date literal, so the text itself is our value
+                            return dateLiterals[i].value;
+                        }
+                    }
+                    
+                    //check if the value is a dynamic date literal
+                    try {
+                        var stringParts = stringVal.split(' ');
+                        if (stringParts[0] == 'NEXT' || stringParts[0] == 'LAST') {
+                            if (!isNaN(parseInt(stringParts[1]))) {
+                                if (stringParts.length == 3 && $.inArray(stringParts[2], ['DAYS', 'QUARTERS', 'YEARS']) != -1) {
+                                    return stringParts[0] + '_N_' + stringParts[2] + ':' + parseInt(stringParts[1]); 
+                                }
+                                else if (stringParts.length == 4 && stringParts[2] == 'FISCAL') {
+                                    if (stringParts[3] == 'QUARTERS' || stringParts[3] == 'YEARS') {
+                                        return stringParts[0] + '_N_FISCAL_' + stringParts[3] + ':' + parseInt(stringParts[1]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (err) { }
+                    
+                    //if we made it this far, we aren't dealing with a date literal so parse the date
+                    try
+                    {
+                        if ($filter.attr('data-fieldtype') == 'DATE')
+                        {
+                            return moment(stringVal).format('YYYY-MM-DD');
+                        }
+                        else
+                        {
+                        	return moment(stringVal).utc().format('YYYY-MM-DDTHH:mm:ss\\Z');
+                        }
+                    }
+                    catch (err)
+                    {
+                        return 'NULL';
+                    }
+                    break;
+                default:
+                    return '';
+            }
+        }
+	      function valueToDateString(value, fieldType)
+	      {
+	          //check if the value is a date literal
+	          for (var i in dateLiterals)
+	          {
+	              if (dateLiterals[i].value == value && value != 'DYNAMIC')
+	              {
+	                  //this is a date literal, so the text itself is our value
+	                  return dateLiterals[i].label;
+	              }
+	          }
+	          
+	          //check if the value is a dynamic date literal
+	          try {
+	              var stringParts = value.split(':');
+	              if (stringParts.length == 2 && !isNaN(parseInt(stringParts[1]))) {
+	                  var literalParts = stringParts[0].split('_');
+	                  if (literalParts[0] == 'NEXT' || literalParts[0] == 'LAST') {
+	                      if (literalParts[1] == 'N') {
+	                          if (literalParts.length == 3 && $.inArray(literalParts[2], ['DAYS', 'QUARTERS', 'YEARS']) != -1) {
+	                              return literalParts[0] + ' ' + parseInt(stringParts[1]) + ' ' + literalParts[2]; 
+	                          }
+	                          else if (literalParts.length == 4 && literalParts[2] == 'FISCAL') {
+	                              if (literalParts[3] == 'QUARTERS' || literalParts[3] == 'YEARS') {
+	                                  return literalParts[0] + ' ' + parseInt(stringParts[1]) + ' FISCAL ' + literalParts[3];
+	                              }
+	                          }
+	                      }
+	                  }
+	              }
+	          }
+	          catch (err) { }
+	              
+	          //if we made it this far, we aren't dealing with a date literal so parse the date
+	          try
+	          {
+	              if (fieldType == 'DATE')
+	              {
+	                  return Date.parse(value).toString('MM/dd/yyyy');
+	              }
+	              else
+	              {
+	                  return Date.parse(value.replace('T', ' ').replace('Z', '')).toString('MM/dd/yyyy');
+	              }
+	          }
+	          catch (err) {}
+	
+	          return '';
+	      }
+	      
+	      var dateLiterals = [
+	          { value:"YESTERDAY", label:"YESTERDAY" },
+	          { value:"TODAY", label:"TODAY" },
+	          { value:"TOMORROW", label:"TOMORROW" },
+	          { value:"LAST_WEEK", label:"LAST WEEK" },
+	          { value:"THIS_WEEK", label:"THIS WEEK" },
+	          { value:"NEXT_WEEK", label:"NEXT WEEK" },
+	          { value:"LAST_MONTH", label:"LAST MONTH" },
+	          { value:"THIS_MONTH", label:"THIS MONTH" },
+	          { value:"NEXT_MONTH", label:"NEXT MONTH" },
+	          { value:"DYNAMIC", label:"LAST N DAYS" },
+	          { value:"DYNAMIC", label:"NEXT N DAYS" },
+	          { value:"THIS_QUARTER", label:"THIS QUARTER" },
+	          { value:"LAST_QUARTER", label:"LAST QUARTER" },
+	          { value:"NEXT_QUARTER", label:"NEXT QUARTER" },
+	          { value:"DYNAMIC", label:"LAST N QUARTERS" },
+	          { value:"DYNAMIC", label:"NEXT N QUARTERS" },
+	          { value:"THIS_YEAR", label:"THIS YEAR" },
+	          { value:"LAST_YEAR", label:"LAST YEAR" },
+	          { value:"NEXT_YEAR", label:"NEXT YEAR" },
+	          { value:"DYNAMIC", label:"LAST N YEARS" },
+	          { value:"DYNAMIC", label:"NEXT N YEARS" },
+	          { value:"THIS_FISCAL_QUARTER", label:"THIS FISCAL QUARTER" },
+	          { value:"LAST_FISCAL_QUARTER", label:"LAST FISCAL QUARTER" },
+	          { value:"NEXT_FISCAL_QUARTER", label:"NEXT FISCAL QUARTER" },
+	          { value:"DYNAMIC", label:"LAST N FISCAL QUARTERS" },
+	          { value:"DYNAMIC", label:"NEXT N FISCAL QUARTERS" },
+	          { value:"THIS_FISCAL_YEAR", label:"THIS FISCAL YEAR" },
+	          { value:"LAST_FISCAL_YEAR", label:"LAST FISCAL YEAR" },
+	          { value:"NEXT_FISCAL_YEAR", label:"NEXT FISCAL YEAR" },
+	          { value:"DYNAMIC", label:"LAST N FISCAL YEARS" },
+	          { value:"DYNAMIC", label:"NEXT N FISCAL YEARS" }
+	      ];
+	      function buildDatePickers ($elements)
+	      {
+	          $elements
+	              .datepicker({
+	                  showOn: "button",
+	                  buttonImage: "{!URLFOR($Resource.QueryEditor, 'images/icons/16_calendar.png')}",
+	                  buttonImageOnly: true,
+	                  constrainInput: false,
+	                  onSelect: function () {
+	                      //parse this new date
+	                      parseDateInput($(this));
+	                  }
+	              })
+	              .autocomplete({
+	                  minLength: 0,
+	                  source: dateLiterals,
+	                  focus: function (event, ui) {
+	                      return false;
+	                  },
+	                  select: function( event, ui ) {
+	                      parseDateInput($(this).val( ui.item.label ));    
+	                      return false;
+	                  }
+	              })
+	              .blur(function () {
+	                  $(this).val(parseDateInput($(this)));
+	              });
+	      }
+	     function parseDateInput ($dateInput)
+	        {
+	            var stringVal = $dateInput.val();
+	        
+	            //check if the value is a date literal
+	            for (var i in dateLiterals)
+	            {
+	                //check if the label matches and the value is not blank (blank value denotes a dynamic date literal and cannot be matched directly)
+	                if (dateLiterals[i].label == stringVal && dateLiterals[i].value != 'DYNAMIC')
+	                {
+	                    //this is a date literal, so the text itself is our value
+	                    $dateInput.removeClass('invalid').prev().val('');
+	                    return stringVal;
+	                }
+	            }
+	            
+	            //check if the value is a dynamic date literal
+	            try {
+	                var stringParts = stringVal.split(' ');
+	                if (stringParts[0] == 'NEXT' || stringParts[0] == 'LAST') {
+	                    if (!isNaN(parseInt(stringParts[1]))) {
+	                        if (stringParts.length == 3 && $.inArray(stringParts[2], ['DAYS', 'QUARTERS', 'YEARS']) != -1) {
+	                            $dateInput.removeClass('invalid').prev().val('');
+	                            return stringVal;
+	                        }
+	                        else if (stringParts.length == 4 && stringParts[2] == 'FISCAL') {
+	                            if (stringParts[3] == 'QUARTERS' || stringParts[3] == 'YEARS') {
+	                                $dateInput.removeClass('invalid').prev().val('');
+	                                return stringVal;
+	                            }
+	                        }
+	                    }
+	                }
+	            }
+	            catch (err) { }
+	                    
+	            var parsedDate = moment($dateInput.val());
+	            if ($dateInput.val() == '')
+	            {
+	                $dateInput.removeClass('invalid').prev().val('NULL');
+	                return '';
+	            }
+	            else if (!parsedDate.isValid())
+	            {
+	                $dateInput.addClass('invalid').prev().val('NULL');
+	                return $dateInput.val();
+	            }
+	            else
+	            {
+	                if ($dateInput.closest('.filter').attr('data-fieldtype') == 'DATE')
+	                {
+	                    $dateInput.removeClass('invalid').prev().val(
+	                        parsedDate.format('MM/DD/YYYY')
+	                    );
+	                    return parsedDate.format('MM/DD/YYYY');
+	                }
+	                else
+	                {
+	                    $dateInput.removeClass('invalid').prev().val(
+	                        parsedDate.format('MM/DD/YYYY h:mm a')
+	                    );
+	                    return parsedDate.format('MM/DD/YYYY h:mm a');
+	                }
+	            }
+	        }
+	       function refreshIndices()
+	       {
+	           $('.fieldfilters .listbox > .filter').each(function (index, element)
+	           {
+	               $(this).attr('data-index', index + 1).find('.indexlabel').text(index + 1);
+	           });
+	       }
+	       function refreshCrossIndices()
+	       {
+	       	$('.crossfilters .listbox .subfilters:first > .filter').each(function (index, element)
+	           	{
+	               	$(this).attr('data-index', index + 1).find('.indexlabel').text(index + 1);
+	           });
+	           
+	           $('.crossfilters .listbox .subfilters:last > .filter').each(function (index, element)
+	           	{
+	               	$(this).attr('data-index', index + 1).find('.indexlabel').text(index + 1);
+	           });            	
+	       }
+		function updateFilter($updatedFilter, $loaderToReplace, operator, value, value2)
+	       {
+	           disableFilter($updatedFilter);
+	
+	           $.ajax({
+	               url: "/apex/QueryBuilderAPIBeta?securityToken={!securityToken}&action=getFilter&baseObject=::baseObject::&fieldName=::fieldName::&parentFieldName=::parentFieldName::&grandparentFieldName=::grandparentFieldName::&core.apexpages.devmode.url=0"
+	                       .replace('::baseObject::', $updatedFilter.attr('data-baseobject').split('~~')[0])
+	                       .replace('::fieldName::', $updatedFilter.find('.fieldoptions .combobox').val() == null ? '' : $updatedFilter.find('.fieldoptions .combobox').val())
+	                       .replace('::parentFieldName::', $updatedFilter.find('.parentfieldoptions .combobox').val() == null ? '' : $updatedFilter.find('.parentfieldoptions .combobox').val())
+	                       .replace('::grandparentFieldName::', $updatedFilter.find('.grandparentfieldoptions .combobox').val() == null ? '' : $updatedFilter.find('.grandparentfieldoptions .combobox').val()),
+	               type: 'POST',
+	               dataType: 'JSON',
+	               success: function (response)
+	               {
+	                   //update type information
+	                   $updatedFilter.attr('data-basetype', response.baseType).attr('data-fieldtype', response.fieldType);
+	               
+	                   //field options
+	                   var $fieldSelect = $updatedFilter.find('.fieldoptions .combobox').empty();
+	                   for (var i in response.fieldOptions)
+	                   {
+	                       $fieldSelect.append(
+	                           $("<option></option>")
+	                               .attr('value', response.fieldOptions[i].value)
+	                               .text(response.fieldOptions[i].label)
+	                       );
+	                   }
+	                   $fieldSelect.val(response.fieldName);
+	                   $updatedFilter.find('.fieldoptions .ui-combobox > input').val($fieldSelect.find('option:selected').text());
+	               
+	                   //refresh parent field options if there are any
+	                   if (response.parentFieldOptions != null && response.parentFieldOptions.length > 0)
+	                   {
+	                       $parentFieldSelect = $updatedFilter.find('.parentfieldoptions .combobox').empty();
+	                       for (var i in response.parentFieldOptions)
+	                       {
+	                           $parentFieldSelect.append(
+	                               $("<option></option>")
+	                                   .attr('value', response.parentFieldOptions[i].value)
+	                                   .text(response.parentFieldOptions[i].label)
+	                           );
+	                       }
+	                       $parentFieldSelect.val(response.parentFieldName);
+	                       $updatedFilter.find('.parentfieldoptions .ui-combobox > input').val($parentFieldSelect.find('option:selected').text());
+	                       $updatedFilter.find('.parentfieldoptions').show();
+	                   }
+	                   else
+	                   {
+	                       $updatedFilter.find('.parentfieldoptions').hide().find('.combobox').empty().val('');
+	                   }
+	                   
+	                   //refresh grandparent field options if there are any
+	                   if (response.grandparentFieldOptions != null && response.grandparentFieldOptions.length > 0)
+	                   {
+	                       $grandparentFieldSelect = $updatedFilter.find('.grandparentfieldoptions .combobox').empty();
+	                       for (var i in response.grandparentFieldOptions)
+	                       {
+	                           $grandparentFieldSelect.append(
+	                               $("<option></option>")
+	                                   .attr('value', response.grandparentFieldOptions[i].value)
+	                                   .text(response.grandparentFieldOptions[i].label)
+	                           );
+	                       }
+	                       $grandparentFieldSelect.val(response.grandparentFieldName);
+	                       $updatedFilter.find('.grandparentfieldoptions .ui-combobox > input').val($grandparentFieldSelect.find('option:selected').text());
+	                       $updatedFilter.find('.grandparentfieldoptions').show();
+	                   }
+	                   else
+	                   {
+	                       $updatedFilter.find('.grandparentfieldoptions').hide().find('.combobox').empty().val('');
+	                   }
+	               
+	                   //refresh operator options
+	                   $operatorOptions = $updatedFilter.find('.operator .combobox').empty();
+	                   for (var i in response.operatorOptions)
+	                   {
+	                       $operatorOptions.append(
+	                           $("<option></option")
+	                               .attr('value', response.operatorOptions[i])
+	                               .text(response.operatorOptions[i])
+	                       );
+	                   }
+	                   $operatorOptions.combobox();
+	                   $updatedFilter.find('.operator input').val($operatorOptions.find('option:selected').change().text());
+	                   
+	                   //if we were passed an operator, populate
+	                   if (operator)
+	                   {
+	                   	$operatorOptions.val(operator).change().next().find('input').val($operatorOptions.find('option:selected').text());
+	                   }
+	                   
+	                   //change value input to match the new field type
+	                   $updatedFilter.find('.value .STRING input:text').removeAttr('class').val('');
+	                   if (response.baseType == 'STRING')
+	                   {
+	                       $updatedFilter.find('.value .STRING input').addClass(response.fieldType);
+	                   }
+	                   $updatedFilter.find('.value > div').hide().filter('.' + response.baseType).show();
+	                   
+	                   //update value options if this is a type that requires it
+	                   if (response.fieldType == 'PICKLIST' || response.fieldType == 'MULTIPICKLIST')
+	                   {
+	                       var $picklistOptions = $updatedFilter.find('.value .PICKLIST .multiselect').empty();
+	                       for (var i in response.picklistOptions)
+	                       {
+	                           $("<option></option>")
+	                               .attr('value', response.picklistOptions[i].value)
+	                               .text(response.picklistOptions[i].label)
+	                               .appendTo($picklistOptions);
+	                       }
+	                       
+	                       //multiselect widget might not be enabled yet which would throw an error so just catch it and do nothing
+	                       try {
+	                       	$picklistOptions.multiselect('refresh').multiselect('uncheckAll');
+	                       }
+	                       catch (err) { }
+	                   }
+	                   else if (response.fieldType == 'ID')
+	                   {
+	                   	var $cachedQueryOptions = $updatedFilter.find('.value .ID .queryfiltervalue .combobox').empty();
+	                   	for (var i in response.cachedQueryOptions)
+	                   	{
+	                   		$("<option></option>")
+	                               .attr('value', response.cachedQueryOptions[i].value)
+	                               .text(response.cachedQueryOptions[i].label)
+	                               .appendTo($cachedQueryOptions);
+	                   	}
+	                   	$cachedQueryOptions.next().find('input').val($cachedQueryOptions.find('option:selected').text());
+	                   }
+	                   
+	                   enableFilter($updatedFilter);
+	                   
+	                   //if we were passed a loader then replace it with this filter
+	                   if ($loaderToReplace)
+	                   {
+	                       $loaderToReplace.slideUp(
+	                           200,
+	                           function ()
+	                           {
+	                               $(this).replaceWith($updatedFilter);
+	                               $updatedFilter.attr('data-basetype', response.baseType).attr('data-fieldtype', response.fieldType).slideDown(500);
+	                                   
+	                               //assign unique names to the boolean radio buttons
+	                               $updatedFilter.find('.value .BOOLEAN input').attr('name', 'bool_' + globalIndex++);
+	                               
+	                               $updatedFilter.find('.combobox').combobox();
+	                               $updatedFilter.find('.multiselect').multiselect({
+	                                   noneSelectedText: 'Click here to select options',
+	                                   selectedList: 2
+	                               }).multiselectfilter().multiselect('uncheckAll');
+	                               buildDatePickers($updatedFilter.find('input.datejs'));
+	                               
+	                               refreshIndices();
+	                               refreshCrossIndices();
+	                               
+	                               //if we were passed a value then use it to populate the currently displayed value input
+	                               if (value)
+	                               {
+	                                   switch (response.baseType)
+	                                   {
+	                                       case 'STRING':
+	                                           if (value != 'NULL')
+	                                           {
+	                                               $updatedFilter.find('.value > div.STRING > input').val(value);
+	                                           }
+	                                           if (value2 && value2 != 'NULL')
+	                                           {
+	                                               $updatedFilter.find('.value > div.STRING .range input').val(value2);
+	                                           }
+	                                           break;
+	                                       case 'PICKLIST':
+	                                           if (value != '')
+	                                           {
+	                                               var selectedOptions = value.split('~~');
+	                                               for (var s in selectedOptions)
+	                                               {
+	                                                   $updatedFilter.find('.value .PICKLIST .multiselect').multiselect("widget").find('input[value="'+selectedOptions[s]+'"]').click();// option[value='+selectedOptions[s]+']').attr('selected', 'selected');
+	                                               }
+	                                           }
+	                                           break;
+	                                       case 'BOOLEAN':
+	                                           if (value != 'NULL')
+	                                           {
+	                                               $updatedFilter.find('.value > div.BOOLEAN input[value='+value+']').attr('checked', 'checked');
+	                                           }
+	                                           break;
+	                                       case 'DATE':
+	                                           if (value != 'NULL')
+	                                           {
+	                                               $updatedFilter.find('.value > div.DATE > input.datejs').val(valueToDateString(value, $updatedFilter.attr('data-fieldtype')));
+	                                           }
+	                                           if (value2 != 'NULL')
+	                                           {
+	                                               $updatedFilter.find('.value > div.DATE .range > input.datejs').val(valueToDateString(value2, $updatedFilter.attr('data-fieldtype')));
+	                                           }
+	                                           break;
+	                                       case 'ID':
+	                                       	var operator = $updatedFilter.find('.operator .combobox').val();
+	                                       	if (operator == 'in' || operator == 'not in')
+	                                       	{
+	                                       		$updatedFilter.find('.value .ID .queryfiltervalue .combobox').val(value)
+	                                       			.next().find('input').val($updatedFilter.find('.value .ID .queryfiltervalue .combobox option:selected').text());
+	                                       	}
+	                                       	else
+	                                       	{
+	                                       		$updatedFilter.find('.value .ID .idfiltervalue').val(value);
+	                                       	}
+	                                       	$updatedFilter.find('.operator .combobox').change();
+	                                       	break;
+	                                   }
+	                               }
+	                               
+	                               //for some reason, operator changes aren't being caught during the population process for these filters (maybe because they're hidden?).  just refire the change event now
+	                               $operatorOptions.find('option:selected').change();
+	                           }
+	                       );
+	                   }
+	               },
+	               error: function (request, error, exception)
+	               {
+	                   //show error
+	                   $('#TerritoryRollupEditor .buttons .msgs').html('<b>Save Error</b>: Please try again').show();
+	               }
+	           });
+	       }
+	       
+			//clear all values
+			function clearRollup ()
+			{	
+				$('#TerritoryRollupEditor .rollup-aggregate-filters .deletelink').click();
+				$('#TerritoryRollupEditor .rollup-update-save').hide();
+				$('#TerritoryRollupEditor .rollup-save-new').show();
+				$('#TerritoryRollupEditor .rollup-aggregate-table .radio:first').click();
+				$('#TerritoryRollupEditor .deletelink').click();
+				$(":radio[value=all-accounts]").click();
+				if($('#TerritoryRollupEditor .filterlogiclink').text() == 'Remove')
+				{
+					$('#TerritoryRollupEditor .filterlogiclink').click();
+				}
+				$('#TerritoryRollupEditor .add-color-row').click();
+				$.MAWizard.showStep({ wizard: $('.MAWizard'), step: 0, buttons: ['next'] });
+               	$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-name').val('')
+				$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select').empty();
+				$('<option></option>').attr('value', 'none').text('--Select a Field--').appendTo($('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select'));
+				$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select').val('none').next().find('input').val($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-territory-select option:first').text());
+				$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-parent').next().hide();
+				$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent').empty();
+				$('#TerritoryRollupEditor .rollup-name-table .rollup-territory-select-grandparent').next().hide();
+				$('#TerritoryRollupEditor .rollup-name-table').find('.rollup-object-select').val('none').next().find('input').val($('#TerritoryRollupEditor .rollup-name-table').find('.rollup-object-select option:first').text());
+			}
+	       
+	       //Update Cross Filters
+	       function updateCrossFilter($updatedCrossFilter, $loaderToReplace)
+	       {
+	           disableFilter($updatedCrossFilter);
+	               
+	           $.ajax({
+	               url: "/apex/QueryBuilderAPIBeta?securityToken={!securityToken}&action=getCrossFilter&baseObject=::baseObject::&fieldName=::fieldName::&crossObjectName=::crossObjectName::&crossFieldName=::crossFieldName::&core.apexpages.devmode.url=0"
+	                   .replace('::baseObject::', $updatedCrossFilter.attr('data-baseobject'))
+	                   .replace('::fieldName::', $updatedCrossFilter.find('.fieldoptions .combobox').val() == null ? '' : $updatedCrossFilter.find('.fieldoptions .combobox').val())
+	                   .replace('::crossObjectName::', $updatedCrossFilter.find('.crossobjectoptions .combobox').val() == null ? '' : $updatedCrossFilter.find('.crossobjectoptions .combobox').val())
+	                   .replace('::crossFieldName::', $updatedCrossFilter.find('.crossfieldoptions .combobox').val() == null ? '' : $updatedCrossFilter.find('.crossfieldoptions .combobox').val()),
+	               type: 'POST',
+	               dataType: 'JSON',
+	               success: function (response)
+	               {
+	                   //field options
+	                   $newFieldOptions = $updatedCrossFilter.find('.crossfilter-fields .fieldoptions .combobox').empty();
+	                   for (var i in response.fieldOptions)
+	                   {
+	                       $newFieldOptions.append(
+	                           $("<option></option>")
+	                               .attr('value', response.fieldOptions[i].value)
+	                               .text(response.fieldOptions[i].label)
+	                       );
+	                   }
+	                   $newFieldOptions.val(response.fieldName);
+	                   $updatedCrossFilter.find('.crossfilter-fields .fieldoptions .ui-combobox > input').val($newFieldOptions.find('option:selected').text());
+	                   
+	                   //only update operator options if we don't have any because cross filter operator options are not affected by any changes
+	                   $operatorOptions = $updatedCrossFilter.find('.crossfilter-fields .operator .combobox');
+	                   if ($operatorOptions.children().length == 0)
+	                   {
+	                       for (var i in response.operatorOptions)
+	                       {
+	                           $operatorOptions.append(
+	                               $("<option></option")
+	                                   .attr('value', response.operatorOptions[i].value)
+	                                   .text(response.operatorOptions[i].label)
+	                           );
+	                       }
+	                   }
+	                   
+	                   //cross object options
+	                   $crossObjectOptions = $updatedCrossFilter.find('.crossfilter-fields .crossobjectoptions .combobox').empty();
+	                   for (var i in response.crossObjectOptions)
+	                   {
+	                       $crossObjectOptions.append(
+	                           $("<option></option")
+	                               .attr('value', response.crossObjectOptions[i].value)
+	                               .text(response.crossObjectOptions[i].label)
+	                       );
+	                   }
+	                   $crossObjectOptions.val(response.crossObjectName);
+	                   $updatedCrossFilter.find('.crossfilter-fields .crossobjectoptions .ui-combobox > input').val($crossObjectOptions.find('option:selected').text());
+	                                                               
+	                   //need to update cross field options
+	                   $crossFieldOptions = $updatedCrossFilter.find('.crossfilter-fields .crossfieldoptions .combobox').empty();
+	                   for (var i in response.crossFieldOptions)
+	                   {
+	                       $crossFieldOptions.append(
+	                           $("<option></option")
+	                               .attr('value', response.crossFieldOptions[i].value)
+	                               .text(response.crossFieldOptions[i].label)
+	                       );
+	                   }
+	                   $crossFieldOptions.val(response.crossFieldName);
+	                   $updatedCrossFilter.find('.crossfilter-fields .crossfieldoptions .ui-combobox > input')
+	                       .val($crossFieldOptions.find('option:selected').text())
+	                       .removeClass('invalid');
+	                   
+	                   if (response.crossFieldOptions.length == 0)
+	                   {
+	                       $updatedCrossFilter.find('.crossfilter-fields .crossfieldoptions .ui-combobox > input').addClass('invalid');
+	                   }
+	                   
+	                   enableFilter($updatedCrossFilter);
+	                   
+	                   if ($loaderToReplace)
+	                   {
+	                       $loaderToReplace.slideUp(
+	                           200,
+	                           function ()
+	                           {
+	                               jQuery(this).replaceWith($updatedCrossFilter);
+	                               $updatedCrossFilter.slideDown(500);
+	                               
+	                               $updatedCrossFilter.find('.crossfilter-fields .combobox').combobox();
+	                               buildDatePickers($updatedCrossFilter.find('.crossfilter-fields input.datejs'));
+	                           }
+	                       );
+	                   }
+	               },
+	               error: function (request, error, exception)
+	               {
+	                   //show error
+	                   $('#savedqueryeditor .buttons .msgs').html('<b>Save Error</b>: Please try again').show();
+	               }
+	           });
+	       }
+		
+		/******************************
+		* Build Query
+		*********************************/
+		function buildQuery(options)
+        {
+        	//manage proper folderId selection
+			var folderId;
+			var Rollup;
+			if($('.territory-rollup-tree').jstree('get_selected').attr('data-id') == 'Rollups' || $('.territory-rollup-tree').jstree('get_selected').attr('rel') == 'rollup' && $.jstree._reference('.territory-rollup-tree')._get_parent($('.territory-rollup-tree').jstree('get_selected')).attr('data-id') == 'Rollups')
+			{
+				folderId = Rollup;
+			}
+			else if ($('.territory-rollup-tree').jstree('get_selected').attr('rel') == 'rollup')
+			{
+				folderId = $.jstree._reference('.territory-rollup-tree')._get_parent($('.territory-rollup-tree').jstree('get_selected')).attr('data-id');
+			}
+			else
+			{
+				folderId = $('.territory-rollup-tree').jstree('get_selected').attr('data-id');
+			}
+        	var options = options || {};
+            var componentIndex = 0;
+            var queryObj = {
+                name                : $('#TerritoryRollupEditor .rollup-name-table .rollup-name').val(),
+                folderId            : folderId,
+                folderType          : $('.territory-rollup-tree').jstree('get_selected').attr('rel'),
+                filterByOwner       : 'All',
+                baseObject          : $('#TerritoryRollupEditor .rollup-name-table .rollup-object-select').val(),
+                useFilterLogic      : $('#TerritoryRollupEditor .filterlogiclink').text() == 'Add' ? false : true,
+                filterLogicString   : $('#TerritoryRollupEditor .filterlogic').val(),
+                filters             : [],
+                crossFilters        : []
+            };
+            
+            //loop through and add filters
+            $('.fieldfilters .filter').each(function ()
+            {
+                queryObj.filters.push({
+                    index                   : componentIndex++,
+                    baseObject              : $(this).attr('data-baseobject'),
+                    indexLabel              : $(this).find('.indexlabel').text(),
+                    fieldName               : $(this).find('.fieldoptions .combobox').val(),
+                    parentFieldName         : $(this).find('.parentfieldoptions .combobox').val(),
+                    grandparentFieldName    : $(this).find('.grandparentfieldoptions .combobox').val(),
+                    fieldType               : $(this).attr('data-fieldtype'),
+                    operator                : $(this).find('.operator .combobox').val(),
+                    value                   : extractValue1($(this)),
+                    value2                  : extractValue2($(this))
+                });
+            });
+            
+            //loop through and add cross filters
+            $('.crossfilters .crossfilter').each(function ()
+            {
+                var crossFilter = {
+                    index               : componentIndex++,
+                    baseObject          : $(this).attr('data-baseobject'),
+                    indexLabel          : 0,
+                    fieldName           : $(this).find('.fieldoptions .combobox').val(),
+                    crossObjectName     : $(this).find('.crossobjectoptions .combobox').val(),
+                    crossFieldName      : $(this).find('.crossfieldoptions .combobox').val(),
+                    operator            : $(this).find('.operator .combobox').val(),
+                    useCrossFilterLogic	  : $(this).find('.crossfilterlogiclink').text() == 'Add' ? false : true,
+	                crossFilterLogicString   : $(this).find('.crosslogic').val(),
+                    filters             : []
+                };
+                
+                //loop through and add subfilters
+                var subfilterIndex = 1;
+                $(this).find('.subfilters > .filter').each(function ()
+                {
+                    crossFilter.filters.push({
+                        index                   : subfilterIndex++,
+                        baseObject              : $(this).attr('data-baseobject').split('~~')[0],
+                        indexLabel              : $(this).find('.indexlabel').text(),
+                        fieldName               : $(this).find('.fieldoptions .combobox').val(),
+                        parentFieldName         : $(this).find('.parentfieldoptions .combobox').val(),
+                        grandparentFieldName    : $(this).find('.grandparentfieldoptions .combobox').val(),
+                        fieldType               : $(this).attr('data-fieldtype'),
+                        operator                : $(this).find('.operator .combobox').val(),
+                        value                   : extractValue1($(this)),
+                        value2                  : extractValue2($(this))
+                    });
+                });
+
+                queryObj.crossFilters.push(crossFilter);
+            });
+            
+            
+            return queryObj;
+        }
+	</script>
+	
+    
+    <!-- CSS -->
+    <apex:stylesheet value="{!URLFOR($Resource.sma__MapAnything, 'css/style.css')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.sma__MapAnything, 'style.css')}"/>
+    <c:CSSHelperBlue />
+    <style type='text/css'>
+    
+    	/* Temporary fix for header links divider */
+        span.divider {
+        	float: none;
+			display: inline;
+			background: none;
+			margin: 0;
+        }
+        
+        .rollup-button
+        {
+        	position: absolute;
+        	right: 5px;
+        	bottom: 5px;
+        }
+        .rollup-button button {
+        	padding: 6px 10px;
+        	font-size: 12px;
+        	cursor: pointer;
+        }
+        
+        .rollup-aggregate-filters select
+        {
+        	width: 180px;
+        }
+        
+        #tab-filters .htab-content-button.add
+        {
+        	float: right;
+        	display: inline-table;
+        }
+        
+        #tab-filters .htab-content-header
+        {
+        	display: inline-table;
+        }
+        
+        /* Comboboxes */
+        .ui-autocomplete
+        {
+        	max-height: 250px;
+        	overflow: auto;
+        }
+        
+        .ui-combobox
+        {
+        	padding-right: 0 !important;
+        }
+        .ui-combobox input
+        {
+        	background-color: white !important;
+        	background: white !important;
+        	padding-right: 30px !important;
+        	font-weight: bold !important;
+        }
+        .ui-combobox a
+        {
+        	background: transparent !important;
+			border: none !important;
+			position: absolute !important;
+			right: 0 !important;
+        }
+        .ui-combobox a .ui-button-icon-primary
+        {
+        	background: transparent url("/resource/1372710420000/QueryEditor/images/icons/combobox-arrow-16.png") no-repeat center !important;
+        }
+        
+        #TerritoryRollupEditor tr > td.actions > div, #TerritoryRollupEditor tr > td.crossfilteractions > div, #TerritoryRollupEditor .color-row div
+        {
+            display: none;
+        }
+        #TerritoryRollupEditor tr:hover > td.actions > div, #TerritoryRollupEditor tr:hover > td.crossfilteractions > div, #TerritoryRollupEditor .color-row:hover div
+        {
+            display: inline-table;
+            color: blue;
+			cursor: pointer;
+        }
+        
+        #TerritoryRollupEditor .rollup-options .small.link {
+            color: blue;
+			font-size: 80%;
+			font-weight: bold;
+			cursor: pointer;
+        }
+        
+        .rollup-aggregate-filters .htab-content-header
+        {
+        border-bottom: 1px solid silver;
+		width: 100%;
+		margin-bottom: 10px;
+        }
+        
+        #rollup-tree
+        {
+        	width: 250px; 
+        	overflow: auto;
+        }
+        
+        #rollup-tree .territory-rollup-tree
+        {
+        	background: none;
+        }
+        
+    </style>
+    
+    <!-- Header -->
+    <c:MAAdminHeader PageTitle="Territory Rollups"/>
+	
+	<!-- Main Content -->
+	<table style='border-spacing: 0;'>
+    	<tr>
+    	
+	    	<!-- Territory Rollup Tree -->
+	    	<td id='rollup-tree' style='border: 3px solid #BEBEBE;'>
+				<div class='territory-rollup-tree' style='padding: 10px 5px;'></div>
+	    	</td>
+	    	
+	    	<!-- Territory Rollups Editor -->
+	    	<td style='border: 3px solid #BEBEBE; padding: 0;'>
+	    		<div id='TerritoryRollupEditor'>
+	    		
+	    			<!-- Wizard -->
+	    			<div class='MAWizard'>
+	    				
+	    				<!-- Steps -->
+	    				<div class='steps' style='border-bottom: 3px solid #BEBEBE;'>
+	    					<div>Step 1: Basic Info<div class='arrow-right'></div></div>
+	    					<div>Step 2: Aggregate Info<div class='arrow-right'></div></div>
+	    					<div>Step 3: Filters<div class='arrow-right'></div></div>
+	    					<div>Step 4: Colors<div class='arrow-right'></div></div>
+	    				</div>
+	    				
+	    				<!-- Panes -->
+	    				<div class='panes'>
+	    					
+	    					<!-- Basic Info -->
+	    					<div>
+	    						
+	    						<!-- Instructions -->
+	    						<p>Provide the object that you would like aggreagate information on and the field that is used to determine which territory records are in.</p>
+	    					
+	    						<!-- Table -->
+	    						<table class='rollup-table rollup-name-table' style='width: 350px;'>
+			    					<tr>
+			    						<td>
+				    						<div style='padding: 5px; font-weight: bold;'>Name:</div>
+				    						<div style='padding: 5px; font-weight: bold;'>Object:</div>
+				    						<div style='padding: 5px; font-weight: bold;'>Territory:</div>
+				    					</td>
+				    					<td>
+				    						<div><input type="text" class='rollup-name'/></div>
+				    						<div><select class='rollup-combobox rollup-object-select'><option value='none'>--Select an Object--</option></select></div>
+				    						<div><select class='rollup-combobox rollup-territory rollup-territory-select'><option>--Select a Field--</option></select></div>
+				    						<div><select style='display: none;' class='rollup-territory rollup-territory-select-parent'></select></div>
+				    						<div><select  style='display: none;' class='rollup-territory rollup-territory-select-grandparent'></select></div>
+				    						<div class='rollup-button'><button class='rollup-next rollup-object-next' type="button">Next</button></div>
+				    					</td>
+				    				</tr>
+			    				</table>
+	    					</div>
+	    					
+	    					<!-- Aggregate Info -->
+	    					<div>
+	    					
+	    						<!-- Instructions -->
+	    						<p>Select the type of aggregation you would like to perform and the field that the data resides in.</p>
+	    					
+	    						<table class='rollup-table rollup-options rollup-aggregate-table' style='width: 350px;'>
+	    							<tr>
+				    					<td>
+				    						<div><input type="radio" checked="yes" name="aggregate-radio" class="radio aggregate-count" value="COUNT"/> Count</div>
+				    						<div><input type="radio" name="aggregate-radio" class="radio aggregate-sum" value="SUM"/> Sum</div>
+				    						<div><input type="radio" name="aggregate-radio" class="radio aggregate-min" value="MIN"/> Min</div>
+				    						<div><input type="radio" name="aggregate-radio" class="radio aggregate-max" value="MAX"/> Max</div>
+				    						<div><input type="radio" name="aggregate-radio" class="radio aggregate-average" value="AVG"/> Average</div>
+				    					</td>
+				    					<td>
+					    					<div style='padding-top: 10px; font-weight: bold;'>Field to Aggregate</div> 
+					    					<div style='padding-bottom: 25px;'><select disabled="disabled" class='aggregate-field'><option value='none'>--None--</option></select></div>
+					    					<div class='rollup-button'><button class='rollup-aggregate-back' type="button">Back</button><button class='rollup-next rollup-aggregate-next' type="button">Next</button></div>
+				    					</td>
+				    				</tr>
+			    				</table>
+	    					</div>
+	    					
+	    					<!-- Filters -->
+	    					<div>
+	    					
+	    						<!-- Instructions -->
+	    						<p>Add any filters that you would like to use to constrain the data set.</p>
+	    					
+	    						<table id='tab-filters' class='rollup-table rollup-options rollup-aggregate-filters'>
+			                		<tr class='aggregate-filter-options'>
+			    						<td>
+				    						<div><input type="radio" checked="yes" name="filter-radio" class="aggregate-radio aggregate-all" value="all-accounts"/> All records should be included in the calculation</div>
+				    						<div><input type="radio" name="filter-radio" class="aggregate-radio aggregate-limit" value="limit-accounts"/> Only records meeting certain criteria should be included in the calculation </div>
+			    						</td>
+			    					</tr>
+			                		<tr class='aggregate-filters-table' style='display:none;'>
+			                			<td style='vertical-align:top; width: 100%;'>
+						                    <div class='htab-content-wrapper'>
+						                    
+							                    <!-- Field Filters -->
+							                    <div class='htab-content fieldfilters' data-tab='fieldfilters'>
+							                        <div class='htab-content-header'><b>Field Filters</b>
+							                        	<img class='field-add htab-content-button add' src="{!URLFOR($Resource.QueryEditor, 'images/icons/badge-circle-plus-16.png')}" />
+							                        </div>
+							                        
+							                        
+							                        <div class='section-body listbox'>
+							                        </div>
+							                        
+							                        <div class='section-footer'>
+							                            <div style='margin: 10px 30px 0 10px; padding: 5px; border-top: 1px solid silver; border-bottom: 1px solid silver;'>
+							                                <b>Filter Logic </b> 
+							                                <input type='text' class='filterlogic' style='display: none;' /> 
+							                                <span class='filterlogiclink small link'>Add</span>
+							                            </div>
+							                        </div>
+							                    </div><br></br>
+							                    
+							                    <!-- Cross Filters -->
+							                    <div class='htab-content crossfilters' data-tab='crossfilters' >
+							                        <div class='htab-content-header'><b>Cross Object Filters</b>
+							                        	<img class='cross-add htab-content-button add' src="{!URLFOR($Resource.QueryEditor, 'images/icons/badge-circle-plus-16.png')}" />
+							                        </div>
+							                        
+							                        <div class='section-body listbox'>
+							                        </div>
+							                    </div>
+							                    
+							                    <!-- Query Filters -->
+							                    <div class='htab-content queryfilters' data-tab='queryfilters' style='display: none;'>
+							                    	<div class='htab-content-header'>Query Filters</div>
+							                    </div>
+							                    
+						            		</div>
+						    			</td>
+						    		</tr>
+						    		<tr>
+						    			<td><div class='rollup-button'><button class='rollup-aggregate-back' type="button">Back</button><button class='rollup-next rollup-aggregate-next' type="button">Next</button></div></td>
+						    		</tr>
+						    	</table>
+	    					</div>
+	    					
+	    					<!-- Colors -->
+	    					<div>
+	    					
+	    						<!-- Instructions -->
+	    						<p>Add as many legend rows as you would like.  These values will be used to shade your teritories during reporting.</p>
+	    					
+	    						<table class='color-table'>
+			    					<tr>
+			    						<th>Label</th>
+			    						<th>Range</th>
+			    						<th></th>
+			    						<th>Color</th>
+			    					</tr>
+			    					<tr class='color-row'>
+			    						<td><input type="text" class='aggregate-label'/></td>
+			    						<td><input type="text" class='aggregate-from-range'/> - </td>
+			    						<td><input type="text" class='aggregate-to-range'/></td>
+			    						<td><input type="text" class='color aggregate-color' value='#00FF00' /></td>
+			    						<td style='width: 50px' ><div><span class='link deletelink'>Delete</span></div></td>
+			    					</tr>
+			    					<tfoot>
+			    					<tr>
+			    						<td></td>
+			    						<td></td>
+			    						<td></td>
+			    						<td><button class='add-color-row' type="button">Add</button></td>
+			    					</tr>
+			    					<tr class='rollup-save-new'>
+				    					<td></td>
+				    					<td></td>
+				    					<td></td>
+				    					<td style='padding-top: 10px;' class='rollup-button'><button class='rollup-color-back' type="button">Back</button><button class='rollup-save' type="button">Save</button></td>
+			    					</tr>
+			    					<tr class='rollup-update-save' style='display:none;'>
+				    					<td></td>
+				    					<td></td>
+				    					<td></td>
+				    					<td style='padding-top: 10px;' class='rollup-button'><button class='rollup-color-back' type="button">Back</button><button class='rollup-update' type="button">Update</button><button class='rollup-delete' type="button">Delete</button></td>
+			    					</tr>
+			    					</tfoot>
+			    				</table>
+	    					</div>
+	    					
+	    				</div><!-- Panes -->
+	    				
+	    				<!-- Buttons -->
+	    				<div class='buttons' style='display: none;'>
+	    				
+	    					<button data-button='back'>Back</button>
+	    					<button data-button='next'>Next</button>
+	    					<button data-button='save'>Save</button>
+	    				
+	    				</div>
+	    				
+	    			</div><!-- Wizard -->
+	    			    			
+	    		</div>
+	    	</td>
+	    	
+	    </tr>
+    </table>
+    
+    
+    <!-- Popups -->
+    <div id='Popups' style='display: none;'>
+    
+    </div>
+    
+    <!-- Templates -->
+    <div id='Templates' style='display: none;'>
+    
+	    <!-- Color Row Template -->
+	    <table>
+		    <tr class='color-row template'>
+				<td><input type="text" class='aggregate-label'/></td>
+				<td><input type="text" class='aggregate-from-range'/> - </td>
+				<td><input type="text" class='aggregate-to-range'/></td>
+				<td><input type="text" class='color aggregate-color' value='#00FF00' /></td>
+				<td style='width: 50px'><div><span class='link deletelink'>Delete</span></div></td>
+			</tr>
+		</table>
+		
+		 <!-- ajax load template -->
+	        <div class="ajaxload template" style="display: none;">
+	            <table>
+	                <tr>
+	                    <td colspan="5"><img src="{!URLFOR($Resource.QueryEditor, 'images/icons/ajax-loader.gif')}" /></td>
+	                </tr>
+	            </table>
+	        </div>
+		
+		<!-- filter template -->
+	        <div class="filter template" style="display: none;">
+	            <table>
+	                <tr>            
+	                    <!-- Filter Index -->
+	                    <td class='indexlabel'></td>
+	                
+	                    <!-- Field Selector -->
+	                    <td class="fieldlabel">
+	                    
+	                        <!-- Selector for Field filters -->
+	                        <div class='fieldoptions'>
+	                            <select class="combobox"></select>
+	                        </div>
+	                        
+	                        <div class='parentfieldoptions' style='display: none;'>
+	                            <select class="combobox"></select>
+	                        </div>
+	                        
+	                        <div class='grandparentfieldoptions' style='display: none;'>
+	                            <select class="combobox"></select>
+	                        </div>
+	                        
+	                    </td>
+	                    
+	                    <!-- Operator Selector -->
+	                    <td class="operator">
+	                        <select class="combobox"></select>                              
+	                    </td>
+	            
+	                    <!-- Value Input -->
+	                    <td class="value">
+	                        <!-- render a text box for STRING filters -->
+	                        <div class='STRING' style='display: none;'>
+	                            <input type='text'/>
+	                            
+	                            <div class='range' style='display: none;'>
+	                                <span>to</span> 
+	                                <input type='text'/>
+	                            </div>
+	                        </div>
+	                        
+	                        <!-- render a checkbox list for PICKLIST filters -->
+	                        <div class='PICKLIST' style='display: none;'>
+	                            <select class='multiselect' multiple='multiple' style='display: none;'></select>
+	                        </div>
+	                        
+	                        <!-- render a radio list for BOOLEAN filters -->
+	                        <div class='BOOLEAN' style='display: none;'>
+	                            <input type='radio' value="TRUE" /> True
+	                            <input type='radio' value="FALSE" /> False
+	                        </div>
+	                        
+	                        <!-- render a special text box that uses date.js for date parsing for DATE filters -->
+	                        <div class='DATE' style='display: none;'>
+	                            <input type='text' class='datejs startdate' data-type="DATE"/>
+	                            <img src="{!URLFOR($Resource.QueryEditor, 'images/icons/16_lookup.png')}" class="dateliteralpicker" />
+	                            
+	                            <div class='range' style='display: none;'>
+	                                <span>to</span> 
+	                                <input type='text' class='datejs enddate' data-type="DATE"/>
+	                                <img src="{!URLFOR($Resource.QueryEditor, 'images/icons/16_lookup.png')}" class="dateliteralpicker" />
+	                            </div>
+	                            <div class='nextlast' style='display: none;'>
+	                            	<select class='n-type'>
+	                            		<option value='DAYS'>Days</option>
+	                            		<option value='QUARTERS'>Quarters</option>
+	                            		<option value='YEARS'>Years</option>
+	                            		<option value='FISCAL_QUARTERS'>Fiscal Quarters</option>
+	                            		<option value='FISCAL_YEARS'>Fiscal Years</option>
+	                            	</select>
+	                            </div>
+	                        </div>
+	                        
+	                        <!-- render a picklist that will contain cached queries that match the object type of the field that was selected -->
+	                        <div class='ID' style='display: none;'>
+	                        	<input type='text' class='idfiltervalue' />
+	                        	
+	                        	<span class='queryfiltervalue' style='display: none;'>
+	                        		<select class='combobox' />
+	                        	</span>
+	                        </div>
+	                    </td>
+	            
+	                    <!-- Action Links -->
+	                    <td class="actions" style='width: 50px;'>
+	                        <div>
+	                            <span class='link deletelink'>Delete</span> 
+	                        </div>
+	                    </td>
+	                </tr>
+	            </table>
+	        </div>
+	        
+	        <!-- cross filter template -->
+	        <div class='crossfilter template' style='display: none;'>
+	            <table class='crossfilter-fields'>
+	                <tr>
+	                                
+	                    <!-- Filter Index -->
+	                    <td class='indexlabel'>AND</td>
+	                
+	                    <!-- Field Selector -->
+	                    <td class="fieldlabel">
+	                        <!-- Selector for Cross Filters -->
+	                        <table>
+	                            <tr>
+	                                <td>
+	                                    <!-- Display Base Object -->
+	                                    <span class='baseobject'></span>
+	                                </td>
+	                                <td>
+	                                    <span class="advanced" style="font-weight: bold; font-size: 18px; display: none;">.</span>
+	                                </td>
+	                                <td>
+	                                    <!-- Base object field selection for advanced queries -->
+	                                    <div class="advanced fieldoptions" style='display: none;'>
+	                                        <select class='combobox'></select>
+	                                    </div>
+	                                </td>
+	                            </tr>
+	                        </table>
+	                    </td>
+	                    
+	                    <!-- Operator Selector -->
+	                    <td class="operator">
+	                        <select class='combobox'>
+	                        	<option value='with'>with</option>
+	                        	<option value='without'>without</option>
+	                        </select>                              
+	                    </td>
+	            
+	                    <!-- Value Input -->
+	                    <td class="value">
+	            
+	                        <!-- render a select list of child objects for CROSS filters -->
+	                        <table>
+	                            <tr>
+	                                <td>
+	                                    <div class='crossobjectoptions'>
+	                                        <select class='combobox'></select>
+	                                    </div>
+	                                </td>
+	                                <td>
+	                                    <span class='advanced' style="font-weight: bold; font-size: 18px; display: none;">.</span>
+	                                </td>
+	                                <td>
+	                                    <!-- select list of field options for the selected child object (this is for advanced queries) -->
+	                                    <div class='advanced crossfieldoptions' style='display: none;'>
+	                                        <select class='combobox'></select>
+	                                    </div>
+	                                </td>
+	                            </tr>
+	                        </table>
+	                    </td>
+	                 
+	                    <!-- Action Links -->
+	                    <td class="crossfilteractions" style='width: 50px;'>
+	                        <div>
+	                            <!-- <span class='link'>Show Advanced</span> |  --><span class='link deletelink'>Delete</span>
+	                        </div>
+	                    </td>
+	                </tr>
+	            </table>
+	            
+	            <div style='padding-left: 30px;'>
+	                <div class='subfilters'></div>
+	                <div class='addfilter'><span class='link'>Add filter</span></div>
+	            </div>
+	            <div class='crossfilterlogic'>
+					<div style='margin: 10px 30px 0 10px; padding: 5px; border-top: 1px solid silver; border-bottom: 1px solid silver;'>
+						<b>Filter Logic</b> 
+						<input type='text' class='crosslogic' style='display: none;' /> 
+						<span class='crossfilterlogiclink small link'>Add</span>
+					</div>
+				</div>
+	        </div>
+	    
+    </div>
+    
+    
+</apex:page>

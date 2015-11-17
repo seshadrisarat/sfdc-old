@@ -1,0 +1,368 @@
+<apex:page standardController="Lead" extensions="DSE.DS_LeadConvertControllerClass" id="leadConvertPage" tabStyle="Lead">
+    <apex:sectionHeader title="Convert Lead" subtitle="{!lead.Name}" help="/help/doc/user_ed.jsp?loc=help&target=leads_convert.htm&section=Leads">
+    Leads can be converted to accounts, contacts, opportunities, and follow-up tasks.<br/>
+    You should only convert a lead once you have identified it as qualified.<br/>
+    After this lead has been converted, it can no longer be viewed or edited as a lead, but can be viewed in lead reports.   
+    </apex:sectionHeader>
+    
+    <!-- // TODO: Translation -->
+    
+    <apex:form id="leadConvertForm">
+        <apex:actionFunction name="jsChangeAccount" action="{!changeAccount}" reRender="accountSection,contactSection,leadSection"/> 
+        <script language="javascript">
+            var prevSelected = null;
+            var remDate = document.getElementById('ReminderDateTime_fu');
+            remDate.value = "{!JSENCODE(reminderDate)}";
+        </script>
+        <br/>
+        <apex:pageBlock id="leadBlock">
+             <center>
+                <apex:actionStatus id="BtnStatus">        
+                    <apex:facet name="start"><apex:image value="/img/loading.gif" title="Processing..."/></apex:facet>
+                    <!--<apex:facet name="stop"></apex:facet>-->
+                </apex:actionStatus>
+            </center>       
+            <apex:pageBlockButtons >
+                <apex:commandButton id="Convert" onclick="fillData()" value="Convert" action="{!convert}" reRender="leadBlock" status="BtnStatus" />
+                <apex:commandButton id="Cancel" value="Cancel" action="{!cancel}"/>
+            </apex:pageBlockButtons>
+            
+            <!-- This Component is used to display the Error Messages to user in the runtime  -->
+    <apex:pageMessages />    
+    <!-- DONE REWRITTEN 
+    <span id="accountScoutPageMessageBlock" style="display: none;">
+        <span id="accountScoutPageMessageBlockContainer">
+            <div class="message errorM3">
+            <table cellspacing="0" cellpadding="0" border="0" style="padding: 0px; margin: 0px;" class="messageTable">
+                <tbody><tr valign="top">
+                    <td>
+                        <img title="ERROR" class="msgIcon" src="/s.gif" alt="ERROR"/>
+                    </td>
+                    <td class="messageCell">
+                        <div class="messageText" id="messageTextContainer">
+                            <div id="error1" style="display: none;"><span style="color: rgb(204, 0, 0);" id="accountError">
+                            <h4>Error:</h4></span>Account Already Exists : <b><a href="/{!errorId}" target="_top">{!errorMessage}</a></b><br/></div>
+                        </div>
+                    </td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+        </span>
+    </span>
+    <script type="text/javascript">
+        var error = "{!errorCodeType}";
+        if(error != ''){
+            document.getElementById('accountScoutPageMessageBlock').style.display = '';
+            document.getElementById('error' + error).style.display = '';
+        }
+    </script>  
+    -->              
+            <!-- Start convert lead section -->
+            <apex:pageBlockSection id="ConvertLeadSection" title="Convert Lead" collapsible="false" columns="1" >   
+                <apex:pageBlockSectionItem id="recordOwnerSecItem">
+                    <apex:outputLabel value="Record Owner"/>
+                    <apex:inputField value="{!aOwner.OwnerId}" />
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem id="sendEmailSecItem">               
+                    <apex:outputLabel value="Send Email to the Owner"/>
+                    <apex:inputCheckbox value="{!email}"/>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem id="opportunitySecItem">               
+                    <apex:outputLabel value="Opportunity Name"/>
+                    <apex:outputPanel layout="block" styleClass="requiredInput">
+                        <apex:outputPanel styleClass="requiredBlock"/>
+                        <apex:inputText id="txtOppName" value="{!oppName}" /><br/>  
+                        <!-- TODO: Translations -->                 
+                        <apex:inputCheckbox id="chkNoOpp" value="{!dontCreateOpportunity}" rendered="{!showCreateOpportunity}" disabled="{!NOT(enableCreateOpportunity)}" onclick="noOpp(this);" />
+					    <apex:outputLabel value="{!$Label.dse__DS_Message_DoNotCreateNewOppConversion}"/>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem id="convertedStatusSecItem">               
+                    <apex:outputLabel value="Converted Status"/>
+                    <apex:outputPanel >
+                        <apex:outputPanel layout="block" styleClass="requiredInput">
+                            <apex:outputPanel styleClass="requiredBlock"/>
+                            <apex:selectList id="selectedstatusid" value="{!selectedStatus}" size="1">
+                                <apex:selectOptions value="{!leadStatus}"/>                           
+                            </apex:selectList>
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+            </apex:pageBlockSection>
+            <!-- End convert lead section -->
+            
+            <!-- Start Account Detail section -->
+            <apex:pageBlockSection id="accountSection" title="Account Information" collapsible="true" columns="1">
+                <!-- Master Bean only -->
+                <!--  DONE REWRITTEN
+                <apex:outputPanel rendered="{!onlyMasterBeanPresent}">                    
+                    <apex:pageBlockTable width="100%" value="{!mbean}" var="mb">
+                                            
+                        <apex:column headerValue="Organization Name">
+                            <apex:outputField value="{!mb.DS_Company__c}"/>
+                        </apex:column>
+                        
+                        <apex:column headerValue="Legal Form">
+                            <apex:outputField value="{!mb.DS_Legal_Form__c}"/>
+                        </apex:column>
+                        
+                        <apex:column headerValue="Billing Street">
+                            <apex:outputField value="{!mb.DS_Billing_Street__c}"/>
+                        </apex:column>
+                        
+                        <apex:column headerValue="Billing City">
+                            <apex:outputField value="{!mb.DS_Billing_City__c}"/>
+                        </apex:column>
+                        
+                        <apex:column headerValue="Billing State">
+                            <apex:outputField value="{!mb.DS_Billing_State__c}"/>
+                        </apex:column>
+                        
+                        <apex:column headerValue="Billing Postal Code">
+                            <apex:outputField value="{!mb.DS_Billing_Postal_Code__c}"/>
+                        </apex:column>
+                        
+                        <apex:column headerValue="Billing Country">
+                            <apex:outputField value="{!mb.DS_Billing_Country__c}"/>
+                        </apex:column>
+                         
+                    </apex:pageBlockTable>
+                    <apex:commandButton id="Remove" value="Remove" action="{!removeMasterBean}"/>
+                </apex:outputPanel>
+                 -->
+                <!-- Account -->
+                
+                <apex:outputPanel id="AccountCreationPanel" rendered="true">
+                    <apex:selectRadio id="AccountCreationRadio" layout="pageDirection" value="{!createNewAccount}">
+                        <apex:selectOption itemValue="true" itemLabel="Create New Account" itemDisabled="{!AND(accountPresent,NOT(allowCreateDuplicateAccount))}"/>
+                        <apex:selectOption itemValue="false" itemLabel="Attach to Existing"/>
+                    </apex:selectRadio>
+                </apex:outputPanel>
+                                
+                <apex:outputPanel id="AccountPanel" rendered="true">
+                    
+                    <apex:pageBlockTable id="AccountTable" width="100%" value="{!acct}" var="act">
+                                            
+                        <apex:column headerValue="Name">
+                            <!-- Use {!led} variable instead of {!lead} variable to allow changes from Controller -->
+                            <apex:inputField id="Account" value="{!led.DSE__DS_Account__c}" onchange="jsChangeAccount()"/>
+                        </apex:column>
+                        
+	                    <apex:repeat value="{!$ObjectType.Account.FieldSets.DSE__DS_LeadConvertFields_Account}" var="f">
+	                        <apex:column headerValue="{!f.label}">
+	                            <apex:outputField value="{!acct[f]}"/>
+	                        </apex:column>
+						</apex:repeat>
+						
+					</apex:pageBlockTable>
+                     
+                </apex:outputPanel>
+                
+                
+            </apex:pageBlockSection>            
+            <!-- End Account Detail section -->
+            
+            <!-- Start Contact List section -->
+            <apex:pageBlockSection id="contactSection" title="Related Contacts" collapsible="true" columns="1">
+                
+                <apex:outputPanel id="ContactCreationPanel" rendered="true">
+                    <apex:selectRadio id="ContactCreationRadio" layout="pageDirection" value="{!createNewContact}">
+                        <apex:selectOption itemValue="true" itemLabel="Create New Contact" itemDisabled="{!AND(contactPresent,NOT(allowCreateDuplicateContact))}" />
+                        <apex:selectOption itemValue="false" itemLabel="Attach to Existing"/>
+                    </apex:selectRadio>
+                </apex:outputPanel>
+                
+                <apex:outputPanel id="contactPanel" rendered="{!contactPresent}">
+                    
+                    <apex:variable var="num"  value="{!VALUE('0')}"/>
+                    
+                    <apex:pageBlockTable id="contactTable" width="100%" value="{!cList}" var="cont">
+                        
+                        
+                        <apex:column headerValue="">                        
+                        <apex:inputCheckbox id="contIndexId" value="{!cont.checked}" onclick="uncheckOthers(this)"/>
+                        <script language="javascript">
+                        var checkboxEle = document.getElementById("leadConvertPage:leadConvertForm:leadBlock:contactSection:contactTable:" + {!num} + ":contIndexId");
+                                            
+                        if("{!cont.checked}" == "true"){
+                            prevSelected = checkboxEle;
+                        }
+                        </script>
+                        </apex:column>
+                         
+                        
+                        <!-- DONE REWRITTEN FIELD SETS
+                        <apex:column headerValue="Name">
+                            <apex:outputText value="{!cont.con.FirstName} {!cont.con.LastName}"/>
+                        </apex:column>
+                        
+                        <apex:column headerValue="Phone">
+                            <apex:outputField value="{!cont.con.Phone}"/>
+                        </apex:column>
+                        
+                        <apex:column headerValue="Mobile">
+                            <apex:outputField value="{!cont.con.MobilePhone}"/>
+                        </apex:column>
+                                                
+                        <apex:column headerValue="Email">
+                            <apex:outputField value="{!cont.con.Email}"/>                           
+                        </apex:column>  
+                        
+                        
+                        <apex:column headerValue="Created Date">
+                            <apex:outputField value="{!cont.con.CreatedDate}"/>                         
+                        </apex:column>  
+                        
+                        <apex:column headerValue="Modified Date">
+                            <apex:outputField value="{!cont.con.LastModifiedDate}"/>
+                            <apex:variable var="num"  value="{!num + 1}"/>
+                        </apex:column>  
+                         -->
+                       
+                      
+	                    <apex:repeat value="{!$ObjectType.Contact.FieldSets.DSE__DS_LeadConvertFields_Contact}" var="f">
+	                        <apex:column headerValue="{!f.label}">
+	                            <apex:outputField value="{!cont.con[f]}"/>
+	                        </apex:column>
+						</apex:repeat>
+						<apex:variable var="num"  value="{!num + 1}"/>
+                        
+                    </apex:pageBlockTable>
+                    
+                </apex:outputPanel>                        
+            
+            </apex:pageBlockSection>
+            <!-- End Contact List section -->
+            
+            <!-- Start Leads related to account section --> 
+            <apex:pageBlockSection id="leadSection" title="Related Leads" collapsible="true" columns="1" >
+                <apex:outputPanel id="leadPanel" rendered="{!leadPresent}">
+                    <apex:pageBlockTable width="100%" value="{!leads}" var="ld">
+                                     
+	                    <apex:repeat value="{!$ObjectType.Lead.FieldSets.DSE__DS_LeadConvertFields_Lead}" var="f">
+	                        <apex:column headerValue="{!f.label}">
+	                            <apex:outputField value="{!ld[f]}"/>
+	                        </apex:column>
+						</apex:repeat>						   
+                        
+                    </apex:pageBlockTable>
+                </apex:outputPanel>
+            </apex:pageBlockSection>
+            <!-- End Leads related to account section -->
+            
+            <!-- Start Task Information section -->
+            <apex:pageBlockSection id="taskSection" title="Task Information" collapsible="false">
+                <apex:pageBlockSectionItem id="taskSubjectSecItem">
+                    <apex:outputLabel value="Subject"/>
+                    <apex:outputPanel layout="block">
+                        <apex:outputPanel />
+                        <apex:inputField value="{!tsk.Subject}" required="false"/>  
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem id="taskStatusSecItem">
+                    <apex:outputLabel value="Status"/>
+                    <apex:outputPanel layout="block" styleClass="requiredInput">
+                        <apex:outputPanel styleClass="requiredBlock"/>
+                        <apex:inputField value="{!tsk.Status}" required="false"/>   
+                    </apex:outputPanel> 
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem id="taskActivityDateSecItem">
+                    <apex:outputLabel value="Due Date"/>
+                    <apex:inputField value="{!tsk.ActivityDate}"/>  
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem />
+                
+                <apex:pageBlockSectionItem id="taskPrioritySecItem">
+                    <apex:outputLabel value="Priority"/>
+                    <apex:outputPanel layout="block" styleClass="requiredInput">
+                        <apex:outputPanel styleClass="requiredBlock"/>
+                        <apex:inputField value="{!tsk.Priority}" required="false"/> 
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            <!-- End Task Information section -->
+            
+            <!-- Start Description Information section -->
+            <apex:pageBlockSection id="descriptionSection" title="Description Information" collapsible="false" columns="1">
+                <apex:pageBlockSectionItem id="taskDescriptionSecItem">
+                    <apex:outputLabel value="Comments"/>
+                    <apex:inputTextArea value="{!tsk.Description}" rows="6" cols="75"/> 
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem id="taskEmailNotificationSecItem">
+                <apex:outputPanel >
+                <apex:inputCheckbox value="{!taskNotification}"/>
+                <apex:outputText style="valign:top;" value="Send Notification Email"/>
+                </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            <!-- End Description Information section -->
+            
+            <!-- Start Reminder section -->
+            <apex:pageBlockSection id="reminderSection" title="Reminder" collapsible="false" columns="1">
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Reminder"/>
+                    <apex:outputPanel >
+                        <apex:inputCheckbox value="{!reminderRequired}" />
+                        <input type="text" value="{!reminderDate}" id="ReminderDateTime_fu" onfocus="DatePicker.pickDate(false, 'ReminderDateTime_fu', false);putData(this);" size="10"  /> 
+                        &nbsp;
+                        <apex:selectList id="selectedtimeid" value="{!reminderTime}" size="1">
+                            <apex:selectOptions value="{!timeSlots}"/>                            
+                        </apex:selectList>
+                        
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            <!-- End Reminder section -->
+        </apex:pageBlock>
+    
+    <apex:inputHidden id="reminderdatehide" value="{!reminderDate}"/>
+    <script language="javascript">
+        // to fill the reminder date value
+        function fillData(){
+            var hidEle = document.getElementById('{!$Component.reminderdatehide}');
+            var dateEle = document.getElementById('ReminderDateTime_fu');
+            hidEle.value = dateEle.value;                       
+        }
+        // to uncheck the other check box if it is checked 
+        function uncheckOthers(obj)
+        {            
+            //alert(prevSelected.checked);
+            if(obj.checked)
+            {
+                if(prevSelected != null)
+                    prevSelected.checked = false;
+                prevSelected = obj;
+            }
+            else
+            {
+                obj.checked = true;
+            }
+        }
+        // if no opp required disable text box
+        function noOpp(obj){
+            var oppNameEle = document.getElementById('{!$Component.leadConvertPage.leadConvertForm.leadBlock.ConvertLeadSection.opportunitySecItem.txtOppName}');
+            //alert(oppNameEle);            
+            if(obj.checked){
+                oppNameEle.disabled = true;
+            }
+            else{
+                oppNameEle.disabled = false;
+            }
+        }
+    </script>
+    
+    </apex:form>
+  
+</apex:page>

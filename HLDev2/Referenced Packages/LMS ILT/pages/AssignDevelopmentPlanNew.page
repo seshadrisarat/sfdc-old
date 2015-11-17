@@ -1,0 +1,631 @@
+<apex:page standardController="lmsilt__Development_Plan__c" extensions="lmsilt.AssignDevPlan">
+	<apex:sectionHeader title="{!$ObjectType.lmsilt__Development_Plan__c.label}" subtitle="{!lmsilt__Development_Plan__c.Name}"/>
+
+	<apex:includeScript value="{!URLFOR($Resource.lmsilt__jquery, 'jquery-1.7.min.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.lmsilt__TableScroll, 'jquery.tablescroll.js')}" />
+	<apex:stylesheet value="{!URLFOR($Resource.lmsilt__TableScroll, 'jquery.tablescroll.css')}"/>
+	<apex:stylesheet value="{!URLFOR($Resource.lmsilt__lmslightbox2, 'css/lightbox.css')}"/>
+
+	<style>
+	.imageone {
+			background: url("/img/alohaSkin/sortArrows_sprite.png") no-repeat scroll 0px -16px;
+			height: 11px;
+			margin: 0 5px;
+			vertical-align: -2px;
+			width: 11px;
+	}
+	.imagetwo {
+			background: url("/img/alohaSkin/sortArrows_sprite.png") no-repeat scroll 0px 0px;
+			height: 11px;
+			margin: 0 5px;
+			vertical-align: -2px;
+			width: 11px;
+	}
+	
+	.b-lightbox-loading { display:none;
+							top: 45%; left:45%;
+							position:fixed;
+							z-index:10001;
+							text-align:left;
+							background:#fff;
+							-moz-border-radius:3px;
+							-webkit-border-radius:3px;
+							border-radius:3px;}
+
+	</style>
+
+	<script>
+		jQuery.noConflict();
+		var intSelectedItemsCount = 0;
+		var ScrollPosition = 0;
+	</script>
+
+
+	<!-- Enhanced Action Status -->
+	<apex:actionStatus id="loadStatus">
+	<apex:facet name="start">
+		<c:EnhancedActionStatus BackColor="#efefef" borderColor="#336699"
+						borderSize="1" height="50px" width="120px" ImageUrl="/img/loading.gif"
+						Message="{!$Label.Loading}" messageStyle="color:darkred;font-size:11pt;font-weight:bold;"/>
+	</apex:facet>
+	</apex:actionStatus>
+
+	<apex:form id="DevPlanForm">
+
+	<apex:pageMessages id="pageMessages" />
+
+	<apex:commandLink onclick="backToDevPlan(); return false;" value="{!$Label.BackToDevPlan}" id="backtodevplan" style="padding-bottom:5px;"/>
+	<br/><br/>
+
+	<apex:pageBlock title="{!$ObjectType.lmsilt__Development_Plan__c.label}" rendered="{!NOT(isFieldSetError)}">
+
+		<apex:pageBlockSection title="{!$Label.InformationDevPlan}" id="InformationsectionId" showHeader="true" collapsible="false" columns="1">
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$Label.Pending_Assignments}" for="TotalDevPlanmembers" id="LabelSelectedUsers"/>
+				<apex:outputPanel id="TotalDevPlanmembers">
+					<apex:outputPanel style="position:relative;">
+						<apex:outputText Styleclass="Pending_Assignments" value="{!sizeOfSelectedIds}" />
+					</apex:outputPanel>
+					&nbsp;&nbsp;&nbsp;
+					<apex:commandLink action="{!removeAllMembers}" rerender="DevPlanForm" onclick="if (confirm('{!$Label.DP_Delete_confirmtaion}')){jQuery('.waitingHolder').css('visibility','visible'); jQuery('[id$=table_div]').css('visibility','hidden');}else{jQuery('.waitingHolder').css('visibility','hidden'); jQuery('[id$=table_div]').css('visibility','visible');return true;}">{!$Label.Unselect_users}</apex:commandLink>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+			<apex:outputPanel layout="block" style="width:100%; text-align: center;">
+				<apex:commandButton id="DevAssigmentBtn" action="{!deleteDevAssigments}" value="{!$Label.lmscons__MyTraining_Delete}" rendered="{!ActionType == 'Delete'}" status="sortStatus"/>
+				<apex:commandButton id="AssignBtn" action="{!assignTrainee}" value="{!$Label.AssignButtonDevPlanTrainees}" rendered="{!ActionType == 'Insert'}" onclick="disableAssignBtn()" oncomplete="enableAssignBtn();" reRender="pageMessages" styleClass="assignTraineeB"/>
+				<apex:commandButton onclick=" if(this.disabled == true) {return false;} if ({!ActionType == 'Insert'}) {window.open('/apex/LoadDevPlanAssignments?id={!DevPlan.Id}', 'Load', 'width=500,height=300,resizable=yes,scrollbars=Yes,status=no');} else { window.location = '/apex/DeleteDevPlanAssignments?id={!DevPlan.Id}'}; return false;" value="{!$Label.Load_from_file}" rendered="{!ActionType == 'Insert'}" id="Load"/>
+				<apex:commandButton id="AssignBtnG" action="{!assignGroup}" value="{!$Label.AssignButtonDevPlanGroups}" onclick="disableAssignBtn()" oncomplete="enableAssignBtn();" reRender="pageMessages"/>
+				<apex:commandButton id="CancelBtn" value="{!$Label.Cancel}" onclick="backToDevPlan();return false;"/>
+			</apex:outputPanel>
+		</apex:pageBlockSection>
+		<apex:pageBlockSection title="{!$Label.Additional_Options}" id="OptionssectionId" showHeader="true" collapsible="true" columns="1">
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value=""/>
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+		<apex:outputPanel id="blockSecForTabs" >
+		<apex:tabPanel switchType="client" selectedTab="TraineesTab" id="theTabPanel">
+			<apex:tab label="{!$Label.ilt_AssignDevPlanNew_UsersTab}" name="TraineesTab" id="tabOne" ontabenter="enableOptionsBtn();SelectTrainees();showAssignBtn();" oncomplete="showAssignBtn();">
+
+				<apex:pageBlock id="TraineesSections">
+					<!-- Filter Start -->
+					<apex:outputPanel layout="block" >
+						<a href="javascript:ShowHide();" ><b><span id='idValueShow' style="font-size: 10pt;">{!$Label.Search_Users}</span></b></a>
+					</apex:outputPanel>
+					<apex:outputPanel layout="block" id="filterBlock" style="display:none">
+						<apex:pageBlock title="{!$Label.Specify_Filter_Criteria}" mode="maindetail">
+							<apex:pageBlockButtons location="bottom" >
+								<apex:commandButton value="{!$Label.Apply_Filter_Dev_Plan}" action="{!ApplyFilter}" onclick="BeginValue();ShowHide();" oncomplete="comeBackAfterApply('{!ErrorMessage}', '{!CurrentPage}');allCheckedControl('AllCheckbox', 'SingleCheckbox')" rerender="DevPlanForm" styleClass="waiting"/>
+								<apex:commandButton value="{!$Label.Clear_Filter_Dev_Plan}" action="{!ClearFilter}" onclick="BeginValue();ShowHide();" oncomplete="CombackValue(); selectvalue('{!CurrentPage}'); madeTabel();allCheckedControl('AllCheckbox', 'SingleCheckbox')" rerender="DevPlanForm" styleClass="waiting"/>
+								<!-- <apex:commandButton value="Apply Filter" action="{!ApplyFilter}" onclick="BeginValue();ShowHide();" rerender="DevPlanForm" styleClass="waiting"/>
+								<apex:commandButton value="Clear Filter" action="{!ClearFilter}" onclick="BeginValue();ShowHide();" rerender="DevPlanForm" styleClass="waiting"/>-->
+							</apex:pageBlockButtons>
+							<apex:pageBlockSection columns="1">
+								<apex:outputPanel layout="block" id="firstFilterBlock">
+									<apex:actionRegion immediate="true">
+										<apex:selectList id="ListFirstNamesField" value="{!firstFilter.FilterField}" multiselect="false" size="1">
+											<apex:selectOptions id="firstListField" value="{!AppFields}"/>
+											<apex:actionSupport event="onchange" action="{!FirstFieldAction}" onsubmit="showHideValuePanel('firstPanel','firstPanelShow')" oncomplete="showHideValuePanel('firstPanel','firstPanelShow')" rerender="firstValueBlock" />
+										</apex:selectList>
+									</apex:actionRegion>
+									&nbsp;
+									<apex:outputPanel id="firstPanel">
+										<apex:outputPanel id="firstValueBlock">
+											<apex:selectList id="ListFirstCriteriaField" value="{!firstFilter.FilterCriteria}" multiselect="false" size="1">
+												<apex:selectOptions id="firstListCriteria" value="{!firstValue.lCriteriaPicklist}"/>
+											</apex:selectList>
+											&nbsp;
+											<apex:inputText value="{!firstFilter.FilterValue}" rendered="{!NOT(firstValue.isPicklist)}"/>
+											<apex:selectList value="{!firstFilter.FilterValue}" multiselect="false" size="1" rendered="{!firstValue.isPicklist}">
+												<apex:selectOptions value="{!firstValue.lPicklist}"/>
+											</apex:selectList>
+										</apex:outputPanel>
+									</apex:outputPanel>
+									<apex:outputPanel style="display:inline-block; margin-left:30px;"><apex:outputPanel id="firstPanelShow" style="display:none;"  layout="block">  <div style="width: 90px;"><b><apex:outputtext value="{!$Label.loading_label}"/></b><apex:image url="/img/loading.gif"/></div></apex:outputPanel></apex:outputPanel>
+									<apex:outputText value="{!$Label.PageDevAndLabel}"/>
+								</apex:outputPanel>
+
+								<apex:outputPanel layout="block" id="secondFilterBlock">
+									<apex:actionRegion immediate="true">
+										<apex:selectList id="ListSecondNamesField" value="{!secondFilter.FilterField}" multiselect="false" size="1">
+											<apex:selectOptions id="secondListField" value="{!AppFields}"/>
+											<apex:actionSupport event="onchange" action="{!SecondFieldAction}" onsubmit="showHideValuePanel('secondPanel','secondPanelShow')" oncomplete="showHideValuePanel('secondPanel','secondPanelShow')" rerender="secondValueBlock" />
+										</apex:selectList>
+									</apex:actionRegion>
+									&nbsp;
+									<apex:outputPanel id="secondPanel">
+										<apex:outputPanel id="secondValueBlock">
+										<apex:selectList id="ListSecondCriteriaField" value="{!secondFilter.FilterCriteria}" multiselect="false" size="1">
+											<apex:selectOptions id="secondListCriteria" value="{!secondValue.lCriteriaPicklist}"/>
+										</apex:selectList>
+										&nbsp;
+										<apex:inputText value="{!secondFilter.FilterValue}" rendered="{!NOT(secondValue.isPicklist)}"/>
+											<apex:selectList value="{!secondFilter.FilterValue}" multiselect="false" size="1" rendered="{!secondValue.isPicklist}">
+												<apex:selectOptions value="{!secondValue.lPicklist}"/>
+											</apex:selectList>
+										</apex:outputPanel>
+									</apex:outputPanel>
+									<apex:outputPanel style="display:inline-block; margin-left:30px;"><apex:outputPanel id="secondPanelShow" style=" display:none;"  layout="block">  <div style="width: 90px;"><b><apex:outputtext value="{!$Label.loading_label}"/></b><apex:image url="/img/loading.gif"/></div></apex:outputPanel></apex:outputPanel>
+									<apex:outputText value="{!$Label.PageDevAndLabel}"/>
+								</apex:outputPanel>
+
+								<apex:outputPanel layout="block" id="thirdFilterBlock">
+									<apex:actionRegion immediate="true">
+										<apex:selectList id="ListThirdNamesField" value="{!thirdFilter.FilterField}" multiselect="false" size="1">
+											<apex:selectOptions id="thirdListField" value="{!AppFields}"/>
+											<apex:actionSupport event="onchange" action="{!ThirdFieldAction}" onsubmit="showHideValuePanel('thirdPanel','thirdPanelShow')" oncomplete="showHideValuePanel('thirdPanel','thirdPanelShow')" rerender="thirdValueBlock" />
+										</apex:selectList>
+									</apex:actionRegion>
+									&nbsp;
+									<apex:outputPanel id="thirdPanel">
+										<apex:outputPanel id="thirdValueBlock">
+											<apex:selectList id="ListThirdCriteriaField" value="{!thirdFilter.FilterCriteria}" multiselect="false" size="1">
+												<apex:selectOptions id="thirdListCriteria" value="{!thirdValue.lCriteriaPicklist}"/>
+											</apex:selectList>
+											&nbsp;
+											<apex:inputText value="{!thirdFilter.FilterValue}" rendered="{!NOT(thirdValue.isPicklist)}"/>
+											<apex:selectList value="{!thirdFilter.FilterValue}" multiselect="false" size="1" rendered="{!thirdValue.isPicklist}">
+												<apex:selectOptions value="{!thirdValue.lPicklist}"/>
+											</apex:selectList>
+										</apex:outputPanel>
+									</apex:outputPanel>
+									<apex:outputPanel style="display:inline-block; margin-left:30px;"><apex:outputPanel id="thirdPanelShow" style=" display:none;"  layout="block">  <div style="width: 90px;"><b><apex:outputtext value="{!$Label.loading_label}"/></b><apex:image url="/img/loading.gif"/></div></apex:outputPanel></apex:outputPanel>
+									<apex:outputText value="{!$Label.PageDevAndLabel}"/>
+								</apex:outputPanel>
+
+								<apex:outputPanel layout="block" id="fourthFilterBlock">
+									<apex:actionRegion immediate="true">
+										<apex:selectList id="ListFourthNamesField" value="{!fourthFilter.FilterField}" multiselect="false" size="1">
+											<apex:selectOptions id="fourthListField" value="{!AppFields}"/>
+											<apex:actionSupport event="onchange" action="{!FourthFieldAction}" onsubmit="showHideValuePanel('fourthPanel','fourthPanelShow')" oncomplete="showHideValuePanel('fourthPanel','fourthPanelShow')" rerender="fourthValueBlock" />
+										</apex:selectList>
+									</apex:actionRegion>
+									&nbsp;
+									<apex:outputPanel id="fourthPanel">
+										<apex:outputPanel id="fourthValueBlock">
+											<apex:selectList id="ListFourthCriteriaField" value="{!fourthFilter.FilterCriteria}" multiselect="false" size="1">
+												<apex:selectOptions id="fourthListCriteria" value="{!fourthValue.lCriteriaPicklist}"/>
+											</apex:selectList>
+											&nbsp;
+											<apex:inputText value="{!fourthFilter.FilterValue}" rendered="{!NOT(fourthValue.isPicklist)}"/>
+												<apex:selectList value="{!fourthFilter.FilterValue}" multiselect="false" size="1" rendered="{!fourthValue.isPicklist}">
+													<apex:selectOptions value="{!fourthValue.lPicklist}"/>
+												</apex:selectList>
+										</apex:outputPanel>
+									</apex:outputPanel>
+									<apex:outputPanel style="display:inline-block; margin-left:30px;"><apex:outputPanel id="fourthPanelShow" style=" display:none;"  layout="block">  <div style="width: 90px;"><b><apex:outputtext value="{!$Label.loading_label}"/></b><apex:image url="/img/loading.gif"/></div></apex:outputPanel></apex:outputPanel>
+								</apex:outputPanel>
+							</apex:pageBlockSection>
+						</apex:pageBlock>
+					</apex:outputPanel>
+					<br/>
+					<!-- Filter End -->
+					<!-- Pagination Start -->
+					<div style="white-space: nowrap;">
+						<div class="waitingHolder" style="visibility:visible; width: 50%; position:relative; z-index:1000; left:50%; top:80px;">
+							<img src="/img/loading.gif" class="waitingImage" title="{!$Label.Please_wait}"/>
+							<span class="waitingDescription">{!$Label.loading_label}</span>
+						</div>
+						<apex:outputPanel id="table_div" layout="block" style=" visibility:hidden; margin: 10px  -13px;" styleClass="">
+							<apex:pageBlockTable id="PaginationTable" value="{!records}" var="rec" columnClasses="scrollContent" headerClass="fixedHeader">
+								<apex:column width="5px">
+									<apex:facet name="header">
+										<apex:outputPanel style="padding-left: 4px;">
+											<apex:inputCheckbox onclick="checkAll(this)" id="selectAll" styleClass="AllCheckbox" />
+										</apex:outputPanel>
+									</apex:facet>
+									<apex:inputCheckbox value="{!rec.checked}" id="selectLine" styleClass="SingleCheckbox">
+										<apex:actionSupport event="onclick" action="{!ProcessSelected}" oncomplete="scrollToThis();enableAssignBtn();" reRender="TotalDevPlanmembers" onsubmit="allCheckedControl('AllCheckbox','SingleCheckbox'); ScrollPosition = jQuery('.tablescroll_wrapper').scrollTop(); if(jQuery('.Pending_Assignments').text() == '0'){jQuery('input.SingleCheckbox').attr('disabled', 'disabled');jQuery('input.AllCheckbox').attr('disabled', 'disabled');jQuery('input.AllCheckbox').attr('disabled', 'disabled');disableAssignBtn();}">
+											<apex:param name="Idparam" value="{!rec.entity[rec.fieldList[0]]}" assignTo="{!CurrentId }"/>
+										</apex:actionSupport>
+									</apex:inputCheckbox>
+								</apex:column>
+								<apex:repeat value="{!APILabelList}" var="f">
+									<apex:column >
+										<apex:facet name="header">
+											<apex:outputpanel style="display:block" styleclass="columnHeader">
+												<apex:actionSupport event="onclick" action="{!OrderByField}" reRender="blockSecForTabs, TrainessScript">
+													<apex:param name="OrderField" value="{!f.ApiNameField}" assignTo="{!OrderField}"/>
+												</apex:actionSupport>
+												<apex:outputLabel value="{!f.LabelField}" style="padding-left: 8px;" styleClass="waiting">
+													<img class="{!IF(OrderArrowUp,'imageone','imagetwo')}" src="data:image/gif;base64,R0lGODlhAQABAID/AMDAwAAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" style="display:{!IF(OrderField == f ,'inline','none')}"/>
+												</apex:outputLabel>
+
+											</apex:outputpanel>
+										</apex:facet>
+										<apex:outputField value="{!rec.entity[f.ApiNameField]}" rendered="{!IF(f.ApiNameField != 'Name',true,false)}"/>
+										<apex:outputLink value="/{!rec.entity[rec.fieldList[0]]}" rendered="{!IF(f.ApiNameField == 'Name',true,false)}"><apex:inputField value="{!rec.entity[f.ApiNameField]}" /></apex:outputLink>
+									</apex:column>
+								</apex:repeat>
+							</apex:pageBlockTable>
+						</apex:outputPanel>
+					</div>
+					<div class="paginator">
+						<apex:outputpanel rendered="{!TotalResultSize!=null && TotalResultSize>0}">
+						<span class="left">
+							<apex:outputText value="{!ShownResults}" />
+							{!$Label.PageDevOfLabel}
+							&nbsp;
+							<apex:outputText value="{!TotalResultSize}" />
+							&nbsp;&nbsp;
+							{!$Label.Records_per_page}
+							&nbsp;
+							<apex:selectList value="{!PageSize}" size="1" styleClass="waiting_onchange">
+								<apex:selectOptions value="{!RecPerPageList}"/>
+								<apex:actionSupport event="onchange" action="{!ReSize}" rerender="DevPlanForm"/>
+							</apex:selectList>
+						</span>
+						</apex:outputpanel>
+						<span class="prevNextLinks">
+							<span class="prevNext,waiting">
+								<apex:commandLink styleClass="waiting" action="{!first}" rerender="DevPlanForm"><img class="{!If(hasPrevious,'first','firstoff')}" alt="{!$Label.First_Page_Dev_Plan_Alt}" title="{!$Label.First_Page_Dev_Plan_Title}" src="/s.gif"/></apex:commandlink>
+							</span>
+							<span class="prevNext,waiting">
+								<apex:commandLink styleClass="waiting" action="{!previous}" style="{!If(hasPrevious,'','color:grey')}" rerender="DevPlanForm"><img class="{!If(hasPrevious,'prev','prevoff')}" alt="{!$Label.Previous_Page_Dev_Plan_Alt}" title="{!$Label.Previous_Page_Dev_Plan_Title}" src="/s.gif"/>{!$Label.Pagination_Previous}</apex:commandlink>
+							</span>
+							<span class="prevNext,waiting">
+								<apex:commandLink styleClass="waiting" action="{!next}" style="{!If(hasNext,'','color:grey')}" rerender="DevPlanForm">{!$Label.Pagination_Next}<img class="{!If(hasNext,'next','nextoff')}" alt="{!$Label.Next_Page_Dev_Plan_Alt}" title="{!$Label.Next_Page_Dev_Plan_Title}" src="/s.gif"/></apex:commandlink>
+							</span>
+							<span class="prevNext,waiting">
+								<apex:commandLink styleClass="waiting" action="{!last}" rerender="DevPlanForm"><img class="{!If(hasNext,'last','lastoff')}" alt="{!$Label.Last_Page_Dev_Plan_Alt}" title="{!$Label.Last_Page_Dev_Plan_Title}" src="/s.gif"/></apex:commandlink>
+							</span>
+						</span>
+						<span class="right">
+							{!$Label.PageDevPlanLabel}
+							<apex:inputText value="{!PageNumber}" id="theTextInput" size="1">
+								<apex:actionSupport event="onkeypress" onsubmit="if(event.keyCode != '13'){return true;}else{goto(this.value);return false;}"/>
+								<apex:actionFunction action="{!GoToPage}" name="goto" rerender="DevPlanForm" status="loadStatus">
+										<apex:param name="firstParam" assignTo="{!InputPageNumber}" value="" />
+									</apex:actionFunction>
+							</apex:inputText>
+							&nbsp;{!$Label.PageDevOfLabel}&nbsp;
+							<apex:outputText value="{!TotalNumberPages}" />
+						</span>
+					</div>
+					<!-- Pagination End -->
+				</apex:pageBlock>
+			</apex:tab>
+			<apex:tab label="{!$Label.DevPlanGroupsTabLabel}" name="GroupsTab" id="tabTwo" ontabenter="disableOptionsBtn();SelectGroups();showAssignBtnG();" rendered="{!AND(NOT(SFDCDemo),ActionType == 'Insert')}">
+				<apex:pageBlock id="GroupsSections">
+					<apex:pageBlockButtons location="both">
+						<!-- <apex:commandButton id="CancelBtnG" value="{!$Label.CancelButtonDevPlanGroups}" action="{!cancel}"/> -->
+					</apex:pageBlockButtons>
+					<apex:pageBlockSection id="pageblocksectionId2" columns="1" rendered="true">
+						<apex:pageBlockSectionItem >
+							<apex:outputPanel >
+								<apex:inputText id="SearchKeyWordGroup" value="{!groupSearchText}" maxlength="200" style="width:400px;font-size:8pt" onkeypress="if(event.keyCode != '13'){ return true;} resetGroups();return false;disableOptionsBtn();SelectGroups();"></apex:inputText>
+								<apex:commandButton value="{!$Label.Search}" action="{!resetGroups}" rerender="Groups,pageMessages" oncomplete="disableOptionsBtn();SelectGroups();" status="loadStatus"/>
+							</apex:outputPanel>
+						</apex:pageBlockSectionItem>
+						<apex:outputPanel id="Groups">
+							<div class="waitingHolderGroups" style="visibility:visible; width: 50%; position:relative; z-index:1000; left:50%; top:80px;">
+								<img src="/img/loading.gif" class="waitingImage" title="{!$Label.Please_wait}"/>
+								<span class="waitingDescription">{!$Label.loading_label}</span>
+							</div>
+							<apex:outputPanel id="table_divGroups" layout="block" style=" visibility:hidden; margin: 10px  -13px;" styleClass="">
+								<div style="height:310px; overflow:auto; width:100%;">
+									<apex:pageBlockTable id="page2blocktableid2" value="{!LMSGroups}" var="Group">
+										<apex:column width="10%">
+											<apex:facet name="header" >
+												<apex:outputPanel >
+														<apex:inputCheckbox id="selectall2" selected="false" styleClass="AllGroupCheckbox" onclick="jQuery('[id*=page2blocktableid2]').find(':checkbox').attr('checked', jQuery(this).prop('checked')==true?'checked':false);checkAll(this);disableSearchBlock();"/>
+													{!$Label.DP_Select_All}
+												</apex:outputPanel>
+											</apex:facet>
+											<apex:inputCheckbox value="{!Group.selected}" id="selected2" styleClass="SingleGroupCheckbox" onclick="javascript: allCheckedControl('AllGroupCheckbox', 'SingleGroupCheckbox');disableSearchBlock();checkSinglGroup('{!Group.GroupId}',this);"/>
+										</apex:column>
+										<apex:column >
+											<apex:facet name="header">
+												<apex:commandLink value="{!$Label.Name}" action="{!doGroupSort}" rerender="page2blocktableid2" status="loadStatus">
+													<apex:image url="/img/sort_desc_arrow.gif" rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(groupAsc,true,false))}" width="21" height="12" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}"/>
+														<apex:image url="/img/sort_asc_arrow.gif"  rendered="{!AND(IF($User.UIThemeDisplayed != 'Theme3',true,false),IF(NOT(groupAsc),true,false))}" width="21" height="12" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}"/>
+														<apex:image url="/s.gif" rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(groupAsc,true,false))}" styleClass="sortDesc" title="{!$Label.Sorted_Descending}" alt="{!$Label.Sorted_Descending}" />
+														<apex:image url="/s.gif"  rendered="{!AND(IF($User.UIThemeDisplayed == 'Theme3',true,false),IF(NOT(groupAsc),true,false))}" styleClass="sortAsc" title="{!$Label.Sorted_Ascending}" alt="{!$Label.Sorted_Ascending}" />
+												</apex:commandLink>
+											</apex:facet>
+											<apex:OutputLink target="_blank" value="/{!Group.GroupId}">{!Group.GroupName}</apex:OutputLink>
+										</apex:column>
+									</apex:pageBlockTable>
+								</div>
+							</apex:outputPanel>
+							<div class="paginator" id="paginatorIdGroup" style="bottom:0px;" >
+								<span class="left">
+									<apex:outputText value="{!ShownResultsGroup}" />
+									{!$Label.PageDevOfLabel}
+									&nbsp;
+									<apex:outputText value="{!TotalGroups}{!If(TotalGroups=2000,'+','')}" />
+									&nbsp;&nbsp;
+									{!$Label.Records_per_page}
+									&nbsp;
+									<apex:selectList value="{!PageSizeGroup}" size="1" styleClass="waiting_onchange">
+										<apex:selectOptions value="{!RecPerPageListGroup}"/>
+										<apex:actionSupport event="onchange" action="{!ReSizeGroup}" rerender="pageblocksectionId2, GroupsScript"/>
+									</apex:selectList>
+								</span>
+								<span class="prevNextLinks">
+									<span class="prevNext,waiting">
+										<apex:commandLink styleClass="waiting" action="{!UpGroup}" rerender="pageblocksectionId2, GroupsScript"><img class="{!If(DisablePrevious,'first','firstoff')}" alt="{!$Label.First_Page_Dev_Plan_Alt}" title="{!$Label.First_Page_Dev_Plan_Title}" src="/s.gif"/></apex:commandlink>
+									</span>
+									<span class="prevNext,waiting">
+										<apex:commandLink styleClass="waiting" action="{!PreviousGroup}" style="{!If(DisablePrevious,'','color:grey')}" rerender="pageblocksectionId2, GroupsScript"><img class="{!If(DisablePrevious,'prev','prevoff')}" alt="{!$Label.Previous_Page_Dev_Plan_Alt}" title="{!$Label.Previous_Page_Dev_Plan_Alt}" src="/s.gif"/>{!$Label.Pagination_Previous}</apex:commandlink>
+									</span>
+									<span class="prevNext,waiting">
+										<apex:commandLink styleClass="waiting" action="{!NextGroup}" style="{!If(DisableNext,'','color:grey')}" rerender="pageblocksectionId2, GroupsScript">{!$Label.Pagination_Next}<img class="{!If(DisableNext,'next','nextoff')}" alt="{!$Label.Next_Page_Dev_Plan_Alt}" title="{!$Label.Next_Page_Dev_Plan_Title}" src="/s.gif"/></apex:commandlink>
+									</span>
+									<span class="prevNext,waiting">
+										<apex:commandLink styleClass="waiting" action="{!EndGroup}" rerender="pageblocksectionId2, GroupsScript"><img class="{!If(DisableNext,'last','lastoff')}" alt="{!$Label.Last_Page_Dev_Plan_Alt}" title="{!$Label.Last_Page_Dev_Plan_Title}" src="/s.gif"/></apex:commandlink>
+									</span>
+								</span>
+								<span class="right" id="CurrentPageNumberGroup">
+									{!$Label.PageDevPlanLabel}
+									<apex:inputText value="{!pageNumberGroup}" id="theTextInputGroup" size="1">
+										<apex:actionSupport event="onkeypress" onsubmit="if(event.keyCode != '13'){ return true;}else{gotoGroup(this.value);return false;}"/>
+										<apex:actionFunction action="{!GoToPageGroup}" name="gotoGroup" rerender="pageblocksectionId2, GroupsScript">
+												<apex:param name="firstParamGroup" assignTo="{!InputPageNumberGroup}" value="" />
+										</apex:actionFunction>
+									</apex:inputText>
+									&nbsp;{!$Label.PageDevOfLabel}&nbsp;
+									<apex:outputText value="{!TotalNumberPagesGroup}" />
+								</span>
+							</div>
+						</apex:outputPanel>
+					</apex:pageBlockSection>
+				</apex:pageBlock>
+			</apex:tab>
+	</apex:tabPanel>
+</apex:outputPanel>
+	</apex:pageBlock>
+	<apex:outputPanel style="visible:hidden" id="GroupsScript">
+		<script>
+			jQuery.noConflict();
+			jQuery(document).ready(function($) {
+				jQuery('.waitingHolderGroups').css('visibility','hidden');
+				jQuery('[id$=table_divGroups]').css('visibility','visible');
+			});
+		</script>
+	</apex:outputPanel>
+	<apex:outputPanel style="visible:hidden" id="TrainessScript">
+		<script>
+			jQuery.noConflict();
+
+			function showAssignBtn() {
+				jQuery('[id$=AssignBtnG]').css('display','none');
+				jQuery('[id$=AssignBtn]').css('display','inline-block');
+				jQuery('[id$=TotalDevPlanmembers]').css('display','block');
+				jQuery('[id$=LabelSelectedUsers]').css('display','block');
+			}
+
+			showAssignBtn();
+
+			jQuery.fn.tableScroll.defaults = {
+				flush: false, // makes the last thead and tbody column flush with the scrollbar
+				width: null, // width of the table (head, body and foot), null defaults to the tables natural width
+				height: 100, // height of the scrollable area
+				containerClass: 'tablescroll' // the plugin wraps the table in a div with this css class
+			};
+			jQuery(document).ready(function($) {
+				jQuery('[id$=PaginationTable]').tableScroll({height:300});
+				jQuery('.waitingHolder').css('visibility','hidden');
+				jQuery('[id$=table_div]').css('visibility','visible');
+			});
+			jQuery('.waiting').click(function(){
+				jQuery('.waitingHolder').css('visibility','visible');
+				jQuery('[id$=table_div]').css('visibility','hidden');
+			});
+			jQuery('.columnHeader').click(function(){
+				jQuery('.waitingHolder').css('visibility','visible');
+				jQuery('[id$=table_div]').css('visibility','hidden');
+			});
+			jQuery('.waiting_onchange').change(function(){
+				jQuery('.waitingHolder').css('visibility','visible');
+				jQuery('[id$=table_div]').css('visibility','hidden');
+			});
+
+			var isAllChecked;
+			jQuery("input.SingleCheckbox").each(function(index, element) {
+				if(jQuery(element).attr('type') =='checkbox' && jQuery(element).prop("checked") == false) {
+					isAllChecked = false;
+				}
+			});
+			jQuery("input.AllCheckbox").each(function(index, element) {
+				if(jQuery(element).attr('type') =='checkbox') {
+					jQuery(element).prop("checked", isAllChecked);
+				}
+			});
+		</script>
+	</apex:outputPanel>
+	<apex:actionFunction name="PSfromJS" action="{!ProcessSelected}" oncomplete="scrollToThis();enableSearchBlock();" immediate="true">
+		<apex:param name="Idparam" value="" assignTo="{!CurrentId }"/>
+	</apex:actionFunction>
+	<apex:actionFunction action="{!ProcessSelectedAll}" name="ProcessSelectedAll" rerender="TotalDevPlanmembers" oncomplete="jQuery('[id$=AssignBtn]').removeProp('disabled');jQuery('[id$=AssignBtn]').removeClass('btnDisabled');jQuery('[id$=DevAssigmentBtn]').removeProp('disabled');jQuery('[id$=DevAssigmentBtn]').removeClass('btnDisabled');enableSearchBlock();"/>
+	<apex:actionFunction action="{!ProcessDeSelectedAll}" name="ProcessDeSelectedAll" rerender="TotalDevPlanmembers" oncomplete="jQuery('[id$=AssignBtn]').removeProp('disabled');jQuery('[id$=AssignBtn]').removeClass('btnDisabled');jQuery('[id$=DevAssigmentBtn]').removeProp('disabled');jQuery('[id$=DevAssigmentBtn]').removeClass('btnDisabled');enableSearchBlock();"/>
+	<apex:actionFunction action="{!SelectGroups}" name="SelectGroups" rerender="GroupsSections,GroupsScript" oncomplete="allCheckedControl('AllGroupCheckbox', 'SingleGroupCheckbox')"/>
+	<apex:actionFunction action="{!SelectTrainees}" name="SelectTrainees" rerender="TraineesSections,TrainessScript"/>
+	<apex:actionFunction action="{!resetGroups}" name="resetGroups" rerender="GroupsSections,GroupsScript" status="loadStatus"/>
+
+	</apex:form>
+	
+	<div class="b-lightbox-loading">
+		<table border="0" cellpadding="4" cellspacing="0" style="width: 100%; height: 100%">
+		<tr>
+		<td style="border-bottom-color:#336699; border-bottom-width:1px; border-bottom-style:solid;vertical-align:middle;">
+		<img src="/img/loading.gif"/></td>
+		<td style="border-bottom-color:#336699; border-bottom-width:1px; border-bottom-style:solid;vertical-align:middle;color:darkred;font-size:11pt;font-weight:bold;">
+		&nbsp;{!$Label.Loading}</td>
+		</tr>
+		</table>
+	</div>
+	<div class="b-overlay"></div>
+	
+	<script  type="text/javascript">
+	jQuery.noConflict();
+	showAssignBtn();
+	function linker() {
+		if ({!ActionType == 'Delete'}) {
+
+		}
+	}
+
+	function allCheckedControl(allCheckboxStyleClassName, singleCheckboxStyleClassName){
+		var isAllChecked = true;
+		var singleCheckboxSelectorValue = "input." + singleCheckboxStyleClassName;
+		var allCheckboxSelectorValue = "input." + allCheckboxStyleClassName;
+		jQuery(singleCheckboxSelectorValue).each(function(index, element) {
+			if(jQuery(element).attr('type') =='checkbox' && jQuery(element).prop("checked") == false) {
+				isAllChecked = false;
+			}
+		});
+
+		jQuery(allCheckboxSelectorValue).each(function(index, element) {
+			if(jQuery(element).attr('type') =='checkbox') {
+				jQuery(element).prop("checked", isAllChecked);
+			}
+		});
+	}
+	
+	function checkSinglGroup(rec, th){
+		if(rec != 'NULL') {
+			PSfromJS(rec);
+		}
+	}
+
+	function disableAssignBtn() {
+		if ((jQuery('input[id*=AssignBtn]').prop("disabled"))&&(jQuery('input[id*=Load]').prop("disabled"))) {
+			return false;
+		}
+		else {
+			jQuery('input[id*= AssignBtn],[id*=CancelBtn]').attr('class', 'btnDisabled').prop('disabled', 'disabled');
+			jQuery('input[id*= Load]').attr('class', 'btnDisabled').prop('disabled', 'disabled');
+			return true;
+		}
+	}
+
+	function disableOptionsBtn() {
+		jQuery('input[id*= Load],[id*=Remove]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+		jQuery('.waitingHolderGroups').css('visibility','visible');
+		jQuery('[id$=table_divGroups]').css('visibility','hidden');
+	}
+
+	function enableOptionsBtn() {
+		jQuery('input[id*=Load],[id*=Remove]').attr('class', 'btn').removeAttr('disabled');
+		jQuery('.waitingHolder').css('visibility','visible');
+		jQuery('[id$=table_div]').css('visibility','hidden');
+	}
+
+	function showAssignBtn() {
+		jQuery('[id$=AssignBtnG]').css('display','none');
+		jQuery('[id$=AssignBtn]').css('display','inline-block');
+		jQuery('[id$=TotalDevPlanmembers]').css('display','block');
+		jQuery('[id$=LabelSelectedUsers]').css('display','block');
+	}
+
+	function showAssignBtnG() {
+		jQuery('[id$=AssignBtn]').css('display','none');
+		jQuery('[id$=AssignBtnG]').css('display','inline-block');
+		jQuery('[id$=TotalDevPlanmembers]').css('display','none');
+		jQuery('[id$=LabelSelectedUsers]').css('display','none');
+	}
+
+	function enableAssignBtn() {
+		jQuery('input[id*=AssignBtn],[id*=CancelBtn]').attr('class', 'btn').removeProp('disabled');
+		jQuery('input[id*=Load]').attr('class', 'btn').removeProp('disabled');
+	}
+
+
+	function handleKeyPressForGroup(e){
+		var eventInstance = window.event ? event : e;
+		var keyCode = eventInstance.charCode ? eventInstance.charCode : eventInstance.keyCode;
+		if (keyCode == 13) {
+			doSearchGroup();
+			return false;
+		}
+	}
+
+	function handleKeyPressForTrainee(e){
+		var eventInstance = window.event ? event : e;
+		var keyCode = eventInstance.charCode ? eventInstance.charCode : eventInstance.keyCode;
+		if (keyCode == 13) {
+			doSearchTrainee();
+			return false;
+		}
+	}
+
+	function checkAll(cb){
+		jQuery('[id$=DevAssigmentBtn]').attr('disabled', 'disabled');
+		jQuery('[id$=AssignBtn]').attr('disabled', 'disabled');
+		jQuery('[id$=DevAssigmentBtn]').addClass('btnDisabled');
+		jQuery('[id$=AssignBtn]').addClass('btnDisabled');
+
+		var inputElem = document.getElementsByTagName("input");
+		for(var i=0; i<inputElem.length; i++) {
+			if(inputElem[i].id.indexOf("selectLine")!=-1) {
+				inputElem[i].checked = cb.checked;
+			}
+		}
+		if(cb.checked==true) {
+			ProcessSelectedAll();
+		} else {
+			ProcessDeSelectedAll();
+		}
+	}
+	function scrollToThis() {
+		jQuery('.tablescroll_wrapper').scrollTop(ScrollPosition);
+		jQuery('input.SingleCheckbox').removeAttr('disabled');
+		jQuery('input.AllCheckbox').removeAttr('disabled');
+	}
+	
+	function openLoadingLightBox() {
+		var overlay = jQuery('.b-overlay');
+		jQuery('.b-lightbox-loading').fadeIn('fast');
+		overlay.height( jQuery(document).height() ).css('opacity','0.6').fadeIn('fast');
+	}
+	
+	function closeLoadingLightBox() {
+		var overlay = jQuery('.b-overlay');
+		jQuery('.b-lightbox-loading').fadeOut('fast');
+		overlay.fadeOut('fast');
+	}
+	
+	function disableSearchBlock(){
+		jQuery("input.SingleGroupCheckbox").attr("disabled","disabled");
+		jQuery('input[id*= AssignBtn],[id*=CancelBtn]').attr('class', 'btnDisabled').prop('disabled', 'disabled');
+	}
+	
+	function enableSearchBlock(){
+		jQuery("input.SingleGroupCheckbox").removeAttr("disabled");
+		jQuery('input[id*=AssignBtn],[id*=CancelBtn]').attr('class', 'btn').removeProp('disabled');
+	}
+
+	//----------------------for Filters--------------------------
+	function ShowHide(){
+		var spanObj = document.getElementById('idValueShow');
+		spanObj.innerHTML = (spanObj.innerHTML == 'Show Filter') ? 'Hide Filter' : 'Show Filter';
+
+		jQuery('[id$=filterBlock]').toggle(300);
+	}
+	function showHideValuePanel(first,second){
+		jQuery('[id$='+first+']').toggle();
+		jQuery('[id$='+second+']').toggle();
+	}
+	function BeginValue(){
+		jQuery('[id$=thePanelShow]').show();
+		jQuery('[id$=TableBlockShow]').hide();
+	}
+	function ShowHide(){
+		var spanObj = document.getElementById('idValueShow');
+		spanObj.innerHTML = (spanObj.innerHTML == 'Search Users') ? 'Hide Search' : 'Search Users';
+		jQuery('[id$=filterBlock]').toggle(300);
+	}
+	function comeBackAfterApply (message, page){
+		if (message != '' && message != 'NO' && message != null){
+			alert(message);
+			ShowHide();
+		}
+	}
+	//----------------------for Filters--------------------------
+	function backToDevPlan(){
+		location.href = "/{!DevPlan.Id}";
+	}
+	</script>
+
+</apex:page>

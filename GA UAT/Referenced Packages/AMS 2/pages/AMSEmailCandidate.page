@@ -1,0 +1,248 @@
+<apex:page controller="ts2extams.AMSSingleActionController" showHeader="false" sideBar="false" action="{!setObjCCSubject}">
+	<apex:includeScript value="{!URLFOR($Resource.ts2extams__UIRes, 'res/js/jquery-1.6.min.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__stcode, 'res/js/ui-2.js')}" />
+	<apex:includeScript value="/apexpages/fckeditor/fckeditor.js"/>
+
+	<!--  <apex:stylesheet value="{!URLFOR($Resource.UIRes, 'res/css/std_style.css')}"/>  -->
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__stcode, 'res/css/ui-2.css')}"/>
+
+
+
+<script>
+	function closeWin(refresh) {
+		parent.window.opener = self;
+		parent.window.close();
+	}
+
+	FCKeditor_IsCompatibleBrowser = function () {
+		var sAgent = navigator.userAgent.toLowerCase() ;
+
+		if (getInternetExplorerVersion() == "11")
+			return true;
+
+		if (getInternetExplorerVersion() == "10")
+			return true;
+
+		// Internet Explorer 5.5+
+		if ( /msie/i.test(sAgent) && !/opera/i.test(sAgent) && sAgent.indexOf("mac") == -1 ) {
+			var sBrowserVersion = navigator.appVersion.match(/MSIE (.\..)/)[1] ;
+			return ( sBrowserVersion >= 5.5 ) ;
+		}
+
+		// Gecko (Opera 9 tries to behave like Gecko at this point).
+		if ( navigator.product == "Gecko" && navigator.productSub >= 20030210 && !( typeof(opera) == 'object' && opera.postError ) )
+			return true ;
+
+		// Opera 9.50+
+		if ( window.opera && window.opera.version && parseFloat( window.opera.version() ) >= 9.5 )
+			return true ;
+
+		// Adobe AIR
+		// Checked before Safari because AIR have the WebKit rich text editor
+		// features from Safari 3.0.4, but the version reported is 420.
+		if ( sAgent.indexOf( ' adobeair/' ) != -1 )
+			return ( sAgent.match( / adobeair\/(\d+)/ )[1] >= 1 ) ;	// Build must be at least v1
+
+		// Safari 3+
+		if ( sAgent.indexOf( ' applewebkit/' ) != -1 )
+			return ( sAgent.match( / applewebkit\/(\d+)/ )[1] >= 522 ) ;	// Build must be at least 522 (v3)
+
+		return false ;
+	}
+
+	function getInternetExplorerVersion() {
+		var rv = -1;
+		if (navigator.appName == 'Microsoft Internet Explorer') {
+			var ua = navigator.userAgent;
+			var re  = new RegExp("MSIE ([0-9]{1,}[\.0-9]{0,})");
+			if (re.exec(ua) != null) {
+				rv = parseFloat( RegExp.$1 );
+			}
+		}
+		else if (navigator.appName == 'Netscape') {
+			var ua = navigator.userAgent;
+			var re  = new RegExp("Trident/.*rv:([0-9]{1,}[\.0-9]{0,})");
+			if (re.exec(ua) != null) {
+				rv = parseFloat( RegExp.$1 );
+			}
+		}
+		return rv;
+	}
+
+</script>
+
+<body width="100%" style="margin:10px;">
+
+<apex:form id="frm">
+
+	<apex:pageMessages id="pageMessages" />
+	<apex:pageBlock title="{!$Label.AMS_LABEL_EmailCand}" mode="details" rendered="{!NOT(HasFatalMessages)}" >
+
+		<apex:pageBlockButtons id="pbbsMainButtons" style="text-align: right;" location="bottom">
+			<span id="pbsMainButtons_spinner" class="spinner_indicator">&nbsp;</span>
+			<apex:commandButton id="Send_b" reRender="Send_b" value="{!$Label.AMS_BTN_Send}" title="{!$Label.AMS_BTN_Send}" rendered="{!NOT(Completed)}" onclick="setValueFromEditor();jQuery('#pbsMainButtons_spinner').addClass('spinner_on');jQuery('[id*=pbbsMainButtons] input.btn').attr('disabled','disabled').addClass('btnDisabled');"/>
+			<apex:actionFunction name="EmailCandidateSend" action="{!EmailCandidateSend}" rerender="frm"></apex:actionFunction>
+			<apex:actionFunction name="EmailCandidateSendHtml" action="{!EmailCandidateSend}" rerender="frm">
+				<apex:param name="var1" value="" assignTo="{!eventCC.Description}" />
+			</apex:actionFunction>
+			<apex:commandButton value="{!$Label.ts2__SelectTemplate}" title="{!$Label.ts2__SelectTemplate}" rendered="{!NOT(Completed)}" onclick="openTemplateSelectorWindow();return(false);" />
+			<apex:commandButton value="{!$Label.AMS_BTN_Cancel}" title="{!$Label.AMS_BTN_Cancel}" rendered="{!NOT(Completed)}" onclick="closeWin(false);return(false);" />
+			<apex:commandButton value="{!$Label.AMS_BTN_Close}" title="{!$Label.AMS_BTN_Close}" rendered="{!Completed}" onclick="closeWin(false);return(false);" />
+		</apex:pageBlockButtons>
+
+		<apex:pageMessage rendered="{!IsCandidateEmailEmpty}" summary="{!$Label.AMS_ERROR_EmailCandNoEmail}" severity="warning" strength="2" />
+
+		<apex:pageBlockSection columns="1" rendered="{!NOT(Completed)}" >
+
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="ecndTo" value="{!$Label.AMS_LABEL_To}" />
+				<apex:outputField id="ecndTo" value="{!Candidate.Name}" />
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="ecndCC" value="{!$Label.AMS_LABEL_CC}" />
+				<apex:inputField id="ecndCC" required="false" value="{!eventCC.ownerId}" />
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="ecndBCC" value="{!$Label.AMS_LABEL_BCC}" />
+				<apex:inputField id="ecndBCC" required="false" value="{!eventBCC.ownerId}" />
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="ecndSubject" value="{!$Label.AMS_LABEL_Subject}" />
+				<apex:actionStatus id="TemplateLoading">
+					<apex:facet name="start">
+						<apex:outputText style="font-weight:bold;color:red;" value="{!$Label.AMS_LABEL_Loading}" />
+					</apex:facet>
+					<apex:facet name="stop">
+						<apex:outputPanel id="ecndSubject">
+							<apex:inputField style="width:350px;" rendered="{!EditEmailTemplate}" value="{!eventCC.Subject}" id="subjectIdEnabled" />
+							<apex:inputField style="width:350px;" rendered="{!NOT(EditEmailTemplate)}" value="{!eventCC.Subject}" id="subjectIdDisabled"/>
+							<script>
+								jQuery('[id$=subjectIdDisabled]').attr('disabled', 'disabled');
+							</script>
+						</apex:outputPanel>
+					</apex:facet>
+				</apex:actionStatus>
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="ecndMessage" value="{!$Label.AMS_LABEL_Message}" />
+				<apex:outputPanel id="ecndMessage">
+					<apex:inputField rendered="{!NOT(isTempplateLoaded)}" style="width:350px;height:110px;" value="{!eventCC.Description}" id="messageDisable"/>
+					<apex:inputTextArea readonly="{!NOT(EditEmailTemplate)}" rendered="{!isTempplateLoaded}" value="{!eventCC.Description}" id="Message_box" style="width:350px; height:110px; background-color:#FFFFFF; border:1px solid #000000;" />
+
+					<apex:outputPanel layout="none" rendered="{!isTempplateLoaded && HtmlView}">
+						<script type="text/javascript">
+							RerenderEditor();
+						</script>
+					</apex:outputPanel>
+					<script>
+						if (!{!EditEmailTemplate}) {
+							jQuery('[id$=messageDisable]').attr('disabled', 'disabled');
+						}
+					</script>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="" />
+				<apex:outputText value="{!$Label.AMS_LABEL_EmailCandHelpText}" />
+			</apex:pageBlockSectionItem>
+
+		</apex:pageBlockSection>
+
+		<apex:pageBlockSection id="Attachments_block" title="{!$ObjectType.Attachment.LabelPlural}" rendered="{!NOT(Completed)}" columns="1">
+			<apex:pageBlockTable value="{!AttachmentsList}" var="att" rendered="{!AttachmentsList.SIZE>0}">
+				<apex:column headerValue="{!$Label.AMS_LABEL_Select}" width="30px">
+					<apex:inputCheckbox value="{!att.selectedAttachment}" />
+				</apex:column>
+				<apex:column headerValue="{!$Label.AMS_LABEL_Name}" value="{!att.attachmentName}" />
+			</apex:pageBlockTable>
+		</apex:pageBlockSection>
+
+		<apex:pageBlockSection id="pbsCompleted" columns="1" rendered="{!Completed}" >
+			<apex:pageMessage summary="{!$Label.AMS_LABEL_EmailCandSave}" severity="confirm" strength="2" rendered="{!EmailsMissingCount == '0' && EmailsOptOut == '0'}"/>
+			<apex:pageMessage summary="{!$Label.AMS_LABEL_EmailNotSend}" severity="warning" strength="2" rendered="{!EmailsMissingCount != '0' || EmailsOptOut != '0'}"/>
+			<apex:pageBlockSectionItem labelStyle="width:50%" rendered="{!eventCC.Subject != null || eventCC.Description != null}">
+				<apex:outputLabel value="{!$Label.ts2__SelectedContacts}" for="cntCount" />
+				<apex:outputText id="cntCount" value="1" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem labelStyle="width:50%" rendered="{!eventCC.Subject != null || eventCC.Description != null}">
+				<apex:outputLabel value="{!$Label.ts2__EmailsSent}" for="cntSent" />
+				<apex:outputText id="cntSent" value="{!EmailsSentCount}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem labelStyle="width:50%" rendered="{!eventCC.Subject != null || eventCC.Description != null}">
+				<apex:outputLabel value="{!$Label.ts2__MissingEmailAddress}" for="cntMissing" />
+				<apex:outputText id="cntMissing" value="{!EmailsMissingCount}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem labelStyle="width:50%" rendered="{!eventCC.Subject != null || eventCC.Description != null}">
+				<apex:outputLabel value="{!$Label.ts2__EmailOptOutSelected}" for="cntOptOut" />
+				<apex:outputText id="cntOptOut" value="{!EmailsOptOut}" />
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+
+	</apex:pageBlock>
+
+	<apex:actionFunction name="SelectTemplateAction" action="{!ChangeEmailTemplateOnSendEmail}" rerender="ecndSubject,ecndMessage,Attachments_block" status="TemplateLoading">
+		<apex:param name="templateId" value="" assignTo="{!selectedEmailTemplate}" />
+	</apex:actionFunction>
+
+</apex:form>
+
+</body>
+
+<script type="text/javascript">
+	jQuery.noConflict();
+	jQuery(document).ready(function() {
+		gfxInit();
+	});
+
+	function gfxInit() {
+		a1=new Image; a1.src="{!URLFOR($Resource.UIRes, 'res/img/spinner.gif')}";
+	}
+
+	function openTemplateSelectorWindow() {
+		var pageURL = '{!$Page.AMS2_s_EmailTemplate}';
+		pageURL = (typeof(pageURL)=='string') ? pageURL : "/apex/AMS2_s_EmailTemplate";
+		var url = pageURL;
+		var features = 'directories=no,menubar=no,titlebar=no,toolbar=no,scrollbars=yes,resizable=yes,width=600,height=300';
+		win = window.open(url, 'template', features);
+	}
+
+	function setTemplateId(templateId) {
+		LoadingElementShow(jQuery("[id$=pbSendEmail]").find("div.pbBody").get(0), '{!$Label.ts2__Candidates_LABEL_Loading}');
+		SelectTemplateAction(templateId);
+	}
+
+	function RerenderEditor() {
+		var nameEditor = jQuery('[id$=Message_box]').attr('name');
+		var editor = new FCKeditor(nameEditor, null, 300);
+		editor.BasePath = '/apexpages/fckeditor/';
+			editor.Config['CustomConfigurationsPath'] = '/apexpages/richtext.config.js';
+			editor.ToolbarSet = 'SalesforceBasic';
+			editor.Config['SkinPath'] = editor.BasePath + 'editor/skins/sfdc/';
+			editor.Config['DefaultLanguage'] = 'en-us';
+			editor.Config['EditorAreaStyles'] = ['/sCSS/30.0/sprites/1323209069000/Theme3/default/gc/HtmlDetailElem.css'];
+			editor.Config['ImageUpload'] = true;
+			editor.Config['SitesPath'] = '';
+			editor.ReplaceTextarea();
+	}
+
+	function setValueFromEditor() {
+		if (jQuery('[id$=Message_box___Frame]') == null || jQuery('[id$=Message_box___Frame]').attr('src') == null) {
+			EmailCandidateSend();
+			return true;
+		}
+		var NameEditor = jQuery('[id$=Message_box___Frame]');
+		EditorValue = NameEditor.contents().find("iframe").contents().find("body").html();
+		EditorValue = jQuery.trim(EditorValue);
+		EmailCandidateSendHtml(EditorValue);
+		return true;
+	}
+
+
+</script>
+
+</apex:page>

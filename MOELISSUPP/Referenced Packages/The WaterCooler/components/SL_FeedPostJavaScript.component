@@ -1,0 +1,257 @@
+<apex:component >
+    <script>
+        /**************************************** Methods for file attachment and for opening the new window ********************************/
+        var varContentId = '';  
+        
+        function openWind(URL)
+        {
+            curPopupWindow  = window.open(URL, "_blank","width=500, height=200,dependent=no,toolbar=no,status=no,directories=no,menubar=no,scrollbars=0,resizable=0", true);               
+        }
+        
+        function getParam( name )
+        {
+             name = name.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
+             var regexS = "[\\?&]"+name+"=([^&#]*)";
+             var regex = new RegExp( regexS );
+             var results = regex.exec( window.location.href );
+             if( results == null )
+             return "";
+        else
+            return results[1];
+        }
+        
+        function openCompanyPopup(defaultValue, feedType)
+        {
+            var userId_param = getParam( 'id' );
+            
+            var url ;
+            
+            if(feedType === 'feedPost')
+            {
+                postBody = document.getElementById('publishFeedPost'+defaultValue).value;
+                if(postBody.trim() == 'Post Something...')
+                    postBody = '';
+                if(postBody == defaultValue)
+                    postBody = '';
+                    
+                postBody = urlEncoder(postBody);
+                postBody = postBody. replace(/\n/gi, "%0A");
+                
+                if(userId_param.length != 0)
+                {
+                    url = "SL_FileUpload?groupId=" + userId_param + "&postBody=" + postBody + "&feedType="+feedType;  
+                }
+                else
+                {
+                    url = "SL_FileUpload?groupId=" + selectedGroupId + "&postBody=" + postBody + "&feedType="+feedType;  
+                }
+            }
+            else if(feedType === 'feedComment')
+            {
+                postBody = $('#commentBlock'+defaultValue).val();
+                if(postBody.trim() == 'Comment...')
+                    postBody = '';
+                if(postBody == defaultValue)
+                    postBody = '';
+                postBody = urlEncoder(postBody);
+                postBody = postBody. replace(/\n/gi, "%0A");
+            
+                url = "SL_FileUpload?groupId=" + defaultValue + "&postBody=" + postBody + "&feedType="+feedType;
+            }
+            
+            openWind(url);
+            return false;
+        }
+        
+        function setSelectedCompanyDetails()  
+        {    
+            //To clear all the values
+            clearAllValues();
+            
+            if(varContentId != '')
+                showContentChatterActivity(varContentId);
+            else
+                showGroupActivity(selectedGroupId);
+        }
+        
+        /************************************* End of Methods for file attachment ***************/
+        
+        
+        /***********************************  Methods for subject line **************************/
+        
+        function decodeEntities(input) 
+        {
+           var y = document.createElement('textarea');
+           $(y).html(input);
+           return y.value;
+        }
+        
+        function setSubjectTag(divId)
+        {
+            var postBodyId = divId;
+            var postBody = '';
+            postBody = $('#' + postBodyId).find('span').html();
+            var subtagCount = 0;
+            
+            /* Only for Ie , because multiline post with Subject tag had an issue with IE, so encoding <BR> */
+            if($.browser.msie) 
+            {
+                postBody = postBody.replace(/</gi, "[--]");
+                postBody = postBody.replace(/>/gi, "[---]");
+            }   
+            
+            var decodedPost = (decodeEntities(postBody));
+            
+            while(decodedPost.toLowerCase().indexOf('<s>') > -1)
+            {
+                subtagCount++;
+                if((subtagCount%2) == 0)
+                    postBody = decodedPost =  decodedPost.replace(/<s>/i, '</font>');
+                else
+                    postBody = decodedPost =  decodedPost.replace(/<s>/i, '<font style="font-weight : bold;">');
+            }
+            
+            if((subtagCount%2) != 0) 
+                postBody = postBody.substring(0, postBody.lastIndexOf('<font style="font-weight : bold;">')) + postBody.substring(postBody.lastIndexOf('<font style="font-weight : bold;">')+34, postBody.length);
+            
+            /*Only for Ie , because multiline post with Subject tag had an issue with IE, so decoding it [--] */ 
+            if($.browser.msie)
+            {
+                while(postBody.indexOf('[--]') != -1) 
+                    postBody = postBody.replace('[--]', "<");
+                while(postBody.indexOf('[---]') != -1) 
+                    postBody = postBody.replace('[---]', ">");
+            } 
+            
+            $('#' + postBodyId).find('span').html(postBody);
+        }
+        
+        /*********************************************** End of Methods for subject line *******************************/
+        
+        
+        /************************************ Methods related to Feed posts and comments ****************************/
+                
+        /********* To show the link post container********/
+        function linkAttachment(contentId)
+        {
+            document.getElementById('content1'+contentId).style.display = '';
+            if(curPopupWindow != '' && curPopupWindow != null)
+                curPopupWindow.close();
+        }
+        /*** End ****/
+        
+        /******** To insert feeds *****/    
+        function feedPost1(contentChatterId)
+        {
+            if(contentChatterId != '' && contentChatterId != null)
+            {
+                varContentId = contentChatterId;
+            }
+            else
+                varContentId = '';
+            var strPostValue = document.getElementById('publishFeedPost'+varContentId).value;
+            if(strPostValue == '{!JSENCODE($Label.slsi__Sl_FeedPostDefaultText)}')
+                strPostValue = '';
+            strPostValue = (strPostValue + '').replace(/([^>\r\n]?)(\r\n|\n\r|\r|\n)/g, ''); 
+            var linkPost = '';
+            postBody = '';
+            var linkName = '';
+            linkPost = document.getElementById('linkTxt'+varContentId).value;
+            linkName = document.getElementById('linkName'+varContentId).value;
+            
+            if(linkName.trim() != '' && linkPost.trim() == '')
+            {
+                document.getElementById('linkId'+varContentId).style.display = 'block';
+                document.getElementById('linkTxt'+varContentId).focus();
+            }
+            else if(strPostValue.trim() != '')
+            {
+                postBody = document.getElementById('publishFeedPost'+varContentId).value;
+                
+                if((postBody != '') && postBody.length <= 1000)
+                {   
+                    if(varContentId != '')
+                    {
+                        insertContentChatter(postBody, linkPost, linkName);
+                    }   
+                    else
+                    {
+                        insertFeed(postBody, linkPost, linkName);   
+                    }
+                }   
+            }
+            else if(strPostValue.trim() == '' && linkPost.trim() != '')
+            {
+                if(varContentId != '')
+                {
+                    insertContentChatter(postBody, linkPost, linkName);
+                }    
+                else
+                {
+                    insertFeed(postBody, linkPost, linkName);
+                } 
+            }
+            document.getElementById('publishFeedPost'+varContentId).value = '';
+            return false;           
+        } 
+        /****** End  **********/    
+        
+        /****** To clear all input boxes and textareas after operation *********/   
+        function clearAllValues()
+        {
+            /*document.getElementById('publishFeedPost'+varContentId).value = '';
+            document.getElementById('linkTxt'+varContentId).value = '';
+            document.getElementById('linkName'+varContentId).value = '';
+            document.getElementById('content1'+varContentId).style.display = 'none';
+            */
+            
+            if(curPopupWindow != '' && curPopupWindow != null)
+                curPopupWindow.close();
+                
+            reRenderCss();  
+        }
+        /********* End  **********/ 
+            
+        /******** To check the length of post *********/    
+        function checkPostlength(post)
+        {
+            var postBody = post.value;
+            if(postBody.length > 1000)
+            {
+                document.getElementById('postErr').innerHTML = "Error: Your post can't have more than 1000 characters.";
+            }   
+            else
+                document.getElementById('postErr').innerHTML = "";
+        }
+        
+        function checkLinklength(link, contentId)
+        {
+            var linkBody = link.value;
+            if(linkBody.trim().length > 0)
+                document.getElementById('linkId'+contentId).style.display = 'none'; 
+            else
+                document.getElementById('linkId'+contentId).style.display = 'block';
+        }
+        /************* End  ****************/
+        
+        
+        /*******  for confirmation before deleting the selected post **********/
+        function deletePost(postId)
+        {
+            if (confirm('Are you sure you want to delete this post?')) 
+                deleteFeedPostAF(postId);
+        }
+        /********** End  ***************/
+        
+        /*******  for confirmation before deleting the selected comment **********/
+        function deleteComment(commentId, postId)
+        {
+            if (confirm('Are you sure you want to delete this comment?')) 
+                deleteFeedPostCommentAF(commentId, postId);
+        }
+        /********* End  **************/
+        
+        /********************************** End of Feed posts methods ********************************************/
+        
+    </script>
+</apex:component>

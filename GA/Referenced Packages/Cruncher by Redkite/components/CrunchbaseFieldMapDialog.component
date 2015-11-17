@@ -1,0 +1,155 @@
+<!-- 
+*   	This component is used to display the UI needed for Import screen 
+*		containing Crunchbase data which are to be saved to Salesforce.
+*		The import screen displays Salesforce and Crunchbase field names and values in a table.
+--> 
+
+<apex:component >
+	<apex:stylesheet value="{!URLFOR($Resource.RKCB__CrunchbaseResources,'css/SaveToSalesforceComponent.css')}" />
+	
+	<script type="text/javascript">
+		/* Scale the logo image to display on Save to Salesforce popup */  
+		function displayScaledImage(ImageUrl, divId){
+			if(ImageUrl.slice(0, 4).toLowerCase() == '<img'){
+				/*	set scaling property to Image	*/
+				ImageUrl = ImageUrl.slice(0, 4) + 
+							' onload="javascript:scaleImage(this,50,150);" ' + 
+							ImageUrl.slice(5, ImageUrl.length);
+			}
+			j$(divId).html(ImageUrl);
+		}
+
+		/*	This handles the disabling of row on unselecting the checkbox in the custom component	*/
+		/*	Gray a row so that it appears as disabled when the corresponding checkbox is unselected.	*/
+		function disableSelectedRow(selectedRow, isChecked){
+			
+			/*	Disable the Save button if all checkboxes are unchecked	*/
+			var checkboxIds = "span:[id|='mapCheckbox'] input:checkbox";
+			saveToSalesforceButton( (j$(checkboxIds).filter(':checked').length == 0) ? "disable" : "enable");
+			
+			/*	Enable or disable row based on checkbox value	*/
+			var specifiedCheckboxId = "#mapCheckbox-"+selectedRow;
+
+			//Toggle the css style of row's text depending on whether the checkbox is selected or not
+			var trObj = j$(specifiedCheckboxId).closest("tr");
+			
+			if(isChecked){
+				trObj.find(".map-row-disabled").addClass("map-row").removeClass("map-row-disabled");
+			}
+			else{
+				trObj.find(".map-row").addClass("map-row-disabled").removeClass("map-row");
+			}
+		}
+	</script>
+	<style>
+		/* remove the padding from the pageBlock */
+		#mapTable .pbBody{
+			margin:0;
+		}
+	</style>
+	
+	<apex:attribute name="mapItems" 
+					description="List of wrapper class to display values on the UI." 
+					type="RKCB.CrunchbaseMapItem[]" 
+					required="true"/>
+	
+	<apex:outputPanel rendered="{!(mapItems.size != 0)}">
+		<apex:variable value="{!1}" var="rowCount"/>
+		
+		<div id="mapTable"><apex:pageBlock >
+			<apex:pageBlockTable id="mapPBTable" value="{!mapItems}" var="map"	
+				width="100%">
+	
+				<apex:variable value="" var="mapItemClass"/>
+
+				<apex:column styleClass="fieldmap-col-checkbox">
+					<!-- Evaluate the mapItemClass variable for each row -->
+					<apex:variable value="{!IF(map.selected, 'map-row', 'map-row-disabled')}" var="mapItemClass"/>
+					
+					<span id="mapCheckbox-{!FLOOR(rowCount)}">
+						<apex:inputCheckbox title="{!$Label.rkcb__RKCB_Save_CheckboxTooltip}"
+							value="{!map.selected}" styleClass="{!mapItemClass}"
+							onclick="disableSelectedRow('{!FLOOR(rowCount)}', this.checked);"/>
+					</span>
+				</apex:column>
+				
+				<apex:column headerValue="{!$Label.rkcb__RKCB_Save_Header_CrunchbaseField}" styleClass="fieldmap-col-cb-fieldname">
+					<apex:outputPanel styleClass="{!mapItemClass}">{!map.CbFieldName}</apex:outputPanel>
+				</apex:column> 
+				 
+				<apex:column headerValue="{!$Label.rkcb__RKCB_Save_Header_CrunchbaseValue}" styleClass="fieldmap-col-cb-fieldvalue">
+					<apex:outputPanel styleClass="{!mapItemClass}" >
+						<apex:outputText escape="false" value="{!IF(LEN(map.CbFieldValue) > 45, 
+						         				      LEFT(map.CbFieldValue, 45) & '...' & 
+						         				      '<span class=\'value-meta\'>(' & TEXT(LEN(map.CbFieldValue)) & ')</span>', 
+						         				 	  map.CbFieldValue)}"
+						         		 rendered="{!map.CbFieldName == 'Overview' && 
+						         		 				map.sfAPIFieldType != 'Image'}">
+						</apex:outputText>
+						<apex:outputText value="{!map.CbFieldValue}" styleClass="fieldmap-col-cb-fieldvalue"
+										 rendered="{!map.CbFieldName != 'Overview' && 
+										 				map.sfAPIFieldType != 'Image'}" >
+						</apex:outputText>
+											
+						<apex:outputPanel styleClass="value-image" rendered="{!map.sfAPIFieldType == 'Image'}">
+							<div id="crunchbase-image"><img src="{!map.CbFieldValue}"></img></div> 
+							<script> 
+								/*	Needed for IE-7. 
+								 *  since, scale image was not been applied if written directly in the IMG	*/
+								displayScaledImage(j$("#crunchbase-image").html(), '#crunchbase-image'); 
+							</script>
+						</apex:outputPanel>
+
+					</apex:outputPanel>
+				</apex:column> 
+				
+				<apex:column styleClass="fieldmap-col-arrow">
+					<apex:outputPanel styleClass="{!mapItemClass}">
+						<img id="{!FLOOR(rowCount)}-arrow-image" 
+							 src="/s.gif" 
+							 class="icon-area"/>
+					</apex:outputPanel>
+				</apex:column>
+				
+				<apex:column headerValue="{!$Label.rkcb__RKCB_Save_Header_SalesforceField}" styleClass="fieldmap-col-sf-fieldname">
+					<apex:outputPanel styleClass="{!mapItemClass}">{!map.SfFieldLabel}</apex:outputPanel>
+				</apex:column>
+				
+				<apex:column headerValue="{!$Label.rkcb__RKCB_Save_Header_SalesforceValue}" styleClass="fieldmap-col-sf-fieldvalue">
+				
+					<apex:outputPanel styleClass="{!mapItemClass}" >
+						<apex:outputText value="{!IF(LEN(map.SfFieldValue) > 45, 
+													LEFT(map.SfFieldValue, 45) & '...', 
+													map.SfFieldValue)}" 
+							         	 rendered="{!map.sfAPIFieldType != 'Image' && 
+							         	 				map.CbFieldName == 'Overview'}">
+						</apex:outputText>
+						<apex:outputText value="{!map.SfFieldValue}" 
+							         	 rendered="{!map.sfAPIFieldType != 'Image' && 
+							         	 				map.CbFieldName != 'Overview'}">
+						</apex:outputText>
+						
+						<apex:outputPanel styleClass="value-image" rendered="{!map.sfAPIFieldType == 'Image'}">
+							<div id="salesforce-image"></div>
+							<script> 
+								displayScaledImage('{!map.SfFieldValue}', '#salesforce-image'); 
+							</script>
+						</apex:outputPanel>
+					</apex:outputPanel>
+											
+					<apex:variable value="{!rowCount+1}" var="rowCount"/>
+				</apex:column>
+				
+			</apex:pageBlockTable>
+		</apex:pageBlock></div>
+	</apex:outputPanel>
+	
+	<apex:outputPanel rendered="{!(mapItems.size == 0)}">
+		<!-- 	Hide the save button and display page message when this panel is rendered -->
+		<div id="noRecords"></div>
+		<apex:pageMessage summary="{!$Label.rkcb__RKCB_Save_NoData}" 
+							severity="INFO" 
+							strength="2"
+							Id="record-not-Found"/>
+	</apex:outputPanel>
+</apex:component>

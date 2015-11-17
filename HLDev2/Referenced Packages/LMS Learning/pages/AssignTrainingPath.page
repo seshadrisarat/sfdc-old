@@ -1,0 +1,175 @@
+<apex:page standardController="lmscons__Training_Path__c" id="AssignTrainingPathPageId" extensions="lmscons.CourseAssignController">
+	<apex:sectionHeader title="{!$ObjectType.lmscons__Training_Path__c.label}" subtitle="{!Course.Name}"/>
+	<apex:includeScript value="{!URLFOR($Resource.lmscons__LMSSource, 'js/jquery-1.6.4.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.lmscons__LMSGlobal, 'js/LMSGlobal.js')}"/>
+
+	<script>
+		jQuery.noConflict();
+
+		jQuery(document).ready(function(){
+			jQuery('[id$="DueDateId"]').val('').parent().hide();
+			jQuery('[id$="recurringData"]').val('').hide();
+		});
+
+
+		function showDueDate(){
+			if (document.getElementById('DueDateCheckBox').checked == true) {
+				jQuery('[id$="DueDateId"]').parent().toggle();
+			} else {
+				jQuery('[id$="DueDateId"]').val('').parent().hide();
+			}
+		}
+		var intSelectedItemsCount = 0;
+
+		function showRecurringData() {
+			if (document.getElementById(jQuery('[id$="enableRecurringTrainingCheckbox"]').attr('id')).checked == true) {
+				jQuery('[id$="recurringData"]').toggle();
+			} else {
+				jQuery('[id$="recurringData"]').val('').hide();
+			}
+		}
+
+	</script>
+
+	<apex:pageMessages id="pageMessages" />
+
+
+	<!-- Enhanced Action Status -->
+	<apex:actionStatus id="loadStatus">
+	<apex:facet name="start">
+		<c:EnhancedActionStatus BackColor="#efefef" borderColor="#336699"
+						borderSize="1" height="50px" width="120px" ImageUrl="/img/loading.gif"
+						Message="{!$Label.Loading}" messageStyle="color:darkred;font-size:11pt;font-weight:bold;"/>
+	</apex:facet>
+	</apex:actionStatus>
+
+	<apex:actionStatus startText=""  id="busyStatus"
+		onStart="document.body.style.cursor = 'wait';return true;"
+		onStop="document.body.style.cursor = 'default';return true;" >
+	</apex:actionStatus>
+	<apex:form >
+		<apex:commandLink onclick="backToCourse(); return false;" value="{!$Label.Back_to_course}" id="backtodevplan" style="padding-bottom:5px;"/>
+		<br/><br/>
+	</apex:form>
+
+	<c:TraineesTable LearningObjectType="Training_Path__c" LearningObjectTypeID="{!Course.Id}" LearningObjectLabel="Course"/>
+	<apex:form >
+		<apex:actionFunction action="{!AssignFromPage}" name="AssignTraineeAction" rerender="pageMessages" oncomplete="enableAssignBtn();closeLoadingLightBox();">
+			<apex:param name="SelectedRecords" assignTo="{!SelectedRecords4Assign}" value="" />
+			<apex:param name="Dummy" assignTo="{!Dummy.Due_Date__c}" value="" />
+			<apex:param name="CourseAssignmentPeriods" assignTo="{!courseAssignment.Recurring_Training_Periods__c}" value="" />
+			<apex:param name="CourseAssignmentPeriodType" assignTo="{!courseAssignment.Recurring_Training_Period_Type__c}" value="" />
+			<apex:param name="CourseAssignmentEnabled" assignTo="{!courseAssignment.Recurring_Training_Enabled__c}" value="" />
+		</apex:actionFunction>
+	</apex:form>
+	<script  type="text/javascript">
+	function SelectAssignType() {
+		SelectedRecords4Assign();
+		openLoadingLightBox();
+		//AssignTraineeAction(SelectedRecords4Assign());
+	}
+
+	function backToCourse() {
+		location.href = "/{!Course.Id}";
+	}
+	function backToDetails() {
+		backToCourse();
+	}
+
+	function disableAssignBtn() {
+		if (jQuery('input[id*=AssignBtn]').prop("disabled")) {
+			return false;
+		}
+		else {
+			jQuery('input[id*= AssignBtn],[id*=CancelBtn]').attr('class', 'btnDisabled').prop('disabled', 'disabled');
+			return true;
+		}
+	}
+
+	function enableAssignBtn() {
+		jQuery('input[id*=AssignBtn],[id*=CancelBtn]').attr('class', 'btn').removeProp('disabled');
+	}
+
+	function CheckUncheckLicense(elem) {
+		var row = elem;
+
+		var checkboxSelected = row.cells[0].getElementsByTagName("input")[0].checked;
+		if (checkboxSelected == true) {
+			var selectedContentId = row.cells[1].getElementsByTagName("span")[1].getElementsByTagName("span")[0].innerHTML;
+			var selectedLicenseId = row.cells[1].getElementsByTagName("span")[1].getElementsByTagName("span")[1].innerHTML;
+			refresh(selectedContentId, row.parentNode);
+			row.cells[0].getElementsByTagName("input")[0].checked = true;
+			//resetTraineeSearch(selectedContentId, selectedLicenseId);
+		}
+	}
+
+	function refresh(selectedContentId, objTable) {
+		var objRows = objTable.getElementsByTagName('tr');
+		var iIndex = 0;
+		for(iIndex = 0; iIndex < objRows.length; iIndex++) {
+			//objRows[iIndex].bgColor = "";
+			//objRows[iIndex].cells[0].getElementsByTagName("input")[0].checked = false;
+			var objCol = objRows[iIndex].cells[0].getElementsByTagName("input")[0];
+			if (objCol != null) {
+				if (selectedContentId == objRows[iIndex].cells[1].getElementsByTagName("span")[1].getElementsByTagName("span")[0].innerHTML) {
+					objCol.checked = false;
+				}
+			}
+		}
+	}
+
+	function CheckUncheckFacet(obj,tableId)
+	{
+		if(obj.checked){
+			intSelectedItemsCount = intSelectedItemsCount + 1;
+			}
+		else{
+			intSelectedItemsCount = intSelectedItemsCount - 1;
+			}
+
+		checkAllFields(obj.getAttribute('id'),tableId);
+	}
+
+
+	function selectChecked(form, value)
+	{
+		var i = 0;
+		for (i = 0; i < form.elements.length; i++) {
+			if (form.elements[i].name.search('selected') > 0 && form.elements[i].disabled == false) {
+				if (form.elements[i].checked != value){
+					if (value)
+						intSelectedItemsCount = intSelectedItemsCount + 1;
+					else
+						intSelectedItemsCount = intSelectedItemsCount - 1;
+				}
+				form.elements[i].checked = value;
+			}
+		}
+	}
+
+	function selectAllOrNoneByCheckbox(form, control)
+	{
+	selectChecked(form, control.checked);
+	}
+
+	function handleKeyPressForGroup(e){
+		var eventInstance = window.event ? event : e;
+		var keyCode = eventInstance.charCode ? eventInstance.charCode : eventInstance.keyCode;
+		if (keyCode == 13){
+			doSearchGroup();
+			return false;
+		}
+	}
+
+	function handleKeyPressForTrainee(e){
+		var eventInstance = window.event ? event : e;
+		var keyCode = eventInstance.charCode ? eventInstance.charCode : eventInstance.keyCode;
+		if (keyCode == 13){
+			doSearchTrainee();
+			return false;
+		}
+	}
+
+	</script>
+
+</apex:page>

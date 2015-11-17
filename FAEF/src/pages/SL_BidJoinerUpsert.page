@@ -1,0 +1,246 @@
+<apex:page standardController="Lot__c" extensions="SL_BidJoinerUpsertPageController" standardStylesheets="false" applyHtmlTag="false" showHeader="false">
+	<apex:form id="formId"> 
+<!-- 	<apex:pageMessages /> -->
+		<link href="{!URLFOR($Resource.AngularTreeView, 'styles/sl-bootstrap.css')}" rel="stylesheet" />
+	   	<script src="{!URLFOR($Resource.SL_LeasePayment, 'scripts/sl-bootstrap.js')}" type="text/javascript"></script>
+	   	
+	   	<apex:actionfunction name="updateTotal" action="{!calculateBidTotal}" rerender="dummy,pagemessage" oncomplete="displayTotal('{!decBidTotal}');"/>
+	   	<apex:actionfunction name="updateBidItems" action="{!upsertBidAndBidItemsassociatedwithLot}" status="processing" rerender="status,bodyId">
+	   		<apex:param name="button" value="" assignTo="{!isSubmitButtonClicked}"/>
+	   	</apex:actionfunction>
+	   	<script>
+			
+			function onlyNum(evt)   
+	        {
+	        	//var pageNumber = document.getElementById('{!$component.pageNumberId}');
+	            evt = (evt) ? evt : window.event;
+	            var charCode = (evt.which) ? evt.which : evt.keyCode; 
+	            if (charCode > 31 && (charCode < 48 || charCode > 57)) 
+	            {
+	                return false;
+	            }
+	            return true;
+			}
+			
+			function validateTotal(bidValue)
+			{
+				if( bidValue == '')
+				{
+					alert('Bid Item unit Price should be greater than 0 in order to update Existing Bid Item or to create new Bid Item');
+					updateTotal();
+				}
+				else if( bidValue > 2147483647)
+				{
+	            	alert('Please enter value only below 2,147,483,647');
+	            	updateTotal();
+	            }	
+	            
+	            else 
+	            {
+	            	setTimeout(function(){updateTotal();}, 1000);
+                    
+                } 
+			}
+			
+			function money_format(n) 
+			{
+				n += '';
+				x = n.split('.');
+				x1 = x[0];
+				x2 = x.length > 1 ? '.' + x[1] : '';
+				
+				var r=/(\d+)(\d{3})/;
+				
+				while (r.test(x1)) {
+				 x1 = x1.replace(r, '$1' + ',' + '$2');
+				}
+				
+				x2 = Number(x2).toFixed(2);
+				
+				return '$' + x1 + x2.substr(1);
+			}
+			
+			function displayMessage(submitOrSaveAll)
+			{
+				if('{!objLot.Auction__r.Do_Not_Allow_Bids__c}' == 'true')
+				{
+					alert('Cannot create or submit bids when auction is closed.');
+					return false;
+				}
+				if('{!objLot.Lot_Item_Count__c}' == 0)
+				{
+					alert('No Lot Items exist');
+					return false;
+				}	
+				else
+				{
+					updateBidItems(submitOrSaveAll);
+				}
+				document.getElementById('Description').style.width = '55%';	
+				document.getElementById('Equipment Name').style.width = '25%';
+				
+				return true;
+			}
+			
+			function displayTotal(dectotal)
+			{
+				document.getElementById('totalId').innerHTML = money_format(dectotal);
+			}
+		</script> 
+		<style>
+	        .popupBackground
+	        {  
+	                    background-color: black; 
+	                    opacity: 0.5;
+	                    filter: alpha(opacity = 50);
+	                    position: fixed;
+	                    top: 0;
+	                    left: 0;
+	                    z-index: 8;
+	                    text-align:center; 
+	                    vertical-align: middle; 
+	                    overflow: hidden;
+	        }
+	        #sl .form-control
+	        {
+	        	height:27px;
+	        }
+	        
+	        .alert
+	        {
+	        	margin-left:20px;
+	        }
+        </style>
+        
+	<div id ="sl">
+		<apex:outputPanel id="bodyId">
+		<div id= "sl-body">
+			<apex:outputPanel id="pagemessage">
+				<div class="col-sm-offset-2 col-sm-12" style="margin-left: -30px; margin-right: 30px; padding-top:16px; margin-top:16px;display:{!if(errormsg != '' , '', 'none')};" id="messagebox">
+					<div class="alert alert-danger" >
+<!-- 					   <a href="#" class="close" data-dismiss="alert">&times;</a> -->
+					   <strong>Error !</strong> {!errormsg}
+					</div>
+				 </div>  
+				 <div class="col-sm-offset-2 col-sm-12" style="margin-left: -30px; margin-right: 30px; padding-top:16px; margin-top:16px;display:{!if(AND(isSuccessfulSave,lstLotWrapper.size != 0),'', 'none')};" id="messagebox">
+				   <div class="alert alert-success">
+<!-- 				      <a href="#" class="close" data-dismiss="alert">&times;</a> -->
+				      <strong> Records Saved Successfully.</strong>
+		           </div>
+ 				 </div>
+			</apex:outputPanel>
+			<apex:outputPanel id="dummy"/>
+				<table style="margin-top:20px;">
+				 	<div class="row" style="padding-top:20px;"> 
+						<tr>
+							<td style="display:{!if(OR(objBidRecordAssociatedToLot.Status__c == '',objBidRecordAssociatedToLot.Status__c == 'Saved'),'','none;')};">
+								<apex:commandbutton styleclass="btn" style="margin-left:20px;" value="Save All Bids" onclick="return displayMessage(false);" rerender="dummy"></apex:commandbutton>&nbsp;&nbsp;
+								<apex:commandbutton styleclass="btn" value="Submit" onclick="return displayMessage(true);" rerender="dummy">
+								</apex:commandbutton>&nbsp;&nbsp;
+<!-- 								rendered="{!!objLot.Auction__r.Do_Not_Allow_Bids__c}" -->
+							</td> 
+							<td style="padding-left:80px;"> 
+								<apex:outputpanel rendered="{!if(objBidRecordAssociatedToLot.Status__c != '',true,false)}">
+									<b>Status:</b> &nbsp;&nbsp;<apex:Outputtext value="{!objBidRecordAssociatedToLot.Status__c}"/>
+								</apex:outputpanel>
+							</td>
+							<td style="padding-left:80px;">
+								<b># of Lot Items:</b> &nbsp;{!objLot.Lot_Item_Count__c} 
+							</td>
+							<td style="padding-left:80px;">
+								<b># of Bids:</b> &nbsp;{!intNoOfBids} 
+						    </td>
+						</tr>
+					</div>
+				</table>
+				<apex:outputPanel id="op1">
+					<table class="table table-bordered table-striped" style="margin-top:20px;max-width:96%;margin-left:20px;">
+						<thead>
+							<tr>
+								<apex:repeat value="{!lstHeaders}" var="headerName">
+									<th id="{!headerName}">{!headerName}</th>
+								</apex:repeat>
+							</tr>		
+						</thead>
+				         <tbody>
+					        	<apex:repeat value="{!lstLotWrapper}" var="lotWrap" first="{!FirstPage}" rows="{!PageSize}" rendered="{!if(lstLotWrapper.size>0,true,false)}" id="repeat">
+									<tr>
+										<td style="display:{!if(strSitePrefix != '','','none;')};text-align:left;">
+											<a href="{!strSitePrefix}/{!lotWrap.lotItem.Id}" target="_blank">
+												<apex:outputText value="{!lotWrap.lotItem.Equipment__r.Name}" />
+											</a>
+										</td>
+										<td style="display:{!if(strSitePrefix == '','','none;')};text-align:left;">
+											<a href="/{!lotWrap.lotItem.Id}" target="_blank">
+												<apex:outputText value="{!lotWrap.lotItem.Equipment__r.Name}" />
+											</a>
+										</td>
+										<td style="text-align:left;"><apex:outputText value="{!lotWrap.lotItem.Quantity__c}"     		/></td>
+										<td style="text-align:left;"><apex:outputText value="{!lotWrap.lotItem.Equipment_Description_Full__c}"	/></td>
+										<td style="text-align:right;display:{!if(OR(objBidRecordAssociatedToLot.Status__c == 'Saved',objBidRecordAssociatedToLot.Status__c == ''),'','none;')}">
+											<apex:inputText styleClass="form-control" value="{!lotWrap.bidItem.Bid_Item_Unit_Price__c}" onKeyPress="return onlyNum(event);" onkeyUp="validateTotal(this.value);" style="text-align:right;"/>
+										</td>
+										<td style="text-align:right;display:{!if(OR(objBidRecordAssociatedToLot.Status__c == 'Saved',objBidRecordAssociatedToLot.Status__c == ''),'none;','')}" >
+											<apex:outputText value="{!lotWrap.bidItem.Bid_Item_Unit_Price__c}" style="text-align:right;"/>
+										</td>
+									</tr>
+								</apex:repeat>
+								<tr style="display:{!if(lstLotWrapper.size != 0,'','none;')}">
+	<!-- 								<td colspan="3" rendered="{!if(lstLotWrapper.size == 0,true,false)}" style="text-align:right;"> No Lot Items exist for this Lot</td> -->
+									<td colspan="3" style="text-align:right;"><b>Bid Total:</b></td> 
+									<td style="text-align:right;" id="totalId"></td>
+								</tr>
+								<tr style="display:{!if(lstLotWrapper.size == 0,'','none;')}">
+	<!-- 								<td colspan="3" rendered="{!if(lstLotWrapper.size == 0,true,false)}" style="text-align:right;"> No Lot Items exist for this Lot</td> -->
+									<td colspan="4" style="text-align:left;font-size:19px;">No Lot Items exist</td> 
+								</tr>
+								
+						</tbody>
+					</table>
+					<script>
+						displayTotal('{!decBidTotal}');
+						document.getElementById('Equipment Name').style.width = '25%';
+						document.getElementById('Description').style.width = '55%';
+					</script>		
+		    	</apex:outputPanel>
+				<div class="pagination" style="margin-left: 25px;"> 
+					<apex:outputPanel id="paginationPanel">
+	                    <apex:outputpanel rendered="{!IF(lstLotWrapper.size > 5,true,false)}">
+	                    	Page &nbsp;{!page} of {!noOfPages}  
+	                        <apex:outputpanel rendered="{!(page == 1)}">
+	                            <apex:commandLink action="{!previousPage}" value="Previous" style="margin-left:50px;text-decoration:none;cursor:auto;color:gray;" rerender="paginationPanel,op1"/>&nbsp;&nbsp;| 
+	                        </apex:outputpanel>
+	                        <apex:outputpanel rendered="{!(page != 1)}">
+	                            <apex:commandLink action="{!previousPage}" value="Previous" style="margin-left:50px;color:blue;" rerender="paginationPanel,op1" />&nbsp;&nbsp;| 
+	                        </apex:outputpanel>
+	                        <apex:outputpanel rendered="{!(page == noOfPages)}">
+	                            &nbsp;&nbsp;<apex:commandLink action="{!nextPage}" value="Next" style="color:gray;text-decoration:none;cursor:auto;" rerender="paginationPanel,op1"/> 
+	                        </apex:outputpanel>
+	                        <apex:outputPanel rendered="{!(page != noOfPages)}">
+	                            &nbsp;&nbsp;<apex:commandLink action="{!nextPage}" value="Next" style="color:blue;" rerender="paginationPanel,op1" /> 
+	                        </apex:outputPanel>
+	                     </apex:outputpanel>   
+                	</apex:outputPanel>
+				</div>
+	   </div>
+	   </apex:outputPanel>
+	  </div>
+	  <apex:actionstatus id="processing" startText="Requesting...">
+          <apex:facet name="start">
+             <div id="popUpBack" class="popupBackground" style="height:100%;width:100%; display: block;"></div>
+             <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; ">
+                 <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+                 <table align="center" valign="top" style="width: 100%; height: 30%">
+<!--                  <tr align="center" valign="top" style="width: 100%; height: 30%"> -->
+<!--                      <td valign="top"><img src="" /><span class="waitingDescription">Saving...</span></td> -->
+<!--                  </tr> -->
+                 </table>
+                 </div>
+             </div>
+             <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; "> </div>
+             <script>document.getElementById('ManageMembersViewport_loading').height = window.innerHeight * (3/4);</script>
+          </apex:facet>
+          <apex:facet name="stop"></apex:facet>
+      </apex:actionstatus>	
+   </apex:form>
+</apex:page>

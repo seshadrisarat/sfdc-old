@@ -1,0 +1,844 @@
+<apex:page sidebar="false" showChat="false" showHeader="false" controller="sma.PrintEmailRoute" title="Print/Email Interface" docType="html-5.0">
+
+	<!-- jQuery -->
+    <script type='text/javascript' src="{!URLFOR($Resource.MapAnything, 'js/jquery-1.7.1.min.js')}"></script>
+
+    <!-- Glyphicons -->
+    <apex:stylesheet value="{!URLFOR($Resource.sma__MapAnything, 'css/MapAnything.css')}"/>
+
+    <!-- Google Maps -->
+	<script type='text/javascript' src='https://maps.googleapis.com/maps/api/js?client=gme-cloudbiltinc&libraries='></script>
+
+    <!-- CSS -->
+    <style type='text/css'>
+    
+        /*Print/Email Styling */
+		a, button {
+			cursor: pointer;
+		}
+		
+		#optionsbar {
+			background-color: #F4FA58;
+			height: 22px;
+			width: 600px;
+			padding: 5px 25px;
+			font-size: 12px;
+			margin-top: 15px;
+			margin-bottom: 15px;
+		}
+		
+		.center {
+			margin-left: auto;
+			margin-right: auto;
+		}
+		.text-col {
+			width: 65px;
+		}
+		.input-col {
+			width: 500px;
+			border: 1px solid silver;
+			border-radius: 3px;
+			padding: 6px;
+		}
+		.input-col > input, .input-col > textarea{
+			border: none;
+			border-radius: 3px;
+			height: 25px;
+			line-height: 25px;
+		}
+		.right {
+			float: right;
+		}
+		
+		.waypoint-tooltips table {
+			width: 300px !important;
+			white-space: normal !important;
+		}
+		#emailbox {
+			display: none;
+		}
+		.adp-directions {
+			width: 100%;
+		}
+
+		.inline {
+			display: inline-block;
+		}
+
+		#search-results {
+			position: absolute;
+			left: 75px;
+			background-color: white;
+			width: 300px;
+			border: 1px solid silver;
+			padding: 0px 10px;
+			border-radius: 3px;
+			box-shadow: 1px 1px 3px #939393;
+			display:none;
+			z-index: 10;
+		}
+		#search-results .result-row {
+			margin: 5px 0px;
+			cursor: pointer;
+			color: #6F6F6F;
+		}
+		#search-results .result-row:hover {
+			color: #337AB7;
+			font-weight: bold;
+		}
+		.active {
+			display:block !important;
+		}
+		.emailUser {
+			border: 1px solid silver;
+			padding: 5px;
+			display: inline-block;
+			margin-right: 5px;
+			background-color: #F9F9F9;
+		}
+
+		@media print {
+			#emailbox { display: none !important; }
+			#CallSheetMsg {display:none !important;}
+			#emailSuccess { display: none !important; }
+			#optionsbar { display: none !important; }
+        	#outerbox { border: none !important; }
+        	#logo { margin-left: 0px !important; }
+		}
+		
+    </style>
+    
+    <!-- JS -->
+    <c:MA />
+    <script type='text/javascript'>
+        var securityToken = '{!securityToken}';
+        var namespace = '{!namespace}';
+        var LicenseType = '{!LicenseType}';
+        var currentState = '';
+        var $currentStateGrowl;
+        //TomTom Routing Images
+		var routingImages = '{!URLFOR($Resource.TomTom, 'images/instructions/blank.png')}'.replace('blank.png', '');
+        var RouteObj = {};
+        var waypoints = [];
+        $(function () {
+        	RouteObj = window.opener.RouteObj;
+        	//hide search results on page click
+        	$('body').on('click',function(e) {
+        		//hide the results
+        		$('#search-results').hide();
+        	})
+
+        	$('#hideMsg').on('click',function() {
+        		$('#emailSuccess').hide();
+        	});
+
+        	$('#emailbox').on('click','.add-email',function () {
+        		var id = $(this).attr('data-id');
+        		if(id == 'me') {
+        			var email = '{!$User.Email}';
+        			var $result = $('<div class="emailUser inline" data-val="'+email+'">'+email+'<a style="margin-left: 5px;" class="inline"><span class="glyphicon glyphicon-remove-circle" aria-hidden="true"></span></a></div>');
+					$('#email-wrapper').prepend($result);
+        		}
+        		else {
+        			var email = "{!managerEmail}";
+        			if (email == '') {
+        				alert("An email address for this user's manager has not been set.");
+        				return;
+        			}
+        			var $result = $('<div class="emailUser inline" data-val="'+email+'">'+email+'<a style="margin-left: 5px;" class="inline"><span class="glyphicon glyphicon-remove-circle" aria-hidden="true"></span></a></div>');
+					$('#email-wrapper').prepend($result);
+        		}
+        	});
+
+        	//show results on input click
+        	$('#email-wrapper').on('click','#email-input',function (e) {
+        		e.stopPropagation();
+				if($('#email-input').val() != '') {
+        			$('#search-results').show();
+        		}
+			});
+
+			$('#email-wrapper').on('click','.emailUser',function () {
+				$(this).remove();
+			});
+
+			$('#optionsbar').on('click','#emailDirectionsBtn',function() {
+				$('#emailbox').show();
+				$('#emailSuccess').hide();
+			});
+
+			$('#email-wrapper').on('click',function(e) {
+				$('#email-input').focus();
+				e.stopPropagation();
+				if($('#email-input').val() != '') {
+        			$('#search-results').show();
+        		}
+			});
+
+        	//handle auto complete for email user search
+        	$('#emailbox').on('keyup','#email-input', function () {
+				var searchText = $(this).val();
+				//empty the previous search results
+				$('#search-results .result-row').remove();
+
+				//append the actual entered text
+				$row = $('<div class="result-row">'+searchText+'</div>');
+				$row.on('click',function () {
+					var $result = $('<div class="emailUser inline" data-val="'+searchText+'">'+searchText+'<a style="margin-left: 5px;" class="inline"><span class="glyphicon glyphicon-remove-circle" aria-hidden="true"></span></a></div>')
+					$('#email-wrapper').prepend($result);
+					$('#email-input').val('');
+				});
+				$('#search-results').append($row);
+
+				//apex remote to get users
+				if(searchText.length > 2) {
+					(typeof sma == 'undefined' ? PrintEmailRoute: sma.PrintEmailRoute).searchUsers(searchText, function (response,status) {	
+						if(response.success) {
+							//loop over results and build list
+							var users = response.data.User;
+							var uI = users.length;
+							var html = '';
+							while(uI--) {
+								var user = users[uI];
+								$row = $('<div class="result-row">'+user.label+' - '+user.value+'</div>');
+								$row.data('user',user);
+								$row.on('click',function () {
+									var userData = $(this).data('user');
+									//create a template
+									var $result = $('<div class="emailUser inline" data-val="'+userData.value+'">'+userData.label+'<a style="margin-left: 5px;" class="inline"><span class="glyphicon glyphicon-remove-circle" aria-hidden="true"></span></a></div>')
+									$('#email-wrapper').prepend($result);
+									$('#email-input').val('');
+								});
+								$('#search-results').append($row);
+							}
+							$('#search-results').show();
+						}
+						else {
+							//return an empty array
+							console.log('error');
+						}
+					},
+					{escape: false});//do not escape the json data!
+				}
+			});
+
+        	//if there are more than 26 points, we're just going to create a call sheet instead of getting directions
+	    	var tableRows = $( window.opener.document.getElementById('Routing-Table') ).find('.waypoint-row');
+	    	if (tableRows.length > 26) {
+	    		$('#CallSheetMsg').show();
+	    		var $callSheet = $('#directions');
+	    		$.each(tableRows, function (i, row) {
+	    			var $item = $([
+	    				'<div class="callsheet-item" style="width: 600px;border: 2px solid #808080;padding: 2px;background-color: #EEE;font-family: Roboto,Arial,sans-serif;font-weight: 300;color: #2C2C2C;overflow: hidden;margin-bottom: 5px;">',
+	    					'<div style="display: inline-block;width: 290px;padding-right:10px;vertical-align:top;">',
+	    						'<div class="callsheet-item-name" style="font-weight: bold;" />',
+	    						'<div class="callsheet-item-address" style="color: #383838; font-size: 10px;" />',
+	    					'</div>',
+	    					'<div class="callsheet-item-tooltips" style="display: inline-block; max-width:300px;"/>',
+	    				'</div>'
+	    			].join(''));
+	    			$item.find('.callsheet-item-name').text($(this).find('.name').val());
+	    			$item.find('.callsheet-item-address').text($(this).find('.address').val());
+	    			$item.find('.callsheet-item-tooltips').append(($(this).find('.tooltips').html() || '').replace(/\n/g, '<br />'));
+	    			$callSheet.append($item);
+	    		});
+	    		$('#routeName').text($(window.opener.document.getElementById('routename')).val()).prev().text('Callsheet Name:');
+	    		$('#drivingDistance, #totalTime').text('N/A');
+	    		$('#visitedOrders').text(tableRows.length);
+	    		$('#mapcontainer').hide();
+	    		$('#optionsbar input').attr('disabled', 'disabled');
+	    		$('#printPageBtn, #emailDirectionsBtn').removeClass('btnDisabled').removeAttr('disabled');
+	    		return;
+	    	}
+        	MA.map = new google.maps.Map(document.getElementById('mapdiv'), {
+		        center: { lat: 36.98500309285596, lng: -97.8662109375},
+		        zoom: 5,
+		        panControl: false,
+		        zoomControl: false,
+		        streetViewControl: false,
+		        mapTypeControl: false,
+		        scaleControl: false
+		    });
+
+		    //remove standard POI functionality
+		    MA.map.setOptions({
+		        styles: [
+		            { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+		            { featureType: 'transit', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+		            { featureType: 'landscape', elementType: 'labels', stylers: [{ visibility: 'off' }] }
+		        ]
+		    });
+
+		    google.maps.event.addListenerOnce(MA.map, 'idle', function () {
+
+		    	var HasRoutingErrors = false;
+			    var RequiresGeoCoding = false;
+			    var WPIndex = 0;
+
+			    //build array of points
+			    WayPointArray = [];
+				$.each(tableRows, function () {
+					var WayPoint = {};
+					if (!!$(this).attr('Lat') && !!$(this).attr('Long'))
+					{
+						//get time options
+						var time = {
+							start : $(this).find('.editable[data-for="timeoptions-waypointstart"]').html().replace(/\n/g, '<br />'),
+							duration : $(this).find('.editable[data-for="timeoptions-waypointduration"]').html().replace(/\n/g, '<br />'),
+							timeBased : $(window.opener.document.getElementById('tab-routes-route')).hasClass('timebased')
+						}
+						//this does not need to be geocoded
+						WayPoint['Done'] = true;
+				        WayPoint['WayPointTitle'] = $(this).find('.name').val();
+				        WayPoint['lat'] = $(this).attr('Lat');
+				        WayPoint['long'] = $(this).attr('Long');
+				        WayPoint['Address'] = $(this).find('.address').val();
+				        WayPoint['Index'] = $(this).find('.rownumber').text();
+				        WayPoint['Row'] = $(this);
+				        WayPoint['Tooltips'] = ($(this).find('.tooltips').html() || '').replace(/\n/g, '<br />');
+				        WayPoint['Notes'] = ($(this).find('.editable[data-for="notes"]').html() || '').replace(/\n/g, '<br />');
+				        WayPoint['TimeOptions'] = time.timeBased ? time.start + ' - ' + time.duration : '';
+				        WayPointArray.push(WayPoint);
+				        
+				        WPIndex++;
+					}
+					else if ($(this).find('.address').val() != '')
+					{
+						RequiresGeoCoding = true;
+						//get time options
+						var time = {
+							start : $(this).find('.editable[data-for="timeoptions-waypointstart"]').html().replace(/\n/g, '<br />'),
+							duration : $(this).find('.editable[data-for="timeoptions-waypointduration"]').html().replace(/\n/g, '<br />'),
+							timeBased : $(window.opener.document.getElementById('tab-routes-route')).hasClass('timebased')
+						}
+						WayPoint['Done'] = false;
+				        WayPoint['WayPointTitle'] = $(this).find('.name').val();
+				        WayPoint['Address'] = $(this).find('.address').val();
+				        WayPoint['Index'] = $(this).find('.rownumber').text();
+				        WayPoint['Row'] = $(this);
+				        WayPoint['Tooltips'] = ($(this).find('.tooltips').html() || '').replace(/\n/g, '<br />');
+				        WayPoint['Notes'] = ($(this).find('.editable[data-for="notes"]').html() || '').replace(/\n/g, '<br />');
+				        WayPoint['TimeOptions'] = time.timeBased ? time.start + ' - ' + time.duration : '';
+				        WayPointArray.push(WayPoint);
+				        
+				        WPIndex++;
+				    }
+				});
+				
+				//geocode array of points
+				if (WPIndex < 2)
+			    {
+			    	alert('At least 2 points are required for directions');
+			    	return;
+			    }
+			    else if (RequiresGeoCoding)
+			    {
+			    	$.each(WayPointArray, function (index, waypoint) {
+			    		if (!waypoint.Done) {
+							geocode({
+								address: waypoint.Address,
+								complete: function(response) {
+									if (response.success) {
+										waypoint.Done = true;
+										waypoint.lat = response.results.Latitude;
+								        waypoint.long = response.results.Longitude;
+								        waypoint.Row.attr({ Lat: response.results.Latitude, Long: response.results.Longitude }).find('.address, [data-for="address"]').addClass('GoodGeocodeForWaypoint');
+								        waypoint.address = response.results.FormattedAddress;
+								    }
+								    else {
+								    	waypoint.Done = true;
+								    	waypoint.Row.find('.address, [data-for="address"]').addClass('BadGeocodeForWaypoint');
+								    	waypoint.error = true;
+								    }
+								}
+							});
+						}
+			    	});
+			    }
+
+
+			    //loop through directions and check if done : continue
+			    var interval = setInterval(function ()
+			    {
+			    	var done = true;
+			    	var error = false;
+			    	var routeUnit;
+			    	var unit = 'mi';
+			    	var routeType;
+			    	$.each(WayPointArray, function (index, waypoint) 
+			    	{
+			    		if(waypoint.Done == false) {
+			    			done = false;
+			    		}
+			    		else if (waypoint.error) {
+			    			error = true;
+			    		}
+			    	});
+			    	
+			    	if(done) {
+			    		if (error) {
+			    			$('#tab-routes .loadmask').remove();
+			    		}
+			    		else 
+			    		{
+		    				window.directionsService = new google.maps.DirectionsService();
+		    				window.directionsRenderer = new google.maps.DirectionsRenderer({ map: MA.map, panel: document.getElementById('directions') });
+		    				window.directionsOptions = buildDirectionOptions();
+
+
+							var validWaypointsArray = [];
+							$.each(WayPointArray, function (waypointIndex, waypoint)
+							{
+								if (!waypoint) {return;}
+
+								validWaypointsArray.push(waypoint);
+								if (!directionsOptions.origin) {
+									directionsOptions.origin = new google.maps.LatLng(waypoint.lat, waypoint.long);
+								}
+								else if (directionsOptions.waypoints.length == 23 || waypointIndex == WayPointArray.length - 1) {
+									directionsOptions.destination = new google.maps.LatLng(waypoint.lat, waypoint.long);
+									return false;
+								}
+								else {
+									directionsOptions.waypoints.push({ location: new google.maps.LatLng(waypoint.lat, waypoint.long), stopover: true });
+								}
+							});
+
+							//display custom fields when the directions are rendered
+							google.maps.event.addListener(directionsRenderer, 'directions_changed', function ()
+							{
+								//the directions panel is not populated at this point.  setting an interval to wait for it
+								var panelInterval = setInterval(function () {
+									if ($(directionsRenderer.getPanel()).find('.adp-placemark').length > 0) {
+										$(directionsRenderer.getPanel()).find('.adp-placemark').each(function (i, el) {
+											if (validWaypointsArray[i].Tooltips != '') {
+												$(this).find('tr').append($('<td class="waypoint-tooltips" />').append(validWaypointsArray[i].Tooltips));
+											}
+											if (validWaypointsArray[i].TimeOptions != '') {
+												$(this).find('.adp-text').closest('table').append($('<tr><td class="waypoint-timeOptions" />').append(validWaypointsArray[i].TimeOptions));
+											}
+											if (validWaypointsArray[i].Notes != '') {
+												$(this).find('.adp-text').closest('table').append($('<tr><td class="waypoint-notes" />').append(validWaypointsArray[i].Notes));
+											}
+											$(this).find('.adp-text').text(validWaypointsArray[i].Address);
+										});
+										clearInterval(panelInterval);
+									}
+								}, 200);
+							});
+//console.log('qqq',window.opener);
+
+							//var RouteObj = RouteObj || {};
+							if(RouteObj != null || RouteObj != undefined) {
+								var request = RouteObj.request;
+								window.directionsOptions = buildDirectionOptions();
+			    				directionsOptions.origin = new google.maps.LatLng(request.origin.lat(), request.origin.lng());
+								directionsOptions.destination = new google.maps.LatLng(request.destination.lat(), request.destination.lng());
+
+								//loop over waypoints to fix google error and recreate latlng ob
+								for(i=0;i<request.waypoints.length;i++) {
+									var wp = request.waypoints[i];
+									//create lat lng object and push to directionsOptions
+									directionsOptions.waypoints.push({ location: new google.maps.LatLng(wp.location.lat(), wp.location.lng()), stopover: wp.stopover });
+								}
+							}
+
+							directionsService.route(directionsOptions, function(response, status) {
+								if (status == google.maps.DirectionsStatus.OK) {
+									directionsRenderer.setDirections(response);
+
+									var totalSeconds = 0, totalMeters = 0;
+									$.each(response.routes[0].legs, function (i, leg) {
+										totalSeconds += leg.duration.value;
+										totalMeters += leg.distance.value;
+									});
+
+									//display total time
+									var totalHours = Math.floor(totalSeconds / 3600);
+									var totalMinutes = Math.floor((totalSeconds - (totalHours * 3600)) / 60);
+									if(totalHours == 0) { $('#totalTime').text(totalMinutes + ' minutes '); }
+									else { $('#totalTime').text(totalHours + ' hour' + (totalHours == 1 ? '' : 's') + ' ' + totalMinutes + ' minutes '); }
+
+									//display total distance
+									$('#drivingDistance').text(unit == 'mi' ? (totalMeters * 0.000621371).toFixed(1) + ' miles' : (totalMeters / 1000).toFixed(1) + ' kilometers');
+
+									//display visited orders
+									$('#visitedOrders').text(response.routes[0].legs.length + 1);
+								}
+							});
+			    		}
+			    		clearInterval(interval);
+			    	}
+			    },100);
+
+		    	//done.  enable buttons
+	        	$('#printPageBtn, #emailDirectionsBtn').removeClass('btnDisabled').removeAttr('disabled');
+
+		    });
+        	
+        	/********************************
+	        * PRINT/EMAIL PAGE FUNCTIONS
+	        ********************************/
+	        $('#routeName').text($(window.opener.document.getElementById('routename')).val());
+	        
+	        //initialize all checkboxes to checked
+	        $('#showMapCheckbox, #showDirectionsCheckbox, #showFieldsCheckbox').click();
+	        
+	        //show map button clicked
+	        $('#showMapCheckbox').on('click', function() {
+	        	if($(this)[0].checked) {
+	        		$('#mapcontainer').show();
+	        		google.maps.event.trigger(MA.map, 'resize');
+	        	}
+	        	else {
+	        		$('#mapcontainer').hide();
+	        	}
+	        });
+	        
+	        //show directions button clicked
+	        $('#showDirectionsCheckbox').on('click', function() {
+	        	if($(this)[0].checked) {
+	        		$('.adp-directions').show();
+	        	}
+	        	else {
+	        		$('.adp-directions').hide();
+	        	}
+	        });
+	        
+	        //show fields button clicked
+	        $('#showFieldsCheckbox').on('click', function() {
+	        	if($(this)[0].checked) {
+	        		$('.waypoint-tooltips').show();
+	        	}
+	        	else {
+	        		$('.waypoint-tooltips').hide();
+	        	}
+	        });
+            
+        }); //onready
+        
+
+        //print
+        function printPage()
+        {	
+        	//print
+        	window.print(); 
+        }
+
+        function buildDirectionOptions () {
+        	//get mode
+			try {
+				routeType = window.location.search.split('&')[0].split('=')[1];
+			}
+			catch (e) {
+				routeType = 'driving';
+			}
+			
+			try {
+				routeUnit = window.location.search.split('&')[1].split('=')[1];
+				unit = window.location.search.split('&')[1].split('=')[1];
+			}
+			catch (e) {
+				routeUnit = 'mi';
+			}
+			switch (routeType) {
+        		case 'driving' :
+        			routeType = google.maps.TravelMode.DRIVING;
+        			break;
+        		case 'bicycling' :
+        			routeType = google.maps.TravelMode.BICYCLING;
+        			break;
+        		case 'transit' :
+        			routeType = google.maps.TravelMode.TRANSIT;
+        			break;
+        		case 'walking' :
+        			routeType = google.maps.TravelMode.WALKING;
+        			break;
+        		default: 
+        			routeType = google.maps.TravelMode.DRIVING;
+        			break;
+        	}
+
+        	switch (routeUnit) {
+        		case 'mi' :
+        			routeUnit = google.maps.UnitSystem.IMPERIAL;
+        			break;
+        		case 'km' :
+        			routeUnit = google.maps.UnitSystem.METRIC;
+        			break;
+        		default: 
+        			routeUnit = google.maps.UnitSystem.IMPERIAL;
+        			break;
+        	}
+
+			return {
+				travelMode: routeType,
+				unitSystem: routeUnit,
+				waypoints: []
+			};
+        }
+
+        function geocode(options)
+		{
+			MA.Geocoding.geocode({ address: options.address }, function (response) {
+	            try {
+	                options.complete({
+	                    success: true,
+	                    request: options,
+	                    results: response.result
+	                });
+	            }
+	            catch (err) {
+	                options.complete({success: false});
+	            }
+	        });
+		}
+
+		function cancelEmail () {
+			$('#email-wrapper .emailUser').remove();
+			$('#email-input').val('');
+			$('#emailMsg').val('');
+			$('#emailSubject').val('Map Anything Directions');
+
+			//hide the email dialog
+			$('#emailbox').hide();
+		}
+        
+		function emailSelection () {
+			var EmailAddresses = [];
+			var selections = $('#email-wrapper .emailUser');
+			var eI = selections.length;
+
+			if(eI == 0) {
+				alert('No email recipients have been selected.');
+				return;
+			}
+
+			//loop over the list and add to EmailAddresses
+			while(eI--){
+				var addr = selections[eI];
+				var email = $(addr).attr('data-val');
+				EmailAddresses.push(email);
+			}
+
+			var htmlBody = '';
+        	var directionsHTML = '';
+        	var directionsClone = $('#directions').clone();
+        	var emailMsg = $('#emailMsg').val();
+        	//directionsClone.find('img').remove();
+        	
+        	//remove the maneuvers if needed
+        	if(!$('#showDirectionsCheckbox').prop('checked'))
+        	{
+        		directionsClone.find('.adp-directions').remove();
+        	}
+        	
+        	//remove the custom fields if needed
+        	if(!$('#showFieldsCheckbox').prop('checked')) { $(directionsClone).find('.waypoint-tooltips').remove(); }
+        	
+			//build html body
+    		directionsHTML += $(directionsClone).html() + '<br /><br />';
+        	htmlBody = '<br /><br /><div>' +emailMsg+ '</div><br /><br />' + $('#overview').html() + '<br /><br />' + directionsHTML 
+    					+ '<a href="http://www.cloudbilt.com" target="_blank"><img id="logo" style="width: 100px; border:0; margin-left: -25px;" src="http://cloudbilt.com/wp-content/uploads/Cloudbilt_logo_small-192x39.jpg" title="Cloudbilt" alt="Cloudbilt"/></a>';
+	        
+    		var emailSubject = $('#emailSubject').val() == '' ? 'Map Anything Directions' : $('#emailSubject').val();
+
+	        var MyJSObject = {
+	                action: 'email_directions',
+	                replyTo: "{!$User.Email}",
+	                subject: emailSubject,
+	                toAddresses: EmailAddresses,
+	                htmlBody: htmlBody              
+	        };
+	        
+	        $.ajax({
+	            url: MA.resources.Email,
+	            type: 'POST',
+	            dataType: 'JSON',
+	            data: { MyJSObject: JSON.stringify(MyJSObject) },
+	            complete: function (response)
+	            {
+	                var obj = $.parseJSON(response.responseText);                      
+	                
+	                if(obj.success) {
+	                	$('#emailbox').hide();
+	                	$('#emailSuccess').show();
+	                }
+	                else {
+	                    alert('Error Sending Directions Email');
+	                }
+	            },
+	            error: function(jqXHR, textStatus, errorThrown) { 
+	                alert('Error Sending Directions Email');
+	            }
+	        }); 
+		}
+
+    </script>
+
+	<!-- Options Bar -->
+	<div id="optionsbar" class="center">
+		
+		<input type="checkbox" id="showMapCheckbox" /> Map | 
+		<input type="checkbox" id="showDirectionsCheckbox" /> Turn-by-Turn Directions | 
+		<input type="checkbox" id="showFieldsCheckbox" /> Custom Fields
+		
+		<div class="right">
+			<button id='printPageBtn' onclick="printPage();" class="MAbutton button-silver button-small btnDisabled" disabled="disabled">Print This Page</button>
+			<button id='emailDirectionsBtn' class="MAbutton button-silver button-small btnDisabled" disabled="disabled">Email Directions</button>
+		</div>
+		
+	</div>
+
+	<div id="CallSheetMsg" class="center" style="padding-bottom: 5px;display:none;width: 600px; margin-top: -15px;">
+		<span style="font-size: 20px;color: #D5A165;" class="MAIcon ion-android-warning"></span>
+		<span>Directions are only supported for 25 points or less.</span>
+	</div>
+
+	<!-- Email Box -->
+	<div id="emailbox" class="center" style="border: 1px solid black; width: 600px; padding: 25px; margin-bottom: 10px;">
+		<div class="row" style="padding-bottom: 10px; position: relative;">
+			<div class="text-col inline">To:</div>
+			<div id="email-wrapper" class="to-wrapper inline input-col">
+				<input id="email-input" class="" type="text"/>
+			</div>
+			<div id="search-results">
+				
+			</div>
+			<div class="row" style="position: relative;left: 80px;padding: 10px 0px 0px 0px;">
+				<a style="padding: 2px 5px;" data-id="me" class="MAbutton button-small add-email button-blue inline">Add Me</a>
+				<a style="padding: 2px 5px;" data-id="manager" class="MAbutton button-small add-email button-blue inline">Add Manager</a>
+			</div>
+		</div>
+		<div class="row" style="padding-bottom: 10px;">
+			<div class="text-col inline">Subject: </div>
+			<div class="inline input-col">
+				<input id="emailSubject" style="width: 100%;" value="Map Anything Directions" type="text"/>
+			</div>
+		</div>
+		<div class="row" style="padding-bottom: 10px; border-bottom: 1px solid silver;">
+			<div style="vertical-align: top; padding-top:5px;" class="text-col inline">Message:</div>
+			<div class="inline">
+				<textarea id="emailMsg" class="input-col"></textarea>
+			</div>
+		</div>
+
+		<div class="button-wrapper" style="padding: 25px 0px 0px 5px;">
+			<a onclick="emailSelection();" class="MAbutton button-blue">Send</a>
+			<a onclick="cancelEmail();" class="MAbutton button-silver">Cancel</a>
+		</div>
+	</div>
+
+	<!-- Email Success Message -->
+	<div id="emailSuccess" class="center" style="display:none; border: 1px solid black; width: 600px; padding: 20px 25px;  margin-bottom: 10px;">
+		<div class="check-img inline" style="vertical-align: middle;">
+			<span style="font-size: 24px;color: #65D565;" class="MAIcon glyphicon-ok" aria-hidden="true"></span>
+		</div>
+		<div class="inline" style="vertical-align: middle; font-size: 14px; margin-left: 15px;">Email sent successfully.</div>
+		<div class="check-img inline" id="hideMsg" style="vertical-align: middle; float: right; cursor:pointer;">
+			<span style="font-size: 14px;color: #C8C8C8;line-height: 24px;" class="MAIcon glyphicon-remove" aria-hidden="true"></span>
+		</div>
+	</div>
+	
+	<!-- Outer Box -->
+	<div id="outerbox" class="center" style="border: 1px solid black; width: 600px; padding: 25px;">
+	    
+	    <!-- Route Overview -->
+	    <div id="overview" style="width: 100%; margin-bottom: 10px;">
+	    	<table>
+	    		<tr>
+	    			<td style="font-weight: bold;">Route Name:</td>
+	    			<td id="routeName" style="font-weight: bold;"></td>
+	    		</tr>
+	    		<tr>
+	    			<td style="padding-right: 10px;">Driving Distance:</td>
+	    			<td id="drivingDistance" style="font-weight: bold;"></td>
+	    		</tr>
+	    		<tr>
+	    			<td>Total Time:</td>
+	    			<td id="totalTime" style="font-weight: bold;"></td>
+	    		</tr>
+	    		<tr>
+	    			<td>Visited Orders:</td>
+	    			<td id="visitedOrders" style="font-weight: bold;"></td>
+	    		</tr>
+	    	</table>
+	    </div>
+	    
+	    <!-- Map Container -->
+	    <div id="mapcontainer" style="width:100%; height: 400px;">
+
+		    <!-- Map -->
+		    <div id="mapdiv" style="width:100%; height: 400px;"></div>
+	    
+	        <!-- Shadows -->
+	        <div id="top-shadow"></div>
+	        <div id="right-shadow"></div>
+	        <div id="bottom-shadow"></div>
+	        <div id="topleft-shadow"></div>
+	        <div id="topright-shadow"></div>
+	        <div id="bottomleft-shadow"></div>   
+	        <div id="bottomright-shadow"></div> 
+	        
+	        <!-- Growl Wrapper -->
+	        <div id="growl-wrapper" style='position: absolute; top: 5px; right: 5px;'></div>
+	        
+	    </div>
+	    
+	    <!-- Directions Outer -->
+	    <div id="directionsouter" style="width: 100%;">
+	    	
+	    	<!-- Directions -->
+		    <div id="directions" style="width: 100%;">
+			</div>
+	    
+	    </div>
+	     
+	</div>
+	
+	<!-- Cloudbilt Logo -->
+	<div class="center" style="width: 600px; margin-bottom: 25px;">
+		<a href="http://www.cloudbilt.com" target="_blank"><img id="logo" style="width: 100px; border:0; margin-left: -25px;" src="http://cloudbilt.com/wp-content/uploads/Cloudbilt_logo_small-192x39.jpg" title="Cloudbilt" alt="Cloudbilt"/></a>
+	</div>
+    
+    <!-- Templates -->
+    <div id='templates' style='display: none;'>
+    
+		<!-- Directions Row Template -->
+		<div id="DirectionsTemplate">
+			<table>
+				<tr class='directions-waypoint-row'>
+					<td colspan='3'>
+						<table style='width: 100%; border-spacing: 0;'>
+							<tr>
+								<td style='text-align: left; width: 100%; background-color: #E0E0E0; padding: 12px 8px;'>
+									<div class='name' style='font-family: helvetica,arial,sans-serif; font-size: 16px; color: #006DB4; font-weight: bold;'></div>
+									<div class='address' style='font-family: helvetica,arial,sans-serif; font-size: 10px; font-style: italic; color: black;'></div>
+									<div class='notes' style='max-width:350px;font-size:10px;color:#757575;padding-top:5px;'></div>
+								</td>
+								<td style='width: 1px; white-space: nowrap; background-color: #E0E0E0; padding: 12px 8px;'>
+									<div class='waypointTooltips'></div>
+								</td>								
+							</tr>
+						</table>
+					</td>
+				</tr>
+				<tr class='directions-row'>
+					<td class='index' style='padding: 10px; width: 1px; white-space: nowrap; border-bottom: 1px solid black;font-family: helvetica,arial,sans-serif;font-size: 14px;color: #006DB4;font-weight: bold;text-align: center;'></td>
+					<td style='border-bottom: 1px solid black; width: 1px; white-space: nowrap;'><img class='directions-image'/></td>
+					<td class='directions' style='border-bottom: 1px solid black;'></td>
+				</tr>
+			</table>
+		</div>
+		
+	</div>
+
+	<!-- Avoid Errors -->
+	<input type='hidden' id=':serializedOptions' value='{}' />
+
+	<!-- User Settings -->
+	<apex:form >
+		<apex:inputHidden id="serializedSettings" value="{!currentUser.sma__MapAnythingSettings__c}" />
+	</apex:form>
+
+</apex:page>

@@ -1,0 +1,122 @@
+<apex:component controller="Loop.DdpSecurityController" allowDML="true" layout="block">
+    <apex:attribute name="ddpVar" assignTo="{!ddp}" description="The DDP instance for the security to apply to." type="Loop__DDP__c" required="true" />
+    <apex:attribute name="recordTypeId" assignTo="{!ddpRecordTypeId}" type="Id" description="" required="true" />
+    <apex:attribute name="renderPageMessages" assignTo="{!showPageMessages}" type="boolean" description="" required="false" />
+    
+    <script src="{!URLFOR($Resource.Scripts, 'jquery-code.js')}"></script>
+    <script src="{!URLFOR($Resource.Scripts, 'jquery.drawloop.js')}"></script>
+    <script>
+        jQuery.noConflict(); // Can not use $ because prototype and jQuery will have naming issues.
+                             // This command fixes that, but you must use "jQuery" instead of "$"
+                             // for jQuery commands.
+        
+        function fadeSuccessMessage(visualforceElementId) {
+            var messageElement = jQuery('[id$=":'+visualforceElementId+'"] div.message:contains("Update complete")');
+            messageElement.fadeOut(5000);
+            return (messageElement.size() > 0);
+        }
+        
+        function setFocusOnLoad() {
+            // do nothing. We don't want to focus on the first available element here.
+        }
+        
+        function highlightSaveButton(visualforceElementId) {
+            jQuery('[id$=":'+visualforceElementId+'"]').addClass('saveChange');
+        }
+    </script>
+    
+    <apex:pageBlockSection collapsible="{!NOT(ISBLANK(ddp.Id))}" columns="1" title="{!CASE(ddpRTName,'Report','Email Report To','Set Security')}" id="securityPBS">
+        <apex:pageMessages id="securityMessages" rendered="{!showPageMessages}" />
+        <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Search:" for="secSearchType" />
+            <apex:outputPanel >
+                <apex:selectList size="1" id="secSearchType" value="{!secSearchType}">
+                    <apex:selectOption itemLabel="--None--" itemValue="none" rendered="{!ddpRTName='Report'}" />
+                    <apex:selectOptions value="{!typeOptions}" />
+                    <apex:actionSupport event="onchange" action="{!resetSecList}" status="secSearchStatus" rerender="securityMessages,duel" />
+                </apex:selectList>
+                <apex:outputLabel value="for:" for="searchFilter" />
+                <apex:input type="search" value="{!searchFilter}" />
+                <apex:commandButton value="Find" action="{!resetSecList}" status="secSearchStatus" rerender="securityMessages,duel" />
+                <apex:actionStatus stopText="" id="secSearchStatus" styleClass="nowrap">
+                    <apex:facet name="start">
+                        <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                    </apex:facet>
+                </apex:actionStatus>
+            </apex:outputPanel>
+        </apex:pageBlockSectionItem>
+        <apex:pageBlockSectionItem id="duelpbsi">
+            <apex:outputLabel />
+            <apex:outputPanel id="duel" styleClass="duelingListBox">
+                <apex:outputText id="resultsErrMsg" styleClass="errorMsg" value="{!resultsErrMsg}" style="{!IF(resultsErrMsg='','display: none;','')}" />
+                <table class="layout"> <tr>
+                    <td class="selectCell">
+                        <div class="selectTitle">
+                            <apex:outputLabel value="Available {!IF(ddpRTName=='Report','Recipients','Security')}" for="secIds" styleClass="selectTitle" />
+                        </div>
+                        <apex:selectList size="{!IF(ISBLANK(ddp.Id),14,7)}" multiselect="true" id="secIds" value="{!highlightedIds}" style="min-width: 100px;">
+                            <apex:selectOptions value="{!availableSecurity}" />
+                        </apex:selectList>
+                        <script type="text/javascript">
+                            jQuery(function() {
+                                var errMsg = '{!resultsErrMsg}';
+                                if (errMsg) jQuery('[id$=":resultsErrMsg"]').text(errMsg);
+                            });
+                        </script>
+                    </td>
+                    <td class="buttonCell">
+                        <apex:actionStatus stopText="" id="addStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                        <div class="text">Add</div>
+                        <div class="text">
+                            <apex:commandLink action="{!addSecurity}" status="addStatus" rerender="securityMessages,duel,securityTypePanel" oncomplete="highlightSaveButton('saveSecurityBtn');">
+                                <apex:image title="Add" styleClass="rightArrowIcon" alt="Add" value="/s.gif" />
+                            </apex:commandLink>
+                        </div>
+                        <div class="text">
+                            <apex:commandLink action="{!removeSecurity}" status="remStatus" rerender="securityMessages,duel,securityTypePanel" oncomplete="highlightSaveButton('saveSecurityBtn');">
+                                <apex:image title="Remove" styleClass="leftArrowIcon" alt="Remove" value="/s.gif" />
+                            </apex:commandLink>
+                        </div>
+                        <div class="duelingText">Remove</div>
+                        <apex:actionStatus stopText="" id="remStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </td>
+                    <td class="selectCell">
+                        <apex:outputPanel layout="block" styleClass="selectTitle">
+                            <apex:outputLabel id="selSecLabel" value="Selected {!IF(ddpRTName=='Report','Recipients','Security')}" for="selectedSecIds" styleClass="selectTitle">
+                            </apex:outputLabel>
+                        </apex:outputPanel>
+                        <apex:selectList size="{!IF(ISBLANK(ddp.Id),14,7)}" multiselect="true" id="selectedSecIds" value="{!selectedIds}" style="min-width: 100px; max-width: 500px;">
+                            <apex:selectOptions value="{!selectedSecurity}" />
+                        </apex:selectList>
+                    </td>
+                </tr> </table>
+            </apex:outputPanel>
+        </apex:pageBlockSectionItem>
+        <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Security Type" for="secType" rendered="{!ddpRTName!='Report'}" />
+            <apex:outputPanel id="securityTypePanel">
+                <apex:selectList size="1" id="secType" value="{!securityType}" rendered="{!ddpRTName!='Report'}" disabled="{!securityTypeDisabled}">
+                    <apex:selectOption itemValue="both" itemLabel="Match {!$ObjectType.Profile.label} OR {!$ObjectType.UserRole.label}" />
+                    <apex:selectOption itemValue="bothand" itemLabel="Match {!$ObjectType.Profile.label} AND {!$ObjectType.UserRole.label}" />
+                    <apex:actionSupport event="onchange" rerender="" action="{!updateDdpSecurityType}" oncomplete="highlightSaveButton('saveSecurityBtn');" status="saveSecurityStatus" />
+                </apex:selectList>
+                <apex:outputPanel rendered="{!NOT(ISBLANK(ddp.Id))}">
+                    <apex:commandButton value="Save {!IF(ddpRTName=='Report','','Security ')}Changes" id="saveSecurityBtn" action="{!save}" rerender="securityPBS" oncomplete="if (!fadeSuccessMessage('securityMessages')) highlightSaveButton('saveSecurityBtn');" status="saveSecurityStatus" />
+                    <apex:actionStatus stopText="" id="saveSecurityStatus" styleClass="nowrap">
+                        <apex:facet name="start">
+                            <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                        </apex:facet>
+                    </apex:actionStatus>
+                </apex:outputPanel>
+            </apex:outputPanel>
+        </apex:pageBlockSectionItem>
+    </apex:pageBlockSection>
+</apex:component>

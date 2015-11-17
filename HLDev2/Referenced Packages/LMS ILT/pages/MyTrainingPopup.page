@@ -1,0 +1,348 @@
+<apex:page controller="lmsilt.MyTrainingPopupExtension"  sidebar="false" showheader="false">
+	<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+		<head>
+			<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+			<apex:stylesheet value="{!URLFOR($Resource.lmsilt__devplan, 'css/training.css')}"/>
+			<apex:includeScript value="{!URLFOR($Resource.lmsilt__devplan, 'js/jquery-1.6.4.js')}"/>
+			<apex:includeScript value="{!URLFOR($Resource.lmsilt__devplan, 'js/init.js')}"/>
+			<apex:stylesheet value="{!URLFOR($Resource.lmsilt__devplan, 'css/lightbox.css')}"/>
+			<apex:includeScript value="{!URLFOR($Resource.lmsilt__lmslightbox, 'js/init.js')}"/>
+			<apex:stylesheet value="{!URLFOR($Resource.lmsilt__jquery1816min, 'jquery-ui.css')}" />
+			<apex:includeScript value="{!URLFOR($Resource.lmsilt__jquery1816min, 'jquery-ui.min.js')}" />
+			<style>
+				pre {font-family: Arial,Helvetica,sans-serif; white-space: pre-wrap; word-wrap: break-word;}
+				.m-data td {vertical-align:top; padding: 4px 6px 3px;}
+				.m-data th {padding: 7px 6px 8px;}
+				.m-fixed-table {table-layout: fixed; white-space: pre-wrap; word-wrap: break-word;}
+				.tdEventColumn {border-top: 1px solid #E0DEB8;}
+
+				.b-custom-table {overflow-x:auto; //overflow-y:hidden}
+					.b-custom-table .b-hor-scroll {min-width:800px;}
+
+					.b-custom-table table {table-layout:fixed; width:100%}
+						.b-custom-table .m-custom-header th {color:#535353; font-weight:bold; padding:7px 6px 8px; background:#F0EBC1;}
+						.b-custom-table .m-custom-body td {color:#535353; padding:4px 6px 3px;}
+						.b-custom-table .m-custom-header th, .b-custom-table .m-custom-body td {text-overflow: ellipsis; overflow:hidden; vertical-align:top;}
+							.b-custom-table td.m-inner {padding:0;}
+								.b-custom-table td.m-inner td {border-bottom:0 none}
+							.b-custom-table .m-td-class {width:12%}
+							.b-custom-table .m-td-session {min-width:100px}
+							.b-custom-table .m-td-start {width:118px}
+							.b-custom-table .m-td-end {width:118px}
+							.b-custom-table .m-td-location {width:110px}
+							.b-custom-table .m-td-status {width:65px}
+							.b-custom-table .m-td-btns {width:85px; text-align:center}
+								.b-custom-table .m-td-btns .btn {padding:0 3px}
+			</style>
+			<script>
+
+				function resizeIframe() {
+					window.parent.resizeIframe();
+				}
+
+				function disableEnrollButton(classId) {
+					var callFunction = '{!checkSequence}';
+					if(callFunction != 'false') {
+						var result = window.parent.checkSequence();
+						if(result != undefined && result.seq != '' && result.seq != undefined && result.descr != undefined) {
+							alert('' + result.descr.replace(/\\n/g, "\n"));
+						} else {
+							enroll(classId);
+						}
+					} else {
+						enroll(classId);
+					}
+				}
+
+				function disableMarkCompleteButton(){
+					var callFunction = '{!checkSequence}';
+					if(callFunction != 'false') {
+						var result = window.parent.checkSequence();
+						if(result != undefined && result.seq != '' && result.seq != undefined && result.descr != undefined) {
+							alert('' + result.descr.replace(/\\n/g, "\n"));
+						} else {
+							markComplete();
+						}
+					} else {
+						markComplete();
+					}
+				}
+
+				function refreshParentPage () {
+					if (parent.RefreshPage) {
+						parent.RefreshPage();
+					}
+				}
+
+				//Open cancellation policy popup
+				function open_v_popup(classId, cancellationPolicyText) {
+
+					//console.log('classId == ' + classId);
+					//console.log('cancellationPolicyText == ' + cancellationPolicyText);
+
+					if(cancellationPolicyText != undefined && cancellationPolicyText != ''){
+
+						var szx = jQuery(window).width()*0.5;
+						var szy = jQuery(window).height()*0.5-100;
+
+						newLine = cancellationPolicyText.replace(/\n/g, '<br>');
+
+						jQuery('#textZone').html('<p>' + newLine +'</p>');
+
+						jQuery('#valuePopUp').dialog({
+							autoOpen: false,
+							width: jQuery(window).width()*0.7,
+							height: jQuery(window).height()*0.85,
+							modal: true,
+							resizable: true,
+							show:
+								{
+									effect: "blind",
+									duration: 1000
+								},
+
+							hide:
+								{
+									effect: "explode",
+									duration: 1000
+								},
+
+							buttons:
+								{
+									"{!$Label.Accept}": function() {
+												jQuery( this ).dialog( "close" );
+												disableEnrollButton(classId);
+											},
+
+									Cancel: function() {
+												jQuery( this ).dialog( "close" );
+											}
+								}
+
+						});
+
+						jQuery("#valuePopUp").dialog('open');
+							//insertTable(data);
+					}else{
+						disableEnrollButton(classId);
+					}
+
+				}
+			</script>
+
+		</head>
+		<body style="overflow-x: hidden;">
+
+			<div id="valuePopUp" title="{!$Label.Cancellation_Policy}" style="display:none;">
+				<div id = "textZone"></div>
+			</div>
+
+			<apex:pageMessages id="msg"/>
+			<apex:form >
+				<apex:actionStatus id="loadStatus">
+					<apex:facet name="start">
+						<c:EnhancedActionStatus BackColor="#efefef" borderColor="#336699" borderSize="1" height="50px" width="120px" ImageUrl="/img/loading.gif" Message="{!$Label.Loading}" messageStyle="color:darkred;font-size:11pt;font-weight:bold;"/>
+					</apex:facet>
+				</apex:actionStatus>
+				<!-- Action for mark completed selected Task -->
+				<apex:actionFunction action="{!MarkComplete}" name="markComplete" rerender="objectTaskId, msg" status="loadStatus" oncomplete="top.window.someChanges('myTeam');window.parent.someChanges('myTeam');"></apex:actionFunction>
+				<apex:actionFunction action="{!Enroll}" name="enroll" rerender="objectEventId,msg,contentId,BatchStatusAction,block1" status="loadStatus" oncomplete="resizeIframe();top.window.someChanges('myTeam');window.parent.someChanges('myTeam');">
+					<apex:param name="first" value="" assignTo="{!curClassId}"/>
+				</apex:actionFunction>
+				<apex:actionFunction action="{!unEnroll}" name="unenroll" rerender="objectEventId,msg,contentId,BatchStatusAction,block1" status="loadStatus" oncomplete="top.window.someChanges('myTeam');window.parent.someChanges('myTeam');">
+					<apex:param name="first" value="" assignTo="{!curClassId}"/>
+				</apex:actionFunction>
+				<apex:actionPoller enabled="{!enabledStatusBatch}" action="{!getStatusBatch}" rerender="BatchStatus,block1,objectEventId,msg" interval="5" id="BatchStatusAction" />
+				<apex:actionFunction action="{!unenrollAssignment}" name="unenrollAssignment" oncomplete="refreshParentPage()" status="loadStatus"/>
+			</apex:form>
+			<apex:outputPanel style="{!IF(AND(enabledStatusBatch,!hasBatchCompleted) ,'display:true;','display:none;')}" layout="block" id="block1">
+				<apex:outputPanel layout="block" style="z-index:1000;position:absolute; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.6;filter:alpha(opacity=60)">
+					<div>{!$Label.Please_wait}<img src="/img/loading.gif"/></div>
+				</apex:outputPanel>
+			</apex:outputPanel>
+			<apex:outputPanel styleclass="b-scroller" layout="block" id="contentId">
+				<!-- Object block -->
+				<apex:outputPanel rendered="{!r_Object}" id="objectId" layout="block">
+					<!-- Object name block -->
+
+					<strong class="m-faded">Name:</strong>&nbsp;
+					<apex:outputText value="{!objectDetails.name}"></apex:outputText><br/><br/>
+					<!-- Object Description block -->
+					<apex:outputPanel layout="block" >
+						<strong class="m-faded">{!$Label.Description}:</strong>&nbsp;
+						<pre><apex:outputText value="{!objectDetails.description}"></apex:outputText></pre><br/>
+					</apex:outputPanel>
+					<!-- Object Duration block -->
+					<apex:outputPanel layout="block" rendered="{!!ISBLANK(objectDetails.duration)}">
+						<strong class="m-faded">Duration:</strong>&nbsp;
+						<apex:outputText value="{!objectDetails.duration}"></apex:outputText><br/><br/>
+					</apex:outputPanel>
+					<apex:outputpanel layout="block" style="text-align:left" rendered="{!IF(AND(AllowUnenrollment == true, allowUnenrollForUser == true), true, false)}">
+						<br/>
+						<apex:outputLink value="javascript:void(0);"
+									onclick="if(confirm('{!$Label.MyTraining_Are_you_sure_you_want_to_unenroll_this_assignment}')){unenrollAssignment('{!JSENCODE(unenrollElementId)}','{!JSENCODE(unenrollType)}');}else{return false;}"
+									styleClass="btn"
+									style="text-decoration:none">
+									{!$Label.Unenroll}
+						</apex:outputLink>
+					</apex:outputpanel>
+				</apex:outputPanel>
+				<!-- End Object block -->
+
+				<!-- Task block -->
+				<apex:outputPanel rendered="{!r_Task}" id="objectTaskId"  layout="block">
+					<!-- Task name block -->
+					<strong class="m-faded">{!$Label.Task_Name}:</strong>&nbsp;
+					<apex:outputText value="{!taskDetails.name}"></apex:outputText><br/><br/>
+					<!-- Task Description block -->
+					<apex:outputPanel layout="block" >
+						<strong class="m-faded">{!$Label.Description}:</strong>&nbsp;
+						<pre><apex:outputText value="{!taskDetails.description}"></apex:outputText></pre><br/>
+					</apex:outputPanel>
+					<!-- Task URL block -->
+					<apex:outputPanel layout="block" rendered="{!IF(ISBLANK(taskDetails.URL), false, true)}">
+						<strong class="m-faded">{!$Label.URL}:</strong>&nbsp;
+						<apex:outputLink value="{!taskDetails.URL}" target="_blank">{!taskDetails.URL}</apex:outputLink><br/><br/>
+					</apex:outputPanel>
+					<!-- Task Status block -->
+					<strong class="m-faded">{!$Label.STATUS}:</strong>&nbsp;
+					<apex:outputText value="{!taskDetails.status}"></apex:outputText><br/><br/>
+					<!-- Task Action block -->
+					<apex:outputPanel rendered="{!AND(r_TaskAllowToMark,r_editMode)}">
+						<input type="button" onclick="disableMarkCompleteButton();" class="btn" value="Mark Complete"/><br/><br/>
+					</apex:outputPanel>
+					<!-- Task Attachments block -->
+					<apex:dataTable id="tableAttach" rendered="{!r_TaskAttachments}" width="100%" value="{!taskDetails.attachments}" var="a" cellspacing="0" cellpadding="0" border="0" styleClass="m-data">
+						<apex:column >
+							<apex:facet name="header">{!$Label.Attachment}</apex:facet>
+							<apex:outputText value="{!a.name}" /><br/>
+						</apex:column>
+						<apex:column >
+							<apex:facet name="header">{!$Label.Description}</apex:facet>
+							<apex:outputText value="{!a.description}" /><br/>
+						</apex:column>
+						<apex:column >
+							<apex:facet name="header">{!$Label.Size}</apex:facet>
+							<apex:outputText value="{!a.bodyLength}" /><br/>
+						</apex:column>
+						<apex:column >
+							<apex:facet name="header">{!$Label.Download}</apex:facet>
+							<apex:outputLink title="{!a.bodyLength}" target="_blank" value="/servlet/servlet.FileDownload?file={!a.objId}" styleclass="m-description">Download</apex:outputLink><br/>
+						</apex:column>
+					</apex:dataTable>
+					<!-- End Task Attachments block -->
+				</apex:outputPanel>
+				<!-- End Task block -->
+
+				<!-- Event block -->
+				<apex:outputPanel rendered="{!r_Event}" id="objectEventId" layout="block">
+					<!-- Event name block -->
+					<strong class="m-faded">{!$ObjectType.Event__c.label}:</strong>&nbsp;
+					<apex:outputText value="{!eventDetails.name}"></apex:outputText><br/><br/>
+					<!-- Event Description block -->
+					<apex:outputPanel layout="block" >
+						<strong class="m-faded">{!$Label.Description}:</strong>&nbsp;
+						<pre><apex:outputText value="{!eventDetails.description}"></apex:outputText></pre><br/>
+					</apex:outputPanel>
+					<!-- Event Classes with sessions block -->
+
+					<apex:form id="frm">
+						<apex:outputPanel style="float:right;font-size:85%;"  rendered="{!IF((IsPrevPageClasses)||(IsNextPageClasses), true, false)}">
+							<apex:commandLink action="{!PrevPageClasses}" rerender="frm" rendered="{!IsPrevPageClasses}" status="loadStatus">&lt;{!$Label.Pagination_Previous}</apex:commandlink>
+							<apex:outputText rendered="{!NOT(IsPrevPageClasses)}">&lt;{!$Label.Pagination_Previous}</apex:outputText>
+							&nbsp;|&nbsp;
+							<apex:commandLink action="{!NextPageClasses}" rerender="frm" rendered="{!IsNextPageClasses}" status="loadStatus">{!$Label.Pagination_Next}&gt;</apex:commandlink>
+							<apex:outputText rendered="{!NOT(IsNextPageClasses)}">{!$Label.Pagination_Next}&gt;</apex:outputText>
+						</apex:outputPanel>
+
+						<br/>
+
+						<div class="b-custom-table">
+							<div class="b-hor-scroll" style="border-bottom: 1px solid #E0DEB8;">
+								<apex:dataTable id="tableClasses"  headerClass="m-custom-header" rendered="{!r_EventClasses}" width="100%" value="{!eventDetails.classes}"  var="class" cellspacing="0" cellpadding="0" border="0" styleClass="m-custom-body">
+									<apex:column styleClass="m-td-class {!IF(class.isMainClass, 'tdEventColumn','')}" >
+										<apex:facet name="header">{!$ObjectType.lmsilt__Class__c.label}</apex:facet>
+										<apex:outputText rendered="{!class.isMainClass}">{!class.name}</apex:outputText>
+									</apex:column>
+									<apex:column styleClass="m-td-session {!IF(class.isMainClass, 'tdEventColumn','')}"  rendered="{!isSession}" >
+										<apex:facet name="header">{!$ObjectType.lmsilt__Session__c.label}</apex:facet>
+										<apex:outputText value="{!class.SessionName}"/><br/>
+									</apex:column>
+									<apex:column styleClass="m-td-start {!IF(class.isMainClass, 'tdEventColumn','')}" rendered="{!isSessionStartDate}">
+										<apex:facet name="header">{!$ObjectType.lmsilt__Session__c.label} {!$ObjectType.lmsilt__Session__c.fields.lmsilt__Start_Date_Time__c.label}</apex:facet>
+										<apex:outputText value="">
+											<c:LocaleFormattedDateTime date_time_value="{!class.sessionStartDate}"></c:LocaleFormattedDateTime>
+										</apex:outputText><br/>
+									</apex:column>
+									<apex:column styleClass="m-td-end {!IF(class.isMainClass, 'tdEventColumn','')}" rendered="{!isSessionEndDate}">
+										<apex:facet name="header">{!$ObjectType.lmsilt__Session__c.label} {!$ObjectType.lmsilt__Session__c.fields.lmsilt__End_Date_Time__c.label}</apex:facet>
+										<apex:outputText value="">
+											<c:LocaleFormattedDateTime date_time_value="{!class.sessionEndDate}"></c:LocaleFormattedDateTime>
+										</apex:outputText><br/>
+									</apex:column>
+									<apex:column styleClass="m-td-location {!IF(class.isMainClass, 'tdEventColumn','')}" rendered="{!isSessionLocation}">
+										<apex:facet name="header">{!$ObjectType.lmsilt__Session__c.fields.lmsilt__Session_Location__c.label}</apex:facet>
+										<apex:outputLink target="_blank" value="/{!class.location.locationId}" rendered="{!IF((class.SessionMeetingType == NULL), true, false)}">{!class.location.name}</apex:outputLink>
+										<apex:outputText rendered="{!IF((class.SessionMeetingType == NULL), false, true)}">{!class.SessionMeetingType}</apex:outputText><br/>
+									</apex:column>
+									<apex:column styleClass="m-td-status {!IF(class.isMainClass, 'tdEventColumn','')}" rendered="{!isStatus}">
+										<apex:facet name="header">{!$Label.STATUS}</apex:facet>
+										<apex:outputText rendered="{!class.isMainClass}">{!class.status}</apex:outputText>
+									</apex:column>
+									<apex:column styleClass="m-td-btns {!IF(class.isMainClass, 'tdEventColumn','')}" rendered="{!r_editMode}">
+										<apex:outputPanel rendered="{!class.isMainClass && class.isNotCompleted}">
+											<apex:outputPanel layout="none" rendered="{!AND(class.endDate>dateTimeNow,AND(class.enableEnroll,!hasUnReg))}">
+												<!-- <input type="button" onclick="disableEnrollButton('{!class.classId}');" class="btn" value="{!$Label.Enroll}"/> -->
+												<input type="button" onclick = 'open_v_popup("{!JSENCODE(class.classId)}", "{!JSENCODE(class.cancellationPolicyText)}");' class="btn" value="{!$Label.Enroll}"/>
+											</apex:outputPanel>
+											<apex:outputPanel layout="none" rendered="{!class.enableUnEnroll}">
+												<apex:outputPanel layout="none" rendered="{!class.disableUnEnroll == false}">
+													<input type="button" onclick="unenroll('{!JSENCODE(class.classId)}');" disabled="true" value="Withdraw" id="UnregisterButton" class="btnDisabled"/>
+												</apex:outputPanel>
+												<apex:outputPanel layout="none" rendered="{!class.disableUnEnroll == true}">
+													<input type="button" onclick="unenroll('{!JSENCODE(class.classId)}');" value="Withdraw" id="UnregisterButton2" class="btn"/>
+												</apex:outputPanel>
+											</apex:outputPanel>&nbsp;
+										</apex:outputPanel>
+									</apex:column>
+								</apex:dataTable>
+							</div>
+						</div>
+						<apex:outputPanel style="float:right;font-size:85%;"  rendered="{!IF((IsPrevPageClasses)||(IsNextPageClasses), true, false)}">
+							<apex:commandLink action="{!PrevPageClasses}" rerender="frm" rendered="{!IsPrevPageClasses}" status="loadStatus">&lt;{!$Label.Pagination_Previous}</apex:commandlink>
+							<apex:outputText rendered="{!NOT(IsPrevPageClasses)}">&lt;{!$Label.Pagination_Previous}</apex:outputText>
+							&nbsp;|&nbsp;
+							<apex:commandLink action="{!NextPageClasses}" rerender="frm" rendered="{!IsNextPageClasses}" status="loadStatus">{!$Label.Pagination_Next}&gt;</apex:commandlink>
+							<apex:outputText rendered="{!NOT(IsNextPageClasses)}">{!$Label.Pagination_Next}&gt;</apex:outputText>
+						</apex:outputPanel>
+					</apex:form>
+
+					<!--End Event Classes with sessions block -->
+					<!-- Event Materials block -->
+					<apex:dataTable id="tableMaterials" rendered="{!r_EventMaterials}" width="100%" value="{!eventDetails.materials}" var="material" cellspacing="0" cellpadding="0" border="0" styleClass="m-data m-fixed-table">
+						<apex:column >
+							<apex:facet name="header">{!$ObjectType.lmsilt__Material__c.label}</apex:facet>
+							<apex:outputText value="{!material.name}" /><br/>
+						</apex:column>
+						<apex:column >
+							<apex:facet name="header">{!$ObjectType.lmsilt__Material__c.fields.lmsilt__Description__c.label}</apex:facet>
+							<apex:outputText value="{!material.description}" /><br/>
+						</apex:column>
+						<apex:column >
+							<apex:facet name="header">{!$ObjectType.lmsilt__Material__c.fields.lmsilt__Instructions__c.label}</apex:facet>
+							<apex:outputText value="{!material.instructions}" /><br/>
+						</apex:column>
+						<apex:column >
+							<apex:facet name="header">{!$Label.Download}</apex:facet>&nbsp;
+							<apex:repeat value="{!material.attachments}" var="a">
+								<apex:outputLink title="{!a.bodyLength}" target="_blank" value="/servlet/servlet.FileDownload?file={!a.objId}" >{!a.name}</apex:OutputLink><br/>
+							</apex:repeat>
+						</apex:column>
+					</apex:dataTable>
+					<!-- End Event Materials block -->
+				</apex:outputPanel>
+				<!-- Event end block -->
+			</apex:outputPanel>
+		</body>
+	</html>
+</apex:page>

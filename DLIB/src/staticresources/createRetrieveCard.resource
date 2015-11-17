@@ -1,0 +1,21 @@
+{
+  "id": "card_102qlS2mAiB3IuYiIn63v0GG",
+  "object": "card",
+  "last4": "0005",
+  "type": "American Express",
+  "exp_month": 7,
+  "exp_year": 2017,
+  "fingerprint": "YdE7xeRs75rMZu7w",
+  "customer": "cus_2ql1xlKxgrE1UE",
+  "country": "US",
+  "name": "Johnathan Strange",
+  "address_line1": "47 Witchwood Court",
+  "address_line2": null,
+  "address_city": "Duma Key",
+  "address_state": "FL",
+  "address_zip": "99039",
+  "address_country": "USA",
+  "cvc_check": "pass",
+  "address_line1_check": "pass",
+  "address_zip_check": "pass"
+}

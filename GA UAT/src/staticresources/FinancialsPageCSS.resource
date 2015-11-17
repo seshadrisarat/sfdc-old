@@ -1,0 +1,4 @@
+.financialsHeader
+{
+  font-weight: bold;    
+}

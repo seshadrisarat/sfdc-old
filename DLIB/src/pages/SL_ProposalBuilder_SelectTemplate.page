@@ -1,0 +1,357 @@
+<apex:page standardController="Opportunity" extensions="SL_ProposalBuilder_SelectTemplateCont" sidebar="false" standardstylesheets="false" showheader="false" action="{!redirectionControl}">
+     <apex:includeScript value="{!URLFOR($Resource.ExtJs, '/ext-4.2.1.883/ext-all.js')}" />
+     <apex:includeScript value="{!URLFOR($Resource.ExtJs, '/ext-4.2.1.883/options-toolbar.js')}" />
+     <apex:stylesheet value="{!URLFOR($Resource.ExtJs, '/ext-4.2.1.883/resources/ext-theme-neptune/ext-theme-neptune-all.css')}" />
+     <apex:form >
+       
+       <div id="west" style="display:none">
+           <apex:repeat value="{!lstOppTemplates}" var="a">
+               <div id="{!a.Id}">
+                   <div style="padding-top: 5px;">{!a.Description__c}</div>
+               </div>
+           </apex:repeat>
+       </div>
+       
+        <apex:actionFunction name="rerenderAFF" rerender="dummy" action="{!createOpportunityComponent}">
+            <apex:param name="firstLevelNodes" value="" assignTo="{!selectedOpportunityComponentIds}" />
+            <apex:param name="secondLevelNodes" value="" assignTo="{!selectedOpportunityComponentFeatureIds}" />
+            <apex:param name="thirdLevelNodes" value="" assignTo="{!selectedOpportunityComponentDetailIds}" />
+        </apex:actionFunction>
+        
+        <apex:outputPanel id="dummy" />    
+    </apex:form>
+    
+    <style>
+        .x-grid-cell-inner{ white-space: normal;}
+        .test1{margin: 0px 0 0 100px;}
+        
+        .selected{
+            font-weight: bold;
+            color: #15428B;
+            background-color: #DFE8F6;
+            border: 1px dotted #A3BAE9;
+        }
+        
+        .default{
+            background-color: #eee;
+        }
+        
+    </style>
+     <script>
+         var recordId = '{!strSelectedOppTemplateId}' 
+     </script>
+     <apex:outputpanel id="ScriptPart">
+         <script type="text/javascript" >
+            
+            Ext.require(['*']);
+            
+            // BUG WORKAROUNDS
+            // 1) DirectProxy gets perfectly fine formatted data from api calls, then discards it
+            // This may simply be a difference between ExtJS 3 (used by Remoting) and 4...
+            // SalesForce data will not be rendered if we will not use this BUG WORKAROUND
+            
+            Ext.data.proxy.Direct.prototype.createRequestCallback =
+                function(request, operation, callback, scope){
+                    var me = this;
+                    return function(data, event){
+                        // supply "data" (properly processed data), not "event", as fourth arg
+                        me.processResponse(event.status, operation, request,
+                                           {data: data}, callback, scope);
+                    };
+                };
+                
+           	 // 2) DirectProxy does not supply extraParams to create/update/delete calls - only reads
+            // Solved by making a special writer that inserts them into the regular data
+            //We will not be able to create a new record or update existing record without this BUG WORKAROUND
+            
+            Ext.define('Jet.SFDC.writer', {
+                extend: 'Ext.data.writer.Json',
+                alias: 'writer.sfdc',
+                config: {extraParams: undefined},
+                constructor: function(config) {
+                    this.callParent([config]);
+                },
+                writeRecords: function(request, data) {
+                    this.callParent([request, data]);
+                    if ((this.extraParams !== undefined) && (this.extraParams instanceof Object)) {  //TRUE if this.extraParams is not equal to undefined, or they are not of the same type. 
+                        Ext.apply(request.jsonData, this.extraParams);
+                    }
+                    return request;
+                }});
+                
+            // old Direct used by SFDC does not supply getArgs method (expected by 4.1) for Remoting methods
+            SL_ProposalBuilder_SelectTemplateCont.getTreeHeirarchy.directCfg.method.getArgs = Ext.direct.RemotingMethod.prototype.getArgs;
+            
+           
+           //     Defining the basic template of Tree structure
+                
+            Ext.define('KitchenSink.view.tree.CheckTree', {
+                extend: 'Ext.tree.Panel',
+                requires: [
+                    'Ext.data.TreeStore'
+                ],
+                xtype: 'check-tree',
+                
+                rootVisible: false,
+                useArrows: true,
+                frame: true,
+                title: 'Check Tree',
+
+               	listeners: {
+                          
+                            checkchange: function (record, checked, opts) {
+                                
+                                
+                                //When any node become un-checked
+                                if (!checked)
+                                {
+                                    //Uncheck All the child nodes
+                                    function deSelectChildren(record) {
+                                        record.eachChild(function (record) {
+                                            record.set('checked', false);
+                                            deSelectChildren(record);
+                                        });
+                                    }
+                                    deSelectChildren(record);
+                                    
+                                    //Uncheck Parent node when there are no child in checked mode in the same hierarchy i.e. Parent node will only be unchecked when there are
+                                    //no childs in checked mode
+                                    function deSelectParent(record){
+                                        if(record.parentNode != null){
+                                        
+                                            var allSiblingsUnselected = false;
+                                            
+                                            if (record.parentNode != null) {
+                                                allSiblingsUnselected = record.parentNode.childNodes.reduce(function (previous, node) {
+                                                    return previous && !node.get('checked');
+                                                }, true);
+                                            }
+                                        
+                                            if(allSiblingsUnselected){
+                                                record.parentNode.set('checked', false);                                
+                                                deSelectParent(record.parentNode);
+                                            }   
+                                        }    
+                                    }
+                                    deSelectParent(record);
+                                }
+                                
+                                 //When any node become checked
+                                else
+                                {
+                                    //check all the child nodes
+                                    function selectChildren(record) {
+                                        record.eachChild(function (record) {
+                                            record.set('checked', true);
+                                            selectChildren(record);
+                                        });
+                                    }
+                                    selectChildren(record);
+                                    
+                                    //check parent node when atleast one child has been selected
+                                    function selectParent(record) {
+                                    	if(record.parentNode != null)
+                                    	{
+	                                       record.parentNode.set('checked', true);
+	                                       selectParent(record.parentNode);
+	                                    }   
+                                    }
+                                    selectParent(record);
+                                    
+                                }
+                            }
+                        },
+                          
+				//ToolBar for Add and Cancel Button
+                tbar: [
+                        {
+                          text: 'Add',
+                          tooltip: 'To Add Components and get directed to Main Page',
+                          scope: this,
+                          //handler: this.onCheckedNodesClick
+                          handler: function(){
+				                  	var gridView = Ext.getCmp('treeHierarchy');
+				                    var records = gridView.getView().getChecked(),
+				                        names = [];
+				                        
+				                        firstLevelNodes = '';
+				                        secondLevelNodes = '';
+				                        thirdLevelNodes = '';
+				                               
+				                    Ext.Array.each(records, function(rec){
+				                        
+				                        if(rec.getDepth() == 1)
+				                            firstLevelNodes += rec.get('id') + ','
+				                        else if(rec.getDepth() == 2)
+				                            secondLevelNodes += rec.get('id') + ','
+				                        else if(rec.getDepth() == 3) 
+				                            thirdLevelNodes += rec.get('id') + ','  
+				                        
+				                    });
+				                    
+				                    if(thirdLevelNodes != '' || secondLevelNodes != '' || firstLevelNodes != '')
+				                        rerenderAFF(firstLevelNodes.substring(0, firstLevelNodes.length-1), secondLevelNodes.substring(0, secondLevelNodes.length-1), thirdLevelNodes.substring(0, thirdLevelNodes.length-1));
+				                    else
+				                    {
+				                    	//If none of the Node are not Checked
+				                        Ext.MessageBox.show({
+				                            title: 'Selected Nodes',
+				                            msg: 'Please select atleast one record before Saving!',
+				                            icon: Ext.MessageBox.INFO
+				                        });
+				                    }    
+				                }
+                        },{
+                            text: 'Cancel',
+                            tooltip: 'To go back to Opportunity Detail Page',
+                            scope: this,
+                            handler: function(){
+                                window.location.href = '/{!strOpportunityId}';
+                                }
+                          }
+                        ]
+            });
+            
+            //Creating Store for Tree Grid Using Direct Proxy and Remoting Method
+            var store = new Ext.data.TreeStore({
+            model: 'KitchenSink.view.tree.CheckTree',
+            autoLoad : true,
+            proxy: {
+                                type: 'direct',
+                                
+                                api: {read: SL_ProposalBuilder_SelectTemplateCont.getTreeHeirarchy},
+                                
+                                extraParams: {strSelectedOppTemplateId : recordId},
+                                
+                                reader: {
+                                            type: 'json',
+                                        }
+                    },            
+                    sorters: [{
+                        property: 'leaf',
+                        direction: 'ASC'
+                        },{
+                        property: 'text',
+                        direction: 'ASC'
+                   }]
+                        
+            });
+
+			//End of Definition
+           
+            
+            
+			// Method will be called on ready and create the required component in the DOM
+            
+            
+            Ext.onReady(function(){
+               
+               Ext.QuickTips.init();
+               
+               // NOTE: This is an example showing simple state management. During development,
+               // it is generally best to disable state management as dynamically-generated ids
+               // can change across page loads, leading to unpredictable results.  The developer
+               // should ensure that stable state ids are set for stateful components in real apps.
+                      
+               var viewport = Ext.create('Ext.Viewport', {
+                    id: "MainViewPort",
+                    renderTo: Ext.getBody(),
+                    layout: 'border',
+                    items:[{
+                        region: 'west',
+                        title: 'All Templates',
+                        split: true,
+                        width: 200,
+                        minWidth: 175,
+                        maxWidth: 400,
+                        collapsible: true,
+                        html: ' <apex:repeat value="{!lstOppTemplates}" var="a"><div id="template{!a.Id}" style="min-height: 20px; margin-bottom: 5px;cursor: pointer;" class="default" onclick="recordId=\'{!a.Id}\';rerenderAF(this);">{!a.name}</div></apex:repeat>'
+                    },
+                    {
+                            region: 'center',
+                            layout: 'border',
+                            split: true,
+                            id:'centerView',
+                            items: [
+                                     {
+                                     region: 'north',
+                                     id: 'Description',
+                                     collapsible: true,
+                                     html: '' + document.getElementById(recordId).innerHTML + '',
+                                     header : false,
+                                     headerAsText : false,
+                                     minHeight : 75,
+                                     split: true,
+                                    },
+                                           
+                                    Ext.create('KitchenSink.view.tree.CheckTree', {//This is to create Tree hierarchy   
+                                    id:'treeHierarchy',
+                                    title : 'Selected Template hierarchy',
+                                    region: 'center',
+                                    store: store
+                            }) ]
+                    }]
+                });
+                
+                document.getElementById('template{!strSelectedOppTemplateId}').className = 'selected';
+                
+                setTimeout(function() {
+                    Ext.getCmp('options-toolbar').hide();
+                }, 200);
+                
+            });
+            
+            // Function being used for rerendring the Tree Grid when other Template is selected from Panel
+            function rerenderAF(selectedTemplate)
+            {
+                 selectedTemplate.className = 'selected';
+                 var siblingsTemplate = selectedTemplate.parentNode.childNodes;
+                 
+                 for(i=0; i<siblingsTemplate.length; i++)
+                 {
+                      if(siblingsTemplate[i].id != selectedTemplate.id)
+                      siblingsTemplate[i].className = 'default';
+
+                 }
+                 
+                 Ext.suspendLayouts();
+                 var treeNode = Ext.getCmp('treeHierarchy');
+                 var descriptionNode = Ext.getCmp('Description')                     
+                 var centerViewPort = Ext.getCmp('centerView');
+                 
+                 centerViewPort.remove(treeNode);
+                 centerViewPort.remove(descriptionNode);
+                 
+                 //Reloading the store and invoking the Remoting method using updated parameter.
+                 store.proxy.extraParams = {strSelectedOppTemplateId : recordId};
+                 store.load();
+                 
+                 //This is to create Description Panel  
+                 newDescription = Ext.create('Ext.Panel', { 
+                                             region: 'north',
+                                             id: 'Description',
+                                             collapsible: true,
+                                             html: '' + document.getElementById(recordId).innerHTML + '',
+                                             header : false,
+                                             headerAsText : false,
+                                             minHeight : 70,
+                                             split: true,
+                 });
+                 
+                 //This is to create Tree hierarchy  
+                 newTreeNode = Ext.create('KitchenSink.view.tree.CheckTree', {
+                                    id:'treeHierarchy',
+                                    title : 'Selected Template hierarchy',
+                                    region: 'center',
+                                    store: store
+                                }); 
+                
+                centerViewPort.add(newDescription); 
+                centerViewPort.add(newTreeNode)
+                Ext.resumeLayouts(true); 
+            }
+         
+        </script>
+    </apex:outputpanel>    
+    
+</apex:page>

@@ -1,0 +1,167 @@
+<!--********************************************************************
+Page Name: AdminPage
+Description: This page contains all the functionality of Admin Console; Used from 'Box Settings' Tab
+*********************************************************************-->
+
+<apex:page controller="box.AdminController" action="{!getAccessToken}">
+
+
+    <apex:pageMessages />
+    <style>
+            .adminStyle
+            {
+                background-color: FF9933 !important;
+            }
+            div.tooltip {
+                width: 265px;
+                float: left;
+            }
+            div.tooltip:hover {
+                background: #ffffff;
+                text-decoration: none;
+            } /*BG color is a must for IE6*/
+            div.tooltip span {
+                display: none;
+                padding: 2px 3px;
+                margin-left: 3px;
+                width: 265px;
+            }
+            div.tooltip:hover span {
+                display: inline;
+                position: absolute;
+                border: 1px solid #cccccc;
+                background: #FFC;;
+                color: #000000;
+            }
+    </style>
+    <apex:form id="consoleFrm">
+        <apex:pageBlock id="adminPB" rendered="{!isAdmin}" title="{!$Label.Box} {!$Label.Admin} {!$Label.Settings}" tabStyle="Lead">
+            <div class="tooltip" style="display:inline">
+            <b>{!$Label.Box} {!$Label.Service} {!$Label.Account}:</b>&nbsp;&nbsp;
+                <span>
+                    <ul>
+                        <li>Is used exclusively for integration purposes (does not belong to an individual end user). </li>
+                        <li>Owns the Salesforce content on Box and makes API calls from Salesforce to Box for the entire enterprise. </li>
+                        <li>Has admin or co-admin <a href="https://support.box.com/hc/en-us/articles/201142796-How-do-I-grant-different-permissions-sets-for-Co-admins-">permissions on Box</a>.</li>
+                    </ul>
+                </span>
+            </div>
+            <br/>
+          
+            
+            <apex:outputPanel rendered="{!NOT HasBoxAdminCredential}">
+                <apex:outputText > {!$Label.Begin_Phrase} {!$Label.Box} {!$Label.Admin} {!$Label.Account} &nbsp;&nbsp; </apex:outputText> <br/>
+                <apex:commandlink action="{!GetAuthorizationCode}" value="{!adminConnectLabel}" style="text-decoration:none" styleClass="btn">
+                    <apex:param name="isAdminCall" value="true" assignTo="{!isAdminCall}"/>
+                    <apex:param name="isAdminChangeCall" value="false" assignTo="{!isAdminChangeCall}"/>
+                </apex:commandlink>
+            </apex:outputPanel>
+            
+            <apex:outputPanel rendered="{!HasBoxAdminCredential}">
+                <apex:outputText > {!$Label.Connected_As}&nbsp;</apex:outputText><b>{!admEmailId}.</b> <br/>
+                <apex:outputText > {!$Label.Someone_Else} &nbsp; </apex:outputText> 
+                <apex:commandlink action="{!GetAuthorizationCode}" value="{!adminConnectLabel}">
+                    <apex:param name="isAdminCall" value="true" assignTo="{!isAdminCall}"/>
+                    <apex:param name="isAdminChangeCall" value="true" assignTo="{!isAdminChangeCall}"/>
+                </apex:commandlink>
+            </apex:outputPanel>
+            
+        </apex:pageBlock>
+        
+        <apex:pageBlock id="contentPB" rendered="{!(isAdmin && HasBoxAdminCredential)}" title="{!$Label.Content_Settings}" tabStyle="Lead">
+                
+            <apex:outputText >{!$Label.Current} {!$Label.Root} {!$Label.Folder} :</apex:outputText> &nbsp;&nbsp;
+                <apex:outputPanel id="rootFldrOut">
+                    <apex:outputPanel id="displayRoot" rendered="{!showSecondFolderNameTB}">
+                        <b>{!rootFolderName}</b> &nbsp;&nbsp;&nbsp;&nbsp;
+                        <!-- <apex:commandlink action="{!ChangeRootFolder}" value="{!$Label.Rename}" rerender="rootFldrOut">
+                            <apex:param name="isRenameClicked1" value="True" assignTo="{!showFirstFolderNameTB}"/>
+                            <apex:param name="isRenameClicked2" value="False" assignTo="{!showSecondFolderNameTB}"/>
+                        </apex:commandlink> -->
+                    </apex:outputPanel>
+                    
+                    <apex:outputPanel id="editRoot" rendered="{!showFirstFolderNameTB}">
+                        <apex:inputText value="{!folderName}"/>
+                        <apex:commandlink action="{!CreateRootFolder}" value="{!$Label.Create} {!$Label.Root} {!$Label.Folder}" rerender="rootFldrOut" style="text-decoration:none" styleClass="btn">
+                            <apex:param name="isSubmitClicked1" value="True" assignTo="{!showSecondFolderNameTB}"/>
+                            <apex:param name="isSubmitClicked2" value="False" assignTo="{!showFirstFolderNameTB}"/>
+                        </apex:commandlink>
+                    </apex:outputPanel>
+                </apex:outputPanel>
+                <br/> 
+            
+            <apex:outputText >{!$Label.Convert} Lead {!$Label.Folder}s:</apex:outputText> &nbsp;&nbsp;
+            <apex:selectlist id="convertMove" value="{!selectConvertMove}" size="1">
+                <apex:selectOptions value="{!ConvertMoveValues}"/>
+            </apex:selectlist>
+        </apex:pageBlock>
+        
+        <apex:pageBlock id="syncPB" rendered="{!(isAdmin && HasBoxAdminCredential)}" title="{!$Label.Sync_Systems}" tabStyle="Lead">
+            <apex:outputText >{!$Label.Sync_Access}:</apex:outputText> &nbsp;&nbsp;
+            <apex:commandButton value="Sync Now" action="{!ScheduleNow}" rerender="sch" status="ScheduleStartStatus"/> <br/>
+            
+            <apex:outputPanel id="sch">
+                <p align="center">
+                    <apex:actionstatus id="ScheduleStartStatus" startText="{!$Label.Batch_Running} {!$Label.Wait}" /> 
+                </p>                
+            </apex:outputPanel> 
+            
+            <apex:outputText >{!$Label.Scheduled_Access_Updates}:</apex:outputText> &nbsp;&nbsp;
+            <apex:commandButton value="{!$Label.Schedule_Updates}" onclick="window.open('{!jobSecheduleUrl}')"/>
+        </apex:pageBlock>
+        
+        <apex:pageBlock title="{!$Label.Enable} {!$Label.Seamless_Login} (Org-Wide)" rendered="{!(isAdmin && HasBoxAdminCredential)}" tabStyle="Lead">
+
+            <apex:outputLabel value="{!$Label.Seamless_Login}:" for="seamlessOpt"/> 
+            <apex:selectradio id="seamlessOpt" value="{!selectSeamlessAdmin}" label="{!$Label.Seamless_Login}:">
+                <apex:selectOptions value="{!SeamlessOptions}"/>
+            </apex:selectradio>
+
+        </apex:pageBlock>
+        
+        <apex:variable var="usrRecExists" value="{!(currentUser != null && currentUser.box__AccessToken__c != null && currentUser.box__AccessToken__c != '')}" />
+        
+        <apex:pageBlock id="usrAccount" tabStyle="Account" title="{!$Label.Box} {!$Label.User} {!$Label.Settings}">
+            <h2>
+                <apex:outputLabel value="{!$Label.Connect_with_Box}"/> <br/>
+            </h2>
+            <apex:outputPanel rendered="{!usrRecExists == true}">
+                {!$Label.Connected_As}&nbsp;<b>{!currentUser.LoginId__c}</b>
+                <br/>
+                 {!$Label.Someone_Else}&nbsp;
+                <apex:commandLink value="{!$Label.Disconnect}" action="{!connectToBox}" />
+            </apex:outputPanel>
+            
+            <apex:commandLink rendered="{!usrRecExists == false}" action="{!connectToBox}" value="{!$Label.Begin_Phrase} {!$Label.Company} {!$Label.Box} {!$Label.Account}."/>
+        </apex:pageBlock>
+        
+        <apex:pageBlock id="usrCollab" title="Auto-Collab:" tabStyle="Account" rendered="{!usrRecExists == true}">
+            <apex:selectradio id="autoCollab" value="{!selectAutoCollab}">
+                <apex:selectOptions value="{!AutoCollabValues}"/>
+            </apex:selectradio>
+        </apex:pageBlock>
+         
+        <apex:pageBlock id="usrSeamless" title="Seamless Login:" tabStyle="Account" rendered="{!usrRecExists == true && selectSeamlessAdmin == 'Enabled'}">
+            <apex:selectradio id="seamlessOpt" value="{!selectSeamlessUser}" label="{!$Label.Seamless_Login}:">
+                <apex:selectOptions value="{!SeamlessOptions}"/>
+            </apex:selectradio>
+        </apex:pageBlock>
+        
+        <apex:pageBlock id="usrDebugging" title="Enhanced Debugging:" tabStyle="Account" rendered="{!usrRecExists == true}">
+            <apex:selectRadio id="debugOpt" value="{!selectEnhancedDebugging}" label="Enable Enhanced Debugging for this User?">
+                <apex:selectOptions value="{!DebugOptions}"/>
+            </apex:selectRadio>
+        </apex:pageBlock>
+        
+        <p align="center">
+            <apex:commandButton action="{!SaveSettings}" value="{!$Label.Save_Settings}" rerender="outSaveStatus" status="saveStatus"/>
+        </p>
+        
+        <apex:outputPanel id="outSaveStatus">
+            <p align="center">
+                <apex:actionstatus id="saveStatus" startText="{!$Label.Msg_Saving}" />
+            </p>
+        </apex:outputPanel>
+        
+    </apex:form>
+</apex:page>

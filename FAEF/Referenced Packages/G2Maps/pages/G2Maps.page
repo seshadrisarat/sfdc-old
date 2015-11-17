@@ -1,0 +1,527 @@
+<apex:page cache="true" title="G2Maps" controller="g2maps.G2MapsController"
+    showHeader="{!$CurrentPage.Parameters.embedded != '1' && IsBlank($CurrentPage.Parameters.mobile)}"
+    sidebar="{!$CurrentPage.Parameters.embedded != '1' && IsBlank($CurrentPage.Parameters.mobile)}"
+    standardStylesheets="true" >
+    
+    <!-- CloudTrigger G2Maps, Copyright 2011, CloudTrigger, Inc. -->
+    <apex:form id="g2mapsform" styleClass="g2mapsClass">
+        <c:CustomSettingMap id="locate" Width="100%" Height="750px"
+            LayerName="{!$CurrentPage.parameters.LayerName}"
+            objRecId="{!$CurrentPage.parameters.objId}"
+            
+            Available="{!$CurrentPage.parameters.Available}"
+            Visible="{!$CurrentPage.parameters.Visible}"
+            
+            Mobile="{!$CurrentPage.Parameters.mobile}"
+            Embedded="{!$CurrentPage.Parameters.embedded}"
+            
+            Layer1="{!$CurrentPage.parameters.Layer1}"
+            Filter1="{!$CurrentPage.parameters.Filter1}"
+            Callback1="{!$CurrentPage.parameters.Callback1}"
+            Layer2="{!$CurrentPage.Parameters.Layer2}"
+            Filter2="{!$CurrentPage.Parameters.Filter2}"
+            Layer3="{!$CurrentPage.Parameters.Layer3}"
+            Filter3="{!$CurrentPage.Parameters.Filter3}"
+            Layer4="{!$CurrentPage.Parameters.Layer4}"
+            Filter4="{!$CurrentPage.Parameters.Filter4}"
+            Layer5="{!$CurrentPage.Parameters.Layer5}"
+            Filter5="{!$CurrentPage.Parameters.Filter5}"
+            Layer6="{!$CurrentPage.Parameters.Layer6}"
+            Filter6="{!$CurrentPage.Parameters.Filter6}"
+            Layer7="{!$CurrentPage.Parameters.Layer7}"
+            Filter7="{!$CurrentPage.Parameters.Filter7}"
+            Layer8="{!$CurrentPage.Parameters.Layer8}"
+            Filter8="{!$CurrentPage.Parameters.Filter8}"
+            Layer9="{!$CurrentPage.Parameters.Layer9}"
+            Filter9="{!$CurrentPage.Parameters.Filter9}"
+        />
+    </apex:form>
+
+    <script type="text/javascript">
+        dojo.require("dojo.data.ItemFileReadStore");
+        dojo.require("dojox.grid.EnhancedGrid");
+        dojo.require("dojox.data.CsvStore");
+        dojo.require("dojox.grid.enhanced.plugins.exporter.CSVWriter");
+        dojo.require("dojox.grid.enhanced.plugins.Printer");   
+        dojo.require("dojo.parser");
+        dojo.require("dojo.date.locale");   
+        var gridLayout = [
+            {
+                field: "uid",
+                name: "Id",
+                width: "120px",
+                hidden: true
+            },
+            {
+                field: "id",
+                name: "Id",
+                width: "120px",
+                hidden: true
+            },
+            {
+                field: "Layer",
+                name: "Layer",
+                width: "30%"
+            },
+            {
+                field: "Name",
+                name: "Name",
+                width: "50%"
+            },
+            {
+                field: "content",
+                name: "Content",
+                width: "100%"
+            },
+            {
+                field: "latitude",
+                name: "lat",
+                width: "100px",
+                hidden: true
+            },
+            {
+                field: "longitude",
+                name: "lng",
+                width: "100px",
+                hidden: true
+            },
+            {
+                field: "x",
+                name: "x",
+                width: "100px",
+                hidden: true
+            },
+            {
+                field: "y",
+                name: "y",
+                width: "100px",
+                hidden: true
+            }
+        ];
+        
+        var gridClickEvent;
+        function refreshGrid() {
+            var stopGrid = dijit.byId("stopGrid");
+            var dataStore = g2.getSFLayerDataStore();
+            
+            stopGrid.setStore(dataStore.store);
+            
+            dojo.byId("countLayers").innerHTML = dataStore.layers;
+            dojo.byId("countLocations").innerHTML = dataStore.locations;
+
+            if (!gridClickEvent) {
+                gridClickEvent = dojo.connect(stopGrid, "onRowClick", gridClick);
+            }
+
+            var layerArray = new Array();
+            if(dataStore.layers > 1) {
+                var layer = dataStore.data.items[0].Layer[0].toString(); 
+                layerArray.push(layer);
+                for(var i = 1; i < dataStore.locations; i++) { 
+                    var currentLayer = dataStore.data.items[i].Layer[0].toString(); 
+                    if(layer !== currentLayer) {
+                        layerArray.push(currentLayer);
+                        layer = currentLayer;
+                    } 
+                } 
+            } else if(dataStore.layers === 1) {
+                var layer = dataStore.data.items[0].Layer[0].toString(); 
+                layerArray.push(layer);
+            }
+            
+            var plHTML = "<option value=\"\" selected>Export CSV (Select Layer to Export)</option>";
+            for (var i = 0; i < layerArray.length; i++) {
+                plHTML += "<option value=\""+layerArray[i]+"\">"+layerArray[i]+"</option>";
+            }
+            document.getElementById("picklistSelect").innerHTML = plHTML; 
+            document.getElementById("picklistSelect").style.display = 'inline';
+            document.getElementById("csvButton").style.display = 'none';
+        }
+        
+        function gridClick(e) {
+            var stopGrid = dijit.byId("stopGrid");
+            var item = stopGrid.getItem(e.rowIndex);
+            
+            var x = stopGrid.store.getValue(item, "x");
+            var y = stopGrid.store.getValue(item, "y");
+            
+            if (x && y) {
+                g2.centerOnXY(x, y);
+            }
+        }
+        
+        function clickCampaignMember() {
+            
+            var dataStore = g2.getSFLayerDataStore().store;
+
+            dataStore.fetch({
+                onComplete: fetchCampaignMembers
+            });
+        }
+        
+        function fetchCampaignMembers(items, request) {
+            var CampaignMembers = "";
+            
+            for (var i in items) {
+                if (CampaignMembers != "") CampaignMembers = CampaignMembers + ",";
+                CampaignMembers = CampaignMembers + items[i].id[0];
+            }
+            
+            jsCampaignMember(CampaignMembers);
+            
+        }
+        
+        // Lei: Enable print grid and export grid to csv
+        function printGrid() {
+            previewGrid();
+        }
+        
+        function exportGridToCSV() {
+            var stopGrid = dijit.byId("stopGrid");
+            if (dojo.isIE < 10) {
+                alert("This feature requires Chrome, Firefox, Safari and Internet Explorer 10 or above.");
+/*             } else if(dojo.isIE >= 10){
+                stopGrid.exportGrid("csv", {writerArgs: {separator:","}}, function(content){
+                    var uriContent;
+                    if (window.btoa) {
+                        uriContent = ";base64," + window.btoa(content);
+                    } else {
+                        uriContent = encodeURIComponent(content);
+                    }
+                    var header = "data:text/csv;charset=utf-8;filename=g2maps_layer.csv;headers=Content-Disposition%3Aattachment%3Bfilename%3Dg2maps_layer.csv";
+                    window.location.href = header + uriContent;
+                });   */        
+            } else {
+                stopGrid.exportGrid("csv", {writerArgs: {separator:","}}, function(content){//TODO include record ID?
+                    var bb = new BlobBuilder();
+                    
+                    var str = content.replace(/<[/]br>/ig, "\n");
+                    str = str.replace(/<\/?[a-z][a-z0-9]*[^<>]*>/ig, "");
+                    str = str.replace(/&nbsp/ig, "");
+                    
+                    bb.append(str);
+                    var blob = bb.getBlob("example/binary;charset=" + document.characterSet || "iso-8859-15");
+                    var t = dojo.date.locale.format(new Date(), {datePattern: "yyyyMMdd", timePattern: "HHmmss"});
+                    saveAs(blob, "G2MapsGrid " + t + ".csv");
+                });            
+            }
+        }
+
+        function previewGrid() {
+            var stopGrid = dijit.byId("stopGrid");
+            stopGrid.exportToHTML({
+                title: "Layers and Locations",
+                cssFiles: []
+            }, previewGridWindow);
+        }
+        
+        function previewGridWindow(str){
+            var win = window.open();
+            win.document.open();
+            win.document.write(str);
+            dojo.place("<div><button class='printButton' onclick='printAll();'>Print</button><div>", win.document.body, "first");
+            var script = dojo.create("script", {}, win.document.body);
+            script.innerHTML = "function printAll() {\
+                if(window.print){ window.print(); }\
+            }";
+            var style = dojo.create("style", {}, win.document.body);
+            style.innerHTML = "@media screen, print {\
+                                .grid_view { \
+                                    height: 100%; \
+                                    width: 100%;\
+                                    border: solid 1px grey;\
+                                    border-radius: 5px;\
+                                    color: #333333;\
+                                    border-spacing: 1px;\
+                                    line-height: 24px;\
+                                    margin: 10px 0px;\
+                                }\
+                                .grid_header {\
+                                    text-align: left;\
+                                    background: #E4EDF7;\
+                                }\
+                                .grid_odd_row {\
+                                    background: #CBC8B9;\
+                                }\
+                                .grid_even_row {\
+                                    background: #F6F6F1;\
+                                }\
+                                body {\
+                                    font: 12px \"Lucida Grande\",\"Lucida Sans Unicode\",Lucida,Arial,Helvetica,sans-serif;\
+                                    padding: 10px;\
+                                }\
+                                h1 {\
+                                    text-align:center;\
+                                }}\
+                                @media print {.printButton {display:none;}}\
+                                ";
+            win.document.close();
+        }
+        dojo.ready(function() {
+            dojo.parser.parse();  
+        }); 
+             
+        function exportGridToCSV2() {
+            if (dojo.isIE < 10) {
+                alert("This feature requires Chrome, Firefox, Safari and Internet Explorer 10 or above.");        
+            } else {            
+                var data = g2.getSFLayerData();
+                var countLocations = dojo.byId("countLocations").innerHTML;
+                var bb = new BlobBuilder();
+                var selectedLayer = document.getElementById("picklistSelect").value;
+                if(selectedLayer !== "") {
+                    var header = [];
+                    for(var i = 0; i < data.length; i++) { 
+                        var currentLayer = data[i]["Layer"].toString(); 
+                        if(selectedLayer === currentLayer) { 
+                            if(header.length === 0) {
+                                var columns = 0;
+                                for(var key in data[i]) {
+                                    var newKey;
+                                    if(columns !== 0) {
+                                        bb.append(',');
+                                    }
+                                    newKey = encodeCSV(key.toString());
+                                    header.push(key);
+                                    bb.append(newKey);
+                                    columns++;
+                                }
+                                bb.append('\n');
+                            }
+                                      
+                            /*var counter = 0;
+                            for (var key in data[i]) {
+                                if(header[counter] === key) {
+                                    if(counter !== 0) {
+                                        bb.append(',');
+                                    }
+                                
+                                    var value = data[i][key];
+                                    var valueCSV = '';
+                                    
+                                    if(value != undefined) {
+                                        valueCSV = encodeCSV(value.toString());
+                                    }
+                                    bb.append(valueCSV);   
+                                } 
+                                counter++;
+                            }*/
+                            for (var x = 0; x < header.length; x++) {
+                                if(x !== 0) {
+                                    bb.append(',');
+                                }
+                                var value = data[i][header[x]];
+                                var valueCSV = '';
+                                    
+                                if(value != undefined) {
+                                        valueCSV = encodeCSV(value.toString());
+                                }
+                                bb.append(valueCSV); 
+                            }
+                            bb.append('\n');
+                        }
+                    }   
+                    var blob = bb.getBlob("text/csv;charset=" + document.characterSet || "UTF-8");
+                    //var blob = bb.getBlob("application/vnd.ms-excel;charset=" + document.characterSet || "UTF-8");                                    
+                    var t = dojo.date.locale.format(new Date(), {datePattern: "yyyyMMdd", timePattern: "HHmmss"});
+                    saveAs(blob, "G2MapsGrid " + t + ".csv");
+ 
+  
+                }        
+            }
+        }
+
+        function encodeCSV(value){            
+            var newString;            
+            if(value === undefined) {
+                newString = '';
+                return newString;
+            }
+            newString = value;//.replace(/\n/ig, " ").replace(/\r/ig, " ");  
+            var search = value.search('"');
+            if(search !== -1) {
+                newString = value.replace('"', '""');
+                newString = '"' + newString + '"';
+                return newString;
+            }
+            search = value.search(',');
+            if(search !== -1) {
+                newString = '"' + newString + '"';
+                return newString;
+            }
+            search = value.match(/\n/ig);
+            if(search !== null) {
+                newString = '"' + newString + '"';
+                return newString;
+            }     
+            search = value.match(/\r/ig);
+            if(search !== null) {
+                newString = '"' + newString + '"';
+                return newString;
+            }               
+            return newString;    
+        }
+        
+        function exportGridToKML() {
+            if (dojo.isIE < 10) {
+                alert("This feature requires Chrome, Firefox, Safari and Internet Explorer 10 or above.");
+            } else {
+        
+            var data = g2.getSFLayerData();
+            var countLocations = dojo.byId("countLocations").innerHTML;
+            var bb = new BlobBuilder();
+            
+            bb.append('<?xml version="1.0" encoding="UTF-8"?>');
+            bb.append('<kml xmlns="http://earth.google.com/kml/2.2">');
+            bb.append('<Document>');
+
+            for(var i = 0; i < countLocations; i++) {
+                var name = data[i]["Name"]; 
+                var xmlName = encodeXml(name);
+                var latitude = data[i]["Latitude"].toString(); 
+                var longitude = data[i]["Longitude"].toString(); 
+                            
+                bb.append('<Placemark>');
+                bb.append('<name>');
+                bb.append(xmlName);
+                bb.append('</name>');
+                bb.append('<ExtendedData>');
+
+                for (var key in data[i]) {
+                    var value = '';
+                    var valueXml = '';
+                    
+                    var keyXml = encodeXml(key);
+                    value = data[i][key];
+                    
+                    if(value != undefined) {
+                        valueXml = encodeXml(value.toString());
+                    } else {
+                        valueXml = '';
+                    }
+                    bb.append('<Data name="');
+                    bb.append(keyXml);
+                    bb.append('">');                
+                    bb.append('<value>');
+                    bb.append(valueXml);
+                    bb.append('</value>');
+                    bb.append('</Data>');
+                }
+                bb.append('</ExtendedData>');
+                bb.append('<Point>');
+                bb.append('<coordinates>');
+                bb.append(longitude);
+                bb.append(',');
+                bb.append(latitude);
+                bb.append('</coordinates>');
+                bb.append('</Point>');
+                bb.append('</Placemark>');
+            }   
+            bb.append('</Document>');
+            bb.append('</kml>');
+            
+            var blob = bb.getBlob("application/octet-stream;charset=" + document.characterSet || "UTF-8");
+            var t = dojo.date.locale.format(new Date(), {datePattern: "yyyyMMdd", timePattern: "HHmmss"});
+            saveAs(blob, "G2MapsGrid " + t + ".kml");
+
+            } 
+        }       
+        var xml_map = {
+            '&': '&amp;',
+            '"': '&quot;',
+            '\'': '&apos;',
+            '<': '&lt;',
+            '>': '&gt;'
+        };   
+        function encodeXml(string) {
+            if(string === undefined) {
+                var temp = '';
+                return temp;
+            }    
+            return string.replace(/([\&"'<>])/g, function(str, item) {
+                return xml_map[item];
+            });
+        }
+        
+        function toggle() {
+            var list = document.getElementById("List");
+            var map = document.getElementById("Map");
+            if (list.style.display === 'block') {
+                list.style.display = 'none';
+                map.style.display = 'block';
+            } else {
+                list.style.display = 'block';
+                map.style.display = 'none';
+                refreshGrid();
+            }
+        }
+        function resettoggle() {
+            var map = document.getElementById('Map');
+            var list = document.getElementById("List");
+            list.style.display = 'none';
+            map.style.display = 'block';
+        }
+        dojo.ready(function() {
+            if (dojo.isIE < 10) {
+                dojo.style(dojo.byId('addonFeatureSpan'), 'display', 'none');
+            }
+        });
+    </script>
+    
+<!-- <div id="List" style="display: none;" >
+    <div>
+        <button type="button" onClick="toggle()">Map</button>
+    </div> -->
+    <div id='g2maps_addons'>
+    <apex:form rendered="{!IsCampaign}" id="campaignSection">
+    
+        <apex:pageMessages />
+    
+        <apex:actionFunction action="{!doCampaignMember}" name="jsCampaignMember" rerender="campaignSection">
+            <apex:param name="CampaignMembers" assignTo="{!CampaignMembers}" value="" />
+        </apex:actionFunction>
+        
+        <div style="width: 100%; text-align: center; padding: 12px;">
+            <button type="button"  onClick="dojo.style('CampaignDiv', 'display', 'block');" style="padding:5px;">Add to Campaign</button>
+        </div>
+        
+        <div id="CampaignDiv" style="display: none;">
+        <apex:pageBlock id="CampaignDiv">
+            <apex:pageBlockButtons >
+                <button type="button" onClick="clickCampaignMember();">Add to Campaign</button>
+            </apex:pageBlockButtons>
+            <apex:pageBlockSection columns="2">
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Campaign Name" for="txtCampaignName"/>
+                        <apex:inputText value="{!CampaignName}" id="txtCampaignName"/>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Status" for="ddlStatuses"/>
+                        <apex:selectList value="{!CMStatus}" multiselect="false" size="1" id="ddlStatuses">
+                            <apex:selectOptions value="{!CMStatuses}"/>
+                        </apex:selectList>
+                    </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+        </div>
+    </apex:form>
+
+    <div>
+        <button type="button" onClick="refreshGrid()">Refresh Grid </button>
+        <!-- Lei: Add Print and Export button -->
+        <button type="button" onClick="printGrid()"> Print</button>
+        <!-- Alejandra: Add Export KML button -->
+        <span id='addonFeatureSpan'>
+        <button type="button" onClick="exportGridToKML()"> Export KML</button>
+        <select id="picklistSelect" style="display:none" onchange="exportGridToCSV2()"></select>
+        <button type="button" id= "csvButton" onClick="exportGridToCSV2()"> Export CSV</button>
+        </span>
+        <strong id="countLocations">0</strong> Locations on <strong id="countLayers">0</strong> Layers
+        
+
+    </div>
+    <div id="stopGrid" dojoType="dojox.grid.EnhancedGrid" style='height:300px;'
+        plugins = "{exporter: true, printer: true}"
+        structure="gridLayout" queryOptions="{deep:true}" query="{}" rowsPerPage="40" escapeHTMLInData="false" ></div>
+    </div>
+</apex:page>

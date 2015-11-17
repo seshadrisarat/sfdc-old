@@ -1,0 +1,202 @@
+<apex:page standardController="lmscons__Quiz__c" Extensions="lmsilt.QuizExt" tabStyle="My_Training__tab">
+	<apex:includeScript value="{!URLFOR($Resource.lmscons__LMSSource, 'js/jquery.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.lmscons__Uniform, '/pixelmatrix-uniform-2446d99/jquery.uniform.js')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.lmscons__Uniform, '/pixelmatrix-uniform-2446d99/css/uniform.default.css')}"/>
+	<style type="text/css">
+
+	    .b-header { padding:10px 10px 10px 45px; margin-bottom:20px; box-shadow:inset 0 -1px 5px #bababa; background:#dfdfdf url("{!URLFOR($Resource.lmscons__quizz_res, 'img/quizz-logo.png')}") no-repeat 5px 12px; border-radius:4px; -moz-border-radius:4px; -webkit-border-radius:4px;}
+	        .b-header h1 {font-size: 1.8em; font-weight: normal; line-height: 1.1em; margin-bottom:4px; display:block;}
+	        .b-header h2 {font-size:.9em; font-weight: normal; line-height: 1.1em; padding-left:2px; display:block;}
+
+	    .b-body .b-item {padding:0 15px 15px; margin: 0 30px 15px; border-bottom: 1px solid #dddae3}
+	    .b-body .b-title {font-size:18px; margin-bottom:.8em;}
+	        .b-form { /*padding-left:30px;*/}
+	            .b-form .b-form-line { margin-bottom:.5em; line-height:20px;}
+	                .b-form .b-form-line .radio, .b-form-line .checker {position:relative; top:-1px;}
+	                .b-form .b-form-line .checker {//top:0;}
+
+	      .b-footer { padding:10px 20px; box-shadow:inset 0 -1px 5px #bababa; background:#dfdfdf; border-radius:4px; -moz-border-radius:4px; -webkit-border-radius:4px;}
+	           .b-footer p.b-links {padding:0; margin:0; text-align:right}
+	           .b-footer p.b-links a { color:#0792cb; font-size:18px; text-decoration:none; margin-left:15px;}
+	           .b-footer p.b-links a:hover {text-decoration:underline}
+	      .b-pagination p {margin:0 0 10px; padding:0}
+
+	    .b-pagination {margin: 0 15px 15px 45px;}
+	        .b-pagination button {padding: 2px 12px; margin-right:5px;}
+	        .b-pagination .b-list { display:table-cell; vertical-align:middle; padding-right:10px;  min-width:70px; //float:left; //line-height:25px;}
+	        .b-pagination #Buttons {display:table-cell; vertical-align:middle; min-width:150px; //float:left;}
+
+	    input.text, input.email, input.password, textarea.uniform {margin:0}
+	    textarea.uniform {overflow:auto;}
+
+	    .hiddenItem {display: none;}
+
+	    .m-cfix:after {content:" ";clear:both;display:block;overflow:hidden;width:0;height:0;font-size:0;}
+	    .m-cfix {zoom:1}
+
+	</style>
+<apex:form >
+
+<apex:messages />
+
+<apex:outputPanel rendered="{!NOT(isAttemptOk)}">
+	{!$Label.Quiz_max_attempts_reached}
+</apex:outputPanel>
+		<apex:outputPanel id="Prerequisites" rendered="{!isPre}">
+			<apex:pageBlock title="{!$Label.ilt_message_You_must_complete_following_Learning_Objects}">
+				<apex:pageBlockTable value="{!Pre}" var="P">
+				<!-- <apex:dataTable value="{!Pre}" var="P" rowClasses="odd,even" styleClass="list"> -->
+					<apex:column >
+						<apex:facet name="header">{!$Label.ilt_title_Learning_Object}</apex:facet>
+
+						<apex:outputLink value="/{!P.lmscons__Module_Child__c}" rendered="{!P.RecordType.DeveloperName == 'Module'}" target="__blank">
+							{!P.lmscons__Module_Child__r.lmscons__Title__c}
+						</apex:outputLink>
+
+						<apex:outputLink value="/{!P.lmscons__Quiz_Child__c}" rendered="{!P.RecordType.DeveloperName == 'Quiz'}" target="__blank">
+							{!P.lmscons__Quiz_Child__r.Name}
+						</apex:outputLink>
+
+						<apex:outputLink value="/{!P.lmscons__Course_Child__c}" rendered="{!P.RecordType.DeveloperName == 'Course'}" target="__blank">
+							{!P.lmscons__Course_Child__r.Name}
+						</apex:outputLink>
+
+						<apex:outputLink value="/{!P.lmscons__Learning_Path_Child__c}" rendered="{!P.RecordType.DeveloperName == 'Learning_Path'}" target="__blank">
+							{!P.lmscons__Learning_Path_Child__r.Name}
+						</apex:outputLink>
+
+						<apex:outputLink value="/{!P.lmscons__Curriculum_Child__c}" rendered="{!P.RecordType.DeveloperName == 'Curriculum'}" target="__blank">
+							{!P.lmscons__Curriculum_Child__r.Name}
+						</apex:outputLink>
+
+					</apex:column>
+					<apex:column >
+						<apex:facet name="header">{!$Label.ilt_title_Type}</apex:facet>
+						<apex:outputText value="{!P.RecordType.DeveloperName}"/>
+					</apex:column>
+				</apex:pageBlockTable>
+				<!-- </apex:dataTable> -->
+			</apex:pageBlock>
+		</apex:outputPanel>
+
+<apex:outputPanel rendered="{!NOT(isPre)}">
+
+    <div class="b-header">
+        <h1>{!Qn.Name}</h1>
+        <h2>{!Qn.lmscons__Description__c}</h2>
+    </div>
+
+	<!-- <apex:outputPanel rendered="{!isAttemptOk}"> -->
+	    <div class="b-body">
+	    <!-- {!Questions} -->
+
+	        <apex:variable var="pageCount" value="{!1}" />
+	        <apex:variable var="CountQuestion" value="{!1}" />
+	        <apex:repeat value="{!Questions}" var="page">
+	            <apex:variable var="pageCount" value="{!IF(page.Type==$Label.Page_Break,pageCount+1,pageCount)}"/>
+	            <div class="QuestionPage hiddenItem" name="{!Round(pageCount,0)}">
+	                <apex:repeat value="{!page}" var="q" rendered="{!page.Type!=$Label.Page_Break}">
+	                    <div id="{!q.Qid}" qType="{!q.Type}" name="question" class="b-item">
+	                    <div class="b-title" style="position:absolute; margin-left:-40px">
+	                    	{!Round(CountQuestion,0)}
+	                    </div>
+	                        <div class="b-title"><apex:outputText value="{!q.NameQ}" /></div>
+	                        <apex:outputPanel layout="block" styleClass="b-form" rendered="{!q.Type == 'True/False'}">
+	                            <div class="b-form-line">
+								<apex:selectRadio value="{!q.AnswerTrueFalse}" layout="pageDirection">
+									<apex:selectOptions value="{!q.AnswerOptions}"/>
+								</apex:selectRadio>
+								</div>
+	                        </apex:outputPanel>
+	                        <apex:outputPanel layout="block" styleClass="b-form" rendered="{!q.Type == 'Free Text'}">
+	                            <div class="b-form-line">
+		                            <apex:inputText value="{!q.AnswerFreeText}" />
+	                            </div>
+	                        </apex:outputPanel>
+	                        <apex:outputPanel layout="block" styleClass="b-form" rendered="{!q.Type == 'One Select'}">
+		                        <div class="b-form-line">
+									<apex:selectRadio value="{!q.AnswerOneSelect}" layout="pageDirection">
+										<apex:selectOptions value="{!q.AnswerOptions}"/>
+									</apex:selectRadio>
+								</div>
+	                        </apex:outputPanel>
+	                        <apex:outputPanel layout="block" styleClass="b-form" rendered="{!q.Type == 'Multiple Choice'}">
+		                        <div class="b-form-line">
+									<apex:selectCheckboxes value="{!q.AnswerMultiSelect}" layout="pageDirection">
+										<apex:selectOptions value="{!q.AnswerOptions}"/>
+									</apex:selectCheckboxes>
+								</div>
+	                        </apex:outputPanel>
+	                    </div>
+	                    <apex:variable var="CountQuestion" value="{!CountQuestion+1}"/>
+	                </apex:repeat>
+	            </div>
+	        </apex:repeat>
+	    </div>
+	<!-- </apex:outputPanel> -->
+
+    <div class="b-footer">
+        <table style="width: 100%;">
+            <tr>
+                <td>
+                </td>
+                <td id="Pagination">
+	                    <p class="b-links">
+	                    	<a href="{!$Page.MyTraining}">{!$Label.Cancel}</a>
+	                    	<apex:outputPanel rendered="{!isAttemptOk}">
+	                    		<a class="hiddenItem" id="Prev" href="#" onclick="ShowPage(page-1); return false;">{!$Label.Pagination_Previous}</a>
+	                    		<a class="hiddenItem" id="Next" href="#" onclick="ShowPage(page+1); return false;">{!$Label.Pagination_Next}</a>
+	                    		<apex:commandLink value="Submit" action="{!SaveResult}" styleClass="hiddenItem" id="Submit"/>
+	                    	</apex:outputPanel>
+	                    </p>
+                </td>
+            </tr>
+        </table>
+    </div>
+</apex:outputPanel>
+</apex:form>
+
+
+    <script type="text/javascript">
+
+        jQuery.noConflict();
+
+        jQuery(function(){
+            UseUniform();
+            ShowPage(1);
+        });
+
+        function UseUniform(){
+            jQuery("select, input:text, input:checkbox, input:radio, input:file, textarea").uniform();
+        }
+
+        var page = 0;
+        var pages = {!Pages};
+
+        function ShowPage(n){
+            page = n;
+
+            jQuery("div.QuestionPage").addClass("hiddenItem");
+            jQuery("#Pagination #Prev").addClass("hiddenItem")
+            jQuery("#Pagination #Next").addClass("hiddenItem")
+            jQuery("#Pagination [id$=Submit]").addClass("hiddenItem");
+
+            jQuery("div.QuestionPage[name='"+page+"']").removeClass("hiddenItem");
+            if (page > 1){
+                jQuery("#Pagination #Prev").removeClass("hiddenItem");
+            }
+            if (page < pages){
+                jQuery("#Pagination #Next").removeClass("hiddenItem");
+            }
+            if (page == pages){
+                jQuery("#Pagination [id$=Submit]").removeClass("hiddenItem");
+            }
+
+            jQuery("#Pagination span#page").text(page);
+
+        }
+
+
+    </script>
+
+</apex:page>

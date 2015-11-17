@@ -1,0 +1,190 @@
+<apex:component controller="geopointe.MapMobile_Controller" extensions="geopointe.Route,geopointe.Localization,geopointe.GeoLocation,geopointe.Actions" allowDML="true">
+	<html ng-App="GeopointeApp">
+		<head>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+	        <meta http-equiv="Content-type" content="text/html; charset=utf-8"/>
+	            
+	        <!-- CSS -->
+	        <link rel="stylesheet" href="{!URLFOR($Resource.jquery, 'sf1/lib/snap/snap.css')}"/> <!-- CSS for snap.js -->
+	        <link rel="stylesheet" href="{!URLFOR($Resource.jquery, 'sf1/lib/toastr/toastr.min.css')}"/> <!-- CSS for toastr.js -->
+	       	<link rel="stylesheet" href="{!URLFOR($Resource.jquery, 'sf1/css/sf1.css')}"/> <!-- SF1 Styling -->
+	       	<link rel="stylesheet" href="{!URLFOR($Resource.jquery, 'sf1/css/mapMobile.css')}"/> <!-- Page / app styles -->
+	       	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Montserrat"/><!-- Custom font to match sf1 style -->
+	       	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.1.0/css/font-awesome.min.css"/> <!--Font awesome library for icons and such -->
+
+
+	       	<!--Because iOS is special -->
+	       	<apex:outputPanel rendered="{!isiOS}">
+	       		<link rel="stylesheet" href="{!URLFOR($Resource.jquery, 'sf1/css/sf1iOS.css')}"/>
+	       	</apex:outputPanel>
+
+	       	<!-- JavaScript Merge Vars -->
+	        <script type="text/javascript">
+		        var nameSpacePrefix = '{!JSENCODE(namespace)}'
+		        var isiOS = {!isiOS};
+		        var isDemo = {!isDemo};
+		        var startObjectResponse = {!startObjectResponseJSON};
+		        var isGeopointeAdmin = {!isGeopointeAdmin};
+
+				var gp_userSettings = new Object();
+				gp_userSettings.settings__c = {!userSettingsJSON};
+				gp_userSettings.userInfo = {!userInfoJSON};
+				gp_userSettings.sessionId = '{!GETSESSIONID()}';
+				gp_userSettings.layouts = new Object();
+
+				gp_orgSettings = new Object();
+	            gp_orgSettings.settings__c = {!orgSettingsJSON};
+	            gp_orgSettings.managed = {!orgManaged}; 
+	            gp_orgSettings.fieldPrefix = '{!JSENCODE(namespace)}';
+		        gp_orgSettings.environment = '{!orgEnvironment}';
+		        gp_orgSettings.version = '{!orgVersion}';
+				
+		        var gp_remotes = {
+		        	getDataSets: '{!$RemoteAction.MapMobile_Controller.getDataSets}',
+		        	getRouteList: '{!$RemoteAction.MapMobile_Controller.getRouteList}',
+		        	doRadialSearch: '{!$RemoteAction.MapMobile_Controller.doRadialSearch}',
+		        	getRouteDetail: '{!$RemoteAction.MapMobile_Controller.getRouteDetail}',
+		        	saveRoute: '{!$RemoteAction.Route.saveRoute}',
+		        	deleteRoute: '{!$RemoteAction.Route.deleteRoute}',
+		        	hideGoogleMapsMessage: '{!$RemoteAction.MapMobile_Controller.hideGoogleMapsMessage}',
+		        	saveMapType: '{!$RemoteAction.MapMobile_Controller.saveMapType}',
+		        	updateShowTraffic: '{!$RemoteAction.MapMobile_Controller.updateShowTraffic}',
+		        	getMyLocations: '{!$RemoteAction.GeoLocation.getGeoLocations}',
+		        	getActions: '{!$RemoteAction.Actions.getActions}',
+		        	executeApexAction: '{!$RemoteAction.Actions.executeApexAction}' 	
+		        };
+		        var gp_imgURLs = {
+		        	blueDot: '{!URLFOR($Resource.jquery, "sf1/img/blueDot.png")}',
+		        	redDot: '{!URLFOR($Resource.jquery, "sf1/img/redDot.png")}'
+		        }
+		        var gp_templates = {
+		        	'search.html': '{!URLFOR($Resource.jquery, "sf1/partials/search.html")}',
+		        	'resultList.html': '{!URLFOR($Resource.jquery, "sf1/partials/resultList.html")}',
+		        	'recordDetail.html': '{!URLFOR($Resource.jquery, "sf1/partials/recordDetail.html")}',
+		        	'route.html': '{!URLFOR($Resource.jquery, "sf1/partials/route.html")}',
+		        	'routeList.html': '{!URLFOR($Resource.jquery, "sf1/partials/routeList.html")}',
+		        	'routeSave.html': '{!URLFOR($Resource.jquery, "sf1/partials/routeSave.html")}',
+		        	'legend.html': '{!URLFOR($Resource.jquery, "sf1/partials/legend.html")}',
+		        	'myLocations.html': '{!URLFOR($Resource.jquery, "sf1/partials/myLocations.html")}',
+		        	'fullScreenIframe.html': '{!URLFOR($Resource.jquery, "sf1/partials/fullScreenIframe.html")}',
+		        	'dataSetFolderList': '{!URLFOR($Resource.jquery, "partials/dataSetFolderList.html")}'
+		        };
+		        var gp_translations = {
+		        	No_records_were_found: "{!JSENCODE($Label.No_records_were_found)}",
+		        	Route_Successfully_Saved: "{!JSENCODE($Label.Route_Successfully_Saved)}",
+		        	Close: "{!JSENCODE($Label.Close)}"
+		        }
+	        </script>
+
+	        <!-- JS, Order Matters-->
+	        <script src="{!URLFOR($Resource.jquery, 'sf1/lib/jquery/jquery-2.1.0.min.js')}"></script> <!-- jQuery -->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/jquery/jquery-ui-1.10.4.custom.min.js')}"></script> <!-- jQuery UI -->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/jquery/jquery.ui.touch-punch.min.js')}"></script> <!-- Touch for jQuery UI -->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/snap/snap.js')}"></script> <!-- Sidebar popout menu, https://github.com/jakiestfu/Snap.js/ -->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/toastr/toastr.min.js')}"></script> <!-- Popups -->
+			<script src="{!googleMapsJs}"></script> <!-- Google Maps Api -->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/js/gpMapGoogle.js')}"></script> <!-- Modular map functions file -->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/js/sf1.js')}"></script> <!-- Arrowpointe sf1 functions -->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/hammer-min.js')}"></script> <!-- Hammer.js touch events -->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/angular/angular.min.js')}"></script> <!-- Angular -->
+			<script src="{!URLFOR($Resource.jquery, '/js/lib/angular/locales/angular-locale_'& angularLocaleForCurrentUser &'.js')}"></script> <!-- Angular Locale -->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/moment/moment.min.js')}"></script> <!-- Moment.js for time formatting -->
+		    <script src="{!URLFOR($Resource.jquery, 'sf1/lib/moment/moment-timezone.min.js')}"></script> <!-- Moment.js timezone functionality -->
+		    <script src="{!URLFOR($Resource.jquery, 'sf1/lib/moment/moment-timezone-data.js')}"></script> <!-- Moment.js timezone data -->
+		    <script src="{!URLFOR($Resource.jquery, 'sf1/lib/moment/lang/'& momentJSLangForCurrentUser &'.js')}"></script> <!-- Moment.js language file -->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/angular/angular-sanitize.min.js')}"></script> <!-- Angular Sanitize for HTML output -->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/angular/angular-animate.min.js')}"></script> <!-- Angular Animations-->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/angular/angular-touch.min.js')}"></script> <!-- Optimized touch events-->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/angular/lib/ng-infinite-scroll.min.js')}"></script> <!-- Angular Long List scrolling load-->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/angular/lib/ui.sortable.min.js')}"></script> <!-- Angular jQuery UI sortable-->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/angular/lib/angular-hammer.js')}"></script> <!-- Angular Hammer.js -->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/angular/lib/angular-moment.min.js')}"></script> <!-- Angular Moment.js-->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/jquery.transit.js')}"></script> <!-- smooth css3 transitions, http://ricostacruz.com/jquery.transit/ -->
+			<script src="{!URLFOR($Resource.jquery, 'sf1/lib/mixpanel.js')}"></script> <!-- mixpanel tracking -->
+			<script src="{!URLFOR($Resource.jquery, 'js/map.actions.js')}"></script> <!-- JS for actions functionality -->
+
+
+			<script src="{!URLFOR($Resource.jquery, 'sf1/js/app.js')}"></script> <!-- Main application file contains angular js and other functions -->
+			<script src="{!URLFOR($Resource.jquery, '/js/mapLegendService.js')}"></script> <!-- Angular Service for legend items -->
+			<script src="{!URLFOR($Resource.jquery, '/js/legendController.js')}"></script> <!-- Contains Angular controller for Legend functionality -->
+			<script src="{!URLFOR($Resource.jquery, '/js/directives/dataSetFolderList.js')}"></script> <!-- Contains Angular directive for Data Set folder list -->
+
+			<!-- localize.js -->
+			<script src="https://cdn.localizejs.com/localize.js"></script>
+			<script>!function(a){if(!a.Localize){a.Localize={};for(var e=["translate","untranslate","phrase","initialize","translatePage","setLanguage","getLanguage","detectLanguage","untranslatePage","bootstrap","prefetch","on","off"],t=0;t<e.length;t++)a.Localize[e[t]]=function(){}}}(window);</script>
+
+			<script>
+				Localize.initialize({
+					key: '1SeX6sYAXWLng', 
+					rememberLanguage: true,
+					saveNewPhrases: false,
+					translateBody: true
+				});
+				//Localize.setLanguage('es');
+			</script>
+		</head>
+		<body ng-app="" ng-controller="AppController" id="app">
+
+			<!-- Where partial page views will load over the map -->
+			<div id="includeContainer" class="view-animate-container" ng-class="slideDirection">
+        		<div ng-include="currentTemplateUrl" class="view-animate"></div>
+      		</div>
+
+      		<!-- full screen iframe for record actions -->
+      		<full-screen-iframe url="recordActionURL"/>
+
+            <div class="snap-drawers">
+                
+                <!-- Left sidebar setup and settings menu -->
+                <div class="snap-drawer snap-drawer-left">
+                    <div>
+                       	<img src="{!URLFOR($Resource.jquery, 'sf1/img/geopointe.png')}" style="width:170px; padding: 10px"/>
+                        
+                        <div class="mapLayer {{trafficLayerVisible ? 'mapLayerSelected' : ''}}" ng-click="toggleTraffic()">
+                        	Traffic
+                        </div>
+                        <div class="mapLayer {{mapType == 'hybrid' ? 'mapLayerSelected' : ''}}" ng-click="setMapType('hybrid')">
+                        	Satellite
+                        </div>
+                        <ul>
+                            <li ng-click="snapper.close();openPage('myLocations.html');">
+                            	<img src="{!URLFOR($Resource.jquery, 'sf1/img/locations2x-trans.png')}" class="sideBarListIcon"/>My Locations
+                            </li>
+                            <li ng-click="snapper.close();openPage('legend.html');">
+                            	<img src="{!URLFOR($Resource.jquery, 'sf1/img/legend2x.png')}" class="sideBarListIcon"/>Legend
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content Page / Map -->
+            <div id="content" class="snap-content"> <!-- id must be 'content' for snap.js to work -->
+           		
+           		<div id="mapWrapper">
+	                <!-- This is where the map goes -->
+	                <div id="map" data-snap-ignore="true" hm-hold="mapHold($event)"></div>
+
+	                <!-- Map Buttons -->
+	                <div class="mapButton viewRecordsList" ng-show="records.length" ng-click="openPage('resultList.html');">
+	                	<span class="countBubble routeCount" ng-show="records.length">{{records.length}}</span>
+	                </div>
+	                <div class="mapButton routeMapButton" ng-click="openPage('route.html');">
+	                	<span class="countBubble routeCount" ng-show="activeRoute.routeStops.length">{{routeHasCurrentLocation() ? activeRoute.routeStops.length - 1 : activeRoute.routeStops.length}}</span>
+	                </div>
+	                <div class="mapButton searchMapButton" ng-click="openPage('search.html');"></div>
+	                <div class="mapButton locateMeMapButton" ng-class="locateMeInProgress ? 'locateMeInProgress':''" ng-click="locateMe();"></div>
+	                <div class="mapButton openSideBarMapButton"></div>
+	                <div class="mapButton openStageLeft"></div>
+                </div>
+                
+                <!-- Angular directive for record detail view -->
+                <record-detail/>
+
+                <!-- This div is only "shown" when the left menu is open and overlays all the main content
+                if clicked/touched it will close the left menu -->
+                <div id="closeStageLeftOverlay"></div>
+            </div>
+	    </body>
+    </html>
+</apex:component>

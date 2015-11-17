@@ -1,0 +1,256 @@
+<!-- Copyright © 2010 Primal Cause, Inc. All rights reserved. -->
+<apex:component >
+	<apex:attribute name="loadUserFilter" type="Boolean" required="true" description=""/>
+	<apex:attribute name="adminFilteringEnabled" type="Boolean" required="true" description=""/>
+	<apex:attribute name="launchGridURL" type="String" required="true" description=""/>
+	<apex:attribute name="gridHasValidObjects" type="Boolean" required="true" description=""/>
+	<apex:attribute name="saveAndRefreshPage3" type="ApexPages.Action" required="true" description=""/>
+	<apex:attribute name="saveAndBackPage3" type="ApexPages.Action" required="true" description=""/>
+	<apex:attribute name="saveAndRefreshUDFPage" type="ApexPages.Action" required="true" description=""/>
+	<apex:attribute name="resetForm" type="ApexPages.Action" required="true" description=""/>
+	<apex:attribute name="deleteFilter" type="ApexPages.Action" required="true" description=""/>
+	<apex:attribute name="lang" type="GBLite.GridLang" required="true" description=""/>
+	<apex:attribute name="wrapper" type="GBLite.GridConfigWrapper" required="true" description=""/>
+	<apex:attribute name="ownershipOptions" type="GBLite.SelectOptionWrapper" required="true" description="" />
+	<apex:attribute name="operators" type="GBLite.SelectOptionWrapper" required="true" description="" />
+	<apex:attribute name="orderByOptions" type="GBLite.SelectOptionWrapper" required="true" description="" />
+	<apex:attribute name="filterParentByChildOptions" type="GBLite.SelectOptionWrapper" required="true" description="" />
+	<apex:attribute name="errors" type="GBLite.ErrorHandler" required="false" description="" />
+	<apex:attribute name="cloneFilter" type="ApexPages.Action" required="true" description=""/>
+	<apex:attribute name="savedFilterOptions" type="List" required="false" description="" />
+	<apex:attribute name="adminFilterOptions" type="List" required="false" description="" />
+	<apex:attribute name="enableFilterClone" type="Boolean" required="true" description=""/>
+	<apex:attribute name="isCreatingNewFilter" type="Boolean" required="true" description=""/>
+	<apex:attribute name="isDefaultFilterLoaded" type="Boolean" required="true" description=""/>
+	<apex:attribute name="selectedFilterPicklistVal" type="String" required="false" description="" />
+	<apex:attribute name="selectedAdminFilterPicklistVal" type="String" required="false" description="" />
+
+	<apex:form styleClass="gbwForm">
+		<!-- use inline style to hide content to prevent it from flashing before page is done loading -->
+		<div class="gbwSteps" style="display:{!IF(loadUserFilter = true, 'none', 'block')};">
+			<span class="gbwOtherStep">{!lang.CreateGridLabel}&nbsp;&nbsp;&gt;&nbsp;</span>
+			<span class="gbwOtherStep">{!lang.SelectFieldsLabel}&nbsp;&nbsp;&gt;&nbsp;</span>
+			<span>{!lang.DefineFiltersLabel}</span>
+		</div>
+			
+		<apex:pageblock title="{!IF(loadUserFilter = true, '', lang.DefineFiltersTitle+wrapper.gridConfig.Name)}">
+			<!-- NOTE, this pageBlockButtons tag adds two sets of buttons, one on top and one on bottom of the page. 
+				 For the UDF, the bottom buttons are hidden but still present in the source code -->
+			<apex:pageBlockButtons >
+				<!-- Admin Filter drop down on GW3 -->
+				<c:EmptyComponent rendered="{!gridHasValidObjects && NOT(loadUserFilter) && adminFilteringEnabled}">
+					<span class="adminFilterLbl">{!lang.GW3FilterPicklistLbl}&nbsp;</span>
+					<apex:selectList styleClass="adminFilterOptions" value="{!selectedAdminFilterPicklistVal}" 
+						size="1" multiSelect="false" >
+						<apex:selectOptions value="{!adminFilterOptions}"/>
+					</apex:selectList>
+				</c:EmptyComponent>
+				<!-- Save GW3 -->
+				<c:EmptyComponent rendered="{!gridHasValidObjects && NOT(loadUserFilter)}">
+					<apex:commandButton action="{!saveAndRefreshPage3}" value="{!lang.SaveBtnLbl}" styleClass="saveBtn none"/>
+					<input type="button" class="gbBtnDisabled none" value="{!lang.SaveBtnLbl}" disabled="disabled" />
+				</c:EmptyComponent>
+				<!-- Save and Back GW3 -->
+				<c:EmptyComponent rendered="{!gridHasValidObjects && NOT(loadUserFilter)}">
+					<apex:commandButton action="{!saveAndBackPage3}" value="{!lang.BackBtnLabel}" styleClass="saveBtn none" />
+					<input type="button" class="gbBtnDisabled none" value="{!lang.BackBtnLabel}" disabled="disabled" />
+				</c:EmptyComponent>
+				<c:EmptyComponent rendered="{!gridHasValidObjects && loadUserFilter}">
+					<!-- Filter drop down
+					 	 Here we bind the saved filters picklist to selectedFilterPicklistVal. This value is calculated in GridUtil. This was needed  
+					 	 because we have different values and labels for admin filters when they are in the picklists on the grid, and in the UDF. -->
+					<span>{!lang.FilterPicklistLbl}&nbsp;</span>
+					<apex:selectList styleClass="filterOptions" value="{!selectedFilterPicklistVal}" size="1" multiSelect="false" >
+						<apex:selectOptions value="{!savedFilterOptions}"/>
+					</apex:selectList>
+					<!-- Save UDF -->
+					<apex:commandButton id="saveUDFBtn" action="{!saveAndRefreshUDFPage}" value="{!lang.SaveBtnLbl}" styleClass="saveUDFBtn none" 
+						reRender="saveErrors" status="refreshStatus" />
+					<input id="saveUDFAction" type="button" class="gbBtn saveUDFAction" value="{!lang.SaveBtnLbl}" />	
+					<input type="button" class="gbBtnDisabled none" value="{!lang.SaveBtnLbl}" disabled="disabled" />
+				</c:EmptyComponent>
+				<c:EmptyComponent rendered="{!adminFilteringEnabled}">
+					<!-- Clone GW3 and UDF-->
+					<apex:commandButton action="{!cloneFilter}" value="{!lang.CloneBtnLabel}" styleClass="cloneUDFBtn none"
+						 reRender="{!IF(loadUserFilter, 'saveErrors', '')}" status="cloneStatus"/>
+					<input id="cloneUDFAction" type="button" class="gbBtn cloneUDFAction {!IF(NOT(enableFilterClone), 'none', '')}" 
+						value="{!lang.CloneBtnLabel}" title="{!lang.cloneBtnTitle}"/>	 
+					<input type="button" class="cloneDisabled gbBtnDisabled {!IF(enableFilterClone, 'none', '')}" 
+						value="{!lang.CloneBtnLabel}" disabled="disabled" />
+					<!-- Delete GW3 and UDF -->
+					<apex:commandButton id="revertActionHidden" action="{!deleteFilter}" value="{!lang.DeleteBtnLbl}" styleClass="revertActionHidden none" 
+						immediate="true" reRender="saveErrors" status="refreshStatus" />
+					<input id="revertActionBtn" type="button" class="gbBtn revertAction {!IF((isCreatingNewFilter || isDefaultFilterLoaded), 'none', '')}" 
+						value="{!lang.DeleteBtnLbl}" title="{!lang.deleteBtnTitle}" />
+					<input type="button" class="gbBtnDisabled {!IF(NOT(isCreatingNewFilter) && NOT(isDefaultFilterLoaded), 'none', '')}" 
+						value="{!lang.DeleteBtnLbl}" disabled="disabled" />
+				</c:EmptyComponent>
+				<!-- Refresh GW3 and UDF -->
+				<apex:commandButton action="{!resetForm}" value="{!lang.RefreshBtnLbl}" immediate="true" styleClass="refreshAction none"/>
+				<input type="button" class="gbBtnDisabled none" value="{!lang.RefreshBtnLbl}" disabled="disabled" />
+				<!-- Launch Grid Link -->
+				<c:EmptyComponent rendered="{!gridHasValidObjects && NOT(loadUserFilter)}">
+					<a href="{!launchGridURL}" class="launchGridLink" target="_blank" title="{!lang.LaunchGridTitle}">{!lang.LaunchGridLabel}</a>
+				</c:EmptyComponent>
+			</apex:pageBlockButtons>
+			
+			<apex:actionStatus id="refreshStatus" onStop="refreshParentPage()"/>
+			<apex:actionStatus id="fastFilterStatus" onStop="fastFilterRefreshParentPage()"/>
+			<apex:actionStatus id="cloneStatus" onStop="doFilterCloneComplete()"/>
+			<apex:actionFunction name="saveFastFilters" action="{!saveAndRefreshUDFPage}" reRender="fastFilterSaveErrors" status="fastFilterStatus" /> 
+			
+			<apex:outputPanel id="saveErrors" styleClass="none" rendered="{!loadUserFilter}">
+				<c:GridFilterErrorComponent errors="{!errors}" customErrorId="postSaveErrors"/>
+			</apex:outputPanel>
+			<apex:outputPanel id="fastFilterSaveErrors" styleClass="none" rendered="{!loadUserFilter}">
+				<c:GridFilterErrorComponent errors="{!errors}" customErrorId="fastFilterPostSaveErrors"/>
+			</apex:outputPanel>
+			
+			<c:EmptyComponent rendered="{!NOT(loadUserFilter)}">
+				<div class="instr">
+					<apex:outputText value="{!lang.FilterInstr1}" escape="false"/><br/>
+					<apex:outputText value="{!lang.FilterInstr2}" escape="false"/><br/>
+					<apex:outputText value="{!lang.FilterInstr3}" escape="false"/><br/>
+					<apex:outputText value="{!lang.FilterInstr4}" escape="false"/><br/>
+				</div>
+			</c:EmptyComponent>
+			<!-- user-defined filter name input -->
+			<c:EmptyComponent rendered="{!loadUserFilter}">
+				<div id="filterName"><b>{!lang.FilterNameLbl}<span class="reqStar">*</span>&nbsp;</b>
+					<apex:inputText styleClass="filterNameInput" value="{!wrapper.gridConfig.selectedFilterName}" maxlength="100"/>
+				</div>
+			</c:EmptyComponent>
+			<!-- admin-defined filter name input -->
+			<c:EmptyComponent rendered="{!adminFilteringEnabled && NOT(loadUserFilter)}">
+				<div id="filterName"><b>{!lang.FilterNameLbl}<span class="reqStar">*</span>&nbsp;</b>
+					<apex:inputText styleClass="filterNameInput" value="{!wrapper.gridConfig.selectedAdminFilterName}" maxlength="100"/>
+				</div>
+			</c:EmptyComponent>
+			
+			<div id="parentChildFields">
+				<apex:repeat value="{!wrapper.gridObjectList}" var="gridObject">
+					<apex:pageBlockSection title="{!gridObject.objectLabel}{!lang.RecordsLbl}" columns="5">
+						<c:EmptyComponent rendered="{!NOT(gridObject.supportsUserDefinedFilters)}">
+							<br/>
+							<b>{!gridObject.FilterNotAvailableMsg}</b>
+						</c:EmptyComponent>
+						<c:EmptyComponent rendered="{!gridObject.supportsUserDefinedFilters}">
+							<table class="objectFilters" width="auto" name="{!gridObject.objectName}{!IF(gridObject.isParent, '', ':' + gridObject.foreignKeyToParent)}">
+								<tr>
+									<td colspan="3" class="filterType"><span>{!lang.FilterByOwnershipLbl}</span></td>
+								</tr>
+								<tr class="nowrap {!IF(gridObject.isDetail, 'none', '')}">
+									<td colspan="3">
+										<apex:selectRadio value="{!gridObject.filterByOwnership}" rendered="{!NOT(gridObject.isDetail)}" styleClass="ownerRdo">
+											<apex:selectOptions value="{!ownershipOptions.options}"/>
+										</apex:selectRadio>
+									</td>
+								</tr>
+								<tr class="{!IF(gridObject.isDetail, '', 'none')}">
+									<td colspan="3">
+										<div class="instr">
+										{!lang.NotAvailableForMasterDetail}
+										</div>
+									</td>
+								</tr>									
+								<tr>
+									<td colspan="3" class="filterType"><span>{!lang.FilterByFieldLbl}</span></td>
+								</tr>
+								<tr class="nowrap vmid">
+									<td colspan="3">
+									<apex:repeat value="{!gridObject.filters}" var="filter">
+										<c:WizardFilterComponent filterField="{!filter.filterFieldValue}"
+											filterByFields="{!gridObject.selectOptions}"
+											operator="{!filter.filterOperatorValue}"
+											operators="{!operators}"
+											filterValue="{!filter.filterValueValue}" 
+											filterNumber="{!TEXT(filter.filterNumber)}"
+											lastFilter="{!(filter.filterNumber == gridObject.filters.size)}"	
+											lang="{!lang}"
+                                            loadUserFilter="{!loadUserFilter}"/>					
+									</apex:repeat>
+									</td>
+								</tr>
+								<tr>
+									<td colspan="3">
+										<span class="addFilterCondition none" title="{!lang.AddFilterCondition}">{!lang.AddFilter}</span>
+									</td>
+								</tr>
+								<tr>
+									<td colspan="3" class="filterType"><span>{!lang.AdvFilterLbl}</span></td>
+								</tr>
+                                <tr>
+                                    <td colspan="3" class="lockedAndUnlockedAdvFilterHelperText none"><span>{!lang.LockedAndUnlockedAdvFilterHelpTxt}</span></td>
+                                </tr>
+								<tr class="advFilterRow">
+									<td colspan="3">
+								        <apex:inputText value="{!gridObject.advancedFilter}" styleClass="advFilter" />&nbsp;
+                                        <span class="clearAdvFilter" title="{!lang.ClearAdvFilter}">{!lang.ClearLink}</span>&nbsp;
+                                        <span class="spanLink" title="{!lang.OpenTipsInNewWin}">{!lang.FilterTipsLink}</span>
+                                    </td>
+                                </tr>
+                                <tr class="lockedAdvFilterRow none">
+                                    <td colspan="3">
+                                        <span class="lockedAdvFilterLbl">{!lang.LockedAdvFilterLbl}&nbsp;</span>
+								        <apex:inputText value="{!gridObject.lockedAdvancedFilter}" styleClass="lockedAdvFilter" />&nbsp;
+                                        <span class="clearAdvFilter" title="{!lang.ClearAdvFilter}">{!lang.ClearLink}</span>&nbsp;
+                                        <span class="spanLink" title="{!lang.OpenTipsInNewWin}">{!lang.FilterTipsLink}</span>
+                                        <div class="advancedFilterHelperText none"></div>
+                                    </td>
+                                </tr>
+                                <tr class="unlockedAdvFilterRow none">
+                                    <td colspan="3">
+                                        <span class="unlockedAdvFilterLbl">{!lang.UnlockedAdvFilterLbl}&nbsp;</span>
+								        <apex:inputText value="{!gridObject.unlockedAdvancedFilter}" styleClass="unlockedAdvFilter" />&nbsp;
+                                        <span class="clearAdvFilter" title="{!lang.ClearAdvFilter}">{!lang.ClearLink}</span>&nbsp;
+                                        <span class="spanLink" title="{!lang.OpenTipsInNewWin}">{!lang.FilterTipsLink}</span>
+                                        <div class="advancedFilterHelperText none"></div>
+									</td>
+								</tr>
+								<tr class="{!IF(gridObject.isParent && wrapper.hasSubQueryableChildren, '', 'none')}">
+									<td colspan="3" class="filterType"><span>{!gridObject.FilterByRelObjMsg}</span></td>
+								</tr>
+								<tr class="{!IF(gridObject.isParent && wrapper.hasSubQueryableChildren, '', 'none')}">
+									<td colspan="3">
+										<apex:repeat value="{!wrapper.filterParentByChildObjectList}" var="filterByChild" rendered="{!gridObject.isParent && wrapper.hasSubQueryableChildren}">
+											<div class="tr">
+												<apex:selectList value="{!filterByChild.filterByOption}" multiselect="false" size="1" styleClass="filterByOption">
+													<apex:selectOptions value="{!filterParentByChildOptions.options}" />
+												</apex:selectList>
+												<span>&nbsp;{!filterByChild.ResultLbl}</span>
+											</div>
+										</apex:repeat>
+									</td>
+								</tr>
+								<tr>
+									<td colspan="3" class="filterType"><span>{!lang.OrderByFieldLbl}</span></td>
+								</tr>
+								<tr class="nowrap vmid">
+									<td colspan="3">
+									<apex:repeat value="{!gridObject.sortOrderConditions}" var="sortCondition">
+										<c:WizardSortOrderComponent sortCondition="{!sortCondition}"
+											selectOptions="{!gridObject.selectOptionsForSort}"
+											orderByOptions="{!orderByOptions}"
+											lang="{!lang}"/>
+									</apex:repeat>	
+									</td>
+								</tr>
+								<tr>
+									<td colspan="3">
+										<span class="addSortCondition none" title="{!lang.AddSortCondition}">{!lang.AddSortLink}</span>
+									</td>
+								</tr>
+								<tr>
+									<td colspan="3" class="filterType"><span>{!lang.MaxRecordLimitLbl}</span></td>
+								</tr>
+								<tr class="vmid">								
+									<td colspan="3"><apex:inputText value="{!gridObject.objectLimit}" styleClass="recordLimitValue"/>{!lang.MaxRecordLbl}</td>
+								</tr>
+							</table>
+						</c:EmptyComponent>
+					</apex:pageBlockSection>
+				</apex:repeat>
+			</div>
+		</apex:pageblock>
+	</apex:form>
+</apex:component>

@@ -1,0 +1,719 @@
+<apex:page controller="callDownListController" sidebar="false" standardStylesheets="false">
+    <apex:includeScript value="{!URLFOR($Resource.btg_jquery_ui_1_8_23, 'js/jquery-1.8.0.min.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.qTip)}"/>
+    <apex:includeScript value="{!URLFOR($Resource.btg_jquery_ui_1_8_23, 'js/jquery-ui-1.8.23.custom.min.js')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.btg_jquery_ui_1_8_23, 'css/start/jquery-ui-1.8.23.custom.css')}"/>
+    
+    <script type="text/javascript">
+        var j$ = jQuery.noConflict();
+        var contactID;
+        var leadID;
+        var dataID;
+        //var filtersHidden = true;
+        
+        j$(document).ready(function(){
+            reInitialize();   
+            
+            //j$("#filters").hide();
+            
+            //Complete Action W/ Message Dialog
+            j$("#actionMessage").dialog({
+              autoOpen: false,
+              modal: true,
+              height: 200,
+              width: 400,
+              show: "drop",
+              hide: "drop",
+              draggable: false,
+              resizable: false,
+              buttons: {
+                  "Done": function(){
+                      j$(this).dialog("close");
+                      var message = j$('[id$=messageTXT]').val();
+                      completeActionWithMessage( leadID, contactID, message);
+                      j$('[id$=messageTXT]').val('');
+                      contactID = null;
+                      leadID = null;
+                  },
+                  Cancel: function(){
+                      j$(this).dialog("close");
+                  }
+              }
+            });   
+            
+            
+            j$("#successPopUp").dialog({
+              autoOpen: false,
+              modal: true,
+              height: 600,
+              width: 1060,
+              show: "drop",
+              hide: "drop",
+              draggable: false,
+              resizable: false,
+              buttons: {
+                  "Done": function(){
+                      j$(this).dialog("close");
+                      var message = '';
+                      completeActionSuccess( leadID, contactID, message);
+                      j$('[id$=messageTXT]').val('');
+                      contactID = null;
+                      leadID = null;
+                  }
+              }
+            });   
+            
+            //Shows Campaign Details + Action List
+            j$("#actionsPopUp").dialog({
+              autoOpen: false,
+              modal: true,
+              height: 600,
+              width: 800,
+              show: "drop",
+              hide: "drop",
+              draggable: true,
+              resizable: true,
+              buttons: {
+                  "Close": function(){
+                      j$(this).dialog("close");
+                  }
+              }
+            });                      
+        });
+        
+        function reInitialize(){         
+             
+             j$("#pulldown").click(
+                 function() {
+                     if(j$('#showHideToggle').attr('alt') == 'show'){
+                         //filtersHidden = false;
+                         j$('#filters').show('slow');
+                         j$('#showHideToggle').attr('src', '/img/sort_asc_arrow.gif');
+                         j$('#showHideToggle').attr('alt', 'hide');
+                     }else{
+                          //filtersHidden = true;
+                          j$('#filters').hide('slow');
+                          j$('#showHideToggle').attr('src', '/img/sort_desc_arrow.gif');
+                          j$('#showHideToggle').attr('alt', 'show');
+                     }
+                 }
+             );
+             
+             //When Lead Icon Is Clicked, Show PopupInfo
+             j$(".leadImg").click(
+                 function() {
+                     dataID = j$(this).attr('data-id');
+                     updatePopupInfo(dataID);
+                     showPreview();
+                     j$('.item').removeClass('itemHighlight');
+                     j$(this).parent().addClass('itemHighlight');
+                 }
+             );
+             
+              //When Contact Icon is Clicked, Show PopupInfo
+              j$(".contactImg").click(
+                 function() {
+                    dataID = j$(this).attr('data-id');
+                    updatePopupInfo(dataID);
+                    showPreview();
+                    j$('.item').removeClass('itemHighlight');
+                    j$(this).parent().addClass('itemHighlight');
+                 }
+             );
+             
+             //When the hide details div is clicked, hide PopUpInfo
+             j$(".hideDetails").click(
+                 function() {
+                     hidePreview();
+                     j$('.item').removeClass('itemHighlight');
+                 }
+             );          
+            
+             
+             //Get Campaign Response Rate
+             var percent = j$("#progressbar").attr('data-percent');
+             
+             //Progress Bar
+              j$("#progressbar").progressbar({
+                  value: Math.round(percent)
+              });
+              
+             //Call Group By Account on Load and Reload
+             groupByAccount();
+         }
+         
+        //Shows the actionMessagePopup
+        function showActionMessageDialog(pContactID, pLeadID){
+          leadID = pLeadID;
+          contactID = pContactID;
+          j$("#actionMessage").dialog("open");
+          return false;
+        }  
+        
+        //Shows the successMessageDialog
+        function showSuccessMessageDialog(pContactID, pLeadID){
+          leadID = pLeadID;
+          contactID = pContactID;
+          j$('[id$=taskiFrame]').attr("src", "/00T/e?title=Call&who_id="+leadID+contactID+"&followup=1&tsk5=Call&retURL=/"+leadID+contactID+"&isdtp=vw");
+          j$("#successPopUp").dialog("open");
+          return false;
+        }    
+        
+        function showActionsDialog(){
+            j$("#actionsPopUp").dialog("open");
+        } 
+        
+        //Shows the preview pane
+        function showPreview(){
+            j$(".recordInfo").css('position', 'fixed');
+            j$(".recordInfo").css('button', '80px');
+            j$(".recordInfo").css('width', '23%');
+            j$(".recordInfo").css('height', '600px');
+            j$(".recordInfo").fadeIn('slow');
+            //j$(".recordInfo").css('display', 'block');
+            j$(".blueBorder").css('width', '73%');
+        }
+        
+        //Hides the preview pane
+        function hidePreview(){
+            j$(".recordInfo").fadeOut('slow');
+            j$(".recordInfo").css('width', '0%');
+            j$(".blueBorder").css('width', '97%');
+        }
+        
+        //Gets full text (Used with Account Grouping)
+        function getKey(fullText){
+          return fullText.match(/\d\d/);
+        }
+        
+        //Group Items By Account
+        function groupByAccount(){
+             var items = j$('.item');
+             var groups = [];
+             items.each(function(){
+                 var li = j$(this);
+                 var g = li.attr('data-acctID') + '|' + li.attr('data-acctName');
+                 if(!groups[g])
+                     groups[g] = [];
+                 groups[g].push(li);
+             });
+             
+             //Clear all grouping paragraphs
+             j$('.grouping').remove();
+             
+             for(group in groups){
+                 var div = j$('<p />').html('<a href=\'/' + group.substring(0, group.indexOf('|')) + '\' target=\'_blank\' style=\'text-decoration:none; color:#0085B4;\'>' + group.substring(group.indexOf('|')+1, group.length) + '</a>').css('font-weight', 'bold').addClass('grouping');
+                 var lis = groups[group];
+                 for(i = 0;i<lis.length;i++){
+                     div.append(lis[i]);
+                 }
+                 div.appendTo('div #groupByContainer');
+             }
+             
+             //Get Campaign Response Rate
+             var percent = j$("#progressbar").attr('data-percent');
+             
+             //Progress Bar
+              j$("#progressbar").progressbar({
+                  value: Math.round(percent)
+              });
+        }
+    </script>
+    
+    <apex:form >
+    <!-------------------------Action Functions-------------->
+    <apex:actionFunction name="completeActionWithMessage" action="{!completeActionWithMessage}" rerender="messageInputPanel, campaignMembers" status="actionStatus" oncomplete="reInitialize();">
+      <apex:param name="leadID" value=""/>
+      <apex:param name="contactID" value=""/>
+      <apex:param name="message" value=""/>
+    </apex:actionFunction>
+    <apex:actionFunction name="completeActionSuccess" action="{!completeActionSuccess}" rerender="messageInputPanel, campaignMembers, CampaignDetails" status="actionStatus" oncomplete="reInitialize();">
+      <apex:param name="leadID" value=""/>
+      <apex:param name="contactID" value=""/>
+      <apex:param name="message" value=""/>
+    </apex:actionFunction>
+    <apex:actionFunction name="updatePopupInfo" action="{!updatePopupInfo}" rerender="recordInfoPageBlock, Activities, ActionResults, openTasks, openEvents" >
+      <apex:param name="recordId" value=""/>
+    </apex:actionFunction>
+    <apex:actionFunction name="toggleCampaignMemberSortOrder" action="{!toggleCampaignMemberSortOrder}" />
+    
+    
+    <!-------------------------Popups------------------------->
+    <!-------------------------ActionMessage Popup------------------------->
+    <div id="actionMessage" title="Complete Action With Message">
+          <apex:outputPanel id="messageInputPanel">
+              <center><apex:inputTextarea id="messageTXT" rows="5" cols="50"/></center>
+          </apex:outputPanel>
+    </div>
+     <!-------------------------ActionSuccess Popup------------------------->
+    <div id="successPopUp" title="Sucessful Action">
+          <center><iframe id="taskiFrame" src="/00T/e?title=Call&who_id={!IF(contactID != null, contactID, leadID)}&followup=1&tsk5=Call&retURL=/{!IF(contactID != null, contactID, leadID)}&isdtp=vw" width="1050" height="500" scrolling="yes"></iframe></center>
+    </div>
+     <!-------------------------CallDownList Actions + Campain Details Popup------------------------->
+    <div id="actionsPopUp" title="Call Down List Actions">
+        <apex:outputPanel id="actionListPanel">
+            <center>            
+            <table border="1" cellpadding="3">
+                <tr>
+                    <th>Action Number</th>
+                    <th>Action Name</th>
+                    <th>Action Type</th>
+                </tr>
+                <tr>
+                    <td>1</td>
+                    <td>{!CampaignActions.Action_1_Name__c}</td>
+                    <td>{!CampaignActions.Action_1_Type__c}</td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td>{!CampaignActions.Action_2_Name__c}</td>
+                    <td>{!CampaignActions.Action_2_Type__c}</td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td>{!CampaignActions.Action_3_Name__c}</td>
+                    <td>{!CampaignActions.Action_3_Type__c}</td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td>{!CampaignActions.Action_4_Name__c}</td>
+                    <td>{!CampaignActions.Action_4_Type__c}</td>
+                </tr>
+                <tr>
+                    <td>5</td>
+                    <td>{!CampaignActions.Action_5_Name__c}</td>
+                    <td>{!CampaignActions.Action_5_Type__c}</td>
+                </tr>
+                <tr>
+                    <td>6</td>
+                    <td>{!CampaignActions.Action_6_Name__c}</td>
+                    <td>{!CampaignActions.Action_6_Type__c}</td>
+                </tr>
+                <tr>
+                    <td>7</td>
+                    <td>{!CampaignActions.Action_7_Name__c}</td>
+                    <td>{!CampaignActions.Action_7_Type__c}</td>
+                </tr>
+                <tr>
+                    <td>8</td>
+                    <td>{!CampaignActions.Action_8_Name__c}</td>
+                    <td>{!CampaignActions.Action_8_Type__c}</td>
+                </tr>
+                <tr>
+                    <td>9</td>
+                    <td>{!CampaignActions.Action_9_Name__c}</td>
+                    <td>{!CampaignActions.Action_9_Type__c}</td>
+                </tr>
+                <tr>
+                    <td>10</td>
+                    <td>{!CampaignActions.Action_10_Name__c}</td>
+                    <td>{!CampaignActions.Action_10_Type__c}</td>
+                </tr>
+            </table>
+            <br /><br />
+            <hr />
+            <div style="margin-top: 10px;">
+                <apex:detail subject="{!CampaignID}" relatedList="false" title="false"/>
+            </div>
+            </center>
+        </apex:outputPanel>
+    </div>
+    
+     <!-------------------------Small Action Status------------------------->
+    <div class="status">
+        <apex:actionstatus id="actionStatus" startText="Saving..." stopText=""/>
+    </div>
+    
+    <!-------------------------Preview Pane------------------------->
+    <div class="clearfix" style="width: 100%">
+    <div class="recordInfo" style="display: none; float: left; width: 0%; height: 100%;">
+        <div class="hideDetails" style="color: white; background: #0085B4; text-align: center; font-size: 1.1em; font-weight: bold; margin-bottom: 5px; cursor: pointer;">Hide Details</div>
+        <div id="previewPaneScrolling">
+        <apex:pageBlock id="recordInfoPageBlock">
+            <apex:pageBlockSection title="{!sObjectName} Details" columns="1">
+               <!-------------------------Lead Fields------------------------->
+              <apex:repeat value="{!fields}" var="f" rendered="{!IF(LEFT(popupRecordID, 3) == "00Q", "True", "False")}">
+                  <apex:outputField value="{!leadRecord[f.fieldPath]}" rendered="{!IF(LEFT(popupRecordID, 3) == "00Q", "True", "False")}"/>
+              </apex:repeat>
+               <!-------------------------Contact Fields------------------------->
+              <apex:repeat value="{!fields}" var="f" rendered="{!IF(LEFT(popupRecordID, 3) == "003", "True", "False")}">
+                  <apex:outputField value="{!contactRecord[f.fieldPath]}" rendered="{!IF(LEFT(popupRecordID, 3) == "003", "True", "False")}"/>
+              </apex:repeat>
+          </apex:pageBlockSection>
+          <apex:pageblockSection title="Account Details" columns="1" rendered="{!IF(LEFT(popupRecordID, 3) == '003', 'True', 'False')}" >
+               <!-------------------------Account Fields------------------------->
+              <apex:repeat value="{!AccountFields}" var="f" rendered="{!IF(LEFT(popupRecordID, 3) == "003", "True", "False")}">
+                  <apex:outputField value="{!accountRecord[f.fieldPath]}" rendered="{!IF(LEFT(popupRecordID, 3) == "003", "True", "False")}"/>
+              </apex:repeat>
+          </apex:pageblockSection>
+        </apex:pageBlock>
+        <!-------------------------Action Results List------------------>
+        <apex:pageBlock title="Action Results" id="ActionResults">
+            <apex:repeat value="{!ActionResults}" var="ar" rendered="{!IF(popupRecordID != null, 'True', 'False')}">
+                <apex:pageblockSection title="{!ar.Action_Step__c}" columns="1">
+                    <apex:outputField value="{!ar.Action_Result_Date_Time__c}"/>
+                    <apex:outputField value="{!ar.Result__c}"/>
+                    <apex:outputField value="{!ar.Message_Note__c}"/>
+                </apex:pageblockSection>
+            </apex:repeat>
+        </apex:pageBlock>        
+        <!-------------------------Open Tasks--------------------------->
+        <apex:pageBlock title="Open Tasks" id="openTasks">
+            <apex:repeat value="{!OpenTasks}" var="ot" rendered="{!IF(popupRecordID != null, 'True', 'False')}">
+                <apex:pageblockSection title="{!ot.Subject}" columns="1">
+                    <apex:outputField value="{!ot.ActivityDate}"/>
+                    <apex:outputField value="{!ot.Status}"/>
+                    <apex:outputField value="{!ot.Description}"/>
+                </apex:pageblockSection>
+            </apex:repeat>
+        </apex:pageBlock>
+        <!-------------------------Open Events-------------------------->
+        <apex:pageBlock title="Open Events" id="openEvents">
+            <apex:repeat value="{!OpenEvents}" var="oe" rendered="{!IF(popupRecordID != null, 'True', 'False')}">
+                <apex:pageblockSection title="{!oe.Subject}" columns="1">
+                    <apex:outputField value="{!oe.ActivityDate}"/>
+                    <apex:outputField value="{!oe.Type}"/>
+                    <apex:outputField value="{!oe.Description}"/>
+                </apex:pageblockSection>
+            </apex:repeat>
+        </apex:pageBlock>
+        <!-------------------------Activity History--------------------->
+        <apex:pageBlock title="Activity History" id="Activities">
+            <apex:repeat value="{!ActivityHistory}" var="ah" rendered="{!IF(popupRecordID != null, 'True', 'False')}">
+                <apex:pageblockSection title="{!IF(ah.isTask == True, 'Task', 'Event')}: {!ah.Subject}" columns="1">
+                    <apex:outputField value="{!ah.Status}"/>
+                    <apex:outputField value="{!ah.ActivityDate}"/>
+                </apex:pageblockSection>
+            </apex:repeat>
+        </apex:pageBlock>
+        </div>
+        <div class="hideDetails" style="color: white; background: #0085B4; text-align: center; font-size: 1.1em; font-weight: bold; margin-bottom: 5px;">Hide Details</div>
+    </div>
+    
+    <!------------------------Main Container------------------>
+    <div class="blueBorder" style="width: 97%; float:right; margin-right: 15px;" id="activities">
+        
+        <apex:outputpanel id="CampaignDetails">
+        <div class="header" >
+            <div id="campaignTitle" style="width: auto; display: inline-block;">
+                <h1 style="font-size: 30px;">Call Down List: </h1>&nbsp;&nbsp;<span style="font-size: 30px;">{!CurrentCampaign.Name}</span>
+            </div>
+            <div id="listSelection" style="display: inline-block; float: right;">
+                <h1>&nbsp;&nbsp;Choose List: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</h1>
+                <apex:selectList value="{!campaignID}" multiselect="false" size="1">
+                    <apex:selectOption itemValue="" itemLabel="--Select--"></apex:selectOption>
+                    <apex:selectoptions value="{!CallDownLists}"/>
+                    <apex:actionsupport event="onchange" rerender="CampaignDetails, campaignMembers" oncomplete="reInitialize();"/>
+                </apex:selectList>
+                <apex:commandButton value="View Actions" style="float: right; height: 19px; vertical-align:middle; display: {!IF(CampaignID == null, 'none','block')}" onclick="showActionsDialog();" rerender="actionListPanel"/><br />
+                <h1 style="display: {!IF(CampaignID == null, 'none','inline')};">No Attempts: &nbsp;&nbsp;</h1>
+                <apex:selectlist value="{!noAttemptsSinceFilterValue}" multiselect="false" size="1" rendered="{!IF(CampaignID == null, 'false','true')}">
+                    <apex:selectOption itemValue="" itemLabel="View All Records"></apex:selectOption>
+                    <apex:selectOption itemvalue="2HRS" itemLabel="Last 2 Hours"></apex:selectOption>
+                    <apex:selectOption itemvalue="4HRS" itemLabel="Last 4 Hours"></apex:selectOption>
+                    <apex:selectOption itemvalue="TODAY" itemLabel="Today"></apex:selectOption>
+                    <apex:selectOption itemvalue="THISWEEK" itemLabel="This Week"></apex:selectOption>
+                    <apex:actionsupport event="onchange" rerender="CampaignDetails, campaignMembers" oncomplete="reInitialize();"/>
+                </apex:selectlist>
+                <apex:commandButton value="Sort Asc/Desc" style="float: right; height: 19px; vertical-align:middle; display: {!IF(CampaignID == null, 'none','block')}" onclick="toggleCampaignMemberSortOrder();" rerender="campaignMembers"/>
+            </div> 
+            <div id="campaignStats" style="text-align: left; padding-top: 5px; height: 25px; display: {!IF(CampaignID == null, 'none','block')};">
+                <!--<h1>Status: {!CurrentCampaign.Status}</h1>&nbsp;&nbsp;--><h1>Total Leads: {!CurrentCampaign.NumberOfLeads}</h1>&nbsp;&nbsp;<h1>Total Contacts: {!CurrentCampaign.NumberOfContacts}</h1>&nbsp;&nbsp;<h1>Minimum Number Of Actions: <apex:outputField value="{!CurrentCampaign.Minimum_Attempts__c}"/></h1>
+            </div>
+            <div class="clear" />
+        </div>
+        <div class="clear" />
+        <!--------------------------------Campaign Stats--------------------------------->
+        <div class="subHeader">
+            <div data-percent="{!CurrentCampaign.Actual_Response_Percent__c}" id="progressbar" style="height: 10px;"></div><br />
+            <!--
+            <div id="filters">
+                <h1># Of Actions:</h1>
+                <apex:selectList value="{!actionNumberFilterValue}" multiselect="false" size="1" rendered="true">
+                    <apex:selectoptions value="{!ActionNumberPicklistValues}"/>
+                    <apex:actionsupport event="onchange" rerender="campaignMembers" oncomplete="reInitialize();"/>
+                </apex:selectList>
+            </div>
+            <div id="pulldown">
+                <img id="showHideToggle" src="/img/sort_desc_arrow.gif" alt="show" />
+            </div>
+            -->
+        </div>
+        </apex:outputpanel>
+        
+         <!-------------------------Campain Complete Message------------------------->
+        <apex:outputpanel id="campaignMembers" layout="block" style="">
+            <div id="successMessage" style="width: 300px; margin: 0 auto; margin-top:15px; text-align:center; display:{!IF(ISNULL(CurrentCampaign.Actual_Response_Percent__c), IF(CurrentCampaign.Actual_Response_Percent__c = 100, "block", "none"), "none")};">
+                <img src="/img/msg_icons/confirm32.png" alt="Checkbox" /><br /><br />
+                <b>Congratulations! Your Call Down List Is Complete</b>
+            </div>
+            
+            <div id="groupByContainer" ></div>
+            
+             <!-------------------------Campaign Member List------------------------->
+            <apex:repeat value="{!CampaignMembers}" var="cm">
+                <div id="{!cm.ID}" class="item clearfix" data-acctName='{!cm.Contact.Account.Name}' data-acctID='{!cm.Contact.Account.ID}'>
+                        <img id="{!IF(cm.LeadId != null, cm.LeadId, cm.ContactId)}" style="float:left" src="/s.gif" alt="recordIcon" class="{!IF(cm.LeadID != null, "leadImg", "contactImg")}" data-id="{!IF(cm.LeadId != null, cm.LeadId, cm.ContactId)}"/>
+                    <div class="leftContainer clearfix">
+                    <div class="left">
+                        <b>Name: </b><a href="{!LEFT($Api.Partner_Server_URL_260, FIND( '/services', $Api.Partner_Server_URL_260))+IF(cm.LeadID != null, cm.LeadID, cm.ContactID)}" target="_blank">{!IF(cm.LeadID != null, cm.Lead.Firstname + " " + cm.Lead.Lastname + " - " + cm.Lead.Company, cm.Contact.Firstname + " " + cm.Contact.Lastname)}</a> {!IF(NOT(ISBLANK(cm.Contact.Title)), '(' & cm.Contact.Title & ')', '')}<br />
+                        <b>Email: </b>{!IF(cm.LeadID != null, cm.Lead.Email, cm.Contact.Email)}
+                    </div>
+                    <div class="middle">
+                        <b>Next Action: </b>{!cm.Next_Action_Name__c}<br />
+                        <b>Phone: </b><a target="_blank" href="http://192.168.40.190:8070/ShoreTelWebSDK/REST/DialNumber?callingExtension={!$User.Extension__c}&destinationNumber=9{!IF(cm.LeadID != null, SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(cm.Lead.Phone, '(',''), ')', ''), '-', ''), ' ', ''), SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(cm.Contact.Phone, '(', ''), ')',''), '-', ''), ' ', ''))}">{!IF(cm.LeadID != null, cm.Lead.Phone, cm.Contact.Phone)}</a>
+                    </div>
+                    <div class="right">
+                        <b>Last Action: </b><apex:outputfield value="{!cm.Last_Action__c}"/>&nbsp;&nbsp;<b># Actions: </b><apex:outputField value="{!cm.Attempts__c}"/><br />
+                        <b>Last Activity: </b>{!IF(cm.LeadID != null, IF(TEXT(cm.Lead.LastActivityDate) != "", TEXT(MONTH(cm.Lead.LastActivityDate))+"/"+TEXT(DAY(cm.Lead.LastActivityDate))+"/"+TEXT(YEAR(cm.Lead.LastActivityDate)), "N/A"), IF(TEXT(cm.Contact.LastActivityDate) != null, TEXT(MONTH(cm.Contact.LastActivityDate))+"/"+TEXT(DAY(cm.Contact.LastActivityDate))+"/"+TEXT(YEAR(cm.Contact.LastActivityDate)), "N/A"))}
+                    </div>
+                    </div>
+                    <!-------------------------------ACTION BUTTONS------------------------>
+                    <div class="buttons">
+                        <apex:commandButton styleClass="button" value="A" title="Complete Action" style="background: #C2EAF7; height: 35px; width: 35px; border: 2px solid white;" reRender="messageInputPanel, campaignMembers" action="{!completeAction}" status="actionStatus" oncomplete="reInitialize();">
+                            <apex:param name="leadID" value="{!cm.LeadID}"/>
+                            <apex:param name="contactID" value="{!cm.ContactID}"/>
+                        </apex:commandButton>
+                        <apex:commandButton styleClass="button" value="AM" title="Complete Action With Message" style="background: #F7B361; height: 35px; width: 35px; border: 2px solid white;" reRender="messageInputPanel, campaignMembers" onclick="return showActionMessageDialog('{!cm.ContactID}','{!cm.LeadID}')">
+                        </apex:commandButton>
+                        <apex:commandButton styleClass="button" value="S" title="Sucessful Action" style="background: #D4FAD3; height: 35px; width: 35px; border: 2px solid white;" onclick="return showSuccessMessageDialog('{!cm.ContactID}','{!cm.LeadID}')"/>
+                        <apex:commandButton styleClass="button" value="C" title="Close A Campaign Member" style="background: #FF7178; height: 35px; width: 35px; border: 2px solid white; display: {!IF(cm.Attempts__c >= CurrentCampaign.Minimum_Attempts__c, 'inline-block', 'none')}" reRender="messageInputPanel, campaignMembers, CampaignDetails" action="{!closeAction}" status="actionStatus" oncomplete="reInitialize();">
+                            <apex:param name="leadID" value="{!cm.LeadID}"/>
+                            <apex:param name="contactID" value="{!cm.ContactID}"/>
+                        </apex:commandButton>
+                    </div>
+                </div>
+            </apex:repeat>
+        </apex:outputpanel>
+    </div>
+    </div>
+    </apex:form>
+    
+     <!-------------------------CSS------------------------->
+    <style>
+      .blueBorder {
+          height: auto;
+          min-height: 600px;
+          margin-top: 0px;
+          border: white 5px solid;
+          -moz-border-radius:10px;
+          -webkit-border-radius:10px;
+          border-radius:10px; 
+          -moz-box-shadow:    3px 3px 5px 4px #ccc;
+          -webkit-box-shadow: 3px 3px 5px 4px #ccc;
+          box-shadow:         3px 3px 5px 4px #ccc;
+      }
+      
+      .subHeader {
+          display: block;
+          background: #C2EAF7;
+          padding: 5px;
+          -webkit-border-bottom-left-radius: 5px;
+          -webkit-border-bottom-right-radius: 5px;
+          -moz-border-radius-bottomleft: 5px;
+          -moz-border-radius-bottomright: 5px;
+          border-bottom-left-radius: 5px;
+          border-bottom-right-radius: 5px;
+      }
+      
+      .items{
+          height: 520px;
+          overflow: auto;
+      }
+      
+      .header {
+          color: white;
+          background: #0085B4;
+          padding: 5px;
+          height: auto;
+          -webkit-border-top-left-radius: 5px;
+          -webkit-border-top-right-radius: 5px;
+          -moz-border-radius-topleft: 5px;
+          -moz-border-radius-topright: 5px;
+          border-top-left-radius: 5px;
+          border-top-right-radius: 5px;
+      }
+      
+      #listSelection {
+          text-align: center; 
+          color: black; 
+          background: #F8F8F8; 
+          width: 390px; 
+          display: inline; 
+          padding-top: 5px; 
+          padding-left: 3px; 
+          padding-right: 3px; 
+          padding-bottom: 3px;
+          border: 3px solid grey;
+      }
+      
+      .item {
+          background: #F8F8F8;
+          border: 3px solid grey;
+          -webkit-border-top-right-radius: 8px;
+          -webkit-border-bottom-left-radius: 8px;
+          -moz-border-radius-topright: 8px;
+          -moz-border-radius-bottomleft: 8px;
+          border-top-right-radius: 8px;
+          border-bottom-left-radius: 8px;
+          margin: 5px;
+          padding: 3px;
+          min-height: 35px;
+          width: 98%;
+      }
+      
+      .itemHighlight{
+          border: 3px solid #FF7178;
+      }
+      
+      .leadImg{
+          background: #E67F15 url(/img/sprites/master.png);
+          width: 32px;
+          height: 32px;
+          background-position: 0px -1166px;
+          background-repeat: no-repeat;
+          cursor:pointer;
+          border: 2px solid white;
+      }
+      
+      .contactImg{
+          background: #423579 url(/img/sprites/master.png);
+          width: 32px;
+          height: 32px;
+          background-position: 0px -1022px;
+          background-repeat: no-repeat;
+          cursor:pointer;
+          border: 2px solid white;
+      }
+      
+      .contactImg:hover, .leadImg:hover {
+          border: 2px solid yellow !important; 
+      }
+      
+      .contactImg:active, .leadImg:active {
+          -moz-box-shadow:    inset 0 0 3px #FFF;
+          -webkit-box-shadow: inset 0 0 3px #FFF;
+          box-shadow:         inset 0 0 3px #FFF;
+      }
+      
+      .left{
+          float: left;
+          margin-left: 10px;
+          width: 25%;
+          line-height: 150%;
+      }
+      
+      .middle{
+          float: left;
+          margin-left: 10px;
+          width: 25%;
+          line-height: 150%;
+      }
+      
+      .right{
+          float: left;
+          margin-left: 10px;
+          line-height: 150%;
+          width: 40%;
+      }
+      
+      .buttons{
+          float:right;
+          width: 20%;
+          text-align: right;
+      }
+      
+      .button:active {
+          position: relative;
+          top: 1px;
+          -moz-box-shadow:    inset 0 0 3px #000000;
+          -webkit-box-shadow: inset 0 0 3px #000000;
+          box-shadow:         inset 0 0 3px #000000;
+      }
+      
+      .button:hover {
+          border: 2px solid yellow !important; 
+      }
+      
+      .status{
+         width: 50px;
+         margin: 0 auto;
+         text-align: center;
+         background: yellow;
+      }
+ 
+      .pbSubheader{
+        background-color: #C2EAF7 !important;
+        border-color: none !important;
+        color: black !important;
+      }
+      
+      .leftContainer{
+          width: 75%;
+          float: left;
+      }
+      
+      .clear{
+          clear: both;
+      }
+      
+      .clearfix:after {
+            content: ".";
+            display: block;
+            clear: both;
+            visibility: hidden;
+            line-height: 0;
+            height: 0;
+        }
+         
+        .clearfix {
+            display: inline-block;
+        }
+         
+        html[xmlns] .clearfix {
+            display: block;
+        }
+         
+        * html .clearfix {
+            height: 1%;
+        }
+        
+        .recordInfo{
+             border: white 5px solid; 
+             -moz-border-radius:10px; 
+             -webkit-border-radius:10px; 
+             border-radius:10px; 
+             -moz-box-shadow:    3px 3px 5px 4px #ccc;
+             -webkit-box-shadow: 3px 3px 5px 4px #ccc;
+             box-shadow:         3px 3px 5px 4px #ccc;
+        }
+        
+        #previewPaneScrolling{
+             height: 550px; 
+             overflow: auto; 
+        }
+        
+    
+        .ui-progressbar-value{
+            border: 1px solid green;
+            background: #8AEB5E;
+        }
+        
+        .ui-progressbar{
+            overflow: visible;
+        }
+        
+        #pulldown{
+            background: white; 
+            width:50px; 
+            height: 10px; 
+            padding-left: 20px; 
+            padding-bottom: 3px; 
+            margin: 0 auto;
+            -moz-border-radius:3px; 
+             -webkit-border-radius:3px; 
+             border-radius:3px;
+        }
+      
+      </style>
+</apex:page>

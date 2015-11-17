@@ -1,0 +1,534 @@
+<apex:component controller="SL_IntranetDocumentsController" allowDML="true" id="Documents">
+	<apex:attribute assignTo="{!compImpl}" name="aComponentImpl" type="WidgetAbstract" description="component implementation object" required="true"/>
+	
+    <link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/css/icons.css')}" />
+    <link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/css/icons-mobile.css')}" />
+    <link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/css/categories.css')}" />
+     
+    <script>   
+    	var docType, selFilteredIds = '';
+    	var filterSelected;
+    	if(typeof varJSstrDepartmentId == 'undefined') varJSstrDepartmentId = '';
+    </script>
+    <style>
+    .popupDialog{
+	    z-index: 100;
+ 	    width: 100%; 
+/* 	    display:none; */
+	    position: fixed;
+	    top: 0px; 
+	    left: 0px; 
+ 	    height: 100%;
+	    overflow: auto;
+	    background: none repeat scroll 0px 0px rgba(0, 0, 0, 0.5);"
+    }
+    
+    .innerPopup{
+     	width: 730px;  
+     	height: 600px;  
+    	display: block; 
+    	visibility: visible; 
+    	left: 345px; 
+    	top: 29px;
+    	position: fixed !important; 
+    	z-index:9999;
+    }
+    </style>
+    
+    <apex:form id="documentFormId" >
+    	<apex:actionFunction id="getMoreContentRecords" name="widget{!id}getMoreContentRecords" action="{!Myimpl.getMoreContentRecords}" 	rerender="mobileContentId" status="loader"/>
+        <!-- Newly created for Department -->
+        <apex:actionFunction id="getFilteredByDepartment" name="widget{!id}.getFilteredByDepartment" action="{!MyImpl.getFilteredByDepartment}" status="loader" rerender="opWholeWidget,jsOP" onComplete="widget{!id}ChangeToDefaultNameFilter();widget{!id}.rerenderDocumentCategories('{!Myimpl.strListOfContentIdsToBeDisplayed}'); reRenderCss();">
+            <apex:param name="deptId" assignTo="{!MyImpl.strDeptId}" value=""/>
+        </apex:actionFunction>
+        <!-- End of Newly created for Department -->
+                
+		<apex:actionFunction id="getFeaturedOrRecent" name="widget{!id}.getFeaturedOrRecent" action="{!getFeaturedOrRecentContents}" rerender="contentId, contentSection, pagingSection, jsOP" status="loader" oncomplete="widget{!id}ChangeToDefaultNameFilter();widget{!id}.rerenderDocumentCategories('{!Myimpl.strListOfContentIdsToBeDisplayed}'); reRenderCss();">
+		    <apex:param name="param1" value="" assignTo="{!MyImpl.strContentType}" />
+		    <apex:param name="strJSdepartment" value="" assignTo="{!Myimpl.strDeptId}" />
+		</apex:actionFunction>
+		
+        <apex:actionFunction id="getContentOfSelectedCategory" name="widget{!id}.getContentOfSelectedCategory" action="{!getCategoryRelatedContent}" rerender="opWholeWidget,mobileContentId, jsOP" status="loader" oncomplete="widget{!id}ChangeToDefaultNameFilter();reRenderCss(); docType = '{!MyImpl.documentType}'; selFilteredIds = '{!Myimpl.strFilteredItems}';">
+            <apex:param name="documentType" value="" assignTo="{!MyImpl.documentType}"/>
+            <apex:param name="FirstlevelCatg" value="" assignTo="{!MyImpl.FirstLevelCatg}"/>
+            <apex:param name="SecondlevelCatg" value="" assignTo="{!MyImpl.SecondLevelCatg}"/>
+            <apex:param name="ThirdlevelCatg" value="" assignTo="{!MyImpl.ThirdLevelCatg}"/>
+            <apex:param name="strJSdepartment" value="" assignTo="{!Myimpl.strDeptId}" />
+        </apex:actionFunction> 
+         
+        <apex:actionFunction id="prev" name="widget{!id}.prev" action="{!prevRecords}" oncomplete="widget{!id}.callOffsetDocumentRecords(varJSstrDepartmentId); $(window).scrollTop(0);" rerender="contentSection, pagingSection" status="loader" />
+		
+        <apex:actionFunction id="next" name="widget{!id}.next" action="{!nextRecords}" oncomplete="widget{!id}.callOffsetDocumentRecords(varJSstrDepartmentId); $(window).scrollTop(0);" rerender="contentSection, pagingSection" status="loader" />
+		
+        <apex:actionFunction id="goToPage" name="widget{!id}.goToPage" action="{!goToPage}" oncomplete="widget{!id}.callOffsetDocumentRecords(varJSstrDepartmentId); $(window).scrollTop(0);" rerender="contentSection, pagingSection" status="loader" >
+            <apex:param name="pageNo" value=""/>
+        </apex:actionFunction>
+		
+        <apex:actionFunction id="callOffsetDocumentRecords" name="widget{!id}.callOffsetDocumentRecords" action="{!Myimpl.getOffsetDocumentRecords}" status="loader" rerender="contentSection, pagingSection" >
+        	<apex:param name="strJSdepartment" value="" assignTo="{!Myimpl.strDeptId}" />
+        </apex:actionFunction>
+        
+		<!--*******  Start : Chatter Feed Action Functions ******-->
+        <apex:actionFunction id="showContentChatterAF" name="widget{!id}.showContentChatterAF" action="{!MyImpl.fetchContentChatter}" rerender="testingChatter" status="loader" oncomplete="reRenderCss();">
+        	<apex:param name="ContentVersionId" value=""  assignTo="{!Myimpl.contentIdFromChatter}"/>
+<!--         	<apex:param name="docType" value="" assignTo="{!Myimpl.documentType}"/> -->
+<!--         	<apex:param name="filteredIds" value="" assignTo="{!Myimpl.strFilteredItems}"/> -->
+        </apex:actionFunction>
+        
+        <apex:actionFunction id="deleteDocument" name="widget{!id}.deleteDocumentAF" action="{!MyImpl.deleteDocument}" rerender="contentId, contentSection, pagingSection, jsOP" status="loader" oncomplete="widget{!id}ChangeToDefaultNameFilter(); reRenderCss();">
+				<apex:param name="docId" value="" />
+		</apex:actionFunction>
+        
+	</apex:form>
+		
+        <!--******  End : Chatter Feed Action Functions ********-->
+	<apex:outputpanel id="jsOP">
+		<script>
+			var varContentId = '';
+			
+	    	function widget{!id}ChangeToDefaultNameFilter()
+			{
+				document.getElementById('widget{!id}FeaturedContent').className = '' ;
+				document.getElementById('widget{!id}ContentByName').className = '' ;
+				document.getElementById('widget{!id}RecentContent').className = '' ;
+				
+				if('{!JSENCODE(MyImpl.strContentType)}' == 'Feature')
+					document.getElementById('widget{!id}FeaturedContent').className = 'active' ;
+				if('{!JSENCODE(MyImpl.strContentType)}' == 'Name')
+					document.getElementById('widget{!id}ContentByName').className = 'active' ;
+	            if('{!JSENCODE(MyImpl.strContentType)}' == 'Recent')
+	            	document.getElementById('widget{!id}RecentContent').className = 'active' ;
+	        }
+	     </script> 
+	</apex:outputpanel>
+    
+    <div class="wc-widget SL_IntranetDocuments" id="widget{!id}" >
+		<apex:outputPanel id="opWholeWidget" layout="block">
+			<apex:outputPanel rendered="{!myimpl.showWidget}" layout="none"> 
+			    <div id="content">
+			        <div>
+				        <fieldset>
+				            <legend class="hidden">feed-form</legend>
+				            
+				            <!-- Start - headline -->
+				            <div class="headline" style="padding-bottom: 5px;border-bottom: 1px solid #ededed;">
+				                 <apex:outputpanel id="contentId">
+				                 	<h2 id="widget{!id}EmpResourcesHeading" style="padding-top : 2px;">{!MyImpl.documentType}</h2>
+				                 </apex:outputpanel>
+				                <br/> 
+				                <apex:outputPanel rendered="{!compImpl.properties['displayFilterLinks']}" layout="none">
+					                <dl class="sort" id="widget{!id}selectOrderDiv" style="float:left;padding-top:10px;">
+					                	<dd><a id="widget{!id}ContentByName" style="cursor: pointer;" onclick="widget{!id}.getContent('ContentByName')" class="active">{!$Label.SL_DocumentContentByName}</a></dd>
+					                    <dd style="padding-left:3px;">|<a id="widget{!id}RecentContent" style="cursor: pointer;padding-left:3px;" onclick="widget{!id}.getContent('RecentContent')" >{!$Label.SL_DocumentCreatedDate}</a> </dd>
+					                    <dd style="padding-left:3px;">|<a id="widget{!id}FeaturedContent" style="cursor: pointer;padding-left:3px;" onclick="widget{!id}.getContent('FeaturedContent')" >{!$Label.SL_DocumentFeatureLabel}</a> </dd>
+					                </dl>
+				                </apex:outputPanel>
+				                <apex:outputPanel layout="block">
+				                	<a onclick="widget{!id}.uploadDocument();" style="float: right;cursor: pointer;">
+                                       <img  title ="Upload new Document" src="{!URLFOR($Resource.SL_IntranetHub, '/IntranetHub/images/icons/up.png')}"  width="25" height="25"/>
+                                    </a> 
+				                </apex:outputPanel>
+				                 
+				                <div id="DocumentUpload{!id}" style="display: none;">
+				                	<div id="overlay{!id}" class="docViewerPanel popupDialog">
+										<div  role="dialog" id="overlayDiv{!id}" aria-live="assetive" aria-describedby="docViewerOverlayTitle" class="overlayDialog docViewerOverlay innerPopup" />
+									</div>
+                                </div>
+                                
+				            </div> 
+				            <!-- End - headline -->
+			                    
+			                <!-- Start : JavaScript for show/hide for Content Feed Post and Feed Comments section -->
+			                <script>
+			                	//Used to close  pagemessage block appeared while deleting a document
+			                	function closeErrorPageMsg()
+			                	{
+			                		$("[id$=errorMessage]").empty();
+			                		$('#anchorErrorDelete').hide();
+			                	}
+			                
+								function widget{!id}showChatter(contentId)
+								{
+									if(varContentId != '' && varContentId == contentId)
+									{
+										$("#{!id}"+varContentId+"Divs").slideUp(500);
+										varContentId = '';
+									}
+									else
+									{
+										varContentId = contentId;
+										widget{!id}reRenderContentChatter();
+										//widget{!id}.showContentChatterAF(varContentId, '{!JSENCODE(Myimpl.documentType)}', '{!JSENCODE(MyImpl.strFilteredItems)}');
+										widget{!id}.showContentChatterAF(varContentId);
+									}
+								}
+								
+								function widget{!id}reRenderContentChatter()
+								{
+									var chatterDivs = document.getElementsByClassName('contentChatterDiv' + '{!id}');
+									for(var i = 0; i < chatterDivs.length; i++) 
+									{ 
+										if(chatterDivs[i].id == '{!id}' + varContentId + 'Divs')
+										{
+											$("#{!id}"+varContentId+"Divs").animate({
+										    	height:'toggle'
+										    }, "slow" );
+										}
+										else
+										{
+											$("#"+chatterDivs[i].id).slideUp(500);
+										}
+									}
+								}
+			               	</script>
+			                <!-- End : JavaScript for show/hide for Content Feed Post and Feed Comments section -->
+			                
+			                <!-- Start - Main Section  -->
+			                <apex:outputPanel id="contentSection" layout="block">
+			                	<apex:outputPanel id="closeErrorMsg">
+				                 	<a onclick="closeErrorPageMsg();" id="anchorErrorDelete" style="display:none;">
+						            	<img style="float:right;cursor:pointer;" src="{!URLFOR($Resource.SL_IntranetHUB,'/IntranetHub/images/icons/closeIcon.png')}" alt="image description" width="15" height="15"/>
+						     		</a>
+				                 	<apex:pageMessages id="errorMessage"/>
+				                 </apex:outputPanel>
+			                    <!-- Start - Resources Information -->
+			                        <apex:outputPanel rendered="{!IF(MyImpl.totalRecords > 0, true, false)}" layout="none">			                        
+			                            
+			                            <apex:repeat value="{!MyImpl.lstContentsToBedisplayed}" var="C" id="contentRows">
+			                            	<script>
+				                            	// When the whole widget is rerendered, open the accordion which was opened earlier 
+							                	if(varContentId == '{!C.Id}')
+							                	{
+							                		$("#{!id}{!JSENCODE(MyImpl.currentContentId)}Divs").show();
+							                	}
+						                	</script> 
+						                	
+			                                <!-- Start - Resources Information of Link type  -->
+			                                <apex:outputPanel rendered="{!C.FileType == 'LINK'}" layout="none">
+			                                    <div class="feed" style="padding:10px 0px 10px 0px;border-bottom: 1px solid #ededed;border-top:none;background: none;" 
+			                                    		onmouseover="if({!compImpl.properties['showfeed']}) document.getElementById('{!id}{!C.id}Icon').style.visibility = 'visible'; $('#documentDelete{!id}{!C.id}').show();" 
+			                                    		onmouseout="if({!compImpl.properties['showfeed']}) document.getElementById('{!id}{!C.id}Icon').style.visibility = 'hidden'; $('#documentDelete{!id}{!C.id}').hide();">
+			                                        <div class="icon" style="float:left;">
+			                                            <div class="{!C.FileType}" style="height:16px;width:16px;"> &nbsp; </div>
+			                                        </div>
+			                                        <div class="info" style="float:left;width:390px;">
+			                                            <h3><a class="title" href="{!$Site.Prefix}{!C.ContentUrl}" target="_blank" style="word-wrap:break-word;">{!C.Title}</a></h3>
+			                                            <apex:outputPanel rendered="{!NOT(ISBLANK(C.Description))}" layout="block" style="word-wrap:break-word">
+			                                            	<apex:outputText value="Description: " rendered="{!compImpl.properties['showFieldLabel']}"/>{!C.Description}
+			                                            </apex:outputPanel>
+			                                            
+														<apex:repeat value="{!MyImpl.lstDocumentFieldsName}" var="field" id="documentFieldNameRows">
+			                                            	<apex:outputPanel layout="block" rendered="{!AND(field.fieldLabel != 'Title', field.fieldLabel != 'Description', !ISBLANK(C[field.fieldAPIName]))}" >
+				                                            	<apex:outputText value="{!field.fieldLabel}: " rendered="{!compImpl.properties['showFieldLabel']}"/>
+				                                            	<apex:outputField value="{!C[field.fieldAPIName]}" style="text-overflow: ellipsis;overflow: hidden;white-space: nowrap;"/><br/>
+			                                            	</apex:outputPanel>
+			                                            </apex:repeat>
+			                                        </div>
+			                                        
+			                                        <apex:outputPanel rendered="{!OR(C.CreatedById ==$User.Id,$Profile.Name == 'System Administrator') }">
+			                                         	<div id ="documentDelete{!id}{!C.id}" style="display:none;">
+									                		<a onclick="widget{!id}.deleteDocument('{!C.id}');" style="float: right;cursor: pointer;">
+					                                       		<img  title ="Delete Document" src="{!URLFOR($Resource.SL_IntranetHub, '/IntranetHub/images/icons/deleteIcon.png')}"  width="20" height="22"/>
+						                                    </a> 
+										                </div>
+									                </apex:outputPanel>
+									                
+			                                        <apex:outputPanel rendered="{!compImpl.properties['showfeed']}" layout="none">
+				                                        <div style="float:right;visibility: hidden;cursor: pointer;" id="{!id}{!C.id}Icon" onclick="widget{!id}showChatter('{!C.id}');" >
+				                                        	<img alt="Show Chatter Post and Comments" src="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/images/chatterIcon.png')}" width="24px" height="24px"/>
+				                                        </div>
+			                                        </apex:outputPanel>
+			                                    </div>
+			                                </apex:outputPanel>
+			                                <!-- End - Resources Information of Link type -->
+			                                           
+			                                <!-- Start - Resources Information of other file type  -->
+			                                <apex:outputPanel rendered="{!C.FileType != 'LINK'}" layout="none">
+			                                    <div class="feed" style="padding:10px 0px 10px 0px;border-bottom: 1px solid #ededed;border-top:none;background:none;" 
+			                                    	onmouseover="if({!compImpl.properties['showfeed']}) document.getElementById('{!id}{!C.id}Icon').style.visibility = 'visible'; $('#documentDelete{!id}{!C.id}').show();" 
+			                                    	onmouseout="if({!compImpl.properties['showfeed']}) document.getElementById('{!id}{!C.id}Icon').style.visibility = 'hidden'; $('#documentDelete{!id}{!C.id}').hide();" >
+			                                        <div class="icon" style="float:left;">
+			                                            <div class="{!C.FileType}" style="cursor: pointer;height:16px;width:16px;" onclick="javascript:document.getElementById('widget{!Id}overlay{!C.Id}').style.display = 'block'; document.documentElement.style.overflow = 'hidden';">&nbsp;</div>
+			                                        </div>
+			                                        <div class="info" style="float:left;width:390px;">
+			                                            <h3>
+			                                                <a class="title" href="{!$Site.Prefix}/sfc/servlet.shepherd/version/download/{!C.Id}" style="word-wrap:break-word;">
+			                                                	{!C.Title}
+			                                                </a>
+			                                            </h3>
+			                                            <apex:outputPanel rendered="{!NOT(ISBLANK(C.Description))}" layout="block" style="word-wrap:break-word">
+			                                            	<apex:outputText value="Description: " rendered="{!compImpl.properties['showFieldLabel']}"/>{!C.Description}
+			                                            </apex:outputPanel>
+														
+														<apex:repeat value="{!MyImpl.lstDocumentFieldsName}" var="field" id="documentFieldRows">
+			                                            	<apex:outputPanel layout="block" rendered="{!AND(field.fieldLabel != 'Title', field.fieldLabel != 'Description', !ISBLANK(C[field.fieldAPIName]))}" >
+				                                            	<apex:outputText value="{!field.fieldLabel}: " rendered="{!compImpl.properties['showFieldLabel']}"/>
+				                                            	<apex:outputField value="{!C[field.fieldAPIName]}"  style="text-overflow: ellipsis;overflow: hidden;white-space: nowrap;"/><br/>
+			                                            	</apex:outputPanel>
+			                                            </apex:repeat>
+			                                        </div>
+			                                        
+			                                        <apex:outputPanel rendered="{!OR(C.CreatedById ==$User.Id,$Profile.Name == 'System Administrator') }">
+			                                         	<div id ="documentDelete{!id}{!C.id}" style="display:none;">
+									                		<a onclick="widget{!id}.deleteDocument('{!C.id}');" style="float: right;cursor: pointer;">
+					                                       		<img  title ="Delete Document" src="{!URLFOR($Resource.SL_IntranetHub, '/IntranetHub/images/icons/deleteIcon.png')}"  width="20" height="22"/>
+						                                    </a> 
+										                </div>
+									                </apex:outputPanel>
+									                
+			                                        <apex:outputPanel rendered="{!compImpl.properties['showfeed']}" layout="none">
+				                                        <div style="float:right;visibility: hidden;cursor: pointer;" id="{!id}{!C.id}Icon" onclick="widget{!id}showChatter('{!C.id}');" >
+				                                        	<img alt="Show Chatter Post and Comments" src="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/images/chatterIcon.png')}" width="24px" height="24px"/>
+			                                       	 </div>
+				                                        
+			                                        </apex:outputPanel>
+			                                    </div>
+			                                    
+			                                    <div id="widget{!Id}overlay{!C.Id}" class="docViewerPanel" style="z-index: 100; width: 100%; display:none;position: fixed;top: 0px; left: 0px; height: 100%;overflow: auto;background: none repeat scroll 0px 0px rgba(0, 0, 0, 0.5);">
+													<div  role="dialog" aria-live="assetive" aria-describedby="docViewerOverlayTitle" class="overlayDialog docViewerOverlay" style="width: 730px; height: 650px; display: block; visibility: visible; left: 318px; top: 29px;position: fixed !important; z-index:9999;">
+														<div class="topRight">
+															<a title="Start of Dialog" style="width:2px;height:2px;position:absolute;border:0;margin:0;padding:0;background:none;outline:none;z-index:-1;cursor:none;" onclick="return false;" href="javascript:void(0)">Start of Dialog</a>
+															<div class="topLeft">
+																<a class="dialogClose" href="javascript:void(0)" onclick="javascript:document.getElementById('widget{!Id}overlay{!C.Id}').style.display = 'none'; document.documentElement.style.overflow = 'auto';" onmouseout="this.className = 'dialogClose'" onmouseover="this.className = 'dialogCloseOn'" tabindex="0" title="Close" >Close</a>
+															</div>
+														</div>
+														
+														<div class="middle">
+															<div  class="innerContent" >
+																<div  class="docViewerContainerParent" style="height: 500px;">
+																	<div class="docViewerContainer">
+																		<embed id="widget{!id}actualFilePreview{!C.Id}" width="100%" height="480px;" align="middle" type="application/x-shockwave-flash" wmode="opaque" pluginspage="http://www.adobe.com/go/getflashplayer" allowfullscreen="true" allowscriptaccess="sameDomain" name="renditionLarge" bgcolor="#f3f3f3" quality="high" flashvars="shepherd_prefix={!$Site.Prefix}/sfc/servlet.shepherd&v={!C.Id}&mode=chatter_bubble&in_tests=false" src="{!$Site.Prefix}/_swf/121310/sfc/flex/DocViewer.swf"/>
+																		<noembed>&lt;p&gt;Flash file preview&lt;/p&gt;</noembed>
+																		
+																		<!-- Section added to display the replacement content when flash player is not available -->
+																		<div id="widget{!id}dummyFilePreview{!C.Id}" style="display:none;">
+																			File preview is not available in this device because of absence of Flash player.<br />
+																			Download the file via clicking this link : 
+																			<a class="contentActionLink" href="{!$Site.Prefix}/sfc/servlet.shepherd/version/download/{!C.Id}?asPdf=false&amp;operationContext=CHATTER">
+																				<img alt="" src="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/images/Download.png')}"/>
+																				<span >Download</span>
+<!-- 																				<span class="fileSize" style="color: #B2B2B2;">({!ROUND(C.ContentSize/1024, 0)} &nbsp;KB)</span> -->
+																			</a> 
+																		</div>
+																				
+																		<script>
+																			if(!isFilePreviewDisplay)
+																			{
+																				$('#widget{!id}actualFilePreview{!C.Id}').hide();
+																				$('#widget{!id}dummyFilePreview{!C.Id}').show();
+																			}
+																		</script>
+																		<!-- End -->
+																	</div>
+																</div>
+															</div>
+														</div>
+														<div class="bottomRight">
+															<input type="text" style="width:2px;height:0px;position:absolute;border:0;margin:0;padding:0;background:none;outline:none;z-index:-1;cursor:none;" />
+															<div class="bottomLeft"/>
+														</div>
+													</div>
+												</div>
+			                                </apex:outputPanel>
+			                                <!-- End - Resources Information of other file type  -->
+			                                
+			    								
+											<!-- START : Content Feed Post section  -->
+											<apex:outputPanel rendered="{!compImpl.properties['showfeed']}" layout="none">
+			                                <div class="contentChatterDiv{!id}" style="display:none;border-bottom: 1px solid #ededed;" id="{!id}{!C.id}Divs" onmouseover="document.getElementById('{!id}{!C.id}Icon').style.visibility = 'visible';" onmouseout="document.getElementById('{!id}{!C.id}Icon').style.visibility = 'hidden';">
+				                                <apex:outputPanel id="testingChatter" >
+				                                	<apex:outputPanel id="contentChatterOpDoc" rendered="{!MyImpl.mapContentIdToChatterValue[C.id]}">
+			                                		 	<script>
+									                    	var chatterWidget{!id} = new SL_IntranetChatterPlugIn('{!id}');
+									                    </script>
+			                                			<c:SL_IntranetChatterPlugIn id="componentAdd" chatterImpl="{!MyImpl.Chatter}" objectRecordId="{!C.id}" chatterId="{!id}"/>
+													</apex:outputPanel>
+												</apex:outputPanel>	
+				                            </div>
+				                            </apex:outputPanel>
+				                            <!--  END : Content Feed Post section  -->
+			    										
+													                                       	
+								        </apex:repeat>
+								
+								    </apex:outputPanel>
+								<!-- End - Resources Information -->    
+			                      
+			                      
+								<!-- Start - No record found section && MyImpl.lstIntranetAlerts.size == 0 -->    
+								<apex:outputPanel rendered="{!IF((MyImpl.totalRecords == 0), true, false)}" layout="none">
+								    <div id="noResourcesSection">
+								        <div class="feed" style="background: none;">
+								            <div class="info" style="padding-left: 0px;"><p class="noResult">No Resources Found </p></div>
+								        </div>
+								    </div>
+								</apex:outputPanel>
+								<!-- End - No record found section -->   
+							</apex:outputpanel>
+							<!-- End - Main Section  -->
+			
+			                <!-- Start - pagination -->
+			                <apex:outputPanel id="pagingSection">
+			                    <div id="widget{!id}.pagingDiv">
+			                        <ul id="widget{!id}.paging" class="paging">
+			                            <li class="first"><a href="javascript:widget{!id}.prev();" id="widget{!id}.prevBtn">PREV</a></li> 
+			                            <span id="widget{!id}.addLi"></span>
+			                            <li class="last"><a href="javascript:widget{!id}.next();" id="widget{!id}.nxtBtn">NEXT</a></li>
+			                        </ul>
+			                    </div>
+								
+			                    <script>
+			                    	// Used when we delete a document and get some exception then show close button to close error message block
+			                 		if($("[id$=errorMessage]").children().length == 1)
+			                 			$('#anchorErrorDelete').show();
+			                    	
+			                        $(document).ready(function () {
+			                            $('#imgUserImage').attr('title', $('#userName').val());
+			                            $('#imgUserImage').attr('alt', $('#userName').val());
+			                            $('#imgUserImage').attr('src', $('#userImage').val());
+			                            $('#imgUserName').html($('#userName').val());
+			                        });
+			
+			                        //To display the page link with numbers
+			
+			                        var additionalLinksContainer = document.getElementById('widget{!id}.addLi');
+			                        var Pages = '{!MyImpl.totalPages}';
+			                        var pageNo = '{!MyImpl.pageNo}';
+			                        var pageLinksHTML = '';
+								
+			                        //Creating dynamic page Links
+			                        if(Pages == '1' || Pages == '0')
+			                        {
+			                            document.getElementById('widget{!id}.prevBtn').style.display = 'none';
+			                            document.getElementById('widget{!id}.nxtBtn').style.display = 'none';
+			                            document.getElementById('widget{!id}.pagingDiv').style.display = 'none';
+			                        }
+			                        else
+			                        {
+			                            for( i = 1; i <= Pages ; i++)
+			                            {
+			                                if(!(Pages == 1))
+			                                {
+			                                    if(pageNo == i)
+			                                        pageLinksHTML += ' <li class="active" id="' + i + '"><span>' + i + '</span></li>' ;
+			                                    else
+			                                        pageLinksHTML += ' <li id="' + i + '"><a href="javascript: widget{!id}.goToPage(' + i + ');">' + i + '</a></li>' ;
+			                                }
+			                            }
+			
+			                            additionalLinksContainer.innerHTML = pageLinksHTML;
+			                            if(pageNo == 1)
+			                            {
+			                                document.getElementById('widget{!id}.prevBtn').href = "javascript:void(0);" ;
+			                                document.getElementById('widget{!id}.prevBtn').style.cursor = "text";
+			                                document.getElementById('widget{!id}.prevBtn').className = "first-page";
+			                            }
+										else
+										{
+											document.getElementById('widget{!id}.prevBtn').href = "javascript:widget{!id}.prev();" ;
+			                                document.getElementById('widget{!id}.prevBtn').style.cursor = "";
+			                                document.getElementById('widget{!id}.prevBtn').className = "";
+										}
+			                            if(pageNo == Pages)
+			                            {
+			                                document.getElementById('widget{!id}.nxtBtn').href = "javascript:void(0);" ;
+			                                document.getElementById('widget{!id}.nxtBtn').style.cursor = "text";
+			                                document.getElementById('widget{!id}.nxtBtn').className = "last-page";
+			                            }
+			                            else
+			                            {
+			                            	document.getElementById('widget{!id}.nxtBtn').href = "javascript:widget{!id}.next();" ;
+			                                document.getElementById('widget{!id}.nxtBtn').style.cursor = "";
+			                                document.getElementById('widget{!id}.nxtBtn').className = "";
+			                            }
+			                        }
+			                        
+									if(('{!JSENCODE(TEXT(MyImpl.totalRecords))}') == '1' )
+									{
+									    document.getElementById('widget{!id}.prevBtn').style.display = 'none';
+									    document.getElementById('widget{!id}.nxtBtn').style.display = 'none';
+									    document.getElementById('widget{!id}.pagingDiv').style.display = 'none';
+									}
+								</script>
+									
+							</apex:outputPanel>
+							<!-- End - pagination -->
+			                           
+			            </fieldset>
+				    </div>
+				</div>
+			</apex:outputPanel>
+		</apex:outputPanel>
+		<script>
+	        $(document).keyup(function(e)
+	        {
+	            var code = (e.keyCode ? e.keyCode : e.which);
+	            if (code == 27) {$('.docViewerPanel').hide();}
+	        });
+	    </script>
+    </div>
+    
+    <!-- mobile content -->
+     <div class="wc-widget-mobile mobile-content" >
+         <apex:outputpanel id="mobileContentId">
+             <div class="mobile-content" id="contentsDivId">
+                 <div class="content-holder">
+                 	
+                         <ul class="list"  style="padding: 0 0 0px;">
+                         
+                         <apex:repeat value="{!MyImpl.lstContentsToBedisplayed_Mobile}" var="C" rows="{!MyImpl.pageSizeResources_Mobile}" id="mobContentRows">
+                              <li style="margin-left:0px;">  
+                             <!-- Start - Resources Information of Link type  -->
+                             <apex:outputPanel rendered="{!C.FileType == 'LINK'}" layout="none">
+                                 
+                                  <div class="avatar">
+                                      <div class="{!C.FileType}" style="height:32px;width:32px;">&nbsp;</div>
+                                  </div>
+                                  <div class="info" style="float:left;width:390px;">
+                                      <h3><a href="{!C.ContentUrl}" target="_blank" style="word-wrap:break-word;">{!C.Title}</a></h3>
+                                      <div style="word-wrap:break-word;">{!C.Description}</div>
+                                  </div>
+                                    
+                                
+                             </apex:outputPanel>
+                             <!-- End - Resources Information of Link type -->
+                                        
+                             <!-- Start - Resources Information of other file type  -->
+                             <apex:outputPanel rendered="{!C.FileType != 'LINK'}" layout="none">
+                                 <div class="feed" style="border-top:0px;">
+                                     <div class="icon" style="float:left;">
+                                         <div class="{!C.FileType}" style="cursor: pointer;height:32px;width:32px;" onclick="javascript:document.getElementById('widget{!Id}overlay{!C.Id}').style.display = 'block'; document.documentElement.style.overflow = 'hidden';">&nbsp;</div>
+                                     </div>
+                                     <div class="info" >
+                                         <h3 style="font: bold 22px Arial, Helvetica, sans-serif;">
+                                             <a href="/sfc/servlet.shepherd/version/download/{!C.Id}" style="word-wrap:break-word;">{!C.Title}</a>
+                                         </h3>
+                                         <div style="word-wrap:break-word;font-size:20px;margin-bottom: 8px;">{!C.Description}</div>
+                                     </div>                                        
+                                 </div>
+                             </apex:outputPanel>
+                             <!-- End - Resources Information of other file type  -->                      
+                             </li>    
+                         </apex:repeat>
+                         
+                         <apex:outputPanel rendered="{!MyImpl.lstContentsToBedisplayed_Mobile.size == 0}" layout="none"><br /> 
+                             <li style="margin-left:0px;"><h3 style="font-weight: bold; padding-top: 10px;">No Records Found.</h3></li> 
+                         </apex:outputPanel>
+
+                         <apex:outputPanel rendered="{!(MyImpl.intListContentSizeMobile - MyImpl.pageSizeResources_Mobile) > 0}" layout="none">
+                         	<a href="javascript:widget{!id}getMoreContentRecords();" style="font-size: 2.4em;color: #a3a3a3;" class="see-more">{!$Label.SL_Pagination_SeeMore}</a>
+                         </apex:outputPanel>  
+                         
+                 		</ul>
+                 </div>
+             </div>
+         </apex:outputpanel>
+         
+     </div>
+     <script>
+     	 $(document).ready(function() {
+     		 widget{!id}.rerenderDocumentCategories('{!JSENCODE(Myimpl.strListOfContentIdsToBeDisplayed)}');
+		});
+     </script>
+          
+</apex:component>

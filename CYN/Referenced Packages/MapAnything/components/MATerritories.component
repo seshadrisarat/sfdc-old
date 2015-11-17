@@ -1,0 +1,981 @@
+<apex:component controller="sma.MAComponentCon">
+
+	<!-----------------------------------
+		Territory Grid
+	------------------------------------>
+
+	<!-- CSS -->
+	<style type='text/css'>
+	
+		/* Territory Grid */
+		#TerritoryGrid {
+        	max-height: 350px;
+			overflow: auto;
+        }
+        #TerritoryGrid .territory-row > td {
+        	cursor: pointer;
+        }
+        #TerritoryGrid .territory-row:hover > td, .territory-row.selected td {
+        	filter: progid:DXImageTransform.Microsoft.gradient(startColorstr = '#ccfcff', endColorstr = '#96fff9') !important;
+			-ms-filter: "progid:DXImageTransform.Microsoft.gradient(startColorstr = '#ccfcff', endColorstr = '#96fff9')" !important;
+			background-image: -moz-linear-gradient(top, #ccfcff, #96fff9) !important;
+			background-image: -ms-linear-gradient(top, #ccfcff, #96fff9) !important;
+			background-image: -o-linear-gradient(top, #ccfcff, #96fff9) !important;
+			background-image: -webkit-gradient(linear, center top, center bottom, from(#ccfcff), to(#96fff9)) !important;
+			background-image: -webkit-linear-gradient(top, #ccfcff, #96fff9) !important;
+			background-image: linear-gradient(top, #ccfcff, #96fff9) !important;
+        }
+		#TerritoryGrid .rollup-cell.loading {	
+   			background: #F0F0F0 url('{!URLFOR($Resource.MapAnything, 'images/chatterstatus-loader.gif')}') no-repeat 5px center;
+   		}
+   		#TerritoryGrid th.rollup-cell {
+   			cursor: pointer;
+   		}
+   		#TerritoryGrid th.rollup-cell.selected {
+   			text-decoration: underline;
+   		}
+   		
+   		#TerritoryRollupLegendPopup {
+   			display: none;
+   		}
+   		#TerritoryRollupLegendPopup .territory-legend-row td {
+   			padding: 5px;
+   		}
+   		#TerritoryRollupLegendPopup .territory-legend-row .label {
+   			font-weight: bold;
+   		}
+   		#TerritoryRollupLegendPopup .territory-legend-row .color div {
+   			width: 20px;
+   			height: 20px;
+   			display: block;
+   			border: 1px solid black;
+   		}
+	
+	</style>
+
+	<!-- JS -->
+	<script type='text/javascript'>
+	
+		/**************************
+        *	Territory On Ready
+        ***************************/
+        $(function () {
+        
+        	//show the Territories menu button if territory management is enabled
+        	if ('{!territoryManagementEnabled}' == 'true') {
+        		$('#TerritoriesButton').show();
+        	}
+        	
+        	//init the territory grid
+        	$('#TerritoryGrid').MATerritoryGrid().bind({
+        	
+        		//handle visibility updates
+        		'MATerritoryGrid.update_visibility': function (event, data) {
+        			
+        			//remove geometry from unchecked rows
+        			$.each(data.remove, function (index, $row) {
+        				$.each($row.data('geometryObjects') || [], function (index, obj) {
+        					leafletMap.removeLayer(obj);
+        				});
+        			});
+        			
+        			//figure out which geometry we need to request for the checked rows
+        			$.each(data.add, function (index, $row) {
+        			
+        				//grab data about this rollup and territory so we know how to color the geometry
+        				var colorRules = $('#TerritoryGrid th.rollup-cell.selected').data('colorRules') || [];
+			        	var selectedRollupId = $('#TerritoryGrid th.rollup-cell.selected').attr('data-rollup');
+	        			var selectedRunId = $('#TerritoryGrid th.rollup-cell.selected').attr('data-run');
+	        			var dataType = $('#TerritoryGrid th.rollup-cell.selected').attr('data-type');
+			            var dataValue = parseFloat($row.find('td.rollup-cell[data-rollup="'+selectedRollupId+'"][data-run="'+selectedRunId+'"]').attr('data-value'));
+			            var width = ManageRollups_FormatValue(dataValue, dataType).length*4 + 20;
+			            var color = '#17b200';
+			            
+			            //loop over the color rules looking for a match
+			            $.each(colorRules, function (index, rule) {
+			            	if ((rule.rangeStart == '' || dataValue >= parseFloat(rule.rangeStart)) && (rule.rangeEnd == '' || dataValue <= parseFloat(rule.rangeEnd))) {
+			            		color = rule.color;
+			            	}
+			            });
+        				
+        				//start compiling request data
+        				$row.data('geometryObjects', []);
+        				var geoToRequest = {
+	        				states: [],
+	        				counties: {},
+	        				zips: [],
+	        				custom: []
+	        			};
+	        			
+	        			//send request for spatial geometry for this territory and its children
+	        			$.ajax({
+							url: MA.resources.Territory+"?securityToken={!securityToken}&action=getTerritoryGeometry&id="+$row.attr('data-id'),
+							dataType: 'JSON',
+							success: function (response)
+							{
+								if (response.success)
+								{
+									//loop over each geometry record
+									$.each(response.data, function (index, record) {
+										
+										//remove potential namespace
+										removeNamespace('{!namespace}', record);
+										
+										//try to parse and process geometry
+										try {
+											var geometry = JSON.parse(record.Geometry__c);
+											
+											//add states
+				        					try {
+				        						$.each(geometry.states.fips, function (index, fip) {
+				        							if ($.inArray(geoToRequest.states, fip) == -1) {
+				        								geoToRequest.states.push(fip);
+				        							}
+				        						});
+				        					}
+				        					catch (err) {}
+				        					
+				        					//add counties
+				        					try {
+				        						if (geometry.counties.statefips) {
+				        							
+				        							//make sure this state is in the counties list
+				        							if (!geoToRequest.counties[geometry.counties.statefips]) {
+				        								geoToRequest.counties[geometry.counties.statefips] = [];
+				        							}
+				        							
+				        							//add each county
+				        							$.each(geometry.counties.fips, function (index, fip) {
+					        							if ($.inArray(geoToRequest.counties[geometry.counties.statefips], fip) == -1) {
+					        								geoToRequest.counties[geometry.counties.statefips].push(fip);
+					        							}
+					        						});
+				        						}
+				        					}
+				        					catch (err) { }
+				        					
+				        					//add zips
+				        					try {
+				        						$.each(geometry.zips.codes, function (index, code) {
+				        							if ($.inArray(geoToRequest.zips, code) == -1) {
+				        								geoToRequest.zips.push(code);
+				        							}
+				        						});
+				        					}
+				        					catch (err) { }
+				        					
+				        					//add custom
+				        					try {
+				        						$.each(geometry.custom.codes, function (index, code) {
+				        							if ($.inArray(geoToRequest.custom, code) == -1) {
+				        								geoToRequest.custom.push(code);
+				        							}
+				        						});
+				        					}
+				        					catch (err) { }
+											
+										}
+										catch (err) { }
+										
+									});
+									
+									//now we're ready to request the actual geometry coordinates
+									//send request for states
+				        			var stateRequestsOut = 1;
+				        			$.ajax({
+										url: "https://gis-prod-api.cloudbilt.com/geometry/?action=getstates&statefips="+geoToRequest.states.join(','),
+										dataType: 'JSONP',
+										success: function (response)
+										{
+											if (response.success)
+											{
+												$.each(response.data, function (index, state) {
+													$.each(state.polygon, function (index, statePolygon) {
+													
+														var coordinates = [];
+														$.each(statePolygon, function (index, latLongStr) {
+															var latLongArr = latLongStr.split(' ');
+									                    	coordinates.push(L.latLng(parseFloat(latLongArr[1]), parseFloat(latLongArr[0])));
+									                    });
+														$row.data('geometryObjects').push(drawPolygon(coordinates, {
+															layerType: 'territory',
+															territoryRow: $row,
+															fillColor: color,
+															fillOpacity: 0.2
+														}).on('click', territory_Click));
+													
+								                    });
+												});
+											}
+											stateRequestsOut--;
+										},
+										error: function (response) {
+											stateRequestsOut--;
+										}
+									});
+				        			
+				        			//send requests for counties
+				        			var countyRequestsOut = 0;
+				        			$.each(geoToRequest.counties, function (statefips, counties) {
+				        				countyRequestsOut++;
+					        			$.ajax({
+											url: "https://gis-prod-api.cloudbilt.com/geometry/?action=getcounties&statefips="+statefips+"&countyfp="+counties.join(','),
+											dataType: 'JSONP',
+											success: function (response)
+											{
+												if (response.success)
+												{
+													$.each(response.data, function (index, county) {
+														$.each(county.polygon, function (index, countyPolygon) {
+														
+															var coordinates = [];
+															$.each(countyPolygon, function (index, latLongStr) {
+																var latLongArr = latLongStr.split(' ');
+										                    	coordinates.push(L.latLng(parseFloat(latLongArr[1]), parseFloat(latLongArr[0])));
+										                    });
+															$row.data('geometryObjects').push(drawPolygon(coordinates, {
+																layerType: 'territory',
+																territoryRow: $row,
+																fillColor: color,
+																fillOpacity: 0.2
+															}).on('click', territory_Click));
+														
+									                    });
+													});
+												}
+												countyRequestsOut--;
+											},
+											error: function (response) {
+												countyRequestsOut--;
+											}
+										});
+									});
+				        			
+				        			//send request for zips
+				        			var zipRequestsOut = 1;
+				        			$.ajax({
+										url: "https://gis-prod-api.cloudbilt.com/geometry/?action=getzips&zipcode="+geoToRequest.zips.join(','),
+										dataType: 'JSONP',
+										success: function (response)
+										{
+											if (response.success)
+											{
+												$.each(response.data, function (index, zip) {
+													$.each(zip.polygon, function (index, zipPolygon) {
+													
+														var coordinates = [];
+														$.each(zipPolygon, function (index, latLongStr) {
+															var latLongArr = latLongStr.split(' ');
+									                    	coordinates.push(L.latLng(parseFloat(latLongArr[1]), parseFloat(latLongArr[0])));
+									                    });
+														$row.data('geometryObjects').push(drawPolygon(coordinates, {
+															layerType: 'territory',
+															territoryRow: $row,
+															fillColor: color,
+															fillOpacity: 0.2
+														}).on('click', territory_Click));
+													
+								                    });
+												});
+											}
+											zipRequestsOut--;
+										},
+										error: function (response) {
+											zipRequestsOut--;
+										}
+									});
+									
+									//send request for custom
+				        			var customRequestsOut = 1;
+				        			$.ajax({
+				        				url: "https://gis-staging-api.cloudbilt.com/geometry/?action=getcustom&orgid=verizon&cili="+geoToRequest.custom.join(','),
+										dataType: 'JSONP',
+										success: function (response)
+										{
+											if (response.success)
+											{
+												$.each(response.data, function (index, custom) {
+													$.each(custom.polygon, function (index, customPolygon) {
+													
+														var coordinates = [];
+														$.each(customPolygon, function (index, latLongStr) {
+															var latLongArr = latLongStr.split(' ');
+									                    	coordinates.push(L.latLng(parseFloat(latLongArr[1]), parseFloat(latLongArr[0])));
+									                    });
+														$row.data('geometryObjects').push(drawPolygon(coordinates, {
+															layerType: 'territory',
+															territoryRow: $row,
+															fillColor: color,
+															fillOpacity: 0.2
+														}).on('click', territory_Click));
+													
+								                    });
+												});
+											}
+											customRequestsOut--;
+										},
+										error: function (response) {
+											customRequestsOut--;
+										}
+									});
+									
+									//start an interval to check for completion
+									var geoInterval = setInterval(function () {
+										
+										if (stateRequestsOut == 0 && countyRequestsOut == 0 && zipRequestsOut == 0 && customRequestsOut == 0)
+										{
+											clearInterval(geoInterval);
+										}
+										
+									}, 500);
+								}
+							},
+							error: function (response)
+							{
+								MALog(response);
+							}
+						});
+        			
+        			});//end loop over checked rows
+        		},//end update_visibility function
+        		
+        		
+				//handle selecting a rollup
+				'MATerritoryGrid.select_rollup': function (event, data) {
+				
+					//show the "Show Legend" button because we now have a rollup
+					$('#TerritoryGrid-ShowLegend').show(300);
+					
+					//grab the legend
+					var $legendPopup = $('#TerritoryRollupLegendPopup');
+					var $legend = $legendPopup.find('.legend').empty();
+					
+					//update the legend header
+					$legendPopup.find('> h2').text($('#TerritoryGrid th.selected').attr('data-name'));
+					$legendPopup.find('> h3').text($('#TerritoryGrid th.selected').attr('data-display'));
+					
+					//add each color rule to the legend
+					$.each($('#TerritoryGrid th.selected').data('colorRules') || [], function (index, rule) {
+					
+						var $legendRow = $('#MATerritoryTreeTemplates .territory-legend-row').clone().appendTo($legend);
+						$legendRow.find('.label').text(rule.label);
+						$legendRow.find('.from').text(ManageRollups_FormatValue(rule.rangeStart, $('#TerritoryGrid th.selected').attr('data-type')));
+						$legendRow.find('.to').text(ManageRollups_FormatValue(rule.rangeEnd, $('#TerritoryGrid th.selected').attr('data-type')));
+						$legendRow.find('.color div').css('background-color', rule.color);
+					
+					});
+					
+					//uncheck and recheck all checked territory rows to rerender them with the new rollup
+					$('#TerritoryGrid tr.territory-row td.visible input:checked').each(function () {
+						$(this).click().click();
+					});
+				
+				},//end select_rollup function
+				
+				//handle loading child territories
+				'MATerritoryGrid.load_children': function (event, data) {
+
+					//add a cell for each rollup/territory
+					data.rows.each(function () {
+						var $territoryRow = $(this);
+						$('#TerritoryGrid th.rollup-cell').each(function () {
+							var $rollupHeader = $(this);
+							$territoryRow.append(
+								$('<td class="rollup-cell loading" />').attr({
+									'data-rollup'		: $rollupHeader.attr('data-rollup'),
+									'data-run'			: $rollupHeader.attr('data-run'),
+									'data-territory'	: $territoryRow.attr('data-id')
+								})
+							);
+						});
+					});
+
+					//build an array of rollup value objects that can be populated
+					var rollupValues = [];
+					$('#TerritoryGrid td.rollup-cell.loading').each(function () {
+						rollupValues.push(
+							addNamespace('{!namespace}', {
+								Territory__c: $(this).attr('data-territory'),
+								Run__c: $(this).attr('data-run'),
+								Run__r: {
+									Rollup__c: $(this).attr('data-rollup')
+								}
+							})
+						);
+					});
+
+					//send a request to get rollup values
+					$.ajax({
+						url: MA.resources.Territory+"?securityToken={!securityToken}&action=getTerritoryRollupValues&core.apexpages.devmode.url=0",
+						type: 'POST',
+						dataType: 'JSON',
+						data: {
+							serializedRollupValues: JSON.stringify(rollupValues)
+						},
+						success: function (response)
+						{
+							if (response.success)
+							{
+								$.each(response.data, function (index, rollupValue) {
+									removeNamespace('{!namespace}', rollupValue);
+									
+									$('#TerritoryGrid [data-run="'+rollupValue.Run__c+'"][data-rollup="'+rollupValue.Run__r.Rollup__c+'"][data-territory="'+rollupValue.Territory__c+'"]')
+										.removeClass('loading')
+										.attr('data-value', rollupValue.Value__c)
+										.text(ManageRollups_FormatValue(rollupValue.Value__c, $('#TerritoryGrid th[data-run="'+rollupValue.Run__c+'"][data-rollup="'+rollupValue.Run__r.Rollup__c+'"]').attr('data-type')));
+								});
+							}
+						}
+					});
+					
+				}//end load_children function
+				
+        	});//end territory grid bindings
+        	
+        	/*
+        	//init the territory grid
+        	$('#TerritoryGrid').MATerritoryGrid().bind({
+        	
+        		//handle visibility updates
+        		'MATerritoryGrid.update_visibility': function (event, data) {
+        			
+        			//remove geometry from unchecked rows
+        			$.each(data.remove, function (index, $row) {
+        				$.each($row.data('geometryObjects') || [], function (index, obj) {
+        					leafletMap.removeLayer(obj);
+        				});
+        			});
+        			
+        			//figure out which geometry we need to request for the checked rows
+        			$.each(data.add, function (index, $row) {
+        			
+        				//grab data about this rollup and territory so we know how to color the geometry
+        				var colorRules = $('#TerritoryGrid th.rollup-cell.selected').data('colorRules') || [];
+			        	var selectedRollupId = $('#TerritoryGrid th.rollup-cell.selected').attr('data-rollup');
+	        			var selectedRunId = $('#TerritoryGrid th.rollup-cell.selected').attr('data-run');
+	        			var dataType = $('#TerritoryGrid th.rollup-cell.selected').attr('data-type');
+			            var dataValue = parseFloat($row.find('td.rollup-cell[data-rollup="'+selectedRollupId+'"][data-run="'+selectedRunId+'"]').attr('data-value'));
+			            var width = ManageRollups_FormatValue(dataValue, dataType).length*4 + 20;
+			            var color = '#17b200';
+			            
+			            //loop over the color rules looking for a match
+			            $.each(colorRules, function (index, rule) {
+			            	if ((rule.rangeStart == '' || dataValue >= parseFloat(rule.rangeStart)) && (rule.rangeEnd == '' || dataValue <= parseFloat(rule.rangeEnd))) {
+			            		color = rule.color;
+			            	}
+			            });
+        				
+        				//start compiling request data
+        				$row.data('geometryObjects', []);
+        				var geoToRequest = {
+	        				states: [],
+	        				counties: {},
+	        				zips: []
+	        			};
+	        			
+	        			//support function to compile geometry data from a territory row
+	        			function addGeometryDataFromRows(geoData, $rows)
+	        			{
+	        				var $nextRows = $();
+	        				$rows.each(function () {
+	        				
+	        					//loop over geometry data for this row and add it to the request data
+		        				$.each(($(this).data('geometryData') || []), function (index, geometry) {
+		        					
+		        					//add states
+		        					try {
+		        						$.each(geometry.states.fips, function (index, fip) {
+		        							if ($.inArray(geoData.states, fip) == -1) {
+		        								geoData.states.push(fip);
+		        							}
+		        						});
+		        					}
+		        					catch (err) {}
+		        					
+		        					//add counties
+		        					try {
+		        						if (geometry.counties.statefips) {
+		        							
+		        							//make sure this state is in the counties list
+		        							if (!geoData.counties[geometry.counties.statefips]) {
+		        								geoData.counties[geometry.counties.statefips] = [];
+		        							}
+		        							
+		        							//add each county
+		        							$.each(geometry.counties.fips, function (index, fip) {
+			        							if ($.inArray(geoData.counties[geometry.counties.statefips], fip) == -1) {
+			        								geoData.counties[geometry.counties.statefips].push(fip);
+			        							}
+			        						});
+		        						}
+		        					}
+		        					catch (err) { }
+		        					
+		        					//add zips
+		        					try {
+		        						$.each(geometry.zips.codes, function (index, code) {
+		        							if ($.inArray(geoData.zips, code) == -1) {
+		        								geoData.zips.push(code);
+		        							}
+		        						});
+		        					}
+		        					catch (err) { }
+		        					
+		        				});
+		        				
+		        				//keep track of child rows for use after this loop
+		        				$nextRows = $nextRows.add($('#TerritoryGrid .territory-row[data-parent="'+$(this).attr('data-id')+'"]'))
+	        				
+	        				});
+	        				
+	        				//recursively add geometry data from child rows because a territory's geometry includes children
+	        				if ($nextRows.length > 0) {
+	        					return addGeometryDataFromRows(geoData, $nextRows);
+	        				}
+	        				else {
+	        					return geoData;
+	        				}
+	        			}
+	        			
+	        			//build data that we want to request using this row and its children
+	        			geoToRequest = addGeometryDataFromRows(geoToRequest, $row);
+        			
+	        			//send request for states
+	        			var stateRequestsOut = 1;
+	        			$.ajax({
+							url: "https://gis-prod-api.cloudbilt.com/geometry/?action=getstates&statefips="+geoToRequest.states.join(','),
+							dataType: 'JSONP',
+							success: function (response)
+							{
+								if (response.success)
+								{
+									$.each(response.data, function (index, state) {
+										$.each(state.polygon, function (index, statePolygon) {
+										
+											var coordinates = [];
+											$.each(statePolygon, function (index, latLongStr) {
+												var latLongArr = latLongStr.replace(/[()]/g, '').split(' ');
+						                    	coordinates.push(L.latLng(parseFloat(latLongArr[1]), parseFloat(latLongArr[0])));
+						                    });
+											$row.data('geometryObjects').push(drawPolygon(coordinates, {
+												layerType: 'territory',
+												territoryRow: $row,
+												fillColor: color,
+												eventListener: {
+													"click": [territory_Click, false, null],
+		            								"tap": [territory_Click, false, null]
+												}
+											}));
+										
+					                    });
+									});
+								}
+								stateRequestsOut--;
+							},
+							error: function (response) {
+								stateRequestsOut--;
+							}
+						});
+	        			
+	        			//send requests for counties
+	        			var countyRequestsOut = 0;
+	        			$.each(geoToRequest.counties, function (statefips, counties) {
+	        				countyRequestsOut++;
+		        			$.ajax({
+								url: "https://gis-prod-api.cloudbilt.com/geometry/?action=getcounties&statefips="+statefips+"&countyfp="+counties.join(','),
+								dataType: 'JSONP',
+								success: function (response)
+								{
+									if (response.success)
+									{
+										$.each(response.data, function (index, county) {
+											$.each(county.polygon, function (index, countyPolygon) {
+											
+												var coordinates = [];
+												$.each(countyPolygon, function (index, latLongStr) {
+													var latLongArr = latLongStr.replace(/[()]/g, '').split(' ');
+							                    	coordinates.push(L.latLng(parseFloat(latLongArr[1]), parseFloat(latLongArr[0])));
+							                    });
+												$row.data('geometryObjects').push(drawPolygon(coordinates, {
+													layerType: 'territory',
+													territoryRow: $row,
+													fillColor: color,
+													eventListener: {
+														"click": [territory_Click, false, null],
+			            								"tap": [territory_Click, false, null]
+													}
+												}));
+											
+						                    });
+										});
+									}
+									countyRequestsOut--;
+								},
+								error: function (response) {
+									countyRequestsOut--;
+								}
+							});
+						});
+	        			
+	        			//send request for zips
+	        			var zipRequestsOut = 1;
+	        			$.ajax({
+							url: "https://gis-prod-api.cloudbilt.com/geometry/?action=getzips&zipcode="+geoToRequest.zips.join(','),
+							dataType: 'JSONP',
+							success: function (response)
+							{
+								if (response.success)
+								{
+									$.each(response.data, function (index, zip) {
+										$.each(zip.polygon, function (index, zipPolygon) {
+										
+											var coordinates = [];
+											$.each(zipPolygon, function (index, latLongStr) {
+												var latLongArr = latLongStr.replace(/[()]/g, '').split(' ');
+						                    	coordinates.push(L.latLng(parseFloat(latLongArr[1]), parseFloat(latLongArr[0])));
+						                    });
+											$row.data('geometryObjects').push(drawPolygon(coordinates, {
+												layerType: 'territory',
+												territoryRow: $row,
+												fillColor: color,
+												eventListener: {
+													"click": [territory_Click, false, null],
+		            								"tap": [territory_Click, false, null]
+												}
+											}));
+										
+					                    });
+									});
+								}
+								zipRequestsOut--;
+							},
+							error: function (response) {
+								zipRequestsOut--;
+							}
+						});
+						
+						//start an interval to check for completion
+						var geoInterval = setInterval(function () {
+							
+							if (stateRequestsOut == 0 && countyRequestsOut == 0 && zipRequestsOut == 0)
+							{
+								clearInterval(geoInterval);
+							}
+							
+						}, 500);
+						
+        			});//end loop over checked rows
+        		},//end update_visibility function
+        		
+        		
+				//handle selecting a rollup
+				'MATerritoryGrid.select_rollup': function (event, data) {
+				
+					//show the "Show Legend" button because we now have a rollup
+					$('#TerritoryGrid-ShowLegend').show(300);
+					
+					//grab the legend
+					var $legendPopup = $('#TerritoryRollupLegendPopup');
+					var $legend = $legendPopup.find('.legend').empty();
+					
+					//add each color rule to the legend
+					$.each($('#TerritoryGrid th.selected').data('colorRules') || [], function (index, rule) {
+					
+						var $legendRow = $('#MATerritoryTreeTemplates .territory-legend-row').clone().appendTo($legend);
+						$legendRow.find('.label').text(rule.label);
+						$legendRow.find('.from').text(ManageRollups_FormatValue(rule.rangeStart, $('#TerritoryGrid th.selected').attr('data-type')));
+						$legendRow.find('.to').text(ManageRollups_FormatValue(rule.rangeEnd, $('#TerritoryGrid th.selected').attr('data-type')));
+						$legendRow.find('.color div').css('background-color', rule.color);
+					
+					});
+					
+					//uncheck and recheck all checked territory rows to rerender them with the new rollup
+					$('#TerritoryGrid tr.territory-row td.visible input:checked').each(function () {
+						$(this).click().click();
+					});
+				
+				}//end select_rollup function
+				
+        	});//end territory grid bindings
+        	*/
+        	
+        });//end territory onready
+        
+        /*****************************************
+        *	Support Functions
+        *****************************************/
+        
+        function territory_Click()
+        {
+        	MALog('clicked on a territory', this);
+        	$('#TerritoryGrid .territory-row').removeClass('selected');
+        	this.options.territoryRow.addClass('selected');
+        	
+        	//show the territories workspace
+        	BottomWorkspace_Show({ pane: 'TerritoryGrid', title: 'Territories' });
+        }
+        
+    </script>
+    
+    <!---------------------------------------
+    	Manage Rollups
+   	---------------------------------------->
+    
+    <!-- Manage Rollups Popup -->
+    <div id='ManageRollupsPopup' style='display: none;'>
+    
+    	<!-- Header -->
+    	<h2>Manage Rollups</h2>
+    	<p style='font-size: 11px; font-family: "Helvetica Neue", Helvetica, arial, sans-serif; color: #757575; margin: 4px 0 8px 0;'>Find rollups in the tree that you would like to analyze and drag them into the table.</p>
+    
+    	<!-- Selected Rollups -->
+    	<table>
+    		<tr>
+    			<td style='min-width: 200px; width: 200px; overflow: auto;'>
+    				<div id='ManageRollupsTree'></div>
+    			</td>
+    			<td style='vertical-align: top;'>
+    				<table id='ManageRollupsTable'>
+    					<tr>
+    						<th>Name</th>
+    						<th>Display</th>
+    						<th></th>
+    					</tr>
+    					<tr class='rollup-dropzone-row'>
+    						<td colspan='3' class='rollup-dropzone'></td>
+    					</tr>
+    				</table>
+    			</td>
+    		</tr>
+    	</table>
+    	
+    	<!-- Manage Rollups Templates -->
+    	<div id='ManageRollupsTemplates' style='display: none;'>
+    		
+    		<table>
+    			<tr class='rollup-row'>
+    				<td class='name'></td>
+    				<td class='display'><select disabled='disabled'><option value='Loading...'>Loading...</option></select></td>
+    				<td style='width: 16px;'><image src="{!URLFOR($Resource.MapAnything, 'images/x-22.png')}" onclick="$(this).closest('.rollup-row').next().remove(); $(this).closest('.rollup-row').remove();" /></td>
+    			</tr>
+    			<tr class='rollup-dropzone-row'>
+					<td colspan='3' class='rollup-dropzone'></td>
+				</tr>
+    		</table>
+    		
+    	</div>
+    	
+    	<!-- Manage Rollups CSS -->
+    	<style type='text/css'>
+    	
+    		#ManageRollupsPopup {
+    			display: none;
+    		}
+    		#ManageRollupsTable .rollup-row img {
+    			display: none;
+    			width: 16px;
+    			cursor: pointer;
+    		}
+    		#ManageRollupsTable .rollup-row:hover img {
+    			display: block;
+    		}
+    		#ManageRollupsTable .rollup-dropzone.hovering {
+    			background: green;
+    		}
+    		
+    	</style>
+    	
+    	<!-- Manage Rollups JS -->
+    	<script type='text/javascript'>
+			$(function () {
+			
+				//init the rollup tree
+				$('#ManageRollupsTree').MATerritoryRollupTree();
+				
+				//add default handlers
+				ManageRollups_AddHandlers();
+				
+			});
+			function ManageRollups_LaunchPopup()
+			{
+				launchPopup($('#ManageRollupsPopup'), {
+					buttons: { 
+						'Close': function () {
+						
+							//update the rollup columns
+							$('#TerritoryGrid .rollup-cell').remove();
+							$('#ManageRollupsTable .rollup-row').each(function () {
+								var $rollupRow = $(this);
+								
+								//add a header cell for this rollup
+								var $rollupHeaderCell = $('<th class="rollup-cell" />').text($rollupRow.find('td.name').text() + ' - ' + $rollupRow.find('td.display select').next().find('input').val()).attr({
+									'data-rollup'	: $rollupRow.attr('data-id'),
+									'data-run'		: $rollupRow.find('td.display select').val(),
+									'data-field'	: $rollupRow.attr('data-field'),
+									'data-type'		: $rollupRow.attr('data-type')
+								}).appendTo($('#TerritoryGrid tr:first'));
+								
+								//add color rule data to the new header cell
+								$rollupHeaderCell.data('colorRules', $rollupRow.data('colorRules'));
+							
+								//add a cell for this rollup for each territory
+								$('#TerritoryGrid .territory-row').each(function () {
+									$(this).append(
+										$('<td class="rollup-cell loading" />').attr({
+											'data-rollup'		: $rollupRow.attr('data-id'),
+											'data-run'			: $rollupRow.find('td.display select').val(),
+											'data-territory'	: $(this).attr('data-id')
+										})
+									);
+								});
+							
+							});
+							
+							//build an array of rollup value objects that can be populated
+							var rollupValues = [];
+							$('#TerritoryGrid td.rollup-cell.loading').each(function () {
+								rollupValues.push(
+									addNamespace('{!namespace}', {
+										Territory__c: $(this).attr('data-territory'),
+										Run__c: $(this).attr('data-run'),
+										Run__r: {
+											Rollup__c: $(this).attr('data-rollup')
+										}
+									})
+								);
+							});
+							
+							//send a request to get rollup values
+							$.ajax({
+								url: MA.resources.Territory+"?securityToken={!securityToken}&action=getTerritoryRollupValues&core.apexpages.devmode.url=0",
+								type: 'POST',
+								dataType: 'JSON',
+								data: {
+									serializedRollupValues: JSON.stringify(rollupValues)
+								},
+								success: function (response)
+								{
+									if (response.success)
+									{
+										$.each(response.data, function (index, rollupValue) {
+											removeNamespace('{!namespace}', rollupValue);
+											$('#TerritoryGrid [data-run="'+rollupValue.Run__c+'"][data-rollup="'+rollupValue.Run__r.Rollup__c+'"][data-territory="'+rollupValue.Territory__c+'"]')
+												.removeClass('loading')
+												.attr('data-value', rollupValue.Value__c)
+												.text(ManageRollups_FormatValue(rollupValue.Value__c, $('#TerritoryGrid th[data-run="'+rollupValue.Run__c+'"][data-rollup="'+rollupValue.Run__r.Rollup__c+'"]').attr('data-type')));
+										});
+									}
+								}
+							});
+							
+							//hide the popup
+							hidePopup($('#ManageRollupsPopup'));
+							 
+						}
+					}
+				});
+			}
+			function ManageRollups_AddHandlers()
+			{
+				$('#ManageRollupsTable .rollup-dropzone:not(.ui-droppable)').droppable({
+					accept: 'li[rel="rollup"]',
+	            	tolerance: 'touch',
+	            	hoverClass: 'hovering',
+	            	drop: function (event, ui) {
+	            		
+	            		//add a new rollup row
+	            		var $newRow = $('#ManageRollupsTemplates .rollup-row').clone().attr('data-id', ui.draggable.attr('data-id'));
+	            		$newRow.find('.name').text(ui.draggable.data('name'));
+	            		$newRow.appendTo($('#ManageRollupsTable'));
+	            		
+	            		//add a new drop zone after this rollup
+	            		$('#ManageRollupsTemplates .rollup-dropzone-row').clone().appendTo($('#ManageRollupsTable'));
+	            		
+	            		//add handlers
+	            		ManageRollups_AddHandlers();
+	            		
+	            		//send a request to get the display options for this rollup
+	            		$.ajax({
+							url: MA.resources.Territory+"?securityToken={!securityToken}&action=getTerritoryRollup&core.apexpages.devmode.url=0",
+							type: 'POST',
+							dataType: 'JSON',
+							data: {
+								id: ui.draggable.attr('data-id')
+							},
+							success: function (response)
+							{
+								if (response.success) 
+								{
+									var $displayCombobox = $newRow.find('td.display select').empty();
+									$.each((response.data.runs || []), function (index, run) {
+										$displayCombobox.append($('<option />').attr('value', run.Id).text(run.CreatedDate));
+									});
+									$displayCombobox.removeAttr('disabled').combobox();
+									
+									//add rollup data to this row
+									$newRow.attr({
+										'data-field'	: response.data.AggregateField,
+        								'data-type'		: response.data.AggregateFieldType,
+									});
+									
+									//try to parse the color rules for this rollup and store them
+									try {
+										$newRow.data('colorRules', JSON.parse(response.data.SerializedColorRules));
+									}
+									catch (err) {
+										$newRow.data('colorRules', []);
+									}
+								}
+							}
+						});
+	            	}
+				});
+			}
+			function ManageRollups_FormatValue(value, dataType)
+			{
+				//a blank data type can be sent if a rollup hasn't been selected.  just send back a question mark (i don't think this will ever be seen, but it throws an error)
+				if (!dataType) {
+					return '?';
+				}
+			
+				//the rollup legend can have blank values, in which case we'll show a * to denote that any value will work
+				if (value == '') {
+					return '*';
+				}
+			
+				//return the appropriate string based on the data type
+				switch (dataType.toUpperCase()) {
+				
+					case 'CURRENCY': 
+						return formatCurrency(value);
+					case 'NUMBER':
+						return formatCurrency(value).substring(1);
+					case 'INTEGER':
+						var formattedForCurrency = formatCurrency(value);
+						return formattedForCurrency.substring(1, formattedForCurrency.length - 3);
+					default:
+						return value;
+						
+				}
+			}
+			function ManageRollups_ShowLegend()
+			{
+				//show the legend
+				launchPopup($('#TerritoryRollupLegendPopup'), {
+					draggable: false,
+					modal: false,
+					minWidth: 'auto',
+					width: 'auto'
+				}).parent().css('cursor', 'move').draggable();
+			}
+		</script>
+    	
+    </div>
+    
+    <!-- Rollup Legend Popup -->
+    <div id='TerritoryRollupLegendPopup' style='display: none;'>
+    	<h2>Rollup Legend</h2>
+	    <table class='legend'></table>
+    </div>
+
+</apex:component>

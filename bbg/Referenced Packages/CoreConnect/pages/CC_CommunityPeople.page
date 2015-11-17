@@ -1,0 +1,160 @@
+<apex:page showHeader="false" sidebar="false" standardStylesheets="false" applyHtmlTag="false" applyBodyTag="false" docType="html-5.0" controller="CORECONNECT.CC_CommunityPeopleController" cache="false" action="{!forwardToLogin}">
+  <apex:composition template="{!$Site.Template}">
+    <apex:define name="pagetitle">{!$Label.CC_People_Title}</apex:define>
+
+    <apex:define name="body" > 
+
+      <header class="container page-heading">
+        <h1 class="inline">{!$Label.CC_People_Title}</h1>
+        <button class="btn btn-link tip" data-toggle="popover" data-placement="top" title="People" data-content="{!$Label.CC_People_Title_Tooltip}"><span class="icon-question"></span></button>
+      </header>
+
+      <article>
+
+        <section class="container box all-news">
+         <apex:form >
+          <nav class="navbar navbar-default">
+            <div class="container-fluid">
+              <!-- Brand and toggle get grouped for better mobile display -->
+              <div class="navbar-header">
+                <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1">
+                  <span class="sr-only">Toggle Filters</span>
+                  <span class="icon-menu"></span>
+                </button>
+              </div>
+
+              <!-- Collect the nav links, forms, and other content for toggling -->
+              <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+
+                <div class="navbar-form navbar-left" role="form">
+                  <apex:actionFunction action="{!Filter}" name="filter" reRender="paginationTop,peopleList,paginationBottom" status="rerenderPeople">
+                  </apex:actionFunction>
+                  <div class="form-group">
+                    <apex:inputText value="{!SearchString}" styleClass="form-control" html-placeholder="{!$Label.coreconnect__CC_People_Search_Placeholder}" onchange="filter()"/>
+                  </div>
+                  <div class="form-group">
+                    <label class="sr-only" for="college_department">{!$Label.coreconnect__CC_People_Filter_Label}</label>
+                    <apex:selectList value="{!FilterOption}" multiselect="false" size="1" styleClass="form-control chosen" onchange="filter()" html-data-placeholder="{!$Label.coreconnect__CC_People_Filter_Placeholder}">
+                        <apex:selectOptions value="{!UserDepartmentsValues}"/>
+                     </apex:selectList>
+                  </div>
+                  <div class="form-group checkbox">
+                    <label>
+                      <apex:inputCheckbox value="{!PeopleIFollow}" onchange="filter()"/> {!$Label.coreconnect__CC_People_Filter_Only_Followed}
+                    </label>
+                  </div>
+                  
+                </div>
+                
+                <div class="pagination-wrapper pull-right hidden-xs hidden-sm">
+                  <apex:outputPanel id="paginationTop" >
+                    <div class="form-inline pull-left" role="form">
+                      <div class="form-group">
+                        <label for="page">Page</label>
+                        <input type="text" class="form-control input-sm" id="page" name="page" value="{!pageNumber}" onchange="goToPage(this.value);onScreenResize(determineBreakpoint());" />
+                      </div>
+                      <div class="form-group">&nbsp;of {!IF(TotalPages == 0,"1", TotalPages)}</div>
+                    </div>
+                        <ul class="pagination pagination-sm pull-right hidden-xs">
+                          <apex:outputPanel layout="none" rendered="{!hasPrevSet==true}">
+                            <li>
+                              <apex:commandLink value="<" action="{!prevSet}" rerender="peopleList,paginationTop,paginationBottom" status="rerenderPeople"></apex:commandLink>
+                            </li>
+                          </apex:outputPanel>
+                          <apex:outputPanel layout="none" rendered="{!hasNextSet==true}">
+                            <li>                 
+                              <apex:commandLink value=">" action="{!nextSet}" rerender="peopleList,paginationTop,paginationBottom" status="rerenderPeople"></apex:commandLink>
+                            </li>
+                          </apex:outputPanel>
+                        </ul>
+                        <apex:actionFunction action="{!GoToPage}" name="goToPage" reRender="peopleList,paginationTop,paginationBottom" >
+                             <apex:param name="param" assignTo="{!SpecifiedPageNumber}" value="param" />
+                        </apex:actionFunction>
+                  </apex:outputPanel>
+                </div>
+              </div><!-- /.navbar-collapse -->
+            </div><!-- /.container-fluid -->
+          </nav>
+          <apex:outputPanel id="peopleList">
+            <apex:outputPanel layout="none" rendered="{!ListOfUsers.size == 0}">
+              <div class="alert alert-success fade in" role="alert">
+                <button type="button" class="close" data-dismiss="alert"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <p>{!$Label.CC_People_Search_No_Result_Message}</p>
+              </div>
+            </apex:outputPanel>
+          <ul class="people-list row">
+
+            <apex:repeat value="{!ListOfUsers}" var="rec">
+                <li class="col-sm-6 col-md-4">
+                  <div class="person clearfix">
+                    <div class="image col-xs-2">
+                      <a href="{!$Site.BaseUrl}/{!rec.u.id}"><img src="{!rec.u.SmallPhotoUrl}" alt="rec.u.Name" class="img-responsive" /></a>
+                    </div>
+                    <div class="text col-xs-10">
+                      <h3><a href="{!$Site.BaseUrl}/{!rec.u.Id}">{!rec.u.Name}</a></h3>
+                      <p class="title"><em>{!rec.u.Title}</em></p>
+                      <apex:outputPanel layout="none" rendered="{!rec.u.Department != ''}">
+                        <p class="department">{!rec.u.Department}</p>
+                      </apex:outputPanel>
+                      <p class="email"><a href="mailto:{!rec.u.email}"><span class="icon-mail"></span> {!$Label.CC_People_Result_Email}</a></p>
+                      <apex:outputPanel layout="none" rendered="{!rec.u.Phone != ''}">
+                        <p class="phone"><apex:outputField value="{!rec.u.Phone}"/> </p>
+                      </apex:outputPanel>
+                      <div class="btn-group btn-group-xs">
+                        <apex:commandLink id="unfollowLink" action="{!Unfollow}" value="Unfollow" styleClass="btn btn-default" rendered="{!rec.followed==true && rec.u.id!=$User.Id}"  rerender="peopleList" status="rerenderPeople" >
+                                    <apex:param name="followId" value="{!rec.u.id}" assignTo="{!FollowId}" ></apex:param>
+                        </apex:commandLink>
+                        <apex:commandLink id="followLink" action="{!Follow}" value="{!$Label.coreconnect__CC_People_Result_Follow}" styleClass="btn btn-default" rendered="{!rec.followed==false && rec.u.id!=$User.Id}" rerender="peopleList" status="rerenderPeople"  >
+                                    <apex:param name="followId" value="{!rec.u.id}" assignTo="{!FollowId}" ></apex:param>
+                        </apex:commandLink>
+                        <apex:commandLink id="yourself" value="yourself" styleClass="btn btn-default disabled" rendered="{!rec.u.id==$User.Id}" rerender="peopleList" status="rerenderPeople"  >
+                        </apex:commandLink>
+                        
+                        <a href="{!$Site.BaseUrl}/{!rec.u.id}" class="btn btn-default">{!$Label.CC_People_Result_View_Profile}</a>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+            </apex:repeat>
+
+            
+          </ul>
+        </apex:outputPanel>
+          <div class="pagination-wrapper">
+            <div class="pull-right">
+              <apex:outputPanel id="paginationBottom" >
+                <div class="form-inline pull-left" role="form">
+                  <div class="form-group">
+                    <label for="page">Page</label>
+                    <input type="text" class="form-control input-sm" id="page" name="page" value="{!pageNumber}" onchange="goToPage(this.value)" />
+                  </div>
+                  <div class="form-group">&nbsp;of {!IF(TotalPages == 0,"1", TotalPages)}</div>
+                </div>
+                <ul class="pagination pagination-sm pull-right">
+                  <apex:outputPanel layout="none" rendered="{!hasPrevSet==true}">
+                    <li>
+                      <apex:commandLink value="<" action="{!prevSet}" rerender="peopleList,paginationTop,paginationBottom" status="rerenderPeople"></apex:commandLink>
+                    </li>
+                  </apex:outputPanel>
+                  <apex:outputPanel layout="none" rendered="{!hasNextSet==true}">
+                    <li>                 
+                      <apex:commandLink value=">" action="{!nextSet}" rerender="peopleList,paginationTop,paginationBottom" status="rerenderPeople"></apex:commandLink>
+                    </li>
+                  </apex:outputPanel>
+                </ul>
+                <apex:actionFunction action="{!GoToPage}" name="goToPage" reRender="peopleList,paginationTop,paginationBottom" >
+                  <apex:param name="param" assignTo="{!SpecifiedPageNumber}" value="param" />
+                </apex:actionFunction>
+              </apex:outputPanel>
+            </div>      
+          </div>
+          </apex:form>
+        </section><!-- /.all-news -->
+
+        <apex:actionStatus id="rerenderPeople" onstop="onScreenResize(determineBreakpoint())"/>
+
+      </article>
+
+    </apex:define>
+  </apex:composition>
+</apex:page>

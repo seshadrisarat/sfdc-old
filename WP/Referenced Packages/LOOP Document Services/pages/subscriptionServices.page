@@ -1,0 +1,311 @@
+<apex:page title="Subscription Services" standardController="Loop__DDP__c" extensions="Loop.subscriptionServicesController" id="ap" tabStyle="DDP_Admin__tab">
+    <style type="text/css">
+        .overlay {
+            height: 100%;
+            width: 100%;
+            top: 0;
+            left: 0;
+            position: absolute;
+            background-color: #FFF;
+            border: 1px solid #CACACA;
+        }
+        .msg {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.10em;
+            white-space: nowrap;            
+        }
+        .msg img {
+            vertical-align: middle;
+        }
+        .msg .msgText {
+            padding-left: 10px;
+            vertical-align: middle;
+            color: #666;
+            font-size: 95%;
+        }
+        #dsSection {
+            display: none;
+        }
+        .message2 {
+            margin: 0 0 4px 0;
+            -moz-border-radius: 4px;
+            -webkit-border-radius: 4px;
+            border-radius: 4px;
+            background-color: #FFC;
+            border-style: solid;
+            border-width: 1px;
+            color: #000;
+            padding: 6px 8px 6px 6px;
+        }
+        .message2 .infoM3 {
+            border-color: #39F;
+        }
+        .message2 .infoM3 .msgIcon {
+            background-image: url(/img/msg_icons/info24.png);
+            background-position: 0px;
+            width: 24px;
+            height: 24px;
+        }
+        .message2 .messageTable .messageCell {
+            vertical-align: middle;
+        }
+        .message2 .messageText {
+            margin-left: 8px;
+        }
+    </style>
+    <script src="{!URLFOR($Resource.JQuery)}"></script>
+    <script src="{!URLFOR($Resource.Scripts, 'jquery.drawloop.js')}"></script>
+    <script type="text/javascript">
+        servicesLoaded = {!servicesLoaded};
+        function setOverlay(e, msgText) {
+            var $e = jQuery(e),
+                $msg = jQuery('<div class="msg"><img src="https://login.salesforce.com/img/loading.gif"/></div>')
+                    .append(jQuery('<span class="msgText"></span>').text(msgText !== undefined ? msgText : 'Loading...'));
+            if (!$e.data('origPos')) $e.data('origPos', $e.css('position'));
+            $e.append('<div class="overlay">&nbsp;</div>')
+                .append($msg)
+                .css('position', 'relative');
+            $msg.css({ top: '50%', 'margin-top': '-' + ($msg.height() / 2) + 'px' });
+        }
+        function removeOverlay(e) {
+            var $e = jQuery(e);
+            $e.find('.overlay,.msg').remove();
+            if ($e.data('origPos')) $e.css('position', $e.data('origPos'));
+        }
+        function setBtnEnabled(btn, enabled, text) {
+            var $btn = jQuery(btn);
+            $btn.each(function(i, e) {
+                if (jQuery(e).data('origValue') === undefined) {
+                    jQuery(e).data('origValue', e.value);
+                }
+            });
+            if (enabled)
+                $btn.removeAttr('disabled').addClass('btn').removeClass('btnDisabled');
+            else
+                $btn.attr('disabled', true).addClass('btnDisabled').removeClass('btn');
+            $btn.each(function(i, e) {
+                jQuery(e).val(text !== undefined ? text : jQuery(e).data('origValue'));
+            });
+        };
+        function submitOnEnter(e) {
+            if (e.keyCode == 13) {
+                jQuery('[id$=":submitBtn"]').click();
+                return false;
+            }
+        };        
+        function toggleServiceSection(sectionName, display, speed) {
+            if (speed === undefined) speed = 500;
+            jQuery('[value="' + sectionName + '"]:hidden').closest('tr').toggle(display, speed);
+        };
+        jQuery(function($) {
+            setServerUrl();
+            setBtnEnabled(jQuery('.btnSubmit'), false, 'Loading...');
+            var $section = jQuery('[id$=":main"] .pbBody');
+            setOverlay($section, 'Checking Available Services...');
+            jQuery.notifie({
+                allowCompatibilityView: false,
+                requiredVersion: 7,
+                containerSelector: '#ieMsgs',
+                compatibilityViewMessage: '{!JSENCODE($Label.IE_Compatibility_View_Warning)}',
+                versionMessage: '{!JSENCODE($Label.IE_Higher_Version_Required)}'
+            });
+        });
+    </script>
+    <div id="ieMsgs" />
+    <apex:form >
+        <apex:actionFunction name="setServerUrl" action="{!setServerUrl}" rerender="haveServerUrl">
+            <apex:param name="serverUrl" assignTo="{!serverUrl}" value="{!$Api.Partner_Server_URL_300}" />
+        </apex:actionFunction>
+        <apex:outputPanel id="haveServerUrl">
+            <script type="text/javascript">
+                serverUrl = '{!JSENCODE(serverUrl)}';
+                jQuery(function($) {
+                    if (serverUrl) {
+                        loadServices();
+                    }
+                });         
+            </script>
+        </apex:outputPanel>
+            <apex:pageBlock title="Subscription Services" id="main" mode="edit">
+                <apex:pageBlockButtons location="top" id="buttonSection">
+                    <apex:commandButton id="submitBtn" value="{!CASE(requestType,'subscribe','Subscribe','quote','Submit','Save')}" styleClass="btnSubmit" />
+                    <apex:actionFunction name="loadServices" action="{!loadServices}" rerender="main,requestInfo" />
+                    <apex:actionFunction name="saveServices" action="{!saveServices}" rerender="mainMessages,mainInit,requestInfo" />
+                    <apex:commandButton value="Cancel" action="{!cancel}" immediate="true" styleClass="btnCancel" />
+                </apex:pageBlockButtons>
+                
+                <apex:outputPanel id="mainInit">
+                    <script type="text/javascript">
+                        jQuery(function($) {
+                            servicesLoaded = {!servicesLoaded};
+                            if (servicesLoaded) {
+                                setBtnEnabled(jQuery('.btnSubmit'), true);
+                            }
+                            $('.btnSubmit').unbind('click').click(function() {
+                                setBtnEnabled(this, false, 'Saving...');
+                                jQuery('[id$=":mainMessages"]').html('');
+                                saveServices();
+                                return false;
+                            });
+                            // hitting "enter" on form should submit rather than cancel
+                            $('[id$=":main"] :input').unbind('keydown').bind('keydown', submitOnEnter);
+                            $('[id$="selectedServices"] :input').unbind('click').bind('click', function() {
+                                var chk = this,
+                                    val = jQuery(chk).val();
+                                if (chk.checked !== undefined && val) {
+                                    toggleServiceSection(val, chk.checked);
+                                }
+                            });
+                            // display selected service sections
+                            $('[id$="selectedServices"] :input').each(function(i, e) {
+                                toggleServiceSection(this.value, this.checked);
+                            });
+                        });
+                    </script>
+                </apex:outputPanel>
+                
+                <apex:outputPanel id="requestInfo">
+                    <apex:pageMessage severity="error" strength="1" rendered="{!showEmailLink}">
+                        Your request could not be submitted automatically. Please
+                        <apex:outputLink target="_blank"
+                            value="mailto:sales@drawloop.com?subject={!URLENCODE(subject)}&body={!URLENCODE(emailBody)}">
+                            click this link
+                        </apex:outputLink>
+                        to email your request to sales.
+                    </apex:pageMessage>
+                    <apex:pageBlockSection title="{!CASE(requestType,'subscribe','Subscription','Quote')} Info"
+                        rendered="{!OR(requestType='subscribe',requestType='quote')}">
+                        
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="{!$ObjectType.User.fields.FirstName.label}" />
+                            <apex:outputPanel layout="block" styleClass="requiredInput">
+                                <apex:outputPanel layout="block" styleClass="requiredBlock" />
+                                <apex:inputText value="{!firstName}" />
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="{!$ObjectType.User.fields.CompanyName.label}" />
+                            <apex:outputPanel layout="block" styleClass="requiredInput">
+                                <apex:outputPanel layout="block" styleClass="requiredBlock" />
+                                <apex:inputText value="{!orgName}" />
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="{!$ObjectType.User.fields.LastName.label}" />
+                            <apex:outputPanel layout="block" styleClass="requiredInput">
+                                <apex:outputPanel layout="block" styleClass="requiredBlock" />
+                                <apex:inputText value="{!lastName}" />
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="{!$ObjectType.Organization.fields.Id.label}" />
+                            <apex:outputPanel layout="block" styleClass="requiredInput">
+                                <apex:outputPanel layout="block" styleClass="requiredBlock" />
+                                <apex:inputText value="{!orgId}" />
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="{!$ObjectType.User.fields.Email.label}" />
+                            <apex:outputPanel layout="block" styleClass="requiredInput">
+                                <apex:outputPanel layout="block" styleClass="requiredBlock" />
+                                <apex:inputText value="{!email}" />
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="{!$ObjectType.User.fields.Phone.label}" />
+                            <apex:outputPanel layout="block" styleClass="requiredInput">
+                                <apex:outputPanel layout="block" styleClass="requiredBlock" />
+                                <apex:inputText value="{!phone}" />
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="LOOP Plus {!$ObjectType.User.labelplural}" />
+                            <apex:outputPanel layout="block" styleClass="requiredInput">
+                                <apex:outputPanel layout="block" styleClass="requiredBlock" />
+                                <apex:inputText value="{!numberOfUsers}" />
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                    </apex:pageBlockSection>
+                </apex:outputPanel>
+                
+                <apex:pageBlockSection columns="1" id="loopServicesSection" title="Services">
+                    <apex:outputPanel id="mainRender">
+                        <div class="message2 infoM3">
+                            <table class="messageTable" border="0" cellpadding="0" cellspacing="0" style="padding:0px;margin:0px;">
+                                <tr valign="top">
+                                    <td><img alt="info" class="msgIcon" src="/s.gif" title="info"/></td>
+                                    <td class="messageCell">
+                                        <div class="messageText">For pricing information,&nbsp;<apex:outputLink value="http://www.drawloop.com/pricing/salesforce-editions/" target="_blank">click here</apex:outputLink>.
+                                            <p>To remove enabled services from your account, please contact <a href="mailto:sales@drawloop.com">sales@drawloop.com</a>.</p></div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <apex:pageMessages id="mainMessages" />
+                    </apex:outputPanel>
+                    <apex:pageBlockSectionItem helpText="Enabled services cannot be removed directly through the interface.  Please contact sales@drawloop.com if you would like to remove a service entirely.">
+                        <apex:outputLabel value="Services" />
+                        <apex:outputPanel layout="block" styleClass="requiredInput">
+                            <apex:outputPanel layout="block"></apex:outputPanel>
+                            <apex:selectCheckboxes id="selectedServices" value="{!currServices}" layout="pageDirection">
+                                <apex:selectOptions value="{!serviceOptions}" />
+                            </apex:selectCheckboxes>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:repeat value="{!availableServices}" var="service">
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="{!service.itemLabel}" />
+                            <apex:outputPanel layout="block" styleClass="requiredInput">
+                                <apex:outputPanel layout="block"></apex:outputPanel>
+                                <apex:selectRadio value="{!service.selectedLevel}" styleClass="serviceLevel" layout="pageDirection">
+                                    <apex:selectOptions value="{!service.options}" />
+                                </apex:selectRadio>
+                                <apex:inputHidden value="{!service.name}" />
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>                    
+                    </apex:repeat>
+                </apex:pageBlockSection>
+                <apex:pageBlockSection title="DocuSign Settings" columns="1" id="dsSection" rendered="{!displayDocusignSection}">
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Account Id" />
+                        <apex:outputPanel layout="block">
+                            <apex:outputPanel layout="block" styleClass="requiredBlock"></apex:outputPanel>
+                            <apex:inputText id="dsAccountId" value="{!docusign.accountId}" size="44" />
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Account Type" />
+                        <apex:outputPanel layout="block">
+                            <apex:outputPanel layout="block"></apex:outputPanel>
+                            <apex:selectList id="dsAccountType" value="{!docusign.accountType}" size="1">
+                                <apex:selectOptions value="{!dsAccountTypeOptions}" />
+                            </apex:selectList>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                </apex:pageBlockSection>
+                
+                <apex:pageBlockSection title="CipherCloud Domains" columns="1" id="ccSection" rendered="{!displayCipherCloudOptions}">
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Current Authorized Domains" />
+                        <apex:outputPanel >
+                            <apex:repeat value="{!trustedDomains}" var="td">
+                                <apex:outputPanel layout="block">
+                                    <apex:outputText value="{!td}" />&nbsp;
+                                    <apex:commandLink value="[remove]" action="{!removeCipherCloudDomain}" rerender="mainMessages,ccSection">
+                                        <apex:param assignTo="{!domainToRemove}" value="{!td}" name="domainToRemove" />
+                                    </apex:commandLink>
+                                </apex:outputPanel>
+                            </apex:repeat>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem rendered="{!isNewCipherCloudDomain}">
+                        <apex:commandLink value="Authorize This Domain" action="{!addCurrentCipherCloudDomain}" rerender="mainMessages,ccSection" />
+                        <apex:outputText value="{!currentCipherCloudDomain}" />
+                    </apex:pageBlockSectionItem>
+                </apex:pageBlockSection>
+            </apex:pageBlock>
+    </apex:form>
+</apex:page>

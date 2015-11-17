@@ -1,0 +1,97 @@
+<apex:component controller="ts2.s_TaxonomySelectorController" >
+	<apex:attribute name="ParentId" description="" type="Id" required="false" assignTo="{!ParentRootId}"/>
+	<apex:attribute name="SearchStr" description="" type="String" required="false" assignTo="{!SearchStr}"/>
+	<apex:attribute name="RadioType" description="" type="String" required="false" assignTo="{!RadioType}"/>
+
+<style>
+	/* tree */
+	.b-tree-holder {background:#f8f6f2;}
+	#Tree_{!JSENCODE(ParentRootId)} {//zoom:1}
+	#Tree_{!JSENCODE(ParentRootId)} ul {list-style-type:none; padding:0; margin:0; //zoom:1}
+
+	#Tree_{!JSENCODE(ParentRootId)} ul li {color:#333; list-style-type:none; padding:3px 0 2px 16px; margin:0; background:url("{!URLFOR($Resource.Tiny_mce3211, 'img/treeview-line.png')}") no-repeat 0 0}
+	#Tree_{!JSENCODE(ParentRootId)} ul li a {color:#333; text-decoration:none; display:inline-block; padding:0 2px; position:relative; top:-1px; //display:inline; //zoom:1}
+	#Tree_{!JSENCODE(ParentRootId)} ul li a:hover {color:#333!important;}
+	#Tree_{!JSENCODE(ParentRootId)} ul .m-plus,
+	#Tree_{!JSENCODE(ParentRootId)} ul .m-minus {display:inline-block; width:12px; height:12px; margin-right:4px; cursor:pointer; background:url("{!URLFOR($Resource.Tiny_mce3211, 'img/treeview-icons.gif')}") no-repeat -80px -3px; //display:inline; //zoom:1; //position:relative; //top:-3px}
+	#Tree_{!JSENCODE(ParentRootId)} ul .m-minus {background-position:-64px -25px}
+
+	#Tree_{!JSENCODE(ParentRootId)} ul span.m-folder {margin:0 2px; display:inline-block; height:14px; width:16px; background: url("{!URLFOR($Resource.Tiny_mce3211, 'img/folder-icon.png')}") no-repeat 0 0; //position:relative; //top:-2px}
+	#Tree_{!JSENCODE(ParentRootId)} ul span.m-folder.m-closed { background: url("{!URLFOR($Resource.Tiny_mce3211, 'img/folder-closed-icon.png')}") no-repeat 0 0;}
+
+	#Tree_{!JSENCODE(ParentRootId)} ul li.m-last { background-position: 0 -19990px;}
+	#Tree_{!JSENCODE(ParentRootId)} a.chozenFolder {color:#000; font-weight:bold; padding:0px 4px; background-color:#e9e3db;}
+	/* move to folder */
+	.b-movetofolder {margin:12px; padding:15px; background:#eee; -moz-border-radius:4px; -webkit-border-radius:4px; border-radius:4px;}
+	.b-movetofolder #Tree_{!JSENCODE(ParentRootId)} {margin-bottom:15px}
+	.b-movetofolder #Tree_{!JSENCODE(ParentRootId)} a.chozenFolder {background-color:#f8f8f8}
+	.b-movetofolder #ChozenFolder_{!JSENCODE(ParentRootId)} {margin-bottom:15px; padding:12px; background:#f8f8f8; -moz-border-radius:4px; -webkit-border-radius:4px; border-radius:4px;}
+	.b-movetofoldermsg .message {margin:12px;}
+
+	/* upload - education catalog */
+	.b-education-catalog #Tree_{!JSENCODE(ParentRootId)} {margin-bottom:15px}
+	.b-education-catalog #Tree_{!JSENCODE(ParentRootId)} a.chozenFolder {background-color:#eee;}
+	.b-education-catalog #ChozenFolder_{!JSENCODE(ParentRootId)} {padding:12px; background:#eee; -moz-border-radius:4px; -webkit-border-radius:4px; border-radius:4px;}
+</style>
+
+	<div id="Tree_{!JSENCODE(ParentRootId)}">
+		<ul>
+			<apex:outputText value="{!Tree}" escape="false"/>
+		</ul>
+	</div>
+
+<script type="text/javascript">
+	jQuery.noConflict();
+
+	jQuery(document).ready(function(){
+		jQuery('#Tree_{!JSENCODE(ParentRootId)} a').click(function(){chozeFolder(this);});
+		jQuery('#Tree_{!JSENCODE(ParentRootId)}').find("li:has(ul)").prepend('<span class="m-plus"></span>');
+		jQuery('#Tree_{!JSENCODE(ParentRootId)} li a').before('<span class="m-folder m-closed"></span>');
+		jQuery('#Tree_{!JSENCODE(ParentRootId)} ul li:last-child').addClass('m-last');
+
+		jQuery("#Tree_{!JSENCODE(ParentRootId)} ul ul").hide();
+		jQuery("#Tree_{!JSENCODE(ParentRootId)} ul .m-plus").click(function() {
+			jQuery(this).toggleClass('m-minus').next().next('.m-folder').toggleClass('m-closed').next().next('ul').toggle();
+		});
+		var Type = 'Radio'
+		if ('{!JSENCODE(RadioType)}' == 'checkbox') {Type = 'checkbox';}
+		jQuery("#Tree_{!JSENCODE(ParentRootId)} ul .m-folder").each(function(indx, element){
+			jQuery(element).before("<input type='"+Type+"' name='defaultTerm' style='margin-top: -6px; margin-left: 8px;'/>")
+		});
+		textFormat('{!JSENCODE(SearchStr)}');
+		function textFormat(searchKeyword) {
+		if(searchKeyword != '' && searchKeyword != ' ' && searchKeyword != null) {
+			var strToReplace = searchKeyword;
+			m_strToReplace = searchKeyword;
+
+			var iChars = "!@#$%^&*()+=-[]\\\';,./{}|\":<>?~_";
+			searchString = '';
+			for (var i = 0; i < searchKeyword.length; i++) {
+				if (iChars.indexOf(searchKeyword.charAt(i)) != -1) {
+					searchString = searchString + '\\' + searchKeyword.charAt(i);
+				}
+				else {
+					searchString = searchString + searchKeyword.charAt(i);
+				}
+			}
+			searchKeyword = searchString;
+			m_searchKeyword = searchString;
+
+			var regreplace = "\\["+searchKeyword.toLowerCase()+"\\]";
+			var reg = searchKeyword.toLowerCase();
+			regreplace = new RegExp(regreplace,"ig");
+			reg = new RegExp(reg,"i");
+			jQuery('#Tree_{!JSENCODE(ParentRootId)} li a').each( function(indx, element){
+				var matchresult = reg.exec(jQuery(element).text());
+				if (matchresult != null && matchresult != '' && matchresult.length > 0) {
+					var result = jQuery(element).text().replace(regreplace, '<FONT COLOR="FF0000">'+matchresult[0]+'</FONT>');
+					result = result.replace(/(\(\d+\))$/, '</B>$1');
+					jQuery(element).html('<B>'+result);
+				}
+			});
+		}
+	}
+	});
+</script>
+
+</apex:component>

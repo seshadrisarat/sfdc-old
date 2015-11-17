@@ -1,0 +1,485 @@
+<apex:component controller="SLSI.SL_IntranetEmployeeProfileController" allowDML="true" >
+	
+<!-- 	<link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.SLSI__SL_IntranetHub,'/IntranetHub/widgetCSS/SL_IntranetEmployeeProfile.css')}" /> -->
+    
+	<apex:attribute assignTo="{!compImpl}" name="aComponentImpl" type="SLSI.WidgetAbstract" description="component implementation object" required="true"/>
+	
+	<apex:outputPanel rendered="{!$Setup.SL_IntranetGoogleMapKey__c.Google_Map_Key__c != ''}">
+        <script src="http://maps.google.com/maps?file=api&amp;v=2&amp;sensor=false&amp;key={!$Setup.SLSI__SL_IntranetGoogleMapKey__c.SLSI__Google_Map_Key__c}" type="text/javascript"></script>
+    </apex:outputPanel>
+    
+    <script src="https://maps.googleapis.com/maps/api/js?v=3&sensor=false" type="text/javascript"/> 
+     
+	<div class="wc-widget SL_IntranetEmployeeProfile" id="widget{!id}" >
+		<apex:form id="formEmpProfile">
+			
+			<apex:actionFunction name="widget{!id}.callDeletePhotoAF" action="{!deleteChatterPhoto}" oncomplete="window.location.reload();" />
+			<apex:actionFunction name="widget{!id}.updateUserInfoAF" action="{!updateUserInfo}" rerender="pnlDummy, error" status="loading" >
+				<apex:param value="" name="aboutMe" assignTo="{!MyImpl.strUserAboutMe}"/>
+			</apex:actionFunction>
+	
+			<apex:outputPanel id="pnlDummy">
+				<apex:outputpanel rendered="{!IF(!MyImpl.isError && !MyImpl.isLoad, true, false)}">
+					<script>
+						closePopup{!id}();
+						window.location.reload();
+					</script>
+				</apex:outputpanel>
+			</apex:outputPanel> 
+			
+			<apex:outputpanel id="leftSideBarId">
+			     <apex:outputPanel rendered="{!MyImpl.mapWidgetToshowSection[id]}">
+				    <h1><apex:outputText value="{!MyImpl.lstUser[0].FirstName} {!MyImpl.lstUser[0].LastName}"/></h1>
+				    
+				    <div class="visual" onmouseover="document.getElementById('photoUploadId').style.visibility = 'visible';" onmouseout="document.getElementById('photoUploadId').style.visibility = 'hidden';">
+				    	<img src="{!MyImpl.lstUser[0].FullPhotoUrl}" alt="" width="200"/>
+				    	
+				    	<apex:outputpanel rendered="{!OR(AND($Setup.SL_Intranet_EmployeeProfile_Settings__c.Allow_Edit_Profile__c, MyImpl.strUserId == $User.Id), $Profile.Name == 'System Administrator')}">
+					    	<div class="photoUploadSection" id="photoUploadId">
+					    		<b>
+					    			<apex:outputPanel rendered="{!CONTAINS(MyImpl.lstUser[0].FullPhotoUrl,'005/F')}" onclick="openProfilePhotoUploadPopup('{!MyImpl.lstUser[0].id}');">
+					    				Add Photo
+					    			</apex:outputPanel>
+					    			
+					    			<apex:outputPanel rendered="{!!CONTAINS(MyImpl.lstUser[0].FullPhotoUrl,'005/F')}">
+					    				<apex:outputPanel onclick="openProfilePhotoUploadPopup('{!MyImpl.lstUser[0].id}');">
+					    					Update
+					    				</apex:outputPanel>	
+							    		 | 
+							    		<apex:outputPanel onclick="var q=confirm('Are you Sure?'); if(q)widget{!id}.callDeletePhoto();">
+					    					Delete
+					    				</apex:outputPanel>	
+					    			</apex:outputPanel>
+					    		</b>
+					    	</div>
+				    	</apex:outputPanel>
+				    	
+				    </div>
+				    
+				    <table width="100%">
+				    	<tr>
+				    		<td> 
+				    			 <h2 style="word-wrap: break-word;margin: 0px;">
+							        <apex:outputText value="About {!MyImpl.lstUser[0].FirstName}" rendered="{!IF(NOT(ISNULL(MyImpl.lstUser[0].FirstName)) && NOT(ISBLANK(MyImpl.lstUser[0].FirstName)), true, false)}"/>
+							        <apex:outputText value="About {!MyImpl.lstUser[0].LastName}" rendered="{!IF(ISNULL(MyImpl.lstUser[0].FirstName) || ISBLANK(MyImpl.lstUser[0].FirstName), true, false)}"/>
+							     </h2>
+				    		</td>
+				    		<td>
+				    			<apex:outputpanel rendered="{!OR(AND($Setup.SL_Intranet_EmployeeProfile_Settings__c.Allow_Edit_Profile__c, MyImpl.strUserId == $User.Id), $Profile.Name == 'System Administrator')}">
+				    			<div class="editPencil" > 
+					    			 <a onclick="openPopup{!id}();"> 
+								        <img src="/img/func_icons/util/pencil12.gif" alt="Edit Profile" title="Edit Profile" />
+								    </a>
+				    			</div>
+				    			</apex:outputpanel>
+				    		</td>
+				    		
+				    		<td> 
+	                            <apex:commandButton value="Download vCard" onClick="vCard();" reRender="pnlDummy"/>
+	                        </td>
+				    	</tr>
+				    </table>
+			    </apex:outputPanel>
+			    <ul class="about">
+ 					<apex:repeat value="{!MyImpl.mapWidget_LstUserFieldNames[id]}" var="userField">
+ 					
+ 						<apex:outputpanel rendered="{!if(userField == 'SLSI__User_Offices__c', false, true)}" >
+                         
+                            <apex:outputPanel rendered="{!IF(AND(MyImpl.mapWidget_LstUser[id][0][userField] != null, MyImpl.mapFieldName_FieldType[userField] != 'DATE', MyImpl.mapFieldName_FieldType[userField] != 'DATETIME'),true,false)}">
+                               <li> 
+                                   <dl>
+                                      <dt>{!MyImpl.mapFieldName_FieldLabel[userField]}</dt>
+                                      <dd style="word-wrap: break-word;">
+                                          <apex:outputText value="{!MyImpl.mapWidget_LstUser[id][0][userField]}" escape="false"/>
+                                      </dd>
+                                   </dl>
+                               </li>
+                            </apex:outputPanel>
+                            
+                            <apex:outputPanel rendered="{!If(AND(MyImpl.mapWidget_LstUser[id][0][userField] != null, MyImpl.mapFieldName_FieldType[userField] == 'DATE'),true,false)}"> 
+                                <li> 
+                                    <dl>
+                                        <dt>{!MyImpl.mapFieldName_FieldLabel[userField]}</dt>
+                                        <dd style="word-wrap: break-word;">
+                                            <apex:outputText value="{0,date,MM'/'dd'/'yyyy}" >
+                                                <apex:param value="{!MyImpl.mapWidget_LstUser[id][0][userField]}" /> 
+                                            </apex:outputText>
+                                        </dd>
+                                    </dl>
+                                </li>
+                            </apex:outputPanel>
+                            
+                             <apex:outputPanel rendered="{!If(AND(MyImpl.mapWidget_LstUser[id][0][userField] != null, MyImpl.mapFieldName_FieldType[userField] == 'DATETIME'),true,false)}"> 
+                                <li> 
+                                    <dl>
+                                        <dt>
+                                        {!MyImpl.mapFieldName_FieldLabel[userField]}</dt>
+                                        <dd style="word-wrap: break-word;">
+                                            <apex:outputText value="{0,date,MM'/'dd'/'yyyy, hh:mm a}" >
+                                                <apex:param value="{!MyImpl.mapWidget_LstUser[id][0][userField]}" /> 
+                                            </apex:outputText>
+                                        </dd>
+                                    </dl>
+                                </li>
+                           </apex:outputPanel>
+                        </apex:outputpanel>
+                        
+                        <apex:outputpanel rendered="{!if(userField == 'SLSI__User_Offices__c', true, false)}" > 
+	                        <span style="{!If(MyImpl.mapWidget_LstUser[id][0][userField] != null, 'display:block','display:none')}">
+                                <li> 
+                                    <dl>
+                                        <dt>{!MyImpl.mapFieldName_FieldLabel[userField]}</dt>
+                                    </dl>
+                                
+                                    <dd style="word-wrap: break-word;padding-left:10px;">
+                                        <apex:repeat value="{!MyImpl.lstOfficeLocations}" var="v" >
+                                              <a href="SL_Intranet?page=Employee Directory&loc={!v}" value="{!v}"><apex:outputText value="{!v}"/></a><br/>
+                                        </apex:repeat> 
+                                    </dd>
+                                </li>
+                            </span>
+                        </apex:outputpanel>
+                    </apex:repeat>  
+			    </ul>
+			    <br/> 
+			    
+			</apex:outputpanel>	
+		    
+			<apex:outputpanel >
+				<div id="eventBgId" style="display: none;" class="popupBackground"/>
+					
+				<div id="eventPopUpId" style="display: none;" >
+					<div aria-describedby="contactInfoTitle" aria-live="assertive" class="overlayDialog " id="contactInfo" role="dialog">
+				        <div class="topRight">
+				            <div class="topLeft">
+				                <a class="dialogClose" href="javascript:void(0)" id="contactInfoX" onclick="closePopup{!id}();" onmouseout="this.className = 'dialogClose'" onmouseover="this.className = 'dialogCloseOn'" tabindex="0" title="Close">Close</a>
+				                <h2 id="contactInfoTitle" >Edit Profile</h2>
+				            </div>
+				        </div>
+				        <div class="middle" style="max-height:350px;overflow: scroll;overflow-x: hidden;padding-top: 20px;" id="middleSectionId">
+							<apex:outputPanel id="error">
+								<apex:outputpanel rendered="{!IF(MyImpl.isError && !MyImpl.isLoad, true, false)}">
+									<div style="margin-left: 40px;">
+										<div style="float:left;width:90%;font-size: 1em;font-weight: bold;font-family: Arial;color:red;margin: 0px 20px 20px 0px;">
+											<apex:outputText value="{!MyImpl.strErrorMsg}" />
+										</div>
+									</div>
+								</apex:outputpanel>
+							</apex:outputPanel> 
+							
+							<div id="topDiv" class="fieldInfo">
+								<div class="leftInfo">
+									First Name<br/>
+									<apex:inputField id="fName" value="{!MyImpl.lstUser[0].FirstName}" styleclass="textClass" />
+								</div>
+								<div class="rightInfo" >
+									<span style="color:#c00;font-size: 10px;">*</span>Last Name<span id="{!id}error_Name" class="errMsg"></span><br/>
+									<apex:inputField id="lastName" value="{!MyImpl.lstUser[0].LastName}" styleclass="textClass"/>
+								</div>
+							</div>
+							<div class="fieldInfo">
+								<div class="leftInfo">
+									Title<br/>
+									<apex:inputField value="{!MyImpl.lstUser[0].Title}" styleclass="textClass"/>
+								</div>
+								<div class="rightInfo" >
+									Department<br/>
+									<apex:inputField value="{!MyImpl.lstUser[0].Department}" styleclass="textClass" /> 
+								</div>
+							</div>
+							<div class="fieldInfo">
+								<div class="leftInfo">
+									<span style="color:#c00;font-size: 10px;">*</span>Email<span id="{!id}error_email" class="errMsg"></span><br/>
+									<apex:inputField id="eMail" value="{!MyImpl.lstUser[0].Email}" styleclass="textClass"/>
+								</div>
+								<div class="rightInfo" >
+									Work Phone<br/>
+									<apex:inputField value="{!MyImpl.lstUser[0].Phone}" styleclass="textClass"/>
+								</div>
+							</div>
+							<div class="fieldInfo">
+								<div class="leftInfo">
+									Mobile Phone<br/>
+									<apex:inputField value="{!MyImpl.lstUser[0].MobilePhone}" styleclass="textClass"/>
+								</div>
+								<div class="rightInfo" >
+									Fax<br/>
+									<apex:inputField value="{!MyImpl.lstUser[0].Fax}" styleclass="textClass"/>
+								</div>
+							</div>
+							<div class="fieldInfo">
+								<div class="leftInfo" style="width:100%;">
+									Street Address<br/>
+									<apex:inputField value="{!MyImpl.lstUser[0].Street}" styleclass="textClass" style="width: 92%;resize:vertical;"/>
+								</div>
+							</div>
+							<div class="fieldInfo">
+								<div class="leftInfo">
+									City<br/>
+									<apex:inputField value="{!MyImpl.lstUser[0].City}" styleclass="textClass"/>
+								</div>
+								<div class="rightInfo" >
+									State/Province<br/>
+									<apex:inputField value="{!MyImpl.lstUser[0].State}" styleclass="textClass"/>
+								</div>
+							</div>
+							<div class="fieldInfo">
+								<div class="leftInfo">
+									Zip/Postal Code<br/>
+									<apex:inputField value="{!MyImpl.lstUser[0].PostalCode}" styleclass="textClass"/>
+								</div>
+								<div class="rightInfo" >
+									Country<br/>
+									<apex:inputField value="{!MyImpl.lstUser[0].Country}" styleclass="textClass"/>
+								</div>
+							</div>
+							<div class="fieldInfo">
+								<div class="leftInfo" style="width:100%;margin-bottom: 40px;">
+									About Me<span style="font-size: 10px;"> (Max 1000 characters)</span><br/>
+									<textarea rows="3" class="textClass" style="width: 92%;resize:vertical;margin-bottom: 0px;" id="{!id}userAboutMeId" onKeyUp="widget{!id}.checklength(this)">{!MyImpl.strUserAboutMe}</textarea>
+									<span id="{!id}aboutMeErrId" style="color: red;font-size: 10px;margin-right: 50px;float: left;"></span>
+								</div>
+							</div>
+				        </div>
+				        <div class="topRight" style="background: none;padding: 0px;">
+				            <div class="middle" style="padding-top: 5px;">
+								<table width="100%" border="">
+									<tr>
+										<td style="width:50%;">
+											<input type="button" value="Save" class="btn" style="float:right;cursor: pointer;color: #737373;font-weight: bold;" 
+												onclick="widget{!id}.updateUserInfo('{!$Component.formEmpProfile.lastName}', '{!$Component.formEmpProfile.eMail}');"/>
+										</td>
+										<td style="width:50%;">
+											<input type="button" value="Cancel" class="btn" style="cursor: pointer;color: #737373;font-weight: bold;" onclick="closePopup{!id}();"/>
+										</td>
+									</tr>
+								</table>	
+				            </div>
+				        </div>
+				        <div class="bottomRight">
+				            <div class="bottomLeft"></div>
+				        </div>
+				    </div>
+				    
+				</div>
+			</apex:outputpanel>
+			
+			<script>
+				var curPopupWindow = '';
+				function setSelectedCompanyDetails()
+				{
+					if(curPopupWindow != '' && curPopupWindow != null)
+						curPopupWindow.close();
+					
+					location.reload();
+				} 
+				function openProfilePhotoUploadPopup(userId)
+				{
+					curPopupWindow = window.open('SL_FileUpload?isProfilePhoto=true&userId='+userId, "_blank","width=500, height=200,dependent=no,toolbar=no,status=no,directories=no,menubar=no,scrollbars=0,resizable=0", true);
+				}
+				
+				function openPopup{!id}()
+				{
+					document.getElementById('eventBgId').style.display = 'block';
+					document.getElementById('eventPopUpId').style.display = 'block';
+					document.body.style.overflow = "hidden";
+					document.getElementById('middleSectionId').scrollTop = 0;
+				}
+		
+				function closePopup{!id}()
+				{
+					document.getElementById('eventBgId').style.display = 'none';
+					document.getElementById('eventPopUpId').style.display = 'none';
+					document.body.style.overflow = "visible";
+					document.getElementById('middleSectionId').scrollTop = 0;
+					var errName = document.getElementById('{!id}error_Name');
+					errName.innerHTML = '';
+		            var err = document.getElementById('{!id}error_email');
+		            err.innerHTML = '';
+				}
+				
+				function vCard()
+                {
+                    window.open("/apex/SL_VCard?id={!$currentpage.parameters.id}");
+                }
+			</script>
+	
+		</apex:form>
+	</div>
+	
+	<!-- mobile content -->
+   <div class="wc-widget-mobile mobile-content" >
+       <!-- top-block -->
+       <div class="top-block">
+           <div class="avatar">
+               <img src="{!Myimpl.lstUser[0].SmallPhotoUrl}" alt="image description"  width="66" height="63" />
+           </div>
+           <div class="info">
+               <h2>{!Myimpl.lstUser[0].FirstName} {!Myimpl.lstUser[0].LastName}</h2><br/>
+               <h3>{!Myimpl.lstUser[0].Title}</h3>
+           </div>
+       </div>
+       <!-- information -->
+       <div class="information" style="padding:0px;margin:20px;">
+           <address> 
+               <strong>Contact Information</strong><br />
+               Phone: <a style="font-size: 30px;cursor:pointer; display:{!IF(ISBLANK(Myimpl.lstUser[0].Phone) || ISNULL(Myimpl.lstUser[0].Phone),'none','')};" href="">{!Myimpl.lstUser[0].Phone} <img height="25px" width="15px" src="{!URLFOR($Resource.SL_IntranetHUB,'/IntranetHub/images/icon-phone.png')}"/></a><br />
+               Fax: <a style="cursor: pointer;" href="">{!Myimpl.lstUser[0].Fax}</a><br />
+               Email: <a style="cursor: pointer;" href="">{!Myimpl.lstUser[0].Email}</a>
+           </address>
+           <div class="map-block" style="margin: 0px;width: 100%;margin-bottom: 10px;">
+               
+               <script>
+                   var strAddress = '{!JSENCODE(Myimpl.strUserAddressForMap)}';
+                   var results;
+                   var varLatitude;
+                   var varLongitude;
+                   geocoder = new google.maps.Geocoder();
+                   geocoder.geocode( { 'address': strAddress}, function(results, status) 
+                   {
+                       if (status == google.maps.GeocoderStatus.OK) 
+                       {
+                           varLatitude = results[0].geometry.location.lat();
+                           varLongitude = results[0].geometry.location.lng();
+                           getLocationMap();
+                       }
+                   });
+                   
+                   function getLocationMap()
+                   {
+                       var projectPosition = new google.maps.LatLng(varLatitude,varLongitude);
+                       
+                       var mapOptions = {
+                                   center: projectPosition, 
+                                   zoom: 8,
+                                   mapTypeId: google.maps.MapTypeId.ROADMAP
+                                 };
+                       
+                       var map = new google.maps.Map(document.getElementById('map_canvas'),mapOptions);
+                       
+                       map.setCenter(projectPosition);  
+                       var marker = new google.maps.Marker(
+                       {
+                          map: map,
+                          position: projectPosition
+                       });
+                   }
+               </script>
+               <div id="map_canvas" style="height:438px;"></div>
+               
+           </div>
+           <address>
+               <strong>{!$Label.SL_EmployeeAddress}</strong><br />
+               <a style="cursor:text; text-decoration: none;" href="" id="locationId">
+                   <apex:outputText value="{!Myimpl.lstUser[0].Street}" rendered="{!if(ISBLANK(Myimpl.lstUser[0].Street) || ISNULL(Myimpl.lstUser[0].Street), 'false','true')}"/>
+                   <apex:outputText value="{!Myimpl.lstUser[0].City}" rendered="{!if(ISBLANK(Myimpl.lstUser[0].City) || ISNULL(Myimpl.lstUser[0].City), 'false','true')}"><br/></apex:outputText>
+                   <apex:outputText value="{!Myimpl.lstUser[0].State}" rendered="{!if(ISBLANK(Myimpl.lstUser[0].State) || ISNULL(Myimpl.lstUser[0].State), 'false','true')}">,&nbsp;</apex:outputText>
+                   <apex:outputText value="{!Myimpl.lstUser[0].PostalCode}" rendered="{!if(ISBLANK(Myimpl.lstUser[0].PostalCode) || ISNULL(Myimpl.lstUser[0].PostalCode), 'false','true')}">&nbsp;</apex:outputText>
+                   <apex:outputText value="{!Myimpl.lstUser[0].Country}" rendered="{!if(ISBLANK(Myimpl.lstUser[0].Country) || ISNULL(Myimpl.lstUser[0].Country), 'false','true')}"><br/></apex:outputText>
+               </a><br/>
+               <apex:outputpanel rendered="{!if(Myimpl.lstOfficeLocations.size > 0 , true, false)}">
+	               <strong>{!$Label.SL_EmployeeOfficeLocations}</strong><br />
+	               <apex:repeat value="{!Myimpl.lstOfficeLocations}" var="v" >
+	                   <a style="cursor:text; text-decoration: none;" href="" >
+	                       <apex:outputText value="{!v}"/>
+	                   </a><br/>
+	               </apex:repeat>
+               </apex:outputpanel>
+	           <apex:outputPanel rendered="{!IF(Myimpl.lstUser[0].AboutMe != null,true,false)}">
+		           <strong>About Me </strong><br/>
+		           <apex:outputText value="{!Myimpl.lstUser[0].AboutMe}" style="font-size: 15px;"/><br />
+	           </apex:outputPanel>
+           </address>
+<!--            <a style="cursor:pointer; text-decoration: none;" onClick="vCardMobile();" > -->
+<!--                         <h2 style="color:#5f6065; font-size: 25px;margin-bottom: 10px;"><apex:outputText value="Download vCard"/></h2> -->
+<!--             </a> -->
+<!--             <br/> -->
+<!--             <br/> -->
+            <script>
+                function vCardMobile()
+                {
+                     window.open("/apex/SL_VCard?id={!$currentpage.parameters.id}");
+                }
+            </script> 
+           <!--*****    Start : EmployeeReportingStructure     ***** -->
+<!--        		<h2 style="font: 24px/29px Arial, Helvetica, sans-serif;color: #5f6065;font-weight: bold;">{!$Label.SL_EmployeeProfile_ReportingStructure}</h2> -->
+<!--        		<br/> -->
+<!-- 		 	<div id="IntranetEvents"> -->
+<!-- 		    	<br/> -->
+<!-- 		    	<h2 style="font: 24px/29px Arial, Helvetica, sans-serif;color: #025595;margin-bottom: 10px;">{!$Label.SL_EmployeeProfile_ReportingStructure_Manager}</h2> -->
+<!-- 		    	<apex:repeat value="{!MyImpl.lstManager}" var="M" id="listofIntranetEvents" rows="7"> -->
+<!-- 	            	<div class="feed"> -->
+<!-- 						<div style="font: 24px/29px Arial, Helvetica, sans-serif;color: #025595;"> -->
+<!-- 							<span style="font-weight: bold;"> -->
+<!-- 								<a style="color: #54585c;" href="SL_Intranet?Page=Employee Profile&id={!M.id}">{!M.Name}</a> -->
+<!-- 							</span> -->
+<!-- 							<apex:outputPanel rendered="{!IF(M.title != '' || M.title != null, true, false)}">    -->
+<!-- 								<br/><em>{!M.title}</em> -->
+<!-- 							</apex:outputPanel> -->
+<!-- 							<apex:outputPanel rendered="{!IF(M.Phone != '' || M.Phone != null, true, false)}"> -->
+<!-- 								<br/><a style="font-size: 30px;cursor:pointer;color: #025595;" href="">{!M.Phone} <img height="25px" width="15px" src="{!URLFOR($Resource.SL_IntranetHUB,'/IntranetHub/images/icon-phone.png')}"/></a> -->
+<!-- 							</apex:outputPanel> -->
+<!-- 							<apex:outputPanel rendered="{!IF(M.Email != '' || M.Email != null, true, false)}"> -->
+<!-- 							    <br/><a style="cursor: pointer;color: #025595;" href="">{!M.Email}</a> -->
+<!-- 							</apex:outputPanel> -->
+<!-- 	                    </div> -->
+<!-- 		            </div> -->
+<!-- 		    	</apex:repeat> -->
+<!-- 		    	<apex:outputPanel rendered="{!MyImpl.lstManager.size < 1}" style="color: #7C7F83;"> -->
+<!-- 					<div class="feed" style="font: 24px Arial, Helvetica, sans-serif;"> -->
+<!-- 						{!$Label.SL_EmployeeProfile_ReportingStructure_NoManagerMsg} -->
+<!-- 					</div> -->
+<!-- 				</apex:outputPanel>	   -->
+		    	 
+<!-- 	        	<br /> -->
+	        	
+<!-- 	        	<h2 style="font: 24px/29px Arial, Helvetica, sans-serif;color: #025595;margin-bottom: 10px;">{!$Label.SL_EmployeeProfile_ReportingStructure_Reporters}</h2>     -->
+<!-- 		    	<apex:repeat value="{!MyImpl.lstReportingUsers}" var="R" rows="7"> -->
+<!-- 	            	<div class="feed"> -->
+<!--                     	<div style="font: 24px/29px Arial, Helvetica, sans-serif;color: #025595;"> -->
+<!-- 	                        <span style="font-weight: bold;"> -->
+<!-- 	                       		<a style="color: #54585c;" href="SL_Intranet?Page=Employee Profile&id={!R.id}">{!R.Name}</a> -->
+<!-- 	                        </span> -->
+<!-- 	                        <apex:outputPanel rendered="{!IF(R.title != '' || R.title != null, true, false)}">    -->
+<!-- 	                        	<br/><em>{!R.title}</em> -->
+<!-- 	                    	</apex:outputPanel> -->
+<!-- 	                        <apex:outputPanel rendered="{!IF(R.Phone != '' || R.Phone != null, true, false)}"> -->
+<!-- 	                       		<br/><a style="font-size: 30px;cursor:pointer;color: #025595;" href="">{!R.Phone} <img height="25px" width="15px" src="{!URLFOR($Resource.SL_IntranetHUB,'/IntranetHub/images/icon-phone.png')}"/></a> -->
+<!-- 	                        </apex:outputPanel> -->
+<!-- 	                        <apex:outputPanel rendered="{!IF(R.Email != '' || R.Email != null, true, false)}"> -->
+<!-- 	                           <br/><a style="cursor: pointer;color: #025595;" href="">{!R.Email}</a> -->
+<!-- 	                        </apex:outputPanel> -->
+<!--                    		</div> -->
+<!-- 		             </div> -->
+<!-- 		    	</apex:repeat> -->
+<!-- 		    	<apex:outputPanel rendered="{!MyImpl.lstReportingUsers.size < 1}" style="color: #7C7F83;"> -->
+<!-- 					<div class="feed" style="font: 24px Arial, Helvetica, sans-serif;"> -->
+<!-- 						{!$Label.SL_EmployeeProfile_ReportingStructure_NoReportersMsg} -->
+<!-- 					</div> -->
+<!-- 				</apex:outputPanel>	    -->
+<!-- 			</div> -->
+			<!--****    End : EmployeeReportingStructure      *****-->
+           
+       </div>
+   </div>
+	
+	<!-- Start of Action status --> 
+	<apex:actionstatus id="loading">
+        <apex:facet name="start">
+            <div id="salesforceSource_blurybackground" style="z-index:9999; position:fixed; left:1px; top:1px; width:100%;height:100%; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.4;filter:alpha(opacity=40)"></div>
+            <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 80%; display: ''; ">
+                <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+                    <table align="center" valign="middle" style="width: 100%; height: 30%">
+                        <tr align="center" valign="middle" style="width: 100%; height: 30%">
+                            <td valign="middle"><img src="/img/loading.gif"/><span class="waitingDescription"><b>Loading...</b></span></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; "></div>
+            <script>document.getElementById('ManageMembersViewport_loading').height = window.innerHeight * (3/4);</script>
+        </apex:facet>
+    </apex:actionstatus>
+	<!-- End of Action status -->
+	
+</apex:component>

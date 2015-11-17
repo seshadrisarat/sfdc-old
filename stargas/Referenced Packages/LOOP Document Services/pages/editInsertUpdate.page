@@ -1,0 +1,241 @@
+<apex:page id="apage" standardController="Loop__Insert_Update__c" extensions="Loop.looplusInsertUpdateExt" title="{!$ObjectType.Loop__Insert_Update__c.label} Edit: {!IF(insertUpdateObj.Id=='','New '&$ObjectType.Loop__Insert_Update__c.label,insertUpdateObj.Name)}" tabStyle="Loop__DDP__c">
+    <style>
+        .helpLink {
+            text-decoration: underline;
+        }
+        .roList {
+            margin: 0 2px 2px 0;
+            width: 200px;
+        }
+        div.bFilterReport span { vertical-align: top; }
+        div.bFilterReport textarea { margin-top: 0; }
+        .nowrap { white-space: nowrap; }
+        .invisible { display: none; }
+    </style>
+    <script src="{!URLFOR($Resource.JQuery)}"></script>
+    <script src="{!URLFOR($Resource.Scripts, 'jquery.drawloop.js')}"></script>
+    <script type="text/javascript">
+        jQuery.noConflict();
+        jQuery(function(){
+            jQuery.notifie({
+                allowCompatibilityView: false,
+                requiredVersion: 7,
+                containerSelector: '#ieMsgs',
+                compatibilityViewMessage: '{!JSENCODE($Label.IE_Compatibility_View_Warning)}',
+                versionMessage: '{!JSENCODE($Label.IE_Higher_Version_Required)}'
+            });
+        });
+        var tmpLookupPick = lookupPick;
+        lookupPick = function(formName, parentIdElementName, parentEditElementName, relatedFieldName, id, display, relatedFieldValue, extraNameElementName) {
+            tmpLookupPick(formName, parentIdElementName, parentEditElementName, relatedFieldName, id, display, relatedFieldValue, extraNameElementName);
+            updateDdp(id);
+        }
+        function entersubmit(ev) {
+            if (ev.target.type != 'textarea' && ((window.event && window.event.keyCode == 13) || ev.which == 13)) {
+                saveStamp();
+                return false;
+            }
+            else
+                return true;
+        }
+        
+        function selectChatterGroup() {
+            var selectGroupUrl = '{!JSENCODE($Page.ddpEdit)}?type=chattergroups';
+            var selectGroupWin = window.open(selectGroupUrl, "SelectChatterGroup", "directories=no,height=600,location=no,scrollbars=yes,menubar=no,toolbar=no,width=850");
+        }
+        function setChatterGroupId(groupId, groupName) {
+            var parentId = jQuery('[id$=:fieldValuesPanel]').find('option[value=ParentId]:selected').parent().next().next();
+            parentId.val(groupId);
+        }
+    </script>
+    <apex:sectionHeader title="{!$ObjectType.Loop__Insert_Update__c.label} Edit" subtitle="{!IF(insertUpdateObj.Id=='','New '&$ObjectType.Loop__Insert_Update__c.label,insertUpdateObj.Name)}" help="http://support.drawloop.com/salesforce/looplus/basic/insert-updates/" />
+    <div id="ieMsgs" />
+    <!--apex:actionRegion -->
+    <apex:pageMessages id="pgmsgs" />
+    <apex:form onkeypress="return entersubmit(event);" id="aform">
+        <apex:actionFunction name="updateDdp" action="{!ddpChange}" reRender="pgmsgs,deliveriesPanel" status="ddpStatus" immediate="true">
+            <apex:param value="" assignTo="{!insertUpdateObj.Loop__DDP__c}" name="ddpId" />
+        </apex:actionFunction>
+        <apex:actionFunction name="saveStamp" action="{!save}" reRender="pgmsgs" />
+        <apex:pageBlock title="{!$ObjectType.Loop__Insert_Update__c.label} Edit" mode="edit">
+            <apex:pageBlockButtons >
+                <apex:commandButton value="Save" action="{!save}" rerender="pgmsgs" />
+                <apex:commandButton value="Save & New" action="{!saveAndNew}" rerender="pgmsgs" />
+                <apex:commandButton value="Cancel" action="{!cancel}" immediate="true" />
+            </apex:pageBlockButtons>
+            <apex:pageBlockSection title="Information" id="infoPbs">
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Type" />
+                    <apex:outputPanel layout="block" styleClass="requiredInput">
+                        <apex:outputPanel layout="block" styleClass="requiredBlock" rendered="{!insertUpdateObj.Id=''}"></apex:outputPanel>
+                        <apex:selectList size="1" value="{!iuType}" disabled="{!insertUpdateObj.Id!=''}">
+                            <apex:selectOption itemValue="" itemLabel="--None--" />
+                            <apex:selectOption itemValue="chatter" itemLabel="Chatter Post" rendered="{!hasChatter}" />
+                            <apex:selectOption itemValue="task" itemLabel="{!$ObjectType.Task.label}" />
+                            <apex:selectOption itemValue="advanced" itemLabel="Advanced" />
+                            <apex:actionSupport event="onchange" action="{!onChangeInsertUpdateType}" rerender="pgmsgs,aform" status="iuTypeStatus" />
+                        </apex:selectList>
+                        <apex:actionStatus stopText="" id="iuTypeStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:inputField id="ddp" value="{!insertUpdateObj.Loop__DDP__c}">
+                    <apex:actionStatus stopText="" id="ddpStatus" styleClass="nowrap">
+                        <apex:facet name="start">
+                            <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                        </apex:facet>
+                    </apex:actionStatus>
+                </apex:inputField>
+                
+                <apex:pageBlockSectionItem >
+                    <apex:outputPanel >
+                        <apex:outputLabel for="iuObject" value="Post To" rendered="{!iuType='chatter'}" />
+                        <apex:outputLabel for="iuName" value="{!$ObjectType.Loop__Insert_Update__c.fields.Name.label}" rendered="{!OR(iuType='update',iuType='advanced')}" />
+                    </apex:outputPanel>
+                    <apex:outputPanel layout="block" styleClass="requiredInput {!IF(OR(iuType='task',iuType=''),'invisible','')}">
+                        <apex:outputPanel layout="block" styleClass="requiredBlock" />
+                        
+                        <apex:selectList id="iuObject" size="1" value="{!iuObject}">
+                            <apex:selectOptions value="{!availableObjects}" />
+                            <apex:actionSupport event="onchange" reRender="pgmsgs,aform" status="mainObjStatus" />
+                        </apex:selectList>
+                        
+                        <apex:actionStatus stopText="" id="mainObjStatus" styleClass="nowrap">
+                         <apex:facet name="start">
+                             <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                         </apex:facet>
+                     </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:inputField value="{!insertUpdateObj.Loop__Order__c}" rendered="{!iuType!=''}" />
+                
+                <apex:pageBlockSectionItem rendered="{!OR(iuType='',iuType='chatter',iuType='advanced')}" >
+                    <apex:outputPanel >
+                        <apex:outputLabel for="body" value="Post Body" rendered="{!iuType='chatter'}" />
+                        <apex:outputLabel for="isUpdate" value="Update existing record" rendered="{!iuType='advanced'}" />
+                    </apex:outputPanel>
+                    <apex:outputPanel >
+                        <apex:inputTextarea value="{!chatterBody}" id="body" styleClass="{!IF(iuType='chatter','','invisible')}" />
+                        <apex:inputCheckbox value="{!isUpdate}" id="isUpdate" styleClass="{!IF(iuType='advanced','','invisible')}">
+                            <apex:actionSupport event="onchange" action="{!onChangeIsUpdate}" rerender="pgmsgs,aform" status="isUpdateStatus" />
+                        </apex:inputCheckbox>
+                        <apex:actionStatus stopText="" id="isUpdateStatus" styleClass="nowrap">
+                             <apex:facet name="start">
+                                 <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                             </apex:facet>
+                         </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!iuType='task'}">
+                    <apex:outputLabel for="subject" value="{!$ObjectType.Task.fields.Subject.label}" />
+                    <apex:inputField value="{!iuTask.Subject}" id="subject" required="false" />
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!iuType='update'}" />
+                <apex:inputField value="{!insertUpdateObj.Loop__Description__c}" rendered="{!iuType!=''}" />
+                
+                <apex:pageBlockSectionItem rendered="{!iuType='task'}">
+                    <apex:outputLabel for="taskStatus" value="{!$ObjectType.Task.fields.Status.label}" />
+                    <apex:inputField value="{!iuTask.Status}" id="taskStatus" required="false" />
+                </apex:pageBlockSectionItem>
+                
+                <apex:inputField value="{!insertUpdateObj.Loop__Attach__c}" rendered="{!OR(iuType='chatter',iuType='update',iuType='advanced')}" />
+                
+                <apex:inputField value="{!insertUpdateObj.Loop__Use_Admin_Credentials__c}" rendered="{!iuType!=''}" />
+                
+                <apex:pageBlockSectionItem rendered="{!iuType='advanced'}" />
+                <apex:inputField value="{!insertUpdateObj.Loop__Submit_for_Approval__c}" rendered="{!iuType='advanced'}" />
+                
+                <apex:pageBlockSectionItem rendered="{!OR(iuType='advanced',iuType='task')}">
+                    <apex:outputLabel for="taskDate" value="{!$ObjectType.OpenActivity.fields.ActivityDate.label}" styleClass="{!IF(iuType='task','','invisible')}" />
+                    <apex:outputPanel id="iuDatePanel" styleClass="{!IF(iuType='task','','invisible')}">
+                        <apex:selectList size="1" value="{!taskDate}" id="taskDate">
+                            <apex:selectOption itemValue="Today" />
+                            <apex:selectOption itemValue="Today+" itemLabel="Today plus" />
+                            <apex:actionSupport event="onchange" status="dueDateStatus" reRender="pgmsgs,aform" />
+                        </apex:selectList>
+                        <apex:actionStatus stopText="" id="dueDateStatus" styleClass="nowrap">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                        <apex:inputText value="{!taskAddDays}" size="5" rendered="{!taskDate='Today+'}" />
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:inputField value="{!insertUpdateObj.Loop__Run_at_Beginning__c}" rendered="{!iuType='advanced'}" />
+                
+                <apex:pageBlockSectionItem rendered="{!OR(iuType='advanced',iuType='update')}" >
+                    <apex:outputLabel for="fieldValues" value="{!$ObjectType.Loop__Insert_Update__c.fields.Loop__Field_Value_Pairs__c.label}" />
+                    <apex:outputPanel id="fieldValuesPanel">
+                        <apex:repeat value="{!fieldValues}" var="fv">
+                            <apex:outputPanel id="fieldValuesPanel2" layout="block" styleClass="bFilterReport" style="margin-left: 0px;">
+                                <apex:selectList size="1" value="{!fv.fieldname}">
+                                    <apex:selectOptions value="{!availableFields}" />
+                                </apex:selectList>
+                                <span> = </span>
+                                <apex:inputTextarea rows="1" value="{!fv.fieldValue}" />
+                            </apex:outputPanel>
+                        </apex:repeat>
+                        <apex:commandLink rendered="{!iuName='FeedItem'}" action="{!chatterGroupCheck}" onclick="selectChatterGroup();" style="float: right; clear: both;" value="Select {!$ObjectType['CollaborationGroup'].label}" rerender="pgmsgs,aform" />
+                        <apex:outputPanel layout="block" style="clear: both;">
+                            <apex:commandLink value="Add field" action="{!addFieldValue}" />
+                            <apex:outputLink value="javascript:openIntegration('{!JSENCODE($Page.Loop__fieldTagger)}?id={!insertUpdateObj.Loop__DDP__c}','height=600,width=800,location=no,toolbar=no,status=no,menubar=no,scrollbars=1',1);"  style="float: right;">Field Tagger</apex:outputLink>
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!iuType='chatter'}" />
+                
+                <apex:pageBlockSectionItem rendered="{!iuType!=''}" helpText="Run this {!$ObjectType.Loop__Insert_Update__c.label} for these delivery methods. Select multiple items with Ctrl and Shift. Unselect items with Ctrl.">
+                    <apex:outputLabel for="deliveries" value="{!$ObjectType.Loop__Insert_Update__c.fields.Loop__Delivery_Methods__c.label}" />
+                    <apex:outputPanel id="deliveriesPanel">
+                        <apex:selectList id="deliveries" value="{!selectedCIOs}" size="10" multiselect="true">
+                            <apex:selectOption itemValue="All" itemLabel="All" />
+                            <apex:selectOptions value="{!availableCIOs}" />
+                        </apex:selectList>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            
+            <apex:pageBlockSection title="Filter Criteria" columns="1" rendered="{!iuType='advanced'}">
+                <apex:outputPanel layout="block" id="filterRepeat" styleClass="bFilterReport">
+                    <apex:repeat value="{!filterCriteria}" var="fc">
+                        <apex:outputPanel layout="block">
+                            <span class="roList">{!fc.index}.</span>
+                            <apex:inputText id="fcfieldsel" value="{!fc.filterField}" styleClass="roList" />
+                            <apex:selectList size="1" value="{!fc.filterComparison}" styleClass="roList">
+                                <apex:selectOptions value="{!filterCompSelOptions}" />
+                                <apex:actionSupport event="onchange" reRender="pgmsgs,filterRepeat" status="filterCriteriaStatus">
+                                    <apex:param name="filterVal" value="" assignTo="{!fc.filterValue}" />
+                                </apex:actionSupport>
+                            </apex:selectList>
+                            <apex:inputText value="{!fc.filterValue}" styleClass="roList" rendered="{!fc.filterComparison != 'is blank'}" />
+                            <apex:actionStatus stopText="" id="filterCriteriaStatus">
+                                <apex:facet name="start">
+                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                </apex:facet>
+                            </apex:actionStatus>
+                        </apex:outputPanel>
+                    </apex:repeat>
+                    <apex:commandLink action="{!addFilter}" value="Add filter" reRender="pgmsgs,filterRepeat" rendered="{!showFilterAdd}" />
+                </apex:outputPanel>
+                <apex:outputPanel layout="block" style="margin-top: 1.5em;" styleClass="bFilterReport">
+                    Advanced Filter Conditions:<br />
+                    <apex:inputText value="{!insertUpdateObj.Loop__Advanced_Conditions__c}" size="60" />
+                    <apex:outputLink value="/help/doc/en/working_with_advanced_filter_conditions_in_reports_and_list_views.htm" target="_blank" styleClass="tipsLink">
+                        <span class="helpLink">Tips</span>
+                        <img class="helpIcon" title="Help" alt="Help" src="/s.gif" />
+                    </apex:outputLink>
+                </apex:outputPanel>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+    </apex:form>
+    <!--/apex:actionRegion-->
+</apex:page>

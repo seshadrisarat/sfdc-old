@@ -1,0 +1,427 @@
+<apex:page title="{!$ObjectType.Loop__DDP__c.label} Migration" standardController="Loop__DDP__c" recordSetVar="ddpRecords" extensions="Loop.ddpMigrationController" id="ap" sidebar="false">
+    <style type="text/css">
+        .overlay {
+            height: 100%;
+            width: 100%;
+            top: 0;
+            left: 0;
+            position: absolute;
+            background-color: #FFF;
+            border: 1px solid #CACACA;
+        }
+        .msg {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.10em;
+            white-space: nowrap;
+        }
+        .msg img {
+            vertical-align: middle;
+        }
+        .msg .msgText {
+            padding-left: 10px;
+            vertical-align: middle;
+            color: #666;
+            font-size: 95%;
+        }
+        .userSecurityMessage {
+            padding: 0 0 16px;
+            display: block;
+        }
+        .securityMessage {
+            text-align: center;
+        }
+        .resultsPanel {
+            min-height: 200px;
+        }
+        .pbSubsection {
+            min-height: 26px;
+        }
+    </style>
+    <script src="{!URLFOR($Resource.JQuery)}"></script>
+    <script src="{!URLFOR($Resource.Scripts, 'jquery.drawloop.js')}"></script>
+    <script type="text/javascript">
+        detailsVerified = {!detailsVerified};
+        optionsVerified = {!optionsVerified};
+        fetchFolders = {!fetchFolders};
+        checkSecurity = {!checkSecurity};
+        migrationVerified = {!migrationVerified};
+        copyUserSecurity = {!copyUserSecurity};
+        lastClicked = null;
+        function setBtnEnabled(btn, enabled, text) {
+            var $btn = jQuery(btn);
+            $btn.each(function(i, e) {
+                if (jQuery(e).data('origValue') === undefined) {
+                    jQuery(e).data('origValue', e.value);
+                }
+            });
+            if (enabled)
+                $btn.removeAttr('disabled').addClass('btn').removeClass('btnDisabled');
+            else
+                $btn.attr('disabled', true).addClass('btnDisabled').removeClass('btn');
+            $btn.each(function(i, e) {
+                jQuery(e).val(text !== undefined ? text : jQuery(e).data('origValue'));
+            });
+        };
+        var tabs = {
+            Details: 0,
+            Options: 1,
+            Migration: 2
+        }
+        function setTab(tab) {
+            var tabsId = jQuery('[id$=":tabs"]').attr('id'),
+                tabName;
+            if (tab == tabs.Migration) {
+                tabName = 'tabMigration';
+            } else if (tab == tabs.Options) {
+                tabName = 'tabOptions';
+            } else {
+                tabName = 'tabDetails';
+            }
+            var contentId = jQuery('.' + tabName + ':eq(1)').parent().closest('td').attr('id');
+            RichFaces.switchTab(tabsId, contentId, tabName);
+        }
+        function setOverlay(e, msgText) {
+            var $e = jQuery(e),
+                $msg = jQuery('<div class="msg"><img src="https://login.salesforce.com/img/loading.gif"/></div>')
+                    .append(jQuery('<span class="msgText"></span>').text(msgText !== undefined ? msgText : 'Loading...'));
+            if (!$e.data('origPos')) $e.data('origPos', $e.css('position'));
+            $e.append('<div class="overlay">&nbsp;</div>')
+                .append($msg)
+                .css('position', 'relative');
+            $msg.css({ top: '50%', 'margin-top': '-' + ($msg.height() / 2) + 'px' });
+        }
+        function removeOverlay(e) {
+            var $e = jQuery(e);
+            $e.find('.overlay,.msg').remove();
+            if ($e.data('origPos')) $e.css('position', $e.data('origPos'));
+        }
+        function getCurrentTab() {
+            var tab,
+                $curr = jQuery('.rich-tab-active');
+            if ($curr.hasClass('tabDetails')) tab = tabs.Details;
+            else if ($curr.hasClass('tabOptions')) tab = tabs.Options;
+            else if ($curr.hasClass('tabMigration')) tab = tabs.Migration;
+            return tab;
+        }
+        function navAllowed(destTab) {
+            var allowed = true;
+            if (destTab == tabs.Options && !detailsVerified) allowed = false;
+            else if (destTab == tabs.Migration && !(detailsVerified && optionsVerified)) allowed = false;
+            return allowed;
+        }
+        function submitDetails() {
+            setBtnEnabled(jQuery('.btnNext,.btnCancel') , false, 'Verifying...');
+            verifyDetails();
+        }
+        function submitOptions() {
+            setBtnEnabled($('.btnMigrate,.btnCancel'), false, 'Verifying...');
+            verifyOptions();
+        }
+        function initOptions() {
+            setOverlay(jQuery('[id$="optionsSection"] .pbSubsection'));
+            setOverlay(jQuery('[id$="warningsSection"] .pbSubsection'), 'Checking {!$ObjectType.DDP__c.label} Details...');
+            getFolders();
+        }
+        function initMigration() {
+            setOverlay(jQuery('.resultsPanel'), 'Sending Migration Request');
+            migrateDDPs();
+        }
+        function submitSectionOnEnter(e) {
+            if (e.keyCode == 13) {
+                jQuery(this).closest('.dlTab').find('.btnSubmit').click();
+                return false;
+            }
+        };
+        function initDDPSection() {
+            var $ = jQuery;
+            $('[id$=":removeDDPs"]').unbind('click').click(function() {
+                var selected = $.makeArray(
+                    $('.selectDDP:checked').siblings('.ddpId').map(function(i, e) {
+                        return this.value;
+                    })
+                ).join(',');
+                removeDDPs(selected);
+                return false;
+            });
+            $('.selectDDP').unbind('click').click(function(e) {
+                if (e.shiftKey) {
+                    if (lastClicked) {
+                        var $chks = $('.selectDDP');
+                        var prev = $chks.index(lastClicked);
+                        var next = $chks.index(this);
+                        if (prev > -1 && next > -1) {
+                            var start = Math.min(prev, next),
+                                num = Math.abs(prev - next);
+                            // exclude this checkbox from list, as it will be checked by default
+                            if (prev > next) num += 1;
+                            //else num -= 1;
+                            $('.selectDDP' + (start ? ':gt(' + (start - 1) + ')' : '')
+                                + ':lt(' + num + ')').attr('checked', this.checked);
+                        }
+                    }
+                }
+                lastClicked = this;
+            });     
+        }
+        function initDetails() {
+            var $ = jQuery;
+            $('.btnNext').unbind('click').click(function() {
+                submitDetails();
+                return false;
+            });
+            initDDPSection();
+        }
+        jQuery.noConflict();
+        jQuery(function($) {
+            setServerUrl();
+
+            $('.btnMigrate').click(function() {             
+                submitOptions();
+                return false;
+            });
+            $('.tabOptions').click(function() {
+                var currTab = getCurrentTab(),
+                    allowed = navAllowed(tabs.Options);
+                //if (allowed && currTab == tabs.Details) {
+                //  submitDetails();
+                //}
+                return allowed;
+            });
+            $('.tabMigration').click(function() {
+                var currTab = getCurrentTab(),
+                    allowed = navAllowed(tabs.Migration);
+                //if (allowed && currTab != tabs.Migration) {
+                //  initMigration();
+                //}
+                return allowed;
+            });
+            $('.dlTab').each(function(i, e) {
+                $(this).find(':input').keydown(submitSectionOnEnter);
+            });
+            if ('{!JSENCODE($Request.retURL)}' != '' && $('#dlbc').size() < 1)
+                $('.bPageTitle:first').append('<div class="ptBreadcrumb" id="dlbc"><a href="{!JSINHTMLENCODE($Request.retURL)}"> « Back to List: {!JSINHTMLENCODE($ObjectType.DDP__c.labelplural)}</a></div>');
+            $.notifie({
+                allowCompatibilityView: false,
+                requiredVersion: 7,
+                containerSelector: '#ieMsgs',
+                compatibilityViewMessage: '{!JSENCODE($Label.IE_Compatibility_View_Warning)}',
+                versionMessage: '{!JSENCODE($Label.IE_Higher_Version_Required)}'
+            });
+        });
+    </script>
+    <apex:form >
+        <apex:actionFunction name="setServerUrl" action="{!setServerUrl}" rerender="serverUrl">
+            <apex:param name="serverUrl" assignTo="{!serverUrl}" value="{!$Api.Partner_Server_URL_300}" />
+        </apex:actionFunction>
+        <apex:inputHidden id="serverUrl" value="{!serverUrl}" />
+        <apex:outputPanel id="detailRender">
+            <script type="text/javascript">
+                jQuery(function($) {
+                    initDetails();
+                    detailsVerified = {!detailsVerified};
+                    copyUserSecurity = {!copyUserSecurity};
+                    setBtnEnabled($('.btnNext,.btnCancel'), true);
+                    var allowed = navAllowed(tabs.Options);
+                    if (allowed) {
+                        setTab(tabs.Options);
+                    }
+                });
+            </script>
+        </apex:outputPanel>     
+        <apex:outputPanel id="optionsRender">
+            <script type="text/javascript">
+                jQuery(function($) {
+                    detailsVerified = {!detailsVerified};
+                    fetchFolders = {!fetchFolders};
+                    checkSecurity = {!checkSecurity};
+                    copyUserSecurity = {!copyUserSecurity};
+                    optionsVerified = {!optionsVerified};
+                    if (navAllowed(tabs.Options)) {
+                        if (fetchFolders) {
+                            initOptions();
+                        }
+                    }
+                    setBtnEnabled($('.btnMigrate,.btnCancel'), true);
+                    if (navAllowed(tabs.Migration)) {
+                        initMigration();
+                        setTab(tabs.Migration);
+                    }
+                });
+            </script>
+        </apex:outputPanel>
+        <apex:outputPanel id="migrationRender">
+            <script type="text/javascript">
+                jQuery(function($) {
+                    migrationResponse = '{!JSENCODE(migrationResponse)}';
+                    migrationVerified = {!migrationVerified};
+                    if (migrationVerified) {
+                        $('.tabMigration .apexp').find('.overlay,.msg').remove();
+                    }
+                });
+            </script>
+        </apex:outputPanel>
+        <apex:outputPanel id="ddpJS">
+            <script type="text/javascript">
+                jQuery(function($) {
+                    initDDPSection();
+                });
+            </script>
+        </apex:outputPanel>
+        <apex:sectionHeader title="{!$ObjectType.Loop__DDP__c.label} Migration" help="http://support.drawloop.com/salesforce/looplus/ddp-migration/" />
+        <div id="ieMsgs" />
+        <apex:tabPanel id="tabs" switchType="client">
+            <apex:tab label="Verify Details" name="tabDetails" styleClass="tabDetails dlTab">
+                <apex:pageBlock title="Migration Details" mode="edit">
+                    <apex:outputPanel rendered="{!!hasDDPs}">
+                        <apex:pageMessage summary="You must include at least one DDP to migrate." severity="error" strength="2"/>
+                    </apex:outputPanel>
+                    <apex:pageBlockButtons location="top">
+                        <apex:commandButton value="Next" styleClass="btnNext btnSubmit" />
+                        <apex:actionFunction name="verifyDetails" action="{!verifyDetails}" rerender="detailRender,loginMessages,optionsRender" />
+                        <apex:actionFunction name="getFolders" action="{!tryUpdateFolders}" rerender="optionsSection" />
+                        <apex:actionFunction name="checkDDPDetails" action="{!checkDDPDetails}" rerender="warningsSection" />
+                        <apex:commandButton value="Cancel" action="{!cancel}" immediate="true" styleClass="btnCancel" />
+                    </apex:pageBlockButtons>
+                    <apex:pageBlockSection title="Destination Salesforce Organization Credentials" columns="1" id="loginSection">
+                        <apex:outputPanel id="loginRender">
+                            <apex:pageMessages id="loginMessages" />
+                        </apex:outputPanel>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="{!$Label.site.username}" />
+                            <apex:outputPanel layout="block" styleClass="requiredInput">
+                                <apex:outputPanel layout="block" styleClass="requiredBlock"></apex:outputPanel>
+                                <apex:inputText value="{!username}" />
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="{!$Label.site.password}" />
+                            <apex:outputPanel layout="block" styleClass="requiredInput">
+                                <apex:outputPanel layout="block" styleClass="requiredBlock"></apex:outputPanel>
+                                <apex:inputSecret value="{!password}" />
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Security Token" />
+                            <apex:outputPanel layout="block" styleClass="requiredInput">
+                                <apex:outputPanel layout="block"></apex:outputPanel>
+                                <apex:inputText value="{!token}" />
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Sandbox" />
+                            <apex:outputPanel layout="block">
+                                <apex:outputPanel layout="block" styleClass="requiredBlock"></apex:outputPanel>
+                                <apex:inputCheckbox value="{!isSandbox}" />
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Copy {!$ObjectType.Loop__DDP__c.label} Security" />
+                            <apex:outputPanel layout="block">
+                                <apex:outputPanel layout="block"></apex:outputPanel>
+                                <apex:inputCheckbox value="{!copyUserSecurity}" />
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                    </apex:pageBlockSection>
+                    <apex:pageBlockSection title="{!$ObjectType.Loop__DDP__c.labelPlural} to Migrate" columns="1" id="ddpSection">
+                        <apex:pageMessages id="ddpMessages" />
+                        <apex:actionFunction name="removeDDPs" action="{!removeDDPs}" rerender="ddpSection,ddpJS">
+                            <apex:param name="ddpIds" assignTo="{!removeIdsStr}" value="" />
+                        </apex:actionFunction>
+                        <apex:commandButton id="removeDDPs" value="Remove Selected" />
+                        <apex:pageBlockTable value="{!ddps}" var="rec" id="ddpTable">
+                            <apex:column headerValue="Action" width="50">
+                                <!--<apex:commandLink value="remove" action="{!removeDDP}" styleClass="cancelRow action" rerender="ddpTable, ddpMessages">
+                                    <apex:param name="removeId" assignTo="{!removeId}" value="{!rec.ddp.Id}" />
+                                </apex:commandLink>-->
+                                <apex:inputCheckbox styleClass="selectDDP" />
+                                <input type="hidden" class="ddpId" value="{!rec.ddp.Id}" />
+                            </apex:column>
+                            <apex:column headerValue="{!$ObjectType.Loop__DDP__c.label} Name" value="{!rec.ddp.Name}" />
+                            <apex:column headerValue="{!$ObjectType.Loop__DDP_File__c.labelPlural}" value="{!rec.numFiles}" />
+                            <apex:column headerValue="{!$ObjectType.Loop__DDP_Integration_Option__c.labelPlural}" value="{!rec.numCIOs}" />
+                            <apex:column headerValue="{!$ObjectType.Loop__Related_Object__c.labelPlural}" value="{!rec.numRelatedObjs}" />
+                            <apex:column headerValue="{!$ObjectType.Loop__Form_Step__c.labelPlural}" value="{!rec.numFormSteps}" />
+                            <apex:column headerValue="{!$ObjectType.Loop__Form_Field__c.labelPlural}" value="{!rec.numFormFields}" />
+                        </apex:pageBlockTable>
+                    </apex:pageBlockSection>
+                </apex:pageBlock>
+            </apex:tab>
+            <apex:tab label="Migration Options" name="tabOptions" styleClass="tabOptions dlTab">
+                <apex:pageBlock title="Migration Options" mode="edit">
+                    <apex:pageBlockButtons location="top">
+                        <apex:commandButton value="Migrate" styleClass="btnMigrate btnSubmit" />
+                        <apex:actionFunction name="verifyOptions" action="{!verifyOptions}" rerender="optionsRender, optionsMessages, migrationRender" />
+                        <apex:actionFunction name="migrateDDPs" action="{!requestDDPMigration}" rerender="migrationRender,migrationSection" />
+                        <apex:commandButton value="Cancel" action="{!cancel}" immediate="true" styleClass="btnCancel" />
+                    </apex:pageBlockButtons>
+                    <apex:pageBlockSection title="Destination Salesforce Organization Details" columns="1" id="optionsSection">
+						<apex:pageMessages id="optionsMessages" />
+                        <apex:pageBlockSectionItem helpText="{!useDefaultLocationHelptext}">
+                        	<apex:outputLabel value="Use Default Location" for="useDefaultLocationCheckbox"/>
+                        	<apex:inputCheckbox value="{!useDefaultLocation}" id="useDefaultLocationCheckbox"/>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem helpText="Any {!$ObjectType.Document.label} records used by the {!$ObjectType.Loop__DDP__c.labelPlural} to be migrated will be copied to this folder." rendered="{!includeDocuments}">
+                            <apex:outputLabel value="Destination Folder" />
+                            <apex:outputPanel layout="block" styleClass="requiredInput">
+                                <apex:outputPanel layout="block" styleClass="requiredBlock"></apex:outputPanel>
+                                <apex:selectList id="destFolders" value="{!selectedFolderId}" size="1">
+                                    <apex:selectOption itemValue="" itemLabel="--None--" />
+                                    <apex:selectOptions value="{!destFolders}" />
+                                </apex:selectList>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem helpText="Any {!contentDocumentLabel} records used by the {!$ObjectType.Loop__DDP__c.labelPlural} to be migrated will be copied to this library." rendered="{!includeContent}">
+                            <apex:outputLabel value="Destination Library" />
+                            <apex:outputPanel layout="block">
+                                <apex:selectList id="destWorkspaces" value="{!selectedWorkspaceId}" size="1">
+                                    <apex:selectOption itemValue="" itemLabel="--None--" />
+                                    <apex:selectOptions value="{!destWorkspaces}" />
+                                </apex:selectList>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <script type="text/javascript">
+                            jQuery(function($) {
+                                if (checkSecurity) {
+                                    checkDDPDetails();
+                                }
+                            });
+                        </script>
+                    </apex:pageBlockSection>
+                    <br/>
+                    <apex:pageBlockSection title="Migration Warnings" columns="1" id="warningsSection">
+                        <apex:outputPanel id="onCompleteCheckUserSecurity">
+                            <script type="text/javascript">removeOverlay(jQuery('[id$="warningsSection"] .pbSubsection'));</script>
+                        </apex:outputPanel>
+                        <apex:pageMessages id="warningMessages" />
+                            <apex:outputLabel styleClass="userSecurityMessage" value="{!userSecurityMessage}" />
+                        <apex:pageBlockTable value="{!messagesList}" var="message" id="messagesTable" styleClass="tblMessages" rendered="{!warnUserSecurity}">
+                            <apex:column headerValue="Type" width="27px" >
+                                <div class="securityMessage {!message.styleClass}"><img class="msgIcon" src="/s.gif" /></div>
+                            </apex:column>
+                            <apex:column headerValue="Message" value="{!message.summary}" />
+                            <apex:column headerValue="Link" width="120px">
+                                <apex:outputLink value="{!message.url}" target="_blank">{!message.urlText}</apex:outputLink>
+                            </apex:column>
+                        </apex:pageBlockTable>
+                    </apex:pageBlockSection>                    
+                </apex:pageBlock>
+            </apex:tab>
+            <apex:tab label="Migrate {!$ObjectType.Loop__DDP__c.labelPlural}" name="tabMigration" styleClass="tabMigration dlTab">
+                <apex:pageBlock title="Processing">
+                <apex:pageBlockSection title="Status" columns="1" id="migrationSection">
+                    <apex:pageMessages id="migrationMessages" />            
+                    <apex:outputPanel id="resultsPanel" styleClass="resultsPanel" layout="block">
+                        <apex:pageBlockTable value="{!migrationList}" var="item" id="migrationTable" styleClass="tblMigration">
+                            <apex:column headerValue="Object" width="120" value="{!item.objType}" />
+                            <apex:column headerValue="# To Be Migrated" value="{!item.count}" />
+                        </apex:pageBlockTable>                      
+                    </apex:outputPanel>
+                </apex:pageBlockSection>
+                </apex:pageBlock>
+            </apex:tab>
+        </apex:tabPanel>
+    </apex:form>
+</apex:page>

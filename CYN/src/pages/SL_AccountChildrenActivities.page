@@ -1,0 +1,230 @@
+<apex:page standardController="Account" extensions="SL_ctrl_AccountChildrenActivities">
+    <apex:includeScript value="{!URLFOR($Resource.SL_ActivityTable,'SL_ActivityTable/js/jquery.min.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.SL_ActivityTable, 'SL_ActivityTable/js/jquery.dataTables.min.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.SL_ActivityTable, 'SL_ActivityTable/js/moment.js')}"/>
+	<apex:stylesheet value="{!URLFOR($Resource.SL_ActivityTable,'SL_ActivityTable/css/tableStyle.css')}"/>
+	<apex:stylesheet value="{!URLFOR($Resource.SL_ActivityTable,'SL_ActivityTable/css/customTableStyle.css')}"/>
+	<style type="text/css">
+		.container-listview{
+			width: 85%;
+			padding: 15px 0px 15px;
+		}
+        td a{
+        	text-decoration: underline;
+        }
+	</style>
+	<apex:outputPanel id="Page">
+	<script>
+    	var selectedLaser;
+    	
+    	function formatChildRow ( data ) {
+        	return '<table cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">'+
+                '<tr>'+
+                    '<td>Comments:</td>'+
+                '</tr>'+
+                '<tr>'+
+                    '<td>' + ( typeof data.Description === 'undefined' ? '' : data.Description ) + '</td>'+
+                '</tr>'+
+            '</table>';
+        }
+    
+    	function redirect (type) {
+            if(type === 'task'){
+            	window.top.location = '/00T/e?what_id='+selectedLaser+'&retURL=%2F{!curRecordID}&saveURL=%2F{!curRecordID}';
+            }else if(type === 'event'){
+            	window.top.location = '/00U/e?what_id='+selectedLaser+'&retURL=%2F{!curRecordID}&saveURL=%2F{!curRecordID}'
+            }else if(type === 'call'){
+            	window.top.location = '/00T/e?what_id='+selectedLaser+'&title=Call&followup=1&tsk5=Call&retURL=%2F{!curRecordID}&saveURL=%2F{!curRecordID}'
+            }else if(type === 'email'){
+            	window.top.location = '/_ui/core/email/author/EmailAuthor?p3_lkid='+selectedLaser+'&retURL=%2F{!curRecordID}&saveURL=%2F{!curRecordID}'
+            }else if(type === 'courtesyCall'){
+            	window.top.location = '/00T/e?what_id='+selectedLaser+'&00NL0000003YceY=Courtesy+Marketing+Call&retURL=%2F{!curRecordID}&saveURL=%2F{!curRecordID}'
+            }
+        }
+    
+        /*jQuery( function ($) {*/
+		    $(document).ready( function() { drawTable(null) });
+		    
+		    function drawTable(callback)
+		    {
+		        if(callback != null){
+		            callback();
+		        }
+		        var activityTable,
+			    	activities = {!activityRecordsJSON},
+			    	activitiesData = [],
+			    	fieldSet = {!listViewFieldSetJSON},
+			    	columns = [],
+                    checked = "{!URLFOR($Resource.SL_ActivityTable,'SL_ActivityTable/resources/checkbox_checked.gif')}",
+                    unchecked = "{!URLFOR($Resource.SL_ActivityTable,'SL_ActivityTable/resources/checkbox_unchecked.gif')}",
+                    idMap = {!idMapJSON},
+                    laserOptions = {!lasersOwned};
+        			columns.push({
+                        "className":      'details-control',
+                        "orderable":      false,
+                        "searchable":     false,
+                        "defaultContent": ''
+                    });
+                
+                console.log('laserOptions' , laserOptions);
+                console.log('activities' , activities);
+                console.log('fieldSet' , fieldSet);
+                console.log('idMap' , idMap);
+                
+			    for(var j = 0; j < fieldSet.length; j++){
+                    if(fieldSet[j].fieldPath == 'Complete__c'){
+                        columns.push({"data": fieldSet[j].fieldPath, "defaultContent": "", "searchable": false, "type": "html"});
+                    }else{
+                        columns.push({"data": fieldSet[j].fieldPath, "defaultContent": ""});
+                    }
+		    	}	
+                
+			    for(var i = 0; i < activities.length; i++){
+			    	var temp = {};
+			    	for(var j = 0; j < fieldSet.length; j++){
+			    		if(fieldSet[j].type == "currency"){
+			    			var n = Number(activities[i][fieldSet[j].fieldPath]);
+		    				temp[fieldSet[j].fieldPath] = "$" + n.toFixed(2).replace(/(\d)(?=(\d{3})+\.)/g, "$1,");
+			    		}else if((fieldSet[j].type == "datetime" || fieldSet[j].type == "date") && activities[i][fieldSet[j].fieldPath]!=null){
+			    			var d = moment(activities[i][fieldSet[j].fieldPath]);
+			    			temp[fieldSet[j].fieldPath] = (d.month() + 1) + '/' + d.date() + '/' + d.year();
+			    		}else if(fieldSet[j].type == "reference"){
+			    		    console.log('===>>' , activities[i][fieldSet[j].fieldPath]);
+                            temp[fieldSet[j].fieldPath] = typeof activities[i][fieldSet[j].fieldPath] === "undefined" ? '' : '<a onClick="window.top.location.href = \'/'+activities[i][fieldSet[j].fieldPath]+'\';" href="#">'+idMap[activities[i][fieldSet[j].fieldPath]]+'</a>';
+			    		}else if(fieldSet[j].type == "boolean"){
+                            temp[fieldSet[j].fieldPath] = '<img alt='+(activities[i][fieldSet[j].fieldPath] ? 'checkbox-checked' : 'checkbox-unchecked')+
+                                ' src="'+(activities[i][fieldSet[j].fieldPath] ? checked : unchecked)+'" /><span style="display:none;">'+(activities[i][fieldSet[j].fieldPath] ? 0 : 1)+'</span>';
+			    		}else{
+			    			temp[fieldSet[j].fieldPath] = activities[i][fieldSet[j].fieldPath];
+			    		}
+			    	}
+			    	temp['DT_RowId'] = activities[i]['Id'];
+			    	temp['Description'] = activities[i]['Description'];
+			    	console.log(temp);
+			    	activitiesData.push(temp);
+			    }
+				console.log('activitiesData' , activitiesData);
+                //initialize datatables
+			    activityTable = $('#activityList').DataTable( {
+			        "data": activitiesData,
+			        "columns" : columns,
+                    "order": [[1, 'desc'],[2, 'desc']],
+                    "fnDrawCallback": function( oSettings ) {
+                        //TODO: figure out resize here...
+                    }
+			    } );
+                                
+                // Add event listener for opening and closing details
+                $('#activityList tbody').on('click', 'td.details-control', function () {
+                    var tr = $(this).closest('tr');
+                    var row = activityTable.row( tr );
+             
+                    if ( row.child.isShown() ) {
+                        // This row is already open - close it
+                        row.child.hide();
+                        tr.removeClass('shown');
+                    }
+                    else {
+                        // Open this row
+                        row.child( formatChildRow(row.data()) ).show();
+                        tr.addClass('shown');
+                    }
+                } );
+                
+                // Add event listener for opening and closing details
+                $('#activityList thead ').on('click', 'th.details-control', function () {
+                   	$(this).closest('th').toggleClass('shown')
+                    var toShow = $(this).hasClass('shown')
+                    activityTable.rows().every(function(){
+                    	var tr = $(this.node());
+                        var row = this;
+                 
+                        if ( !toShow ) {
+                            // This row is already open - close it
+                            row.child.hide();
+                            tr.removeClass('shown');
+                        }
+                        else {
+                            // Open this row
+                            row.child( formatChildRow(row.data()) ).show();
+                            tr.addClass('shown');
+                        }
+                    })
+                } );
+				
+                var select = $('#lasersOwnedSelect')
+                select.on('change', function(){
+                	selectedLaser = $('#lasersOwnedSelect option:selected').attr('value')
+                })
+                
+                for(var prop in laserOptions){
+                	select.append('<option value="'+prop+'">'+laserOptions[prop]+'</option>')
+                }
+                
+                selectedLaser = $('#lasersOwnedSelect option:selected').attr('value')
+		    }
+		/*});*/
+		
+		function callAF()
+		{
+		    updatePageAF();
+		}
+    </script>
+    <apex:form >
+        <apex:outputPanel id="msg">
+            <apex:pagemessages />
+        </apex:outputPanel>
+        <apex:selectRadio value="{!strFilterOpt}" onchange="callAF()">
+            <apex:selectOptions value="{!items}"/>
+        </apex:selectRadio>
+        <apex:actionFunction name="updatePageAF" action="{!updatePage}" rerender="Page,msg" oncomplete="drawTable(function(){activityTable.fnDestroy();})" status="loading"/>  
+    </apex:form>
+    
+    <div class="container container-listview">
+        <div>
+            <select id='lasersOwnedSelect'>
+                
+            </select>
+            <input value="New Task" class="btn" name="task" onclick="redirect('task')" title="New Task" type="button"></input>
+            <input value="New Event" class="btn" name="task" onclick="redirect('event')" title="New Event" type="button"></input>
+            <input value="Log a Call" class="btn" name="task" onclick="redirect('call')" title="Log a Call" type="button"></input>
+            <input value="Send Email" class="btn" name="task" onclick="redirect('email')" title="Send Email" type="button"></input>
+            <input value="Courtesy Marketing Call" class="btn" name="task" onclick="redirect('courtesyCall')" title="Courtesy Marketing Call" type="button"></input>
+        </div>
+<br/>
+        <table id="activityList" class="display" cellspacing="0" width="100%">
+            <thead>
+                <tr>
+                    <th class='details-control'></th>
+                    <apex:repeat value="{! listViewFieldSet }" var="a"> 
+                        <th><apex:outputtext value="{!a.Label}"></apex:outputtext></th>
+                    </apex:repeat>
+                </tr>
+            </thead>
+            
+            <tfoot>
+            </tfoot>
+        </table>
+    </div>
+    </apex:outputPanel>
+    
+    <apex:actionstatus id="loading" startText="Requesting...">
+         <apex:facet name="start">
+            <div id="salesforceSource_blurybackground" style="position:absolute; left:1px; top:1px; width:100%; height:100%; 
+                                                        text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.7;filter:alpha(opacity=60)"></div>
+            <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 80%; display: ''; ">
+                <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+                <table align="center" valign="top" style="width: 100%; height: 30%">
+                <tr align="center" valign="top" style="width: 100%; height: 30%">
+                    <td valign="top"><img src="/img/loading.gif"/><span class="waitingDescription"><b>Loading...</b></span></td>
+                </tr>
+                </table>
+                </div>
+            </div>
+            <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; "/>
+            <script>document.getElementById('ManageMembersViewport_loading').height = window.innerHeight * (3/4);</script>
+         </apex:facet>
+        <apex:facet name="stop"></apex:facet>
+    </apex:actionstatus>
+
+</apex:page>

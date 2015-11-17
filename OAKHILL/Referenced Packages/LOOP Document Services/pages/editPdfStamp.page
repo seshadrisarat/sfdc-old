@@ -1,0 +1,160 @@
+<apex:page standardController="Loop__PDF_Stamp__c" extensions="Loop.pdfStampExt" title="{!$ObjectType.Loop__PDF_Stamp__c.label} Edit: {!IF(pdfStamp.Id=='','New '&$ObjectType.Loop__PDF_Stamp__c.label,pdfStamp.Name)}" tabStyle="Loop__DDP__c">
+    <script src="{!URLFOR($Resource.JQuery)}"></script>
+    <script src="{!URLFOR($Resource.Scripts, 'jquery.drawloop.js')}"></script>
+    <script type="text/javascript">
+        jQuery.noConflict();
+        jQuery(function(){
+            jQuery.notifie({
+                allowCompatibilityView: false,
+                requiredVersion: 7,
+                containerSelector: '#ieMsgs',
+                compatibilityViewMessage: '{!JSENCODE($Label.IE_Compatibility_View_Warning)}',
+                versionMessage: '{!JSENCODE($Label.IE_Higher_Version_Required)}'
+            });
+        });
+        
+        var tmpLookupPick = lookupPick;
+        lookupPick = function(formName, parentIdElementName, parentEditElementName, relatedFieldName, id, display, relatedFieldValue, extraNameElementName) {
+            tmpLookupPick(formName, parentIdElementName, parentEditElementName, relatedFieldName, id, display, relatedFieldValue, extraNameElementName);
+            updateDdp(id);
+        }
+        function entersubmit(ev) {
+            if ((window.event && window.event.keyCode == 13 && window.event.target.type != 'textarea') || (ev.which == 13 && ev.target.type != 'textarea')) {
+                saveStamp();
+                return false;
+            }
+            else
+                return true;
+        }
+        function keepImageProportions() {
+            var height = jQuery('[id$=":stampHeight"]');
+            var width = jQuery('[id$=":stampWidth"]');
+            if (jQuery('[id$=":keepProp"]:checked').length > 0) {
+                if (height.val()) {
+                    width.val('').attr('disabled','disabled');
+                    height.removeAttr('disabled');
+                }
+                else if (width.val()) {
+                    height.val('').attr('disabled','disabled');
+                    width.removeAttr('disabled');
+                }
+                else {
+                    height.removeAttr('disabled');
+                    width.removeAttr('disabled');
+                }
+            }
+            else {
+                height.removeAttr('disabled');
+                width.removeAttr('disabled');
+            }
+        }
+    </script>
+    <apex:includeScript id="colorScript" value="https://dzwcomtqyhdt6.cloudfront.net/wp-content/uploads/widgets/jscolor/jscolor.js" />
+    <apex:sectionHeader title="{!$ObjectType.Loop__PDF_Stamp__c.label} Edit" subtitle="{!IF(pdfStamp.Id=='','New '&$ObjectType.Loop__PDF_Stamp__c.label,pdfStamp.Name)}" />
+    <div id="ieMsgs" />
+    <apex:pageMessages id="pgmsgs" />
+    <apex:actionRegion >
+        <apex:form onkeypress="return entersubmit(event);">
+            <apex:actionFunction name="updateDdp" action="{!ddpChange}" reRender="deliveriesPanel,pgmsgs" status="ddpStatus" immediate="true">
+                <apex:param value="" assignTo="{!pdfStamp.Loop__DDP__c}" name="ddpId" />
+            </apex:actionFunction>
+            <apex:actionFunction name="saveStamp" action="{!save}" reRender="pgmsgs" />
+            <apex:pageBlock id="mainBlock" title="{!$ObjectType.Loop__PDF_Stamp__c.label} Edit" mode="edit">
+                <apex:pageBlockButtons >
+                    <apex:commandButton value="Save" action="{!save}" rerender="pgmsgs" />
+                    <apex:commandButton value="Save & New" action="{!saveAndNew}" rerender="pgmsgs" />
+                    <apex:commandButton value="Cancel" action="{!cancel}" immediate="true" />
+                </apex:pageBlockButtons>
+                <apex:pageBlockSection title="Information">
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel for="stampName" value="{!$ObjectType.Loop__PDF_Stamp__c.fields.Name.label}" />
+                        <apex:outputPanel layout="block" styleClass="requiredInput">
+                            <apex:outputPanel layout="block" styleClass="requiredBlock"></apex:outputPanel>
+                            <apex:inputField value="{!pdfStamp.Name}" id="stampName" />
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:inputField id="ddp" value="{!pdfStamp.Loop__DDP__c}">
+                        <apex:actionStatus startText="• • •" stopText="" id="ddpStatus" />
+                    </apex:inputField>
+                    
+                    <apex:inputField value="{!pdfStamp.Loop__Type__c}">
+                        <apex:actionSupport event="onchange" rerender="mainBlock,colorScript" oncomplete="jscolor.init();" />
+                    </apex:inputField>
+                    <apex:inputField value="{!pdfStamp.Loop__Pages__c}" />
+                    
+                    <apex:pageBlockSectionItem helpText="{!$ObjectType.Loop__PDF_Stamp__c.fields.Loop__Stamp_Text__c.inlineHelpText}" rendered="{!OR(pdfStamp.Loop__Type__c='Text',pdfStamp.Loop__Type__c='')}">
+                        <apex:outputLabel for="stampText" value="{!$ObjectType.Loop__PDF_Stamp__c.fields.Loop__Stamp_Text__c.label}" />
+                        <apex:outputPanel layout="block" styleClass="requiredInput">
+                            <apex:outputPanel layout="block" styleClass="requiredBlock"></apex:outputPanel>
+                            <apex:inputField value="{!pdfStamp.Loop__Stamp_Text__c}" id="stampText" rendered="{!OR(pdfStamp.Loop__Type__c='Text',pdfStamp.Loop__Type__c='')}" />
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:inputField value="{!pdfStamp.Loop__FontSize__c}" rendered="{!OR(pdfStamp.Loop__Type__c='Text',pdfStamp.Loop__Type__c='')}" />
+                    
+                    <apex:pageBlockSectionItem helpText="The Document Id or Word tag from the field tagger for the image to be stamped." rendered="{!pdfStamp.Loop__Type__c='Image'}">
+                        <apex:outputLabel value="Image Id" />
+                        <apex:inputField value="{!pdfStamp.Loop__Stamp_Text__c}" />
+                    </apex:pageBlockSectionItem>
+                    <apex:inputField value="{!pdfStamp.Loop__Scale_By__c}" rendered="{!pdfStamp.Loop__Type__c='Image'}" />
+                    
+                    <apex:pageBlockSectionItem rendered="{!pdfStamp.Loop__Type__c='Image'}" />
+                    <apex:pageBlockSectionItem rendered="{!pdfStamp.Loop__Type__c='Image'}">
+                        <apex:outputLabel for="keepProp" value="Keep Proportions" />
+                        <apex:inputCheckbox id="keepProp" onchange="keepImageProportions();" />
+                    </apex:pageBlockSectionItem>
+                    
+                    <apex:inputField id="stampHeight" value="{!pdfStamp.Loop__Height__c}" rendered="{!OR(pdfStamp.Loop__Type__c='Image',pdfStamp.Loop__Type__c='Rectangle')}" onblur="keepImageProportions();" />
+                    <apex:inputField id="stampWidth" value="{!pdfStamp.Loop__Width__c}" rendered="{!OR(pdfStamp.Loop__Type__c='Image',pdfStamp.Loop__Type__c='Rectangle')}" onblur="keepImageProportions();" />
+                    
+                    <apex:inputField value="{!pdfStamp.Loop__Font__c}" rendered="{!OR(pdfStamp.Loop__Type__c='Text',pdfStamp.Loop__Type__c='')}" />
+                    <apex:pageBlockSectionItem helpText="{!$ObjectType.Loop__PDF_Stamp__c.fields.Loop__RGB_Color__c.inlineHelpText}" rendered="{!OR(pdfStamp.Loop__Type__c='Text',pdfStamp.Loop__Type__c='')}">
+                        <apex:outputLabel for="rgb" value="{!$ObjectType.Loop__PDF_Stamp__c.fields.Loop__RGB_Color__c.label}" />
+                        <apex:inputText id="rgb" value="{!rgbColor}" styleClass="color" />
+                    </apex:pageBlockSectionItem>
+                    
+                    <apex:inputField value="{!pdfStamp.Loop__Rotation__c}" />
+                    <apex:pageBlockSectionItem rendered="{!pdfStamp.Loop__Type__c!='Image'}">
+                        <apex:outputLabel for="bgrgb" value="{!$ObjectType.Loop__PDF_Stamp__c.fields.Loop__Background_Color__c.label}" />
+                        <apex:inputText id="bgrgb" value="{!pdfStamp.Loop__Background_Color__c}" styleClass="color {required:false}" />
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem rendered="{!pdfStamp.Loop__Type__c='Image'}" />
+                    
+                    <apex:inputField value="{!pdfStamp.Loop__Style__c}" rendered="{!OR(pdfStamp.Loop__Type__c='Text',pdfStamp.Loop__Type__c='')}" />
+                    <apex:inputField value="{!pdfStamp.Loop__Background_Padding__c}" rendered="{!OR(pdfStamp.Loop__Type__c='Text',pdfStamp.Loop__Type__c='')}" />
+                    
+                    <apex:inputField value="{!pdfStamp.Loop__VAlign__c}" />
+                    <apex:inputField value="{!pdfStamp.Loop__HAlign__c}" />
+                    
+                    <apex:inputField value="{!pdfStamp.Loop__YOffset__c}" />
+                    <apex:inputField value="{!pdfStamp.Loop__XOffset__c}" />
+                    
+                    <apex:inputField value="{!pdfStamp.Loop__Opacity__c}" />
+                    <apex:inputField value="{!pdfStamp.Loop__Order__c}" />
+                    
+                    <apex:inputField value="{!pdfStamp.Loop__Description__c}" />
+                    <apex:pageBlockSectionItem />
+                    
+                    <apex:pageBlockSectionItem helpText="Select multiple items with Ctrl and Shift. Unselect items with Ctrl.">
+                        <apex:outputLabel for="deliveries" value="{!$ObjectType.Loop__PDF_Stamp__c.fields.Loop__Delivery_Methods__c.label}" />
+                        <apex:outputPanel id="deliveriesPanel">
+                            <apex:selectList id="deliveries" value="{!selectedCIOs}" size="10" multiselect="true">
+                                <apex:selectOption itemValue="All" itemLabel="All" />
+                                <apex:selectOptions value="{!availableCIOs}" />
+                            </apex:selectList>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem helpText="{!$ObjectType.Loop__PDF_Stamp__c.fields.Loop__DDP_Files__c.inlineHelpText} Select multiple items with Ctrl and Shift. Unselect items with Ctrl.">
+                        <apex:outputLabel for="ddpFiles" value="{!$ObjectType.Loop__PDF_Stamp__c.fields.Loop__DDP_Files__c.label}" />
+                        <apex:outputPanel id="ddpFilesPanel">
+                            <apex:selectList id="ddpFiles" value="{!selectedFiles}" size="10" multiselect="true">
+                                <apex:selectOption itemValue="Merged" itemLabel="Merged" />
+                                <apex:selectOption itemValue="All" itemLabel="All (Individual)" />
+                                <apex:selectOptions value="{!availableFiles}" />
+                            </apex:selectList>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                </apex:pageBlockSection>
+            </apex:pageBlock>
+        </apex:form>
+    </apex:actionRegion>
+</apex:page>

@@ -1,0 +1,207 @@
+<apex:page showHeader="true" sideBar="false" standardStylesheets="true"
+    title="Economic Summary" standardController="Operations_Pricing_Quote__c" extensions="IST.SuperTRUMPPricingQuoteEditController">
+    
+    <apex:includeScript value="../../soap/ajax/29.0/connection.js" />
+    <apex:includeScript value="../../soap/ajax/29.0/apex.js" />
+    <apex:stylesheet value="{!URLFOR($Resource[resourceName], 'Scripts/ExtJs/resources/ext-theme-neptune/ext-theme-neptune-all-salesforce.css')}" />
+    <apex:stylesheet value="{!URLFOR($Resource[resourceName], 'Resources/css/ivory-all.css')}" />
+
+    <script src="{!URLFOR($Resource[resourceName], 'Scripts/ExtJs/ext-all.js')}" type="text/javascript" />
+    
+    <apex:form id="form">
+        <apex:pageBlock id="pb" title="Economic Summary Edit" helpTitle="Help for this Page" helpUrl="{!helpURL}">
+            <apex:pageMessages id="editPageMessages"/>
+            <apex:inputHidden value="{!transactionState}"
+                id="transactionStateHidden">
+                <script type="text/javascript"> var transactionStateHiddenID = "{!$Component.transactionStateHidden}"; </script>
+            </apex:inputHidden>
+            <apex:inputHidden value="{!timeZoneOffset}" id="timeZoneOffsetHidden">
+                <script type="text/javascript"> var timeZoneOffsetHiddenID = "{!$Component.timeZoneOffsetHidden}"; </script>
+            </apex:inputHidden>
+            <apex:inputHidden value="{!sfRetData}" id="sfDataHidden">
+                <script type="text/javascript"> var sfDataHiddenID = "{!$Component.sfDataHidden}"; </script>
+            </apex:inputHidden>
+            <apex:pageBlockButtons id="pbbuttons">
+                <apex:commandButton onclick="if (!doSave()) return false;" value="Save"
+                    action="{!save}"
+                    status="quicksave-status"
+                    rerender="quicksave-status,editPageMessages"
+                    oncomplete="isSaving = false;"
+                />
+                <apex:commandButton onclick="if (!doSave()) return false;" value="Quick Save"
+                    action="{!quicksave}"
+                    status="quicksave-status"
+                    rerender="quicksave-status,editPageMessages"
+                    oncomplete="isSaving = false;"
+                />
+                <apex:commandButton onclick="if (!doSave()) return false;" action="{!cancel}" id="cancelButton" value="Cancel" />
+                <apex:commandButton onclick="if (!doSave()) return false;" value="Save As" action="{!saveAs}"
+                    status="quicksave-status"
+                    rerender="quicksave-status,editPageMessages"
+                    oncomplete="isSaving = false;"
+                />
+                <apex:actionStatus startText="Saving..." id="quicksave-status" startStyle="margin-left: 0.5em;" onStop="notifySaved();"/>
+            </apex:pageBlockButtons>
+        </apex:pageBlock>
+    </apex:form>
+    <a href="" id="pricing-quote-report" style="display: none;"
+        target="_blank"></a>
+    <script type="text/javascript">
+        var isVS = false;
+        var isSaving = false;
+        var notifySaveTimeout;
+        
+        function notifySaved(){
+            var notifyId = 'pb-buttons-after-ajax';
+            var e = document.getElementById('{!$Component.form.pb.pbbuttons}');
+            e.innerHTML = e.innerHTML + '<span id=\'' + notifyId + '\' style=\'margin-left: 0.5em;\'>Finished<span>';
+            notifySaveTimeout = setTimeout(function(){
+                var element = document.getElementById(notifyId);
+                if (element != undefined && element != null){
+                    element.parentNode.removeChild(element);
+                }
+            }, 3000);
+        }
+
+        sforce.connection.sessionId = "{!$Api.Session_ID}";
+        isfPage = {
+            sessionID: sforce.connection.sessionId,
+            sfRestUrl: "{!sfURL}",
+            sfNamespace: "{!sfNamespace}",
+            sfQuoteId: "{!objId}",
+            stUrl: "{!stURL}",
+            token: "{!token}",
+            sfUserId: "{!sfUserID}",            
+            quoteBlob: "{!databaseTransactionState}",
+            sfData: '{!sfData}',
+            sfFields: '{!sfDataInfo}',
+            sfDynamic: '{!sfDynamic}',
+            buildPage: function() {
+                    isf.offsets = [60, 240];
+                    var qs = new Ivory.forms.SalesForce.FAEF.Ops.SuperTrumpScreen({});
+                    
+                    IvoryExt.getBody().removeCls(['ix-body', 'ix-chrome','ix-webkit']);
+                    
+                    Ivory.hideLoadMask();
+             },
+             getReport: function(keys, values){
+                if (Array.isArray(keys) && Array.isArray(values) && (keys.length == values.length)){
+                    var map = {};
+                    for (idx in keys){
+                        map[keys[idx]] = values[idx];                      
+                    }
+                    
+                    var isFile = false;
+
+                    if (map && (map.Format == 'C' || map.Format == 'T'))
+                        isFile = true;
+
+                    ivory.showLoadMask();
+                    Visualforce.remoting.Manager.invokeAction(
+                    '{!$RemoteAction.SuperTRUMPPricingQuoteEditController.retrieveReport}', 
+                        map,
+                        function(result, event){
+                            ivory.hideLoadMask();
+                            if (event.status && result) {
+                                if (isFile) {
+                                /*
+                                    var temp = IvoryExt.create('Ext.window.Window', {
+                                        title : "iframe",
+                                        width : 1,
+                                        height: 1,
+                                        layout : 'fit',
+                                        autoRender: true,
+                                        renderTo: IvoryExt.getBody(),
+                                        items : [{
+                                            xtype : "component",
+                                            autoEl : {
+                                                tag : "iframe",
+                                                src : result
+                                            }
+                                        }]
+                                    });
+                                    temp.show();
+                                    temp.hide();
+                                    temp.destroy();
+                                */
+                                    var form = IvoryExt.DomHelper.append(document.body, {
+                                        tag: 'form',
+                                        method: 'post',
+                                        action: result
+                                    });
+                                    document.body.appendChild(form);
+                                    form.submit();
+                                    document.body.removeChild(form);                                
+                                } else {
+                                    ivory.openWindow(result, '', 'toolbar=0,location=0,directories=0,menubar=0', true);
+                                }
+                            } else{
+                                ivory.alert('The report could not be retrieved.');
+                            }
+                        }
+                    );
+                }
+                else{
+                    ivory.alert('There was an error retrieving the report');
+                }
+             }
+         };
+
+        function doSave (date) {
+            if (!isSaving){
+                isSaving = true;
+                var element = document.getElementById('pb-buttons-after-ajax');
+                if (element != undefined && element != null){
+                    element.parentNode.removeChild(element);
+                    clearTimeout(notifySaveTimeout);
+                }
+                IvoryExt.fly(transactionStateHiddenID).dom.value = (isf.dataStore || isfPage.quoteBlob);
+                IvoryExt.fly(timeZoneOffsetHiddenID).dom.value = new Date().getTimezoneOffset();
+                IvoryExt.fly(sfDataHiddenID).dom.value = (isf.sfRetData || isfPage.sfRetData);
+                return true;
+            }
+            return false;
+        }
+
+        (function(Ext){
+            Ext.onReady(function () {
+                Ext.fly(document.documentElement).removeCls(Ext.baseCSSPrefix + 'border-box');
+
+                /* ***********************************************************
+                 *  This is the form.
+                 ************************************************************ */
+                ivory.useLocalAJAX = false;          //true for VS, false for sf
+                Ivory.isSalesforce = true;
+
+                Ext.supports['CSS3BorderRadius'] = true;
+
+                // Hack-ish remove class sniffers from Ext.EventManager (which attaches modrnizer type classes onto the body)
+                Ext.getBody().removeCls('x-nbr x-nlg');
+                Ivory.showLoadMask(0);
+                Ext.defer(function () {
+
+                    Ext.apply(Ivory.screen, {
+                        screenGetStoreAction: 'openopportunity',
+                        screenGetStoreParams: { OpportunityId: 1000 },
+                        screenContext: "../SuperTrump/",
+                        screenContextName: "supertrump"
+                    });
+
+                    // Handle any explicitly passed credentials.
+                    //ivory.screen.loginName = params.u;
+                    //ivory.screen.loginPassword = params.p;
+
+                    ivory.application.isMultiPage = false;
+
+                    isfPage.buildPage(); 
+                }, 5);
+            });
+        })(this.IvoryExt);
+
+    </script>
+    <script src="{!URLFOR($Resource[resourceName], 'Scripts/ivory-all.js')}" type="text/javascript" />
+    <script src="{!URLFOR($Resource[resourceName], 'Scripts/SalesforceFAEF-all.js')}" type="text/javascript" />
+    <script src="{!URLFOR($Resource[resourceName], 'Scripts/SalesSalesforceFAEF-all.js')}" type="text/javascript" />
+    <script src="{!URLFOR($Resource[resourceName], 'Scripts/OpsSalesforceFAEF-all.js')}" type="text/javascript" />
+
+</apex:page>

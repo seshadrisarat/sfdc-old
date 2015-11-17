@@ -1,0 +1,368 @@
+<apex:page showHeader="false" sidebar="false" standardStylesheets="false" applyHtmlTag="false" applyBodyTag="false" docType="html-5.0" controller="SROC_Community_HelpController" cache="false">
+  
+  <apex:includeScript value="{!$Resource.forcetk}"/>
+  
+  <apex:composition template="{!$Site.Template}">
+    <apex:define name="pagetitle">Community Help &amp; Feedback</apex:define>
+
+    <apex:define name="body" > 
+    
+    	<apex:form id="msgForm" html-role="form" styleClass="c-sscp-form">
+    		<fieldset id="file-attachemnts">
+                                <div class="form-group">
+                                  <!-- TODO - assuming there is a file, we may need some sort of "uploading" indicator and disable send because it could take a while -->
+                                  <p>NOTE: Do not navigate away from the page while the files are uploading.</p>
+                                  <div id="fileUploads" class="well clearfix"></div>
+                                  <button type="button" class="btn btn-default btn-lg btn-create" id="button_plus" onclick="addFileUpload();">Add another file</button>
+                                </div>
+                            </fieldset>
+                            <fieldset id="form-controls">
+                                <div class="form-group">
+                                    <a id="sendButton" type="button" class="btn" onclick="this.disabled = true; sendMessage(this);">Send</a>
+                                </div>
+                            </fieldset>
+    	</apex:form>
+    
+    
+    
+    
+    <!-- custom js -->
+    <script type="text/javascript">
+
+      var forcetkClient = new forcetk.Client();
+      forcetkClient.setSessionToken('{!$Api.Session_ID}');
+      var progressSpanList = [];
+      var progressDivList = [];
+      var uploadFileList = [];
+      var uploadedFileList = [];
+      var uploadedFileIdList = [];
+      var inputList = [];
+      var fileList = [];
+      var fileNumList = [];
+      var fileCounter = 0;
+      var fileUploadInputCounter = 0;
+      var uploadFlag = false;
+      var uploadErrors = false;
+      addFileUpload();
+
+      function sendMessage() {
+
+        progressSpanList = [];
+        progressDivList = [];
+        uploadStatusList = [];
+        uploadFileList = [];
+        uploadedFileList = [];
+        uploadedFileIdList = [];
+        inputList = [];
+        fileList = [];
+        fileNumList = [];
+        fileCounter = 0;
+        uploadFlag = false;
+        uploadErrors = false;
+
+        //var msgTextArea = getMsgTextArea();
+        //var subjectText = getSubjectText();
+        //var selectedUserList = getSelectedUserList();
+
+		var msgTextArea = 'test';
+        var subjectText = 'test';
+        var selectedUserList = 'test';
+
+        var inputErrors = '';
+
+        if (selectedUserList == null || selectedUserList.length == 0) {
+          inputErrors += '- No selected Users!\n';
+        }
+
+        if (subjectText == null || subjectText == '') {
+          inputErrors += '- Subject is empty!\n';
+        }
+
+        if (msgTextArea == null || msgTextArea.trim() == '') {
+          inputErrors += '- Message is empty!\n';
+        }
+
+        if (inputErrors != '') {
+          alert('Please correct the following: \n\n ' + inputErrors);
+          document.getElementById("sendButton").disabled = false;
+          document.getElementById("button_plus").disabled = false;
+          enableMinusButtons();
+        } else {
+          document.getElementById("button_plus").disabled = true;
+          disableMinusButtons();
+          document.getElementById("sendButton").disabled = true;
+          processMessagePost(msgTextArea, subjectText, selectedUserList);
+        }
+      }
+
+      function processMessagePost(msgText, subjectText, selectedUserList) {
+
+        var filesToUpload = false;
+
+        $('input[type=file]').each(function() {
+          if ( this.files.length > 0 ) {
+              filesToUpload = true;
+              var fileNum = $(this).attr('id').replace('fileInput', '');
+              inputList[fileNum] = $(this);
+              fileList[fileNum] = this.files[0];
+              fileNumList.push(fileNum);
+          }
+        });
+
+        if (filesToUpload) {
+          uploadFile(fileCounter);
+        } else {
+
+        }
+
+      }
+
+      function uploadFile(count) {
+        var fileNum = fileNumList[count];
+        var file = fileList[fileNum];
+        var input = inputList[fileNum];
+        uploadFileList[fileNum] = fileNum;
+        var fileReader = new FileReader();
+        progressSpanList[fileNum] = document.getElementById("progressBarSpan" + fileNum);
+        progressDivList[fileNum] = document.getElementById("progressBarDiv" + fileNum);
+
+        document.getElementById("progressBarDiv" + fileNum).style.display = "block";
+
+        fileReader.onload = (function(theFile) {
+          return function(e) {
+            progressSpanList[fileNum].style.width = '100%';
+
+            // Extract raw base64 data from data URL
+            var fileData = e.target.result.split(',')[1];
+
+            forcetkClient.create('ContentVersion', {
+              'NetworkId': '0DBM00000008Of4',
+              "Origin": "H",
+              "PathOnClient": file.name,
+              "VersionData": fileData
+            }, function(data) {
+              createContentSuccess(data, fileNum);
+            }, function(error) {
+              createContentError(error, fileNum);
+            });
+          };
+        })(file);
+
+        fileReader.readAsDataURL(file);
+      }
+
+      function createContentSuccess(data, fileNum) {
+        uploadStatusList[fileNum] = 1;
+        uploadedFileList[fileNum] = fileNum;
+        uploadedFileIdList.push(data.id);
+        fileCounter++;
+        if (fileCounter >= fileNumList.length && uploadFlag == false && uploadErrors == false) {
+          uploadFlag = true;
+          var uploadedFileIdString = uploadedFileIdList.join(',');
+
+          var msgText = getMsgTextArea();
+          var subjectText = getSubjectText();
+          var selectedUserList = getSelectedUserList();
+          //alert('uploads complete: ' + uploadedFileIdString);
+
+          var progressBar = progressDivList[fileNum].getElementsByTagName("span");
+          if (progressBar[0]) {
+            progressBar[0].className = 'progress-bar progress-bar-striped progress-bar-success active';
+          }
+
+          
+        } else if (fileCounter >= fileNumList.length && uploadFlag == false && uploadErrors == true) {
+
+          SSCP_NewMessageController.deleteAttachments(uploadedFileIdList,
+            function(result, event) {
+              if (event.status) {
+                //alert(result + ' ' + event.status);
+              } else {
+                //alert('error' + ' ' + event.message);
+              }
+              document.getElementById("sendButton").disabled = false;
+              document.getElementById("button_plus").disabled = false;
+              enableMinusButtons();
+            });
+
+        } else {
+          uploadFile(fileCounter);
+        }
+
+      }
+
+      function createContentError(error, fileNum) {
+
+        /*SSCP_NewMessageController.deleteAttachments(uploadedFileIdList,
+          function(result, event) {
+            if (event.status) {
+              //alert(result + ' ' + event.status);
+            } else {
+              //alert('error' + ' ' + event.message);
+            }*/
+            document.getElementById("sendButton").disabled = false;
+            document.getElementById("button_plus").disabled = false;
+            enableMinusButtons();
+          //});
+
+
+        var progressBar = progressDivList[fileNum].getElementsByTagName("span");
+        if (progressBar[0]) {
+          progressBar[0].className = 'progress-bar progress-bar-striped progress-bar-danger active';
+        }
+
+        document.getElementById("sendButton").disabled = false;
+        document.getElementById("button_plus").disabled = false;
+        enableMinusButtons();
+        uploadErrors = true;
+        alert('Error: ' + JSON.stringify(error));
+      }
+
+      function checkFileUploads() {
+        if (uploadFileList.length == uploadedFileList.length && uploadedFileList.length != 0) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+
+      function getSelectedUserList() {
+        var userList = document.getElementById('{!$Component.msgForm.userList}');
+        if (userList == null) {
+          userList = document.getElementById('{!$Component.msgForm2.pageBlock2.pageBlockSection2.pageBlockSectionItem3.userList2}');
+        }
+
+        var selectedUserList = [];
+
+        for (var i = 0; i < userList.length; i++) {
+          if (userList.options[i].selected) {
+            selectedUserList.push(userList.options[i].value);
+          }
+        }
+
+        return selectedUserList;
+      }
+
+      function getSubjectText() {
+        var subjectText = document.getElementById('{!$Component.msgForm.subjectText}');
+        if (subjectText == null || subjectText.value == null) {
+          subjectText = document.getElementById('{!$Component.msgForm2.pageBlock2.pageBlockSection2.subjectText2}');
+        }
+
+        return subjectText.value;
+      }
+
+      function getMsgTextArea() {
+        var textArea = document.getElementById('{!$Component.msgForm.msgTextArea}');
+        if (textArea == null || textArea.value == null) {
+          textArea = document.getElementById('{!$Component.msgForm2.pageBlock2.pageBlockSection2.pageBlockSectionItem2.msgTextArea2}');
+        }
+
+        return textArea.value;
+      }
+
+      function addFileUpload() {
+        fileUploadInputCounter++;
+        
+        var fileUploadsDiv = document.getElementById('fileUploads');
+
+        var iDiv = document.createElement('div');
+        iDiv.id = 'fileUpload' + fileUploadInputCounter;
+        iDiv.className = 'fileUpload form-horizontal';
+        iDiv.innerHTML =
+        '<div class="form-group has-feedback clearfix">\
+            <div class="col-xs-12">\
+                <input type="file" id="fileInput' + fileUploadInputCounter + '" class="form-control"/>\
+                <span class="fa fa-times-circle form-control-feedback" aria-hidden="true" onclick="removeFileUpload(\'fileUpload' + fileUploadInputCounter + '\');"></span>\
+            </div>\
+        </div>';
+
+        var iDiv2 = document.createElement('div');
+        iDiv2.className = 'progress-container meter';
+        iDiv2.id = 'progressBarDiv' + fileUploadInputCounter;
+        iDiv2.innerHTML += '<span id="progressBarSpan' + fileUploadInputCounter + '" class="progress-bar progress-bar-striped active" style="width: 0%"></span>';
+
+        iDiv.appendChild(iDiv2);
+
+        fileUploadsDiv.appendChild(iDiv);
+      }
+
+
+      function removeFileUpload(fileUploadId) {
+        // document.getElementById(fileUploadId).remove();
+        $('#' + fileUploadId).remove();
+      }
+
+      function disableMinusButtons() {
+        $('input[type=button]').each(function() {
+          if (this.id.indexOf("button_minus") > -1) {
+            this.disabled = true;
+          }
+        });
+      }
+
+      function enableMinusButtons() {
+        $('input[type=button]').each(function() {
+          if (this.id.indexOf("button_minus") > -1) {
+            this.disabled = false;
+          }
+        });
+      }
+
+      function checkFileSize() {
+        var goodSize = true;
+        $('input[type=file]').each(function() {
+          if (typeof this.files[0] !== 'undefined') {
+            var file = this.files[0],
+              size = typeof ActiveXObject !== 'undefined' ?
+              getIEFileSize(file) :
+              file.fileSize || file.size;
+
+            goodSize = 10000000 > size;
+            if (!goodSize) {
+              alert(this.files[0].name + ' is too large - please choose a file that is 10MB or less');
+            }
+            /*
+            else
+            {
+                if (2000000 < size)
+                {
+                    goodSize=confirm('The file size is ' + size +
+                        ' bytes - this may take some time. Are you sure you wish to continue');
+                }
+            }*/
+
+            return goodSize;
+          }
+        });
+        return goodSize;
+      }
+
+
+    (function($) {
+      // ************************************
+      // Choosen plugin used on To field
+      // ************************************
+        // we are overriding the setFocusOnLoad to
+        // prevent the chosen search to appear on page
+        // load because it gains focus
+        window.setFocusOnLoad = function(){
+          // do nothing overriding
+          return false;
+        }
+        // set choosen fields
+        var choosen = $(".userList").chosen({
+          no_results_text: "No results found.",
+          width: "100%"
+        });
+      // ************************************
+      // ************************************
+
+    })(jQuery);
+
+    </script>
+    
+    </apex:define>
+    
+  </apex:composition>
+</apex:page>

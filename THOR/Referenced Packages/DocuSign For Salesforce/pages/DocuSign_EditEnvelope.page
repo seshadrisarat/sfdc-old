@@ -1,0 +1,662 @@
+<apex:page standardController="dsfs__DocuSign_Envelope__c"
+    Extensions="dsfs.DocuSignEnvelopeController"
+    tabStyle="dsfs__DocuSign_Status__c"
+    id="DocuSignEditEnvelopePage">
+    <style> 
+        .WarningError {
+            color: red;
+            font-weight: strong;
+        }
+    </style>
+    <script>
+        function AllowEnvelopeSubmit()
+        {
+            if (document.getElementById("hdnSubmittedEnvelope").value == "1")
+            {
+                return false;
+            }
+            else
+            {
+                document.getElementById("hdnSubmittedEnvelope").value = "1";
+            }
+            return true;
+        }
+        function ClearRecipientNames()
+        {
+            var element = document.getElementById("{!$Component.theForm.theOuterPageBlock.theAddRecipientPageBlock.ContactIn}");
+            if (element != null) {
+                element.value = "";
+            }
+            element = document.getElementById("{!$Component.theForm.theOuterPageBlock.theAddRecipientPageBlock.LeadIn}");
+            if (element != null) {
+                element.value = "";
+            }
+            element = document.getElementById("{!$Component.theForm.theOuterPageBlock.theAddRecipientPageBlock.UserIn}");
+            if (element != null) {
+                element.value = "";
+            }
+        }
+    </script>
+    <apex:sectionHeader title="{!$Label.SendWithDS} : {!DSEnvelope.name}"
+        subtitle="{!mySource}" id="PageTitleHeader" />
+    <apex:pageMessages />
+    <apex:form id="theForm"
+        rendered="{!NoVarErrors && HaveCreds && NoCRUDErrors && memberStatusString == 'VERIFIED'}">
+
+        <apex:actionRegion >
+
+            <input type="hidden" id="hdnSubmittedEnvelope"
+                name="hdnSubmittedEnvelope" value="" />
+
+            <apex:pageBlock id="theOuterPageBlock" mode="Edit">
+                <apex:pageBlockButtons >
+                    <apex:commandLink value="{!$Label.Cancel}" action="{!DScancel}"
+                        styleClass="btn"
+                        style="padding:2px 5px 2px 5px; text-decoration:none;" />
+                    <apex:commandLink rendered="{!ShowTagBtn==true}" value="{!$Label.Tag}"
+                        action="{!DStag}" styleClass="btn"
+                        style="padding:2px 5px 2px 5px; text-decoration:none;"
+                        onclick="return AllowEnvelopeSubmit();">
+                        <apex:param name="sessionId1" assignTo="{!apiSessionId}"
+                            value="{!$Api.Session_ID}" />
+                        <apex:param name="serverURL1" assignTo="{!apiServerURL}"
+                            value="{!$Api.Partner_Server_URL_170}" />
+                    </apex:commandLink>
+                    <apex:commandLink id="btnSendNow" rendered="{!ShowSendBtn==true}"
+                        value="{!$Label.SendNow}" action="{!DSsend}" styleClass="btn"
+                        style="padding:2px 5px 2px 5px; text-decoration:none;"
+                        onclick="return AllowEnvelopeSubmit();">
+                        <apex:param name="sessionId2" assignTo="{!apiSessionId}"
+                            value="{!$Api.Session_ID}" />
+                        <apex:param name="serverURL2" assignTo="{!apiServerURL}"
+                            value="{!$Api.Partner_Server_URL_170}" />
+                    </apex:commandLink>
+                </apex:pageBlockButtons>
+                <apex:outputPanel id="theRefreshPanel">
+                    <apex:pageBlockSection title="{!$Label.DocsForSignature}" columns="1"
+                        collapsible="false">
+                        <apex:panelGrid columns="2">
+                            <apex:commandButton value="{!$Label.AddDoc}"
+                                action="{!OnDocumentAction}" rerender="theRefreshPanel"
+                                status="statusDoc">
+                                <apex:param name="cmd" value="show" />
+                            </apex:commandButton>
+                            <apex:actionStatus id="statusDoc">
+                                <apex:facet name="start">
+                                    <apex:image value="/img/loading.gif" />
+                                </apex:facet>
+                            </apex:actionStatus>
+                        </apex:panelGrid>
+
+                        <apex:pageBlockTable value="{!DocumentList}" var="myDocument"
+                            id="theDocumentList">
+
+                            <apex:column headerValue="{!$Label.Manage}" style="width:80px">
+                                <apex:commandLink action="{!OnDocumentAction}" id="DeleteLink"
+                                    rerender="theDocumentList" status="statusDoc">{!$Label.Del}
+                                    <apex:param name="cmd" value="delete" />
+                                    <apex:param name="did" value="{!myDocument.id}" />
+                                </apex:commandLink>
+                            </apex:column>
+
+                            <apex:column headerValue="{!$Label.Order}" style="width:50px">
+                                <apex:inputField value="{!myDocument.dsfs__Document_Order__c}"
+                                    style="width:40px">
+                                    <apex:actionSupport event="onchange"
+                                        action="{!OnDocumentOrderChange}" rerender="theDocumentList"
+                                        status="statusDoc" />
+                                </apex:inputField>
+                            </apex:column>
+
+                            <apex:column headerValue="{!$Label.Document}">
+                                <apex:outputField value="{!myDocument.dsfs__Document_Name__c}" />
+                                <apex:outputField value="{!myDocument.dsfs__Attachment_NameEx__c}" />
+                            </apex:column>
+
+                        </apex:pageBlockTable>
+                    </apex:pageBlockSection>
+
+                    <!-- Add Recipient Popup -->
+                    <apex:pageBlockSection >
+                    <apex:outputPanel id="addRecipPopupOuter" layout="span"
+                        style="position:absolute; left:0px; top:0px; width:100%; height:100%; z-index:2; opacity:0.1; filter:alpha(opacity=10);background:#000000;"
+                        rendered="{!LEN(AddRecipStep)>0}">
+                    </apex:outputPanel>
+                    <apex:outputPanel id="addRecipPopup" layout="span"
+                        style="border-style:solid; border-width:thin; position:absolute; left:400px; top:250px; width:500px; height:550px; z-index:3; background-color:#f8f8f8;"
+                        rendered="{!LEN(AddRecipStep)>0}">
+                        <apex:pageBlock id="theAddRecipientPageBlock"
+                            title="{!RecipientEditTitle}">
+                            <apex:actionStatus id="statusId">
+                                <apex:facet name="start">
+                                    <apex:image value="/img/loading.gif" />
+                                </apex:facet>
+                            </apex:actionStatus>
+                            <br />
+                            <apex:outputPanel >
+                                <apex:outputPanel rendered="{!AddRecipStep=='stepChooseRecipSource'}">
+                                    <apex:outputText value="{!$Label.ChooseRecipient}:" />
+                                    <apex:commandButton id="cmdContacts" value="{!$Label.Contacts}"
+                                        action="{!OnAddRecipType}" rerender="addRecipPopup"
+                                        status="statusId">
+                                        <apex:param name="rt" value="Contact"
+                                            assignTo="{!DSERecipient.dsfs__Salesforce_Recipient_Type__c}" />
+                                        <apex:param name="cmd" value="next" />
+                                    </apex:commandButton>
+                                    <apex:commandButton id="cmdLeads" value="{!$Label.Leads}"
+                                        action="{!OnAddRecipType}" rerender="addRecipPopup"
+                                        status="statusId">
+                                        <apex:param name="rt" value="Lead"
+                                            assignTo="{!DSERecipient.dsfs__Salesforce_Recipient_Type__c}" />
+                                        <apex:param name="cmd" value="next" />
+                                    </apex:commandButton>
+                                    <apex:commandButton id="cmdUsers" value="{!$Label.Users}"
+                                        action="{!OnAddRecipType}" rerender="addRecipPopup"
+                                        status="statusId">
+                                        <apex:param name="rt" value="User"
+                                            assignTo="{!DSERecipient.dsfs__Salesforce_Recipient_Type__c}" />
+                                        <apex:param name="cmd" value="next" />
+                                    </apex:commandButton>&nbsp;
+                                    <apex:outputText value="{!$Label.Or}" />&nbsp;
+                                    <apex:commandButton id="cmdAddMe" value="{!$Label.AddMe}"
+                                        action="{!OnAddRecipType}" rerender="addRecipPopup"
+                                        status="statusId">
+                                        <apex:param name="cmd" value="addme" />
+                                    </apex:commandButton>
+                                    <br />
+                                    <br />
+                                    <br />
+                                    <br />
+                                    <apex:outputText value="{!$Label.AddPlaceholderRecipient}:" />&nbsp;
+                                    <apex:commandButton value="{!$Label.AddRole}"
+                                        action="{!OnAddRecipType}" rerender="addRecipPopup"
+                                        status="statusId">
+                                        <apex:param name="cmd" value="addrole" />
+                                    </apex:commandButton>
+                                    <br />
+                                    <br />
+                                    <apex:commandButton value="{!$Label.Cancel}" action="{!OnAddRecipType}"
+                                        rerender="theRefreshPanel" status="statusId">
+                                        <apex:param name="cmd" value="cancel" />
+                                    </apex:commandButton>
+                                </apex:outputPanel>
+                                <apex:outputPanel rendered="{!AddRecipStep=='stepChooseRecipName'}">
+                                    <apex:outputText value="{!$Label.Select} {!DSERecipient.dsfs__Salesforce_Recipient_Type__c}:" />&nbsp;
+                                    <apex:inputField id="ContactIn"
+                                        value="{!DSERecipient.dsfs__DSER_ContactID__c}"
+                                        rendered="{!DSERecipient.dsfs__Salesforce_Recipient_Type__c=='Contact'}" />
+                                    <apex:inputField id="LeadIn"
+                                        value="{!DSERecipient.dsfs__DSER_LeadID__c}"
+                                        rendered="{!DSERecipient.dsfs__Salesforce_Recipient_Type__c=='Lead'}" />
+                                    <apex:inputField id="UserIn"
+                                        value="{!DSERecipient.dsfs__DSER_UserID__c}"
+                                        rendered="{!DSERecipient.dsfs__Salesforce_Recipient_Type__c=='User'}" />
+                                    <br />
+                                    <br />
+                                    <apex:commandButton value="{!$Label.Previous}" action="{!OnAddRecipType}"
+                                        rerender="addRecipPopup" status="statusId"
+                                        onClick="ClearRecipientNames();">
+                                        <apex:param name="cmd" value="prev" />
+                                    </apex:commandButton>
+                                    <apex:commandButton value="{!$Label.NextUppercase}" action="{!OnAddRecipType}"
+                                        rerender="addRecipPopup" status="statusId">
+                                        <apex:param name="cmd" value="next" />
+                                    </apex:commandButton>&nbsp;&nbsp;
+                                    
+                                    <apex:commandButton value="{!$Label.Cancel}"
+                                        action="{!OnAddRecipType}" rerender="theRefreshPanel"
+                                        status="statusId" onClick="ClearRecipientNames();">
+                                        <apex:param name="cmd" value="cancel" />
+                                    </apex:commandButton>
+                                </apex:outputPanel>
+                                <apex:outputPanel rendered="{!AddRecipStep=='stepSetDSAttributes'}">
+                                    <apex:outputPanel rendered="{!RecipientNameSelected}">
+                                        <apex:outputText value="{!DSERecipient.dsfs__Salesforce_Recipient_Type__c}" />:&nbsp;
+                                        <apex:outputText value="{!RecipientName}" />&nbsp;-&nbsp;
+                                        <apex:outputText value="{!RecipientEmail}"
+                                            rendered="{!LEN(RecipientEmail)>0}" />
+                                        <apex:outputText value="!! {!$Label.EmailRequired} !!"
+                                            styleClass="WarningError"
+                                            rendered="{!LEN(RecipientEmail)==0}" />
+                                    </apex:outputPanel>
+                                    <apex:outputText value="({!$Label.PlaceholderRole})"
+                                        rendered="{!RecipientNameSelected == false}" />&nbsp;&nbsp;
+                                        
+                                    <apex:commandButton action="{!OnAddRecipType}"
+                                        value="{!$Label.Change}" rerender="addRecipPopup" status="statusId">
+                                        <apex:param name="cmd" value="reset" />
+                                    </apex:commandButton>
+                                    <br />
+                                    <br />
+                                    <apex:panelGrid columns="2">
+                                        <apex:outputLabel value="{!$Label.Signature}: " for="SignatureSelected"
+                                            rendered="{!DSSignaturesExist}" />
+                                        <apex:selectList id="SignatureSelected"
+                                            value="{!DSSignatureName}" style="width:300px;"
+                                            multiselect="false" size="0" rendered="{!DSSignaturesExist}">
+                                            <apex:selectOptions value="{!DSSignatureNameList}" />
+                                        </apex:selectList>
+
+                                        <apex:outputLabel value="{!$Label.Order}: " for="RoutingOrder"
+                                            rendered="{!IsUsingTemplate==false}" />
+                                        <apex:inputField id="RoutingOrder"
+                                            value="{!DSERecipient.dsfs__Routing_Order__c}" style="width:30px"
+                                            rendered="{!IsUsingTemplate==false}" />
+
+                                        <apex:outputLabel value="{!$Label.SignerType}: " for="SignerType" />
+                                        <apex:selectList id="SignerType"
+                                            value="{!DSERecipientSignerType}" style="width:300px;"
+                                            multiselect="false" size="0">
+                                            <apex:selectOptions value="{!DSSignerTypeList}" />
+                                            <apex:actionSupport event="onchange"
+                                                action="{!OnRefreshPage}" rerender="addRecipPopup"
+                                                status="statusId" />
+                                        </apex:selectList>
+
+                                        <apex:outputLabel value="{!$Label.SignerName}: " for="SignerName"
+                                            rendered="{!DSERecipient.dsfs__DocuSign_Signer_Type__c =='Sign in person'}" />
+                                        <apex:inputField id="SignerName" style="width:300px"
+                                            value="{!DSERecipient.dsfs__SignInPersonName__c}"
+                                            rendered="{!DSERecipient.dsfs__DocuSign_Signer_Type__c== 'Sign in person'}">
+                                            <apex:actionSupport event="onchange"
+                                                action="{!OnRefreshPage}" rerender="addRecipPopup"
+                                                status="statusId" />
+                                        </apex:inputField>
+
+                                        <apex:outputLabel value="{!$Label.SignerRole}: "
+                                            rendered="{!RecipientIsSigner || IsUsingTemplate || RecipientAlwaysAllowRole}" />
+                                        <apex:outputPanel layout="span"
+                                            rendered="{!RecipientIsSigner || IsUsingTemplate || RecipientAlwaysAllowRole}">
+                                            <apex:inputText value="{!DSERecipient.dsfs__RoleName__c}"
+                                                style="width:150px" />
+                                            <apex:commandButton value="..."
+                                                action="{!OnRecipientRoleShowSelect}"
+                                                rerender="addRecipPopup" status="statusId" />
+                                            <apex:outputPanel layout="span"
+                                                style="position:absolute; z-index:5"
+                                                rendered="{!RecipientRoleShow}">
+                                                <apex:selectList value="{!RecipientRole}"
+                                                    multiselect="false" size="10" id="listRecipientRole"
+                                                    rendered="{!RecipientIsSigner}">
+                                                    <apex:selectOptions value="{!RecipientRoles}"></apex:selectOptions>
+                                                    <apex:actionSupport event="onclick"
+                                                        action="{!OnRecipientRoleSelect}" rerender="addRecipPopup"
+                                                        status="statusId" />
+                                                </apex:selectList>
+                                            </apex:outputPanel>
+                                        </apex:outputPanel>
+
+                                        <apex:outputLabel value="{!$Label.AccessCode}: " for="AccessCode" />
+                                        <apex:inputText id="AccessCode" value="{!DSERecipient.dsfs__Access_Code__c}" maxlength="50"/>
+                                
+                                        <apex:outputLabel value="{!$Label.Language}:" for="Language" rendered="{!AllowRecipientLanguageSelection}" />
+                                        <apex:selectList id="Language" style="width:300px;" rendered="{!AllowRecipientLanguageSelection}"
+                                            value="{!LanguageOptionValue}" multiselect="false" size="0">
+                                            <apex:selectOptions value="{!LanguageOptions}" />
+                                            <apex:actionSupport event="onchange"
+                                                action="{!OnRecipientLanguageChange}" rerender="addRecipPopup" status="statusId" />
+                                        </apex:selectList>  
+                                        
+                                        <apex:outputLabel value="{!$Label.EmailSubject}:" for="EmailSubject" rendered="{!AllowRecipientLanguageSelection}"/>
+                                        <apex:inputText id="EmailSubject"  rendered="{!AllowRecipientLanguageSelection}"
+                                            value="{!DSERecipient.dsfs__Email_Subject__c}" style="width:300px">
+                                            <apex:actionSupport event="onchange"
+                                                action="{!OnRefreshPage}" rerender="addRecipPopup"
+                                                status="statusId" />
+                                                <script>document.getElementById('{!$Component.EmailSubject}').disabled = {!!ShowEmailSubject};</script>
+                                        </apex:inputText>
+                                            
+                                        <apex:outputLabel value="{!$Label.EmailMessage}:" for="EmailMessage"  rendered="{!AllowRecipientLanguageSelection}"/>
+                                        <apex:inputTextArea id="EmailMessage"  rendered="{!AllowRecipientLanguageSelection}"
+                                            value="{!DSERecipientEmailBody}" style="width:300px ; height:100px;" >
+                                            <apex:actionSupport event="onchange"
+                                                action="{!OnRefreshPage}" rerender="addRecipPopup"
+                                                status="statusId" />
+                                            <script>document.getElementById('{!$Component.EmailMessage}').disabled = {!!ShowEmailMessage};</script>
+                                        </apex:inputTextArea>
+                                        
+                                    </apex:panelGrid>
+                                    <br />
+                                    <apex:outputPanel id="EditRecipientLabel" layout="block"
+                                        style="width:720px;height:30px;">
+                                        <apex:outputText value="{!$Label.NoteForRecipient}: " />
+                                    </apex:outputPanel>
+                                    <apex:outputPanel id="EditRecipientNote" layout="block"
+                                        style="width:720px">
+                                        <apex:inputField value="{!DSERecipient.dsfs__Recipient_Note_Long__c}"
+                                            style="width:450px;height:60px;" />
+                                    </apex:outputPanel>
+                                    <br />
+                                    <apex:commandButton value="{!$Label.AddRecipient}"
+                                        action="{!OnAddRecipType}"
+                                        rendered="{!DSERecipient.id == null}"
+                                        rerender="theRefreshPanel" status="statusId">
+                                        <apex:param name="cmd" value="next" />
+                                    </apex:commandButton>
+                                    <apex:commandButton value="{!$Label.SaveRecipient}"
+                                        action="{!OnAddRecipType}"
+                                        rendered="{!DSERecipient.id != null}"
+                                        rerender="theRefreshPanel" status="statusId">
+                                        <apex:param name="cmd" value="next" />
+                                    </apex:commandButton>&nbsp;&nbsp;
+                                    
+                                    <apex:commandButton value="{!$Label.Cancel}"
+                                        action="{!OnAddRecipType}" rerender="theRefreshPanel"
+                                        status="statusId">
+                                        <apex:param name="cmd" value="cancel" />
+                                    </apex:commandButton>
+                                    <br />
+                                    <br />
+                                    <apex:outputText value=" {!RecipientErrMess}"
+                                        styleClass="WarningError"
+                                        rendered="{!LEN(RecipientErrMess) > 0}" />
+                                </apex:outputPanel>
+                            </apex:outputPanel>
+                            <apex:outputPanel >
+
+                            </apex:outputPanel>
+                        </apex:pageBlock>
+                    </apex:outputPanel>
+                    </apex:pageBlockSection>
+                    <!-- end of popup -->
+
+                    <!-- Add Documents popup -->
+                    <apex:pageBlockSection >
+                    <apex:outputPanel id="addDocumentPopupOuter" layout="span"
+                        style="position:absolute; left:0px; top:0px; width:100%; height:100%; z-index:2; opacity:0.1; filter:alpha(opacity=10);background:#000000;"
+                        rendered="{!ShowAddDocumentPopup}">
+                    </apex:outputPanel>
+                    <apex:outputPanel id="addDocumentPopup" layout="span"
+                        style="border-style:solid; border-width:thin; position:absolute; left:400px; top:100px; width:800px; height:450px; z-index:3; background-color:#f8f8f8;"
+                        rendered="{!ShowAddDocumentPopup}">
+                        <apex:pageBlock title="{!$Label.AddDoc}">
+                            <apex:actionStatus id="statusDocAdd">
+                                <apex:facet name="start">
+                                    <apex:image value="/img/loading.gif" />
+                                </apex:facet>
+                            </apex:actionStatus>
+                            <br />
+                            <apex:pageBlockSection columns="1">
+                                <apex:panelGrid columns="3">
+                                    <apex:outputLabel id="SFDocTypeLabel" value="{!$Label.Source}"
+                                        for="SFDocumentTypeID" />
+                                    <apex:selectList id="SFDocumentTypeID"
+                                        value="{!SFDocumentType}" multiselect="false" size="0">
+                                        <apex:selectOptions value="{!SFDocumentTypeSelectList}" />
+                                        <apex:actionSupport event="onchange"
+                                            rerender="addDocumentPopup"
+                                            action="{!OnDocumentTypeSelected}" status="statusDocAdd" />
+                                    </apex:selectList>
+                                    <apex:commandButton value="{!$Label.UploadAttachment}"
+                                        action="{!DSAttachmentNew}"
+                                        rendered="{!SFDocumentType = 'Attachment'}" />
+                                    <apex:panelGroup rendered="{!SFDocumentType = 'Document'}">
+                                        <input type="button"
+                                            onclick="window.open('/p/doc/DocumentUploadUi','_blank','width=900,height=700,scrollbars=1,resizable=1')"
+                                            value="{!$Label.AddNewDoc}" />
+                                    </apex:panelGroup>
+                                    <apex:outputLabel value="{!$Label.Folder}: " for="FolderSelected"
+                                        rendered="{!SFDocumentType = 'Document'}" />
+                                    <apex:selectList id="FolderSelected" value="{!SelectedFolder}"
+                                        multiselect="false" size="0"
+                                        rendered="{!SFDocumentType = 'Document'}">
+                                        <apex:selectOptions value="{!DocumentFolderList}" />
+                                        <apex:actionSupport event="onchange"
+                                            rerender="DocumentsAvailable"
+                                            action="{!RefreshAvailableDocumentList}"
+                                            status="statusDocAdd" />
+                                    </apex:selectList>
+
+                                    <apex:outputText rendered="{!SFDocumentType == 'Content'}" />
+                                    <apex:outputLabel value="{!$Label.Library}: " for="WorkspaceSelected"
+                                        rendered="{!SFDocumentType = 'Content'}" />
+                                    <apex:selectList id="WorkspaceSelected"
+                                        value="{!SelectedWorkspace}" multiselect="false" size="0"
+                                        rendered="{!SFDocumentType = 'Content'}">
+                                        <apex:selectOptions value="{!ContentWorkspaceList}" />
+                                        <apex:actionSupport event="onchange"
+                                            rerender="DocumentsAvailable"
+                                            action="{!RefreshAvailableDocumentList}"
+                                            status="statusDocAdd" />
+                                    </apex:selectList>
+                                    <apex:outputText value=" "
+                                        rendered="{!SFDocumentType == 'Attachment'}" />
+                                </apex:panelGrid>
+
+                                <apex:outputPanel id="EditDocument" layout="block"
+                                    style="width:250px">
+                                    <apex:actionFunction name="UpdateDocumentFolder"
+                                        rerender="DocumentSelected" />
+                                    <apex:panelGrid columns="1">
+                                        <apex:panelGrid columns="1" style="text-align: center">
+                                            <apex:outputText value="{!$Label.AvailableDocs}" />
+                                            <apex:selectList id="DocumentsAvailable"
+                                                value="{!SelectedInDocsAvailable}" size="15"
+                                                multiselect="true" style="width:720px">
+                                                <apex:selectOptions value="{!DocsAvailableListItems}" />
+                                            </apex:selectList>
+                                        </apex:panelGrid>
+                                    </apex:panelGrid>
+                                </apex:outputPanel>
+                                <apex:outputPanel >
+                                    <apex:commandButton value="{!$Label.Save}" action="{!OnDocumentAction}"
+                                        rerender="theRefreshPanel" status="statusDocAdd">
+                                        <apex:param name="cmd" value="save" />
+                                    </apex:commandButton>&nbsp;&nbsp;
+                                    
+                                    <apex:commandButton value="{!$Label.Cancel}"
+                                        action="{!OnDocumentAction}" rerender="theRefreshPanel"
+                                        status="statusDoc">
+                                        <apex:param name="cmd" value="cancel" />
+                                    </apex:commandButton>
+                                </apex:outputPanel>
+                            </apex:pageBlockSection>
+                        </apex:pageBlock>
+                    </apex:outputPanel>
+                    </apex:pageBlockSection>
+                    <!-- end of Add Documents popup -->
+                    
+                    <!-- Email Settings Section -->
+                    <apex:pageBlockSection title="Email Settings" columns="1" collapsible="false" rendered="{!!AllowRecipientLanguageSelection}">
+                        <apex:inputField id="emailSubjectInput" value="{!DSEnvelope.dsfs__DocuSign_Email_Subject__c}"
+                            style="width:700px">
+                            <script>document.getElementById('{!$Component.emailSubjectInput}').disabled = {!!ShowEmailSubject};</script>
+                        </apex:inputField>
+                        <apex:inputField id="emailMessageInput" value="{!DSEnvelope.dsfs__DocuSign_Email_Message__c}" style="width:700px">
+                            <script>document.getElementById('{!$Component.emailMessageInput}').disabled = {!!ShowEmailMessage};</script>
+                        </apex:inputField>
+                    </apex:pageBlockSection>
+                    
+                    <apex:pageBlockSection title="{!$Label.RecipientsAndRouting}" columns="1"
+                        collapsible="false" id="recipAndRoute">
+                        <apex:panelGrid columns="2">
+                            <apex:commandButton value="{!$Label.AddRecipient}"
+                                action="{!OnAddRecipType}" rerender="theRefreshPanel"
+                                status="statusRecip">
+                                <apex:param name="cmd" value="add" />
+                            </apex:commandButton>
+                            <apex:actionStatus id="statusRecip">
+                                <apex:facet name="start">
+                                    <apex:image value="/img/loading.gif" />
+                                </apex:facet>
+                            </apex:actionStatus>
+                        </apex:panelGrid>
+
+                        <apex:pageBlockTable value="{!RecipientList}" var="recipient" 
+                            id="theRecipientList">
+                            <apex:column headerValue="{!$Label.Manage}" style="width:80px">
+
+                                <apex:commandLink action="{!OnAddRecipType}" id="EditLink"
+                                    rerender="theRefreshPanel" status="statusRecip">{!$Label.Edit}
+                                <apex:param name="cmd" value="edit" />
+                                    <apex:param name="eid" value="{!recipient.id}" />
+                                </apex:commandLink>
+                                <apex:outputText value=" " />
+                                <apex:outputText value="|" />
+                                <apex:outputText value=" " />
+                                <apex:outputText value=" " />
+                                <apex:commandLink action="{!OnAddRecipType}" id="DeleteLink" rerender="theRefreshPanel" status="statusRecip">
+                                    {!$Label.Del}
+                                    <apex:param name="cmd" value="delete" />
+                                    <apex:param name="did" value="{!recipient.id}" />
+                                </apex:commandLink>
+                            </apex:column>
+
+                            <apex:column headerValue="{!$Label.Order}" style="width:100px">
+                                <apex:inputField value="{!recipient.dsfs__Routing_Order__c}"
+                                    rendered="{!IsUsingTemplate==false}" style="width:40px">
+                                    <apex:actionSupport event="onchange"
+                                        action="{!OnChangeRoutingOrder}" rerender="theRecipientList"
+                                        status="statusRecip" />
+                                </apex:inputField>
+                                <apex:outputText value="({!$Label.DefInTemplate})"
+                                    rendered="{!IsUsingTemplate==true}" />
+                            </apex:column>
+
+                            <apex:column headerValue="{!$Label.Recipient}" style="width:250px">
+                                <apex:panelGrid columns="1" id="recipEmail">
+                                    <apex:outputField value="{!recipient.dsfs__DSER_ContactID__c}"
+                                        rendered="{!recipient.dsfs__Salesforce_Recipient_Type__c== 'Contact'}" />
+                                    <apex:outputField value="{!recipient.dsfs__DSER_LeadID__c}"
+                                        rendered="{!recipient.dsfs__Salesforce_Recipient_Type__c== 'Lead'}" />
+                                    <apex:outputField value="{!recipient.dsfs__DSER_UserID__c}"
+                                        rendered="{!recipient.dsfs__Salesforce_Recipient_Type__c== 'User'}" />
+                                    <apex:outputText value="{!recipient.dsfs__DSER_CustomName__c}"
+                                        rendered="{!recipient.dsfs__Salesforce_Recipient_Type__c== 'Custom'}" />
+                                </apex:panelGrid>
+                            </apex:column>
+                            <apex:column headerValue="{!$Label.Role}">
+                                <apex:outputText value="{!recipient.dsfs__RoleName__c}" />
+                            </apex:column>
+                            <apex:column headerValue="{!$Label.Action}">
+                                <apex:outputText value="({!$Label.DefInTemplate})"
+                                    rendered="{!IsUsingTemplate}" />
+                                <apex:outputText value="{!recipient.dsfs__DocuSign_Signer_Type__c}"
+                                    rendered="{!IsUsingTemplate==false}" />
+                                <apex:outputText value="({!recipient.dsfs__SignInPersonName__c})"
+                                    rendered="{!recipient.dsfs__DocuSign_Signer_Type__c=='Sign in person'}" />
+                            </apex:column>
+                            <apex:column headerValue="{!$Label.Language}" rendered="{!AllowRecipientLanguageSelection}">
+                                <apex:outputText value="{0}"> 
+                                    <apex:param value="{!IF (recipient.dsfs__LanguageCode__c == 'en' , 'English', recipient.dsfs__Language__c)}"></apex:param>
+                                
+                                </apex:outputText> 
+                            </apex:column>
+                        </apex:pageBlockTable>
+
+                    </apex:pageBlockSection>
+
+                    <apex:pageBlockSection title="{!$Label.EnvelopeSettings}" columns="1"
+                        collapsible="false" rendered="{!ShowRemindExpire==true}">
+                        <apex:inputField id="EnvReminder"
+                            value="{!DSEnvelope.dsfs__Send_Reminder__c}" />
+                        <apex:inputField id="EnvReminderInterval"
+                            value="{!DSEnvelope.dsfs__Reminder_Interval__c}" style="width:35px" />
+                        <apex:inputField id="EnvReminderRepeatInterval"
+                            value="{!DSEnvelope.dsfs__Reminder_Repeat_Interval_in_Days__c}"
+                            style="width:35px" />
+                        <apex:pageBlockSectionItem />
+                        <apex:outputField id="EnvExpire"
+                            value="{!DSEnvelope.dsfs__Expire_Void_Envelope__c}" />
+                        <apex:inputField id="EnvDaytoWarning"
+                            value="{!DSEnvelope.dsfs__Days_before_Envelope_is_Expired_Voided__c}"
+                            style="width:35px" />
+                        <apex:inputField id="EnvDayPrior"
+                            value="{!DSEnvelope.dsfs__Day_Prior_to_Warn_of_expiration__c}"
+                            style="width:35px" />
+                        <apex:pageBlockSectionItem />
+                    </apex:pageBlockSection>
+                    <apex:pageBlockSection title="{!$Label.ChatterUpdates}" columns="1"
+                        collapsible="false" rendered="{!ShowChatter==true}">
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="{!$Label.EnableChatterUpdates}"
+                                for="cbxChatter" />
+                            <apex:inputcheckbox id="cbxChatter"
+                                value="{!DSEnvelope.dsfs__ChatterUpdatesEnabled__c}"
+                                disabled="{!ChatterFieldDisabled}" />
+                        </apex:pageBlockSectionItem>
+                    </apex:pageBlockSection>
+
+                </apex:outputPanel>
+
+            </apex:pageBlock>
+        </apex:actionRegion>
+    </apex:form>
+    <apex:form id="BadVars" rendered="{!NoVarErrors==false}">
+        <apex:pageBlock title="Error - Incorrect URL Variables "
+            id="thePageBlock" tabStyle="DocuSign_Status__c">
+            <apex:actionRegion >
+                <apex:pageBlockSection title="{!$Label.EditLinkInfo}" columns="1">
+                    <h1>Please edit your Send with DocuSign link button to look
+                        like the below</h1>
+                    <br />
+                    <br />
+                    /apex/DocuSign_CreateEnvelope?DSEID=0&amp;SourceID=&#123;!Lead.Id&#125;&amp;DSEDMAX=3  
+                    <br />
+                    <br />
+                    <H3>You should not call Edit Envelope, as Create Envelope
+                        should call Edit Envelope</H3>
+                </apex:pageBlockSection>
+            </apex:actionRegion>
+        </apex:pageBlock>
+    </apex:form>
+    <apex:form id="InsufficientAccess" rendered="{!NoCrUDErrors==false}">
+        <apex:pageBlock title="Error - Insufficient access to objects "
+            id="thePageBlock" tabStyle="DocuSign_Status__c">
+            <apex:actionRegion >
+                <apex:pageBlockSection title="{!$Label.EditDocFromEnvelope}"
+                    columns="1">
+                    <h1>{!$Label.NoPermissionCustomObj}.</h1>
+                    <br />
+                    <br />
+                    <H3>{!$Label.ContactSFAdminForAccess}:</H3>
+                    <br />
+                    DocuSignAccountConfiguration__c
+                    <br />
+                    DocuSign_Envelope__c
+                    <br />
+                    DocuSign_Envelope_Recipient__c
+                    <br />
+                    DocuSign_Envelope_Document__c
+                </apex:pageBlockSection>
+            </apex:actionRegion>
+        </apex:pageBlock>
+    </apex:form>
+    <apex:form id="UserNotVerified"
+        rendered="{HaveCreds == false && memberStatusString == 'VERIFIED'}">
+        <apex:pageBlock title="{!$Label.NoPermissionConfig}"
+            id="pbPermissions" tabStyle="DocuSign_Status__c">
+            <c:DocuSignManagePasswordComponent theUserId="{!DocuSignConfig.DocuSignUserName}" />
+            <apex:commandButton value="Continue" action="{!DScontinue}" />
+            <apex:commandButton value="{!$Label.Cancel}" action="{!DScancel}" />
+        </apex:pageBlock>
+    </apex:form>
+    <apex:form id="AccountNotConfigured"
+        rendered="{!memberStatusString == 'INACTIVE' || memberStatusString == 'ACTIVATED'}">
+        <apex:pageBlock title="{!$Label.AccountNotConfig}."
+            id="pbPermissions" tabStyle="DocuSign_Status__c">
+            <apex:pageBlockSection columns="1">
+                <h3>{!$Label.ActivationMessage}.</h3>
+                <br />
+                <h3>{!$Label.ContactAdminForConfig}.</h3>
+                <br />
+            </apex:pageBlockSection>
+            <apex:commandButton value="Continue" action="{!DScontinue}" />
+            <apex:commandButton value="{!$Label.Cancel}" action="{!DScancel}" />
+        </apex:pageBlock>
+    </apex:form>
+    <apex:form id="InvalidPassword" 
+        rendered="{!memberStatusString == 'INVALID_PASSWORD'}">
+        <apex:pageBlock title="{!$Label.AccountNotConfig}."
+            id="pbPermissions" tabStyle="DocuSign_Status__c">
+            <apex:pageBlockSection columns="1">
+                <h3>{!$Label.UpdatePassword}.</h3>
+                <br />
+                <h3>{!$Label.ContactAdminForConfig}.</h3>
+                <br />
+            </apex:pageBlockSection>
+            <apex:commandButton value="{!$Label.Continue}" action="{!DScontinue}" />
+            <apex:commandButton value="{!$Label.Cancel}" action="{!DScancel}" />
+        </apex:pageBlock>
+    </apex:form>
+</apex:page>

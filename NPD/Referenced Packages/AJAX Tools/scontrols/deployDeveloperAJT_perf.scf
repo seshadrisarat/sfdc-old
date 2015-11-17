@@ -1,0 +1,140 @@
+<html>
+<head>
+<script src="/js/functions.js"></script>
+<script src="/soap/ajax/10.0/connection.js"></script>
+<script src="/js/dojo/0.4.1/dojo.js"></script>
+<script src="/soap/ajax/10.0/apex.js"></script>
+
+<script type="text/javascript">
+
+    if (!sforce.connection.sessionId) {
+        var sid = getCookie("sid");
+        if (sid) {
+            sforce.connection.sessionId = sid;
+        } else {
+            window.location = "/?startURL=" + window.location;
+        }
+    }
+</script>
+
+
+<title>API Performance</title>
+<script>
+    dojo.require("dojo.collections.Store");
+    dojo.require("dojo.charting.Chart");
+    dojo.require('dojo.json');
+
+    dojo.addOnLoad(update);
+
+    var json = [];
+    var maxy = 10;
+    var maxx = 10;
+
+    var timeout = 2;
+
+    function init() {
+        var store = new dojo.collections.Store();
+        store.setData(json);
+
+        //	define the chart.
+        var s1 = new dojo.charting.Series({
+            dataSource:store,
+            bindings:{ x:"x", y:"y" /*, size:"size"*/ },
+            label:"The Main Series"
+        });
+
+        //	keep going.
+        var xA = new dojo.charting.Axis();
+        xA.range = {upper:maxx, lower:0};
+        xA.origin = "max";
+        xA.showTicks = true;
+        xA.label = "Iteration";
+        xA.labels = [ 0, 5, 10, 20, 25, 30, 35, 40];
+
+        var yA = new dojo.charting.Axis();
+        yA.range = {upper:maxy,lower:0};
+        yA.showLines = true;
+        yA.showTicks = true;
+        yA.labels = [ {label:"min", value:0 }, { label:"10",value:10 },
+        { label:"20",value:20 },
+        { label:"30",value:30 },
+        { label:"40",value:40 },
+        { label:"50",value:50 },
+        { label:"" + maxy, value:maxy } ];
+
+        yA.label = "Response Time in Milli secounds"
+
+        var p = new dojo.charting.Plot(xA, yA);
+        p.addSeries({ data:s1, plotter: dojo.charting.Plotters.CurvedLine });
+        var pA = new dojo.charting.Plot(xA, yA);
+        pA.renderType = dojo.charting.RenderPlotSeries.Grouped;
+
+        var pa = new dojo.charting.PlotArea();
+        pa.size = {width:700,height:500};
+        pa.padding = {top:20, right:20, bottom:30, left:50 };
+        pa.plots.push(p);
+
+        //	auto assign colors, and increase the step (since we've only 2 series)
+        s1.color = pa.nextColor();
+
+
+        chart = new dojo.charting.Chart(null, "Test chart", "This is a potential description");
+        chart.addPlotArea({ x:50,y:50, plotArea:pa });
+
+        chart.node = dojo.byId("chartTest1");
+        chart.render();
+    };
+
+    var xval = 0;
+    var yval = 10;
+
+    function update() {
+        yval = findPref();
+        json.push({ x: xval, y: yval});
+        xval++;
+        if (yval > maxy) {
+            maxy = yval + 5;
+        }
+
+        if (xval > maxx) {
+            maxx = xval;
+        }
+        init();
+
+        timeout = timeout * 2;
+
+        if (xval<500) {
+            setTimeout(update, timeout);
+        } else {
+            alert("Done");
+        }
+    }
+
+    function findPref() {
+        var start = new Date().getTime();
+        try {
+            sforce.connection.query("select name, id from account limit 10");
+        } catch(error) {
+            alert("failed " + error);
+        }
+        var end = new Date().getTime();
+        return end - start;
+    }
+
+</script>
+<style>
+    #chartTest1 {
+        margin: 12px;
+        width: 800px;
+        height: 700px;
+        background-color: #dedeed;
+        border: 1px solid #999;
+    }
+</style>
+</head>
+<body>
+<h3>API Performance</h3>
+Response time in Milli secound for small API query<p></p>
+<div id="chartTest1"></div>
+</body>
+</html>

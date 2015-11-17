@@ -1,0 +1,172 @@
+<apex:component controller="SL_InvestorContactAndFundVFController" allowDML="true">
+    <apex:attribute name="conId" description="this is an id of contact record" type="String" required="true" assignTo="{!ContactId}"/>
+    <apex:attribute name="fundFamilyIds" description="a list of fund families to be sent to the list" type="String" required="false" assignTo="{!FundFamilyIdString}" />
+    <apex:attribute name="context" description="the launching context of the component" type="String" required="false" assignTo="{!LaunchContext}" />
+
+    <base target="_parent"/>
+    <head>
+        <style>
+        .investorContactTable  
+        {
+            border:2;
+            font-size: 12px;
+            table-layout:fixed;
+        }
+        .investorContactTable td
+        {
+            border-width: 1px 1px 1px 1px;
+            border-style:solid;
+            border-color:#D2DAE0;
+            font-size:0.9em;
+            font-weight:bold;
+            background: none repeat scroll 0% 0% #F2F3F3;
+            padding:0 0 0 2px;
+        }
+        #buttonsDiv
+        {
+            text-align:center;
+            padding-bottom: 10px;
+            font-size: 100%;
+        }
+        .investorContactTable .investorRecords td
+        {
+            font-weight:normal;
+            background:white;
+            font-size:1.0em;
+            border-width: 0px 0px 0px;
+            padding-top:4px;
+        }
+        .btnDisabled
+        {
+            font-family:'Verdana','Geneva',sans-serif;
+            background-image:url("/img/bgButtonDisabled.gif");
+            background-repeat:repeat-x;
+            background-position:left top;
+            border-right:1px solid #999;
+            border-bottom:1px solid #999;
+            border-top:1px solid #ccc;
+            border-left:1px solid #ccc;
+            font-size:80%;
+            color:#c1c1c1;
+            padding:0 3px 1px 3px;
+            cursor:default;
+            font-weight:bold;
+        }
+        .editAndDelLinks a
+        {
+            color:#015BA7;
+            text-decoration:none;
+        }
+        .actionStatusDiv
+        {
+            margin-top:2px;
+            text-align:center;
+            font-weight:bold;
+            font-size:1.0em;
+            background: none repeat scroll 0% 0% #F2F3F3;
+        }
+        </style>
+    </head>
+        <apex:form >
+           <apex:actionFunction name="deleteRecordsAF" action="{!deleteRecords}" rerender="pageData,showMessage" status="processing">
+            <apex:param value="" name="recordId" assignTo="{!strObjectId}"/>
+           </apex:actionFunction>
+           <apex:actionFunction name="saveRecordsAF" action="{!saveRecords}" rerender="pageData" status="processing" onComplete="enableButton('{!$Component.saveRecord}','{!$Component.editButton}');"/>
+           <apex:actionFunction name="editRecordsAF" action="{!editRecords}" rerender="pageData" status="processing" />
+           <div Id="buttonsDiv">
+               <apex:commandButton value="New Marketing Contact" action="{!redirectFundOfInterest}" rendered="{!IF(NOT(LaunchContext == 'mn'),true,false)}"/>
+               <apex:commandButton value="New Investor Contact" action="{!redirectInvestorContact}" rendered="{!IF(NOT(LaunchContext == 'mn'),true,false)}"/>
+               <apex:commandButton value="Edit" id="editButton" onClick="return disableButton('{!$Component.saveRecord}',this);"/>
+               <apex:commandButton value="Save" onClick="return saveRecords();" id="saveRecord" disabled="true"/>
+           </div>
+           <apex:actionFunction name="initializeElementsAF" action="{!initializeElements}" rerender="pageData,showMessage" status="loading"/>
+           <apex:outputPanel id="dummy"/>
+           <script>
+            window.onload = function(){
+            initializeElementsAF()
+            };
+           </script>
+        <apex:outputPanel id="pageData">
+            <apex:outputPanel rendered="{!isRender}">
+                  <table width="100%" cellspacing = "0" cellpadding="0" class="investorContactTable">
+                      <thead>
+                          <tr>
+                              <td width="6%">
+                                  Action
+                              </td>
+                              <apex:repeat value="{!lstHeaders}" var="headerName">
+                                  <td width="{!IF(headerName == 'Name','20%','7%')}">
+                                      {!headerName}
+                                  </td>
+                              </apex:repeat>
+                              <td width="15%">
+                                  Type
+                              </td>
+                          </tr>
+                      </thead>
+                           <tbody class="investorRecords">
+                               <apex:repeat value="{!lstRecordWrapper}" var="objRecordWrapper" rendered="{!lstRecordWrapper!=null && lstRecordWrapper.size > 0}">
+                                   <tr>
+                                       <td class="editAndDelLinks">
+                                           <a href="/{!objRecordWrapper.objSobject['Id']}/e?retURL={!ContactId}">Edit</a>
+                                           |
+                                           <apex:commandLink value=" Del" onClick="return deleteRecords('{!objRecordWrapper.objSobject['Id']}');"/>
+                                       </td>
+                                       <td>
+                                           <apex:outputField value="{!objRecordWrapper.objSobject['Investment__c']}" rendered="{!IF(objRecordWrapper.strObjectName == 'Investor_Contact__c',true,false)}"/>
+                                           <apex:outputField value="{!objRecordWrapper.objSobject['Fund_Family__c']}" rendered="{!IF(objRecordWrapper.strObjectName == 'Fund_of_Interest__c',true,false)}"/>
+                                       </td>
+                                        <apex:repeat value="{!lstFieldAPINames}" var="fieldName">
+                                             <td>
+                                                 <apex:outputField value="{!objRecordWrapper.objSobject[fieldName]}" rendered="{!IF(((fieldName != 'Investment__c' && fieldName != 'Fund_Family__c' && objRecordWrapper.strObjectName == 'Investor_Contact__c') || (objRecordWrapper.strObjectName == 'Fund_of_Interest__c' && fieldName != 'Investment__c' && fieldName != 'Fund_Family__c' && (fieldName == 'Estimate__c' || fieldName == 'Monthly_Update__c' || fieldName == 'Quarterly_Letter__c'))) && !isEditable, true, false)}"/>
+                                                 <apex:inputCheckbox value="{!objRecordWrapper.objSobject[fieldName]}" rendered="{!IF(((fieldName != 'Investment__c' && fieldName != 'Fund_Family__c' && objRecordWrapper.strObjectName == 'Investor_Contact__c') || (objRecordWrapper.strObjectName == 'Fund_of_Interest__c' && fieldName != 'Investment__c' && fieldName != 'Fund_Family__c' && (fieldName == 'Estimate__c' || fieldName == 'Monthly_Update__c' || fieldName == 'Quarterly_Letter__c'))) && isEditable, true, false)}"/>
+                                             </td>
+                                        </apex:repeat>
+                                       <td>
+                                           <apex:outputText value="{!objRecordWrapper.strType}"/>
+                                       </td>
+                                   </tr>
+                               </apex:repeat>
+                               <apex:outputText value="No records to display" rendered="{!lstRecordWrapper.size == 0}"/>                      
+                           </tbody>
+                  </table>            
+              </apex:outputPanel>
+          </apex:outputPanel>
+          <div class="actionStatusDiv">
+            <apex:actionStatus startText="Loading..." id="loading"/>
+          </div>
+          <apex:pageMessages id="showMessage"/>
+<!--    Start -       Action Status component -->
+          <c:SL_ActionStatusComponent />
+<!--    End -       Action Status component -->
+        </apex:form>
+        <script>
+        function saveRecords()
+        {
+            saveRecordsAF();
+            return false;
+        }
+        function deleteRecords(objectId)
+        {
+            if(confirm('Are you sure?')) 
+                deleteRecordsAF(objectId);
+            return false;
+        }
+        function disableButton(saveButtonId, editButtonId)
+        {
+            document.getElementById(saveButtonId).className = 'btn';
+            document.getElementById(saveButtonId).removeAttribute('disabled');
+            editButtonId.className = 'btnDisabled';
+            editButtonId.disabled = true;
+            editRecordsAF();
+            return false;
+        }
+        function enableButton(saveButtonId, editButtonId)
+        {
+            document.getElementById(editButtonId).className = 'btn';
+            document.getElementById(editButtonId).removeAttribute('disabled');
+            document.getElementById(saveButtonId).className = 'btnDisabled';
+            document.getElementById(saveButtonId).disabled = true;
+        }
+        </script>
+</apex:component>

@@ -1,0 +1,774 @@
+<apex:component controller="SL_IntranetChatterPlugInController" allowDML="true" id="chatterPlugIn">
+    
+    <apex:attribute name="chatterId" assignTo="{!ChatterImpl.widgetId}" type="String" required="false" description="Contains widget Id"/>
+    <apex:attribute name="objectRecordId" type="String" assignTo="{!ChatterImpl.objectRecordId}" required="true" description="Contains object record Id for Feed"/>
+    <apex:attribute assignTo="{!chatImpl}" name="chatterImpl" type="SL_IntranetChatterPlugIn" description="component implementation object" required="true"/>
+    <apex:attribute assignTo="{!ChatterImpl.strSearchText}" name="searchText" type="String" description="Search Text" required="false"/>
+	
+    <script>
+        sforce.connection.sessionId = '{!$Api.Session_ID}';
+        
+        function onCommentAreaBlur(o, fid, cid) {
+        	if(o.value.trim() == '') o.value = 'Comment...';
+        }
+    </script>
+    
+    <style>
+   	.chatterIcon{
+		background-image:url('{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/images/icons/chatterIcon.png')}');
+		width: 16px;
+		height: 16px;
+		background-repeat: no-repeat;
+	}
+    </style>
+    
+    <apex:stylesheet value="{!URLFOR($Resource.Mention_Autocomplete, '/jquery-ui-1.9.2.custom.css')}" /> 
+    <apex:stylesheet value="{!URLFOR($Resource.Mention_Autocomplete, '/jquery-ui-1.9.2.custom.min.css')}" />  
+    <apex:stylesheet value="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/css/chatterPlugIn.css')}" />
+
+        <div class="wc-widget SL_IntranetChatterFeeds" id="widget{!chatterId}" > 
+            <apex:outputpanel id="chatterOpId"> 
+                
+                <apex:form styleClass="feed-form" id="chatterPlugInForm">
+                    
+                    <apex:actionFunction id="showChatterActivity" name="widget{!chatterId}.showChatterActivity" 
+                    	action="{!ChatterImpl.loadChatterGroupFeeds}" rerender="postOP,ChatterPostFeedListOP" 
+                    	status="loaderPost" onComplete="reRenderCss();chatterWidget{!chatterId}.setLoadingImageCss();">
+                        <apex:param name="GroupId" value=""/>
+                    </apex:actionFunction>
+                    
+                    <apex:actionFunction id="getMoreRecords" name="widget{!chatterId}.getMoreRecords" 
+                    	action="{!ChatterImpl.getNewsFeedForDisplay}" rerender="postOP,ChatterPostFeedListOP" 
+                    	status="loaderPost" onComplete="reRenderCss();chatterWidget{!chatterId}.setLoadingImageCss();"/> 
+                    
+                    <apex:actionFunction id="getRecords" name="chatterWidget{!chatterId}.getRecords" 
+                    	action="{!ChatterImpl.getFeedRecordsOnClick}" rerender="postOP,ChatterPostFeedListOP" 
+                    	status="loaderPost" onComplete="reRenderCss();chatterWidget{!chatterId}.setLoadingImageCss();"/>
+                    
+                    <apex:actionFunction id="SortFeeds" name="widget{!chatterId}.SortFeeds" action="{!ChatterImpl.getFeedItemsSortBy}" 
+                    	rerender="postOP,postPanel" status="loaderPost" 
+                    	onComplete="reRenderCss();chatterWidget{!chatterId}.setLoadingImageCss();">
+                        <apex:param name="sortBy"  value=""/>
+                    </apex:actionFunction>
+                    
+                    <apex:actionFunction id="deletePost" name="chatterWidget{!chatterId}.deletePost" action="{!ChatterImpl.deleteFeedPost}" 
+                    	rerender="NoRecordsSection,postPanel" status="loaderPost" 
+                    	onComplete="reRenderCss();chatterWidget{!chatterId}.setLoadingImageCss();">
+                        <apex:param name="deletedPost" value=""/>
+                    </apex:actionFunction>
+                    
+                    <!-- Actions for Feed Post -->
+                    <apex:actionFunction id="post" name="chatterWidget{!chatterId}.post" action="{!ChatterImpl.feedPost}" status="loaderPost" onComplete="reRenderCss(); chatterWidget{!chatterId}.setLoadingImageCss(); chatterWidget{!chatterId}.clearAllValues();" reRender="postOP,ChatterPostFeedListOP" >
+                        <apex:param name="PostText" value="" assignTo="{!ChatterImpl.strFeedPostText}" />
+                        <apex:param name="RecordId" value="" assignTo="{!ChatterImpl.strRecordId}" />
+                        <apex:param name="UrlLink" value="" assignTo="{!ChatterImpl.strLinkUrl}" />
+                        <apex:param name="UrlName" value="" assignTo="{!ChatterImpl.strUrlName}" />
+                    </apex:actionFunction> 
+                    
+                    <apex:actionFunction id="postFileFeed" name="chatterWidget{!chatterId}.postFileFeed" 
+                    	action="{!ChatterImpl.feedPostForFile}" rerender="postOP,ChatterPostFeedListOP" 
+                    	status="loaderPost" onComplete="reRenderCss();chatterWidget{!chatterId}.setLoadingImageCss(); chatterWidget{!chatterId}.clearAllValues();">
+                        <apex:param name="prmContentId" value="" assignTo="{!ChatterImpl.contentId}"/>
+                        <apex:param name="prmPostBody" value="" assignTo="{!ChatterImpl.postBody}"/>
+                        <apex:param name="prmFeedType" value="" />
+                    </apex:actionFunction>
+                    
+                    <!--  Action for rendering chatter feeds onclick of topic -->
+                     <apex:actionFunction id="showTopicFeeds" name="chatterWidget{!chatterId}.showTopicFeeds" 
+                     	action="{!ChatterImpl.gtTopicFeeds}" rerender="postOP,ChatterPostFeedListOP" 
+                     	status="loaderPost" onComplete="reRenderCss();chatterWidget{!chatterId}.setLoadingImageCss();">
+                        <apex:param name="prmTopicName" value=""/>
+                    </apex:actionFunction>
+                    
+                    <apex:actionFunction id="showTopicFeedsByTopicId" 
+                    	name="chatterWidget{!chatterId}.showTopicFeedsByTopicId" 
+                    	action="{!ChatterImpl.gtTopicFeedsByTopicId}" 
+                    	rerender="postOP,ChatterPostFeedListOP" status="loaderPost" 
+                    	onComplete="reRenderCss();chatterWidget{!chatterId}.setLoadingImageCss();">
+                    	<apex:param name="topicId" value=""/>                   
+                    </apex:actionFunction>
+                    
+                                       
+                    
+                    <legend class="hidden">feed-form</legend>
+                    
+                    <!-----Start-- Section For Chatter Feed Post-----rendered="{!ChatterImpl.isInitialized}"---->
+                    <apex:outputPanel id="postOP" >
+						<apex:pageMessages />
+                        <apex:outputPanel rendered="{!OR(ChatterImpl.chatterSubjectId =='me',ChatterImpl.chatterSubjectId !='') && !ChatterImpl.doSearchOperation && ChatterImpl.showPostSection}" layout="none">
+                            <div class="postBlock" id="chatterFeedPost">
+                                <div class="postBlockRow">
+                                    
+                                    <!-- Start - User's image -->
+                                    <div class="postBlock-avatar">
+                                        <apex:image value="{!ChatterImpl.strUserSmallPhotoUrl}" alt="" title=""  width="35" height="35" />
+                                    </div> 
+                                    <!-- End - User's image -->
+                                    
+                                    <!-- Start - Feed post container -->
+                                    <textarea id="feedPostTextArea{!chatterId}" class="postTextArea animated" cols="30" rows="5" value="{!ChatterImpl.strFeedPostText}" onkeyup="chatterWidget{!chatterId}.checkPostLength(this.value, 'TooMuchContent{!chatterId}');"/>        
+                                    <input id="hidden_inputbox{!chatterId}{!ChatterImpl.objectRecordId}" type="hidden"/>                     
+                                    <!-- End - feed post container -->
+                                    
+                                </div>
+                                
+                                <div id="TooMuchContent{!chatterId}" style="display:none;color:red">Error: Your Post can't have more than 5000 characters.</div>
+                                <div class="postBlock-Tools">
+                                    <ul class="postBlock-Tool-List">
+                                        <li class="postBlock-Tool-List-li">
+                                            <span onclick="chatterWidget{!chatterId}.fileAttachment();">
+                                                <img id ="fileUploadImage{!chatterId}" src="/s.gif"  title="File" alt="image description" class="chatterIcon" style="background-position: 0 -982px;" />
+                                            </span>&nbsp;&nbsp;
+                                        </li>
+                                        <li class="postBlock-Tool-List-li">
+                                            <a onclick="chatterWidget{!chatterId}.linkAttachment();">
+                                                <img src="{!URLFOR($Resource.SL_IntranetHUB,'/IntranetHub/images/icon3.png')}" title="Link" alt="image description" width="17" height="16" />
+                                            </a>
+                                        </li>
+                                    </ul>
+                                    <input type="button" class="btn" style="float:right;width:52px;" value="Post" onclick="chatterWidget{!chatterId}.FeedPostProceed('{!ChatterImpl.objectRecordId}');" id="postButton{!chatterId}"/>
+                                </div>
+                                
+                                <div id="linkAttachment">
+                                    <div id="linkBox{!chatterId}" style="display:none" >
+                                        <div class="post-LinkContainer" >
+                                        	<a onclick="chatterWidget{!chatterId}.removeFileUploadSection('{!chatterId}');">
+                                                <img style="float:right;cursor:pointer;" src="{!URLFOR($Resource.SL_IntranetHUB,'/IntranetHub/images/icons/closeIcon.png')}" alt="image description" width="15" height="15"/>
+                                         	</a>
+                                            <div style="float:left;padding-top: 5px;">
+                                                <p class="post-urlLink" >Link URL<font color="red">*</font>&nbsp;&nbsp;</p>
+                                                <span>
+                                                    <input type ="text" id="linkTxt{!chatterId}" value="{!ChatterImpl.strLinkUrl}" class="urlLink-Text"/>
+                                                    <span id="linkId{!chatterId}" class= "linkRequired" >Link URL is required field</span>
+                                                </span><br clear="all" />
+                                                <p class="post-urlName">Link Name&nbsp;    </p>
+                                                <span ><input type ="text" id="linkName{!chatterId}" value="{!ChatterImpl.strUrlName}" class="urlLink-Text" /></span><br clear="all" />
+                                            </div><br clear="all" />
+                                        </div>
+                                        <br clear="all" />
+                                    </div>
+                                </div>
+                                
+                                
+                                <!-- Start - File Upload Section -->
+                                <div id="widgetFileUploaderSpan{!chatterId}" style="display: none;height: 75px;padding: 0px 10px 15px;" class="post-LinkContainer">
+                                </div>
+                                <!-- End - File Upload Section -->
+                            </div>
+                            
+                            <script>
+                            $('#feedPostTextArea{!chatterId}').triggeredAutocomplete({
+                                hidden: '#hidden_inputbox{!chatterId}{!ChatterImpl.objectRecordId}',
+                                autoFocus: true
+                            });
+                            //chatterWidget{!chatterId}.setLoadingImageCss();
+                            </script>
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                    <!-- Script for Feed Post -->
+                    
+                    
+                    <!-- END Chatter Feed Post Section ---->
+                    
+                    <apex:outputPanel id="ChatterPostFeedListOP" >
+                        <apex:outputPanel id="Posts" rendered="{!OR(ChatterImpl.chatterSubjectId =='me',ChatterImpl.chatterSubjectId !='',ChatterImpl.doSearchOperation)}" layout="none">
+                            
+                            <div style="word-wrap:break-word;max-width:220px !important;"><h2 >{!ChatterImpl.strGroupName} :</h2></div>
+                            
+                            <apex:outputPanel id="chatterPostFeedListOPPanel" 
+                            	layout="block" style="width:155px;margin-top: -20px;float:right;" rendered="{!ChatterImpl.lstFeeds!= null && ChatterImpl.lstFeeds.size != 0}" >
+                                <dl class="sort" style="float: right;margin: 0;font-size: 1.167em;line-height: 1.214em;">
+                                    <dt style="font-weight:100; float: left; margin: 0 5px 0 0; color: #4b4a4a;">Sort by:</dt>
+                                    <dd><a id="anchorId1{!chatterId}" style="cursor:pointer;"  onclick="$('#anchorId2{!chatterId}').removeClass('active');$(this).addClass('active');widget{!chatterId}.SortFeeds('date');">Date</a> &nbsp;</dd>
+                                    <dd>| &nbsp;<a id="anchorId2{!chatterId}" style="cursor:pointer;" class = "active" onclick="$('#anchorId1{!chatterId}').removeClass('active');$(this).addClass('active');widget{!chatterId}.SortFeeds('popular');">Popular</a></dd>
+                                </dl>
+                            </apex:outputPanel>
+                            
+                            <apex:outputPanel id="hiddenItems" > <!-- Used for Comment action Support -->
+	                            <apex:inputHidden value="{!ChatterImpl.commentBody}" id="hiddenCommentBody"/>
+	                            <apex:inputHidden value="{!ChatterImpl.contentId}" id="hiddenCommentContentId"/>
+                            </apex:outputPanel>
+                            
+                            <apex:outputPanel id="hiddenTopicDetail" > <!-- Used to add Topic via action Support -->
+                                <apex:inputHidden value="{!ChatterImpl.topicNameToInsert}" id="hiddenTopicName"/>
+                                <apex:inputHidden value="{!ChatterImpl.topicFeedId}" id="hiddenTopicFeedId"/>
+                            </apex:outputPanel>
+                            
+                            <apex:outputPanel id="postPanel">
+                                <apex:repeat id="chatterFeedRows" value="{!ChatterImpl.lstFeeds}"  var="post" rendered="{!(ChatterImpl.lstFeeds != null && ChatterImpl.lstFeeds.size > 0)}">
+                                	<apex:outputPanel id="postPanelToExcludeUser" rendered="{!!CONTAINS(ChatterImpl.strUserIds,post.createdById)}">
+                                    <div id="postLI{!post.feedId}{!chatterId}" class="feed {!IF((CONTAINS(ChatterImpl.strFeaturedPostsIDs, LEFT(post.feedParentId,15)) && BEGINS(post.feedParentId, '0F9')), 'feature', '')}" style="margin-top:8px;width:475px;word-wrap:break-word;"> <!-- && CONTAINS(ChatterImpl.strFeaturedPostsIDs, post.Id -->
+                                        <div class="avatar">
+                                            <a style="cursor: pointer;" href="" onclick="redirectToURL{!chatterId}('{!post.createdById}');"><img src="{!post.createdBySmallPhotoUrl}" alt="image description" width="45" height="45" /></a>
+                                        </div>
+                                        <div class="info">
+                                            <h3>    
+                                                <apex:outputPanel rendered="{!If(post.feedParentId!=null && ChatterImpl.mapKeyPrefixAndObjectName[LEFT(post.feedParentId,3)] == 'Notification__c',true,false)}" layout="none">
+                                                    <a style="cursor: pointer;" href="" onclick="chatterWidget{!chatterId}.goToNotification('{!post.feedParentId}');">
+                                                        {!post.feedParentName} 
+                                                    </a>
+                                                    - 
+                                                    <a style="cursor: pointer;" href="" onclick="redirectToURL{!chatterId}('{!post.createdById}');">
+                                                    {!post.createdByName}
+                                                    </a>
+                                                </apex:outputPanel>
+                                                
+                                                <apex:outputPanel rendered="{!If(post.feedParentId!=null && ChatterImpl.mapKeyPrefixAndObjectName[LEFT(post.feedParentId,3)] == 'Intranet_Event__c',true,false)}" layout="none">
+                                                    <a style="cursor: pointer;" href="" onclick="chatterWidget{!chatterId}.goToIntranetEvent('{!post.feedParentId}');">
+                                                        {!post.feedParentName} 
+                                                    </a>
+                                                    - 
+                                                    <a style="cursor: pointer;" href="" onclick="chatterWidget{!chatterId}.redirectToURL('{!post.createdById}');">
+                                                    {!post.createdByName}
+                                                    </a>
+                                                </apex:outputPanel>
+                                                
+                                                <apex:outputPanel rendered="{!If(AND(post.feedParentId!=null,ChatterImpl.mapKeyPrefixAndObjectName[LEFT(post.feedParentId,3)] == 'User',
+                                                                                        post.feedParentId == post.createdById),true,false)}" layout="none"> 
+                                                    <a style="cursor: pointer;" href="" onclick="chatterWidget{!chatterId}.redirectToURL('{!post.feedParentId}');">
+                                                        {!post.feedParentName} 
+                                                    </a>
+                                                </apex:outputPanel>
+                                                
+                                                <apex:outputPanel rendered="{!If(AND(post.feedParentId!=null,ChatterImpl.mapKeyPrefixAndObjectName[LEFT(post.feedParentId,3)] == 'User',
+                                                                                        post.feedParentId != post.createdById),true,false)}" layout="none"> 
+                                                    <a style="cursor: pointer;" href="" onclick="chatterWidget{!chatterId}.redirectToURL('{!post.createdById}');">
+                                                        {!post.createdByName} 
+                                                    </a>
+                                                   <span style="font-size: 0.75em;"> to </span>
+                                                    <a style="cursor: pointer;" href="" onclick="chatterWidget{!chatterId}.redirectToURL('{!post.feedParentId}');">
+                                                        {!post.feedParentName} 
+                                                    </a>
+                                                </apex:outputPanel>
+                                                <apex:outputPanel rendered="{!IF(post.feedParentId!=null && ChatterImpl.mapKeyPrefixAndObjectName[LEFT(post.feedParentId,3)] == 'CollaborationGroup' , true, false)}" layout="none">
+                                                    <apex:variable var="chatterGroupId" value="{!LEFT(post.feedParentId,15)}" />
+                                                    <a style="cursor:pointer;" href="" onclick="widget{!chatterId}.showChatterActivity('{!post.feedParentId}');
+                                                                                            $('#{!chatterGroupId}').parent().children().removeClass('active');$('#{!chatterGroupId}').addClass('active');"> 
+                                                        {!post.feedParentName}
+                                                    </a>
+                                                     - 
+                                                    <a style="cursor: pointer;" href="" onclick="chatterWidget{!chatterId}.redirectToURL('{!post.createdById}');">
+                                                    {!post.createdByName}
+                                                    </a>
+                                                </apex:outputPanel>
+                                                
+                                                <apex:outputPanel rendered="{!IF(post.feedParentId!=null && ChatterImpl.mapKeyPrefixAndObjectName[LEFT(post.feedParentId,3)] == 'Content_Chatter__c' , true, false)}" layout="none">
+                                                    <a style="cursor:pointer;" href="{!$Site.Prefix}/sfc/servlet.shepherd/version/download/{!ChatterImpl.mapContentChatterIdToContentId[post.feedParentId]}?asPdf=false&#38;operationContext=CHATTER"> 
+                                                        <apex:outputPanel rendered="{!IF(AND(ChatterImpl.mapContentParentIdAndTitle != null, ChatterImpl.mapContentParentIdAndTitle[post.feedParentId] != null), true, false)}" layout="none">   
+                                                            {!ChatterImpl.mapContentParentIdAndTitle[post.feedParentId]}
+                                                        </apex:outputPanel>
+                                                    </a>
+                                                     - 
+                                                    <a style="cursor: pointer;" href="" onclick="chatterWidget{!chatterId}.redirectToURL('{!post.createdById}');">
+                                                    {!post.createdByName}
+                                                    </a>
+                                                </apex:outputPanel>
+                                                
+												<!-- this section is added to handle use case, when a new version of file is uploaded -->
+                                                 <apex:outputPanel rendered="{!(post.feedParentId==null)}" layout="none">
+                                                    <a style="cursor:pointer;" href="{!post.contentDownloadUrl}"> 
+                                                        <apex:outputPanel layout="none">   
+                                                            {!post.contentTitle}
+                                                        </apex:outputPanel>
+                                                    </a>
+                                                    -  
+                                                </apex:outputPanel>     
+                                                
+                                                <apex:outputPanel rendered="{!IF(AND(post.feedParentId!=null,ChatterImpl.mapKeyPrefixAndObjectName[LEFT(post.feedParentId,3)] != 'Content_Chatter__c',
+                                                                                        ChatterImpl.mapKeyPrefixAndObjectName[LEFT(post.feedParentId,3)] != 'CollaborationGroup',
+                                                                                        ChatterImpl.mapKeyPrefixAndObjectName[LEFT(post.feedParentId,3)] != 'User',
+                                                                                        ChatterImpl.mapKeyPrefixAndObjectName[LEFT(post.feedParentId,3)] != 'Notification__c',
+                                                                                        ChatterImpl.mapKeyPrefixAndObjectName[LEFT(post.feedParentId,3)] != 'Intranet_Event__c'), true, false)}" layout="none">
+                                                    <a style="cursor:pointer;" href="" onclick="chatterWidget{!chatterId}.goToSobject('{!post.feedParentId}','{!ChatterImpl.mapKeyPrefixAndObjectName[LEFT(post.feedParentId,3)]}');"> 
+                                                        {!post.feedParentName} 
+                                                        
+                                                    </a>
+                                                    <a style="cursor: pointer;" href="" onclick="chatterWidget{!chatterId}.redirectToURL('{!post.createdById}');">
+                                                    - {!post.createdByName}
+                                                    </a>
+                                                </apex:outputPanel>
+                                                
+                                                
+                                                <span id="deleteBtn{!post.feedId}{!chatterId}" style="float:right; display:none;" >
+                                                    <apex:outputPanel rendered="{!post.hasDeleteAccess && IF(OR(post.CreatedById == $User.Id ,$Profile.Name == 'System Administrator'), true, false)}" layout="none">
+														<a href="javascript:void(0);" id="deleteBtnLink{!post.feedId}" title="Delete this post" onclick="chatterWidget{!chatterId}.feedPostDelete('{!post.feedId}');">x</a>
+                                                    </apex:outputPanel>
+                                                </span>
+                                                
+                                                
+                                            </h3>
+                                            <div id="divShort{!post.feedId}{!chatterId}" style="margin-top:5px;width:390px;">
+                                                <div style="word-wrap:break-word;">
+                                                <apex:outputText rendered="{!(post.feedParentId==null)}">
+                                                	<a style="cursor: pointer;" href="" onclick="chatterWidget{!chatterId}.redirectToURL('{!post.createdById}');">
+                                                   {!post.createdByName}
+                                                    </a>
+                                                 </apex:outputText>
+                                                <apex:outputText value="{!post.formattedText}" escape="false"/> </div>
+                                            </div>
+                                            <div id="divFull{!post.feedId}{!chatterId}" style="display:none;width:390px;">   
+                                                <div  style="word-wrap:break-word;"><apex:outputText value="{!post.formattedText}" escape="false"/></div>
+                                            </div>
+                                            <div id="togglingSec{!post.feedId}{!chatterId}" style="color: #1f7edf;cursor: pointer;" onclick="document.getElementById('divShort{!post.feedId}{!chatterId}').style.display = 'none'; document.getElementById('divFull{!post.feedId}{!chatterId}').style.display = ''; document.getElementById('togglingSec{!post.feedId}{!chatterId}').style.display = 'none';chatterWidget{!chatterId}.setLoadingImageCss();"></div>
+                                            
+                                            <!-- Link post -->
+                                            <apex:outputPanel id="LinkPost" rendered="{!IF(post.LinkUrl != null, true, false)}" layout="none"><br />
+                                                <div class="linkPostLinkContainer linkPostLinkTitle" style="border: 1px solid #EDEDED;padding:10px;">
+                                                    <a target="_blank" class="linkPostLink" href="{!post.linkUrl}">
+                                                        <img title="{!post.linkTitle}" alt="{!post.linkTitle}" src="{!URLFOR($Resource.SL_IntranetHUB,'/IntranetHub/images/icon3.png')}"/>
+                                                        <span title="{!post.linkUrl}">{!post.linkTitle}</span>
+                                                    </a>
+                                                    <div class="feeditemlinkpost" style="padding-left:20px;">{!post.LinkUrl}</div>
+                                                </div>
+                                            </apex:outputPanel>
+                                            <!-- End of link post -->
+                                            
+                                            <!-- File post -->
+                                            <apex:outputPanel id="FileAttachment" rendered="{!IF(post.contentId != null, true, false)}" layout="none">
+                                                <br />
+                                                <c:SL_IntranetFilePreview id="IntranetFilePreview"  
+                                                	widId="{!chatterId}" 
+                                                	selectedId="{!post.feedId}" 
+                                                	contentId="{!post.contentId}" 
+                                                	contentTitle="{!post.contentTitle}" 
+                                                	contentSize="{!post.contentSize}" 
+                                                	PostOrComment="post" />
+                                            </apex:outputPanel>
+                                            <!-- End of File post -->
+                                            
+                                            <!------------------- Display Topic and Add Feed Item related Topic---------------------->
+                                            <apex:outputPanel id="feedTopic" >
+                                                <div style="margin-top:8px;">
+                                                    <span >
+                                                        <a id="topicLabel{!post.feedId}{!chatterId}" title="Click here to add tags/topics"
+                                                            onclick="chatterWidget{!chatterId}.getTopicSection('{!post.feedId}'); $(this).css('pointer-events','none');"
+                                                            style ="color: #1f7edf;cursor: pointer;">
+                                                            Add Topics
+                                                        </a> 
+                                                        <span class="disableTopicLink blue" style="display:none;">Add Topics</span>&nbsp; 
+                                                        <span id="relatedTopics{!post.feedId}{!chatterId}">
+                                                            <apex:repeat value="{!ChatterImpl.mapFeedItemIdTolstTopic[post.feedId]}" var="topic" rows="1" first="0">
+                                                                <span><a id="{!topic.TopicId}" style="color:#a6a6a6; cursor: pointer; font-size: 11px;" onclick="chatterWidget{!chatterId}.chatterTopicCall('{!topic.Topic.name}');">{!topic.Topic.name}</a></span>
+                                                            </apex:repeat>
+                                                            <apex:repeat value="{!ChatterImpl.mapFeedItemIdTolstTopic[post.feedId]}" var="topic" first="1">
+                                                            	<span>, <a id="{!topic.TopicId}" style="color:#a6a6a6; cursor: pointer; font-size: 11px;" onclick="chatterWidget{!chatterId}.chatterTopicCall('{!topic.Topic.name}');">{!topic.Topic.name}</a></span>
+                                                            </apex:repeat>
+                                                        </span> 
+                                                    </span>
+                                                </div>
+                                            </apex:outputPanel>
+                                            
+                                            <div id="TargetContainer{!post.feedId}"></div>
+                                            
+                                            <div id="divDecoder" style="display:none"></div> 
+                                            
+                                            <div id = "actionSupportDivTopicAdd{!post.feedId}{!chatterId}">
+                                                <apex:outputPanel id="actionSupportDivTopic">
+                                                    <apex:actionSupport id="postNewTopicToFeed" event="onclick" action="{!ChatterImpl.insertNewTopic}" status="loader"  rerender="feedTopic,hiddenTopicDetail"  onComplete="reRenderCss();chatterWidget{!chatterId}.setLoadingImageCss();"/>
+                                                </apex:outputPanel>
+                                            </div>
+                                            <!-------------------End Display Topic and Add Feed Item related Topic ------------------>
+                                            
+                                            <div class="bottom">
+                                                
+                                                <!----------- Feed Item Date section -------------->
+                                                
+                                                <span class="date">
+                                                    <apex:outputtext value="{0, date, 'Today' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(post.feedCreatedDate) = TODAY()}">
+                                                        <apex:param value="{!post.feedCreatedDate}"/>                                                                    
+                                                    </apex:outputtext>
+                                                    <apex:outputText value="{0, date, 'Yesterday' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(post.feedCreatedDate) = TODAY()-1}">
+                                                        <apex:param value="{!post.feedCreatedDate}"/>
+                                                    </apex:outputText> 
+                                                    <apex:outputText value="{0, date, 'Two days ago' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(post.feedCreatedDate) = TODAY()-2}">
+                                                        <apex:param value="{!post.feedCreatedDate}"/>
+                                                    </apex:outputText> 
+                                                    <apex:outputText value="{0, date, MMMMM dd, yyyy 'at' hh:mm a}" escape="false" rendered="{!(DATEVALUE(post.feedCreatedDate) != TODAY()) && (DATEVALUE(post.feedCreatedDate) != TODAY()-1) && (DATEVALUE(post.feedCreatedDate) != TODAY()-2)}">
+                                                        <apex:param value="{!post.feedCreatedDate}"/>
+                                                    </apex:outputText>
+                                                    <apex:outputPanel rendered="{!IF((BEGINS(post.feedParentId, '0F9') && OR(ChatterImpl.strFeaturedPostsIDs =='' ,!CONTAINS(ChatterImpl.strFeaturedPostsIDs, LEFT(post.feedParentId,15)))), true, false) && ChatterImpl.strSearchText ==''}" layout="none"> 
+                                                        &nbsp;<em>in</em>&nbsp; {!Post.feedParentName}
+                                                    </apex:outputPanel>
+                                                    
+                                                    <apex:outputPanel rendered="{!IF((post.feedParentId == $User.Id && ChatterImpl.strSearchText ==''), true, false)}" layout="none"> 
+                                                        &nbsp;<em>in</em>&nbsp; My Feeds
+                                                    </apex:outputPanel>
+                                                    
+                                                </span>    
+                                                
+                                                <!-- End -->
+                                                
+                                                <!----------- Like/unlike block and showing the comment count ------------->
+                                                
+                                                <apex:outputPanel id="hiddenLikeUnLikeFeed" style="display:none;">
+                                                </apex:outputPanel>
+                                                
+                                                <apex:outputPanel id="feedPostLikeUnlike">
+                                                    <span id="likeAndUnlike">
+                                                        <apex:outputPanel id="unlikeFeedActionSupportOp" rendered="{!IF(Post.isLikedByCurrentUser, true, false)}" >  
+                                                            <apex:actionSupport id="updateUnLikeFeeds" event="onclick"  action="{!ChatterImpl.updateLikeUnLikeFeeds}" status="loaderPost" rerender="feedPostLikeUnlike" >
+                                                                <apex:param name="Type" value="unlike"/>
+                                                                <apex:param name="ItemId" value="{!post.feedId}"/>
+                                                                <apex:param name="LikedId" value="{!post.myLikeId}"/>
+                                                                <apex:param name="FeedId" value="{!post.feedId}"/>
+                                                            </apex:actionSupport>
+                                                            <a id="unlike{!post.feedId}" onclick="$('#likeAndUnlike a').css({'pointer-events':'none'});" class="like" style="cursor:pointer;">Unlike ({!post.totalLikes})</a> &nbsp;&nbsp;
+                                                        </apex:outputPanel>
+                                                        
+                                                        <apex:outputPanel id="likeFeedActionSupportOp" rendered="{!IF(Post.isLikedByCurrentUser, false, true)}" >
+                                                            <apex:actionSupport id="updateLikeFeeds" event="onclick"  action="{!ChatterImpl.updateLikeUnLikeFeeds}" status="loaderPost" rerender="feedPostLikeUnlike,commentLikeUnlikeOP" >
+                                                                <apex:param name="Type" value="like"/>
+                                                                <apex:param name="ItemId" value="{!post.feedId}"/>
+                                                                <apex:param name="LikedId" value=""/>
+                                                                <apex:param name="FeedId" value="{!post.feedId}"/>
+                                                            </apex:actionSupport>
+                                                            <a id="like{!post.feedId}" onclick="$('#likeAndUnlike a').css({'pointer-events':'none'});" class="like" style="cursor:pointer;">Like ({!post.totalLikes})</a> &nbsp;&nbsp;  
+                                                            
+                                                        </apex:outputPanel>
+                                                    </span>
+                                                </apex:outputPanel> 
+                                                
+                                                <apex:outputPanel id="commentCount">
+                                                    <a class="comment" href="javascript:chatterWidget{!chatterId}.showHideComments('{!post.feedId}{!chatterId}');">Comment(<span id="count{!post.feedId}">{!post.commentCount}</span>)</a>
+                                                </apex:outputPanel>
+                                                <apex:outputPanel id="hiddenComment">
+                                                    <span id ="hiddenCommentCount{!post.feedId}{!chatterId}"  style="display:none;">{!post.commentCount}</span>
+                                                </apex:outputPanel>
+                                                <!---------------- End -------------------> 
+                                            </div>
+                                            
+                                            <!------------- Starting of comment section  ---------->    
+                                            <div class="add-feed" style="float:left;width:375px;">   
+                                                <apex:outputPanel id="commentInfo" layout="block">
+                                                    <div id="{!post.feedId}{!chatterId}" style="display: block;">
+                                                        <ul class="feeds"> 
+                                                            <apex:repeat id="ChatterFeedcommentsRows" value="{!post.comments}" var="fc">
+                                                            	<apex:outputPanel id="commentPanelToExcludeUser" rendered="{!!CONTAINS(ChatterImpl.strUserIds,post.createdById)}">
+	                                                                <li id="commentLI{!fc.feedCommentId}" onmouseover="document.getElementById('deleteCommentBtn{!fc.feedCommentId}{!chatterId}').style.display = '';" onmouseout="document.getElementById('deleteCommentBtn{!fc.feedCommentId}{!chatterId}').style.display = 'none';" style="margin-left:-1px;">
+	                                                                    <a style="cursor: pointer;" href="" onclick="chatterWidget{!chatterId}.redirectToURL('{!fc.CreatedById}');">
+	                                                                        <img src="{!fc.createdBySmallPhotoUrl}" alt="image description" width="35" height="35" />
+	                                                                    </a>
+	                                                                    <div class="info">
+	                                                                        <span id="deleteCommentBtn{!fc.feedCommentId}{!chatterId}" style="float:right; display:none;" >
+	                                                                            <apex:outputPanel rendered="{!fc.hasDeleteAccess && IF(OR(fc.CreatedById == $User.Id, $Profile.Name == 'System Administrator',post.createdById == $User.Id), true, false)}" layout="none">
+	                                                                                <a href="javascript:void(0);" id="deleteCommentBtnLink{!fc.feedCommentId}" onclick="chatterWidget{!chatterId}.confirmCommentDelete('{!fc.feedCommentId}', '{!post.feedId}');" title="Delete this comment">x</a>                                                                                
+	                                                                            </apex:outputPanel>
+	                                                                            
+	                                                                            <div id="deleteHiddenCommentBtn{!fc.feedCommentId}{!chatterId}" style="display:none">
+	                                                                                <apex:outputPanel id="hiddenActionSupport" >
+	                                                                                    <apex:actionSupport id="deleteFeedComment"  
+	                                                                                    	event="onclick" 
+	                                                                                    	action="{!ChatterImpl.deleteFeedComment}" 
+	                                                                                    	rerender="commentInfo,commentCount, viewAllCount" 
+	                                                                                    	status="loaderPost" 
+	                                                                                    	oncomplete="reRenderCss();chatterWidget{!chatterId}.setLoadingImageCss();"> 
+	                                                                                        <apex:param name="deletedCommentId" value="{!fc.feedCommentId}"/>
+	                                                                                        <apex:param name="feedId" value="{!post.feedId}"/>
+	                                                                                    </apex:actionSupport>
+	                                                                                </apex:outputPanel>
+	                                                                            </div>
+	                                                                            
+	                                                                        </span>
+	                                                                        <div style="padding-right: 8px;">  
+	                                                                            <div id="Shortcomment{!fc.feedCommentId}{!chatterId}">
+	                                                                                <h3 style="font-size:0.9em;"><a style="cursor: pointer;" href="" onclick="chatterWidget{!chatterId}.redirectToURL('{!fc.CreatedById}');">{!fc.createdByName}</a>&nbsp;</h3>  
+	                                                                                <div  style="word-wrap:break-word; ">
+	                                                                                    <apex:outputText value="{!fc.formattedText}" escape="false"/>
+	                                                                                    <br /> 
+	                                                                                </div>
+	                                                                            </div>
+	                                                                            <div style="display:none;" id="Fullcomment{!fc.feedCommentId}{!chatterId}"> 
+	                                                                                <h3 style="font-size:0.9em;"><a style="cursor: pointer;" href="" onclick="chatterWidget{!chatterId}.redirectToURL('{!fc.CreatedById}');">{!fc.createdByName}</a>&nbsp;</h3>    
+	                                                                                <div  style="word-wrap:break-word;">
+	                                                                                    <apex:outputText value="{!fc.formattedText}" escape="false"/><br />
+	                                                                                </div>
+	                                                                            </div> 
+	                                                                            <div id="togglingSec{!fc.feedCommentId}{!chatterId}" style="color: #1f7edf;cursor: pointer;" onclick="document.getElementById('Shortcomment{!fc.feedCommentId}{!chatterId}').style.display = 'none'; document.getElementById('Fullcomment{!fc.feedCommentId}{!chatterId}').style.display = ''; document.getElementById('togglingSec{!fc.feedCommentId}{!chatterId}').style.display = 'none';chatterWidget{!chatterId}.setLoadingImageCss();"></div>
+	                                                                            
+	                                                                            <!-- File post for Comment -->
+	                                                                            <apex:outputPanel id="FileAttachment" rendered="{!fc.contentId != null}" >
+	                                                                                <br />
+	                                                                                <c:SL_IntranetFilePreview id="IntranetFilePreview2" 
+	                                                                                	widId="{!chatterId}" 
+	                                                                                	selectedId="{!fc.feedCommentId}" 
+	                                                                                	contentId="{!fc.contentId}" 
+	                                                                                	contentTitle="{!fc.contentTitle}" 
+	                                                                                	contentSize="{!fc.contentSize}" 
+	                                                                                	contentType="{!fc.contentType}" 
+	                                                                                	PostOrComment="comment"/>
+	                                                                            </apex:outputPanel>
+	                                                                            <!-- End of File post for Comment -->
+	                                                                            
+	                                                                            <apex:outputPanel id="commentLikeUnlikeOP"> 
+	                                                                                <span id="likeAndUnlikeComment{!chatterId}{!post.feedId}">
+	                                                                                    <apex:outputPanel id="unlikeCommentActionSupportOp" rendered="{!IF(fc.isCommentLikeByCurrentUser==true, true, false)}" >
+	                                                                                        <apex:actionSupport id="updateLikeUnLikeFeeds2"  
+	                                                                                        	event="onclick" 
+	                                                                                        	action="{!ChatterImpl.updateLikeUnLikeFeeds}" 
+	                                                                                        	rerender="commentLikeUnlikeOP" 
+	                                                                                        	status="loaderPost">
+	                                                                                            <apex:param name="Type" value="unlikeComment"/>
+	                                                                                            <apex:param name="ItemId" value="{!fc.feedCommentId}"/>
+	                                                                                            <apex:param name="LikedId" value="{!fc.commentLikeId}"/>
+	                                                                                            <apex:param name="FeedId" value="{!post.feedId}"/>
+	                                                                                        </apex:actionSupport>
+	                                                                                        <a id="unlike{!fc.feedCommentId}" 
+	                                                                                            onclick="$('#likeAndUnlikeComment{!chatterId}{!post.feedId} a').css({'pointer-events':'none'});" 
+	                                                                                            class="date" style="cursor:pointer;">Unlike ({!fc.totalLikes})</a> &nbsp;&nbsp;
+	                                                                                    </apex:outputPanel> 
+	                                                                                    
+	                                                                                    <apex:outputPanel id="likeCommentActionSupportOp" rendered="{!IF(fc.isCommentLikeByCurrentUser==false, true, false)}" >
+	                                                                                        <apex:actionSupport id="updateLikeUnLikeFeeds" 
+	                                                                                        	event="onclick" 
+	                                                                                        	action="{!ChatterImpl.updateLikeUnLikeFeeds}" 
+	                                                                                        	rerender="feedPostLikeUnlike,commentLikeUnlikeOP" 
+	                                                                                        	status="loaderPost">
+	                                                                                            <apex:param name="Type" value="likeComment"/>
+	                                                                                            <apex:param name="ItemId" value="{!fc.feedCommentId}"/>
+	                                                                                            <apex:param name="LikedId" value=""/>
+	                                                                                            <apex:param name="FeedId" value="{!post.feedId}"/>
+	                                                                                        </apex:actionSupport>
+	                                                                                        <a id="like{!fc.feedCommentId}" 
+	                                                                                            onclick="$('#likeAndUnlikeComment{!chatterId}{!post.feedId} a').css({'pointer-events':'none'});" 
+	                                                                                            class="date" style="margin-right:28px;cursor:pointer;">Like ({!fc.totalLikes})</a> &nbsp;&nbsp;
+	                                                                                    </apex:outputPanel>
+	                                                                                </span>
+	                                                                            </apex:outputPanel>
+	                                                                            
+	                                                                            <apex:outputtext styleClass="date" value="{0, date, 'Today' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(fc.feedCreatedDate) = TODAY()}">
+	                                                                                <apex:param value="{!fc.feedCreatedDate}"/>                                                                  
+	                                                                            </apex:outputtext>
+	                                                                            
+	                                                                            <apex:outputText styleClass="date" value="{0, date, 'Yesterday' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(fc.feedCreatedDate) = TODAY()-1}">
+	                                                                                <apex:param value="{!fc.feedCreatedDate}"/>
+	                                                                            </apex:outputText> 
+	                                                                            <apex:outputText styleClass="date" value="{0, date, 'Two days ago' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(fc.feedCreatedDate) = TODAY()-2}">
+	                                                                                <apex:param value="{!fc.feedCreatedDate}"/>
+	                                                                            </apex:outputText> 
+	                                                                            <apex:outputText styleClass="date" value="{0, date, MMMMM dd, yyyy 'at' hh:mm a}" escape="false" rendered="{!(DATEVALUE(fc.feedCreatedDate) != TODAY()) && (DATEVALUE(fc.feedCreatedDate) != TODAY()-1) && (DATEVALUE(fc.feedCreatedDate) != TODAY()-2)}">
+	                                                                                <apex:param value="{!fc.feedCreatedDate}"/>
+	                                                                            </apex:outputText>
+	                                                                        </div> 
+	                                                                    </div>  
+	                                                                    <script> 
+	                                                                    /* To show more section for Comment*/ 
+	                                                                    if($(document.getElementById('Shortcomment{!fc.feedCommentid}{!chatterId}')).height() > 89 && !$.browser.chrome) 
+	                                                                    {    
+	                                                                        document.getElementById('Shortcomment{!fc.feedCommentid}{!chatterId}').style.height = 87 + 'px' ;  
+	                                                                        document.getElementById('Shortcomment{!fc.feedCommentid}{!chatterId}').style.overflow = 'hidden'; 
+	                                                                        
+	                                                                        if(document.getElementById('Shortcomment{!fc.feedCommentid}{!chatterId}').style.height != document.getElementById('Shortcomment{!fc.feedCommentid}{!chatterId}').scrollHeight) 
+	                                                                            document.getElementById('togglingSec{!fc.feedCommentid}{!chatterId}').innerHTML += '...More'; 
+	                                                                    } 
+	                                                                    else if(document.getElementById('Shortcomment{!fc.feedCommentid}{!chatterId}').clientHeight > 89 && $.browser.chrome) 
+	                                                                    {    
+	                                                                        document.getElementById('Shortcomment{!fc.feedCommentid}{!chatterId}').style.height = 89 + 'px' ;  
+	                                                                        document.getElementById('Shortcomment{!fc.feedCommentid}{!chatterId}').style.overflow = 'hidden'; 
+	                                                                        if(document.getElementById('Shortcomment{!fc.feedCommentid}{!chatterId}').style.height != document.getElementById('Shortcomment{!fc.feedCommentid}{!chatterId}').scrollHeight) 
+	                                                                            document.getElementById('togglingSec{!fc.feedCommentid}{!chatterId}').innerHTML += '...More'; 
+	                                                                    } 
+	                                                                        else 
+	                                                                        { 
+	                                                                            document.getElementById('togglingSec{!fc.feedCommentid}{!chatterId}').onclick = ''; 
+	                                                                            document.getElementById('togglingSec{!fc.feedCommentid}{!chatterId}').style.display = 'none'; 
+	                                                                        }
+	                                                                    /* End of Show more section for Comment*/ 
+	                                                                    
+	                                                                    </script>   
+	                                                                </li>
+                                                                </apex:outputPanel>   
+                                                            </apex:repeat>
+                                                        </ul>
+                                                    </div>
+                                                    
+                                                    <!-------------- Insert comments container  --------------->  
+                                                    <div class="holder" id ="commentTextArea" style="width:365px;">
+                                                        <label for="comment2" class="hidden">&nbsp;</label>
+                                                        <textarea class="animated" id="commentBlock{!post.feedId}{!chatterId}" 
+                                                        		  onblur="onCommentAreaBlur(this, '{!post.feedId}', '{!chatterId}')"  
+                                                                  onfocus="if(this.value=='Comment...') this.value = '';" 
+                                                                  onkeyup="chatterWidget{!chatterId}.checkLength(this.value, '{!post.feedId}{!chatterId}');chatterWidget{!chatterId}.setLoadingImageCss();" 
+                                                                  onmouseup = "if(this.value=='Comment...') this.value = ''; $('#attachFileDiv{!post.feedId}{!chatterId}').css('display', 'block');chatterWidget{!chatterId}.setLoadingImageCss();" 
+                                                                  style="min-height:32px;resize:none;overflow:hidden;max-width: 340px !important;width:340px !important;">Comment...
+                                                        </textarea>
+                                                        <input id="hidden_commentBox{!post.feedId}{!chatterId}" type="hidden"/>   
+                                                    </div>
+                                                     
+                                                     
+                                                   	<!-- Action support for text comment -->
+                                                   	<div id = "actionSupportDivComment{!post.feedId}{!chatterId}">
+                                                   		<apex:outputPanel id="actionSupportDivComment">
+                                                   			<apex:actionSupport id="postComment" event="onclick" action="{!ChatterImpl.postComment}" rerender="commentInfo,hiddenItems,commentCount" status="loaderPost" onComplete="reRenderCss();chatterWidget{!chatterId}.setLoadingImageCss();">
+										                        <apex:param name="parentFeedItemId" value="{!post.feedId}"/>
+										                        <apex:param name="feedCommentBody" value="{!ChatterImpl.commentBody}"/> 
+										                    </apex:actionSupport>
+                                                   		</apex:outputPanel>
+                                                   	</div>
+                                                   	
+                                                   	<!-- Action support for text/File comment -->
+                                                   	<div id = "actionSupportDivFileComment{!post.feedId}{!chatterId}">
+                                                   		<apex:outputPanel id="actionSupportDivFileComment">
+                                                   			<apex:actionSupport id="postFileComment" event="onclick" action="{!ChatterImpl.feedPostForFile}" rerender="commentInfo,hiddenItems,commentCount" status="loaderPost" onComplete="reRenderCss();chatterWidget{!chatterId}.setLoadingImageCss();">
+										                        <apex:param name="prmContentId" value="{!ChatterImpl.contentId}"/>
+										                        <apex:param name="prmPostBody" value="{!ChatterImpl.commentBody}"/>
+										                        <apex:param name="prmFeedType" value="CommentPost" />
+										                        <apex:param name="prmFeedId" value="{!post.feedId}"  /> 
+										                    </apex:actionSupport>
+                                                   		</apex:outputPanel>
+                                                   	</div>
+                                                    	
+                                                    <div class="tools" id="attachFileDiv{!post.feedId}{!chatterId}" style="display: none;"> 
+                                                        <ul class="tools-list" style="margin-top: 10px;margin-right: 10px;">
+                                                            <li style="cursor: pointer;margin-left: 0px;">
+                                                                <a onclick="chatterWidget{!chatterId}.commentFileAttachment('{!post.feedId}');">
+                                                                    <img src="/s.gif" title="File" alt="image description" class="chatterIcon" style="background-position: 0 -982px;"/>  
+                                                                </a>
+                                                            </li>
+                                                        </ul>
+                                                        
+                                                        <div style="float:right;padding-top:5px;">
+                                                            <input type="button" style="cursor: pointer !important;" class="btn" id="postBtn{!post.feedId}{!chatterId}" value="Comment"
+                                                                   onclick="chatterWidget{!chatterId}.commentPost('{!post.feedId}{!chatterId}','{!post.feedId}');"
+                                                                   >  
+                                                        	</input>  
+                                                    	</div>
+	                                                    <!--  Start - File Upload Section -->
+	                                                    <div id="commentFileUploadSection">
+	                                                        <span id="commentFile{!post.feedId}{!chatterId}"/>
+	                                                    </div>
+	                                                    <!--   End - File Upload Section -->
+                                                	</div>
+                                                
+                                                <!----------------------------------- End   --------------------------> 
+	                                                <apex:outputPanel id="viewAllCount" layout="block" style="margin-top:10px;">
+	                                                    <apex:outputPanel rendered="{!post.comments.size != post.commentCount}" layout="none">
+	                                                        <apex:outputPanel id="viewAllCountForActionSupport">
+	                                                            <apex:actionSupport id="viewAllComments" 
+	                                                            	event="onclick" 
+	                                                            	action="{!ChatterImpl.viewAllComments}" 
+	                                                            	rerender="commentInfo" 
+	                                                            	status="loaderPost" 
+	                                                            	onComplete="reRenderCss(); chatterWidget{!chatterId}.setLoadingImageCss();">
+	                                                                <apex:param name="feedPostId" value="{!post.feedId}"/>
+	                                                            </apex:actionSupport>
+	                                                            <span id="viewAll{!post.feedId}" style="margin-top: 10px;color: #1f7edf;cursor:pointer;">View all  <span id="viewAllCount{!post.feedId}">{!post.commentCount}</span>  Comments</span>
+	                                                        </apex:outputPanel>
+	                                                    </apex:outputPanel>
+	                                                </apex:outputPanel>
+	                                                
+	                                                <script>
+	                                                $('#commentBlock{!post.feedId}{!chatterId}').triggeredAutocomplete({
+	                                                    hidden: '#hidden_commentBox{!post.feedId}{!chatterId}',
+	                                                    autoFocus: true
+	                                                });
+	                                                </script>
+	                                                
+	                                                <script> 
+	                                                /********************** For setting the subject line  **************************/  
+	                                                
+	                                                /* To show more section for Post*/  
+	                                                if(document.getElementById('divShort{!post.feedid}{!chatterId}').clientHeight > 106 && !$.browser.chrome)  
+	                                                {     
+	                                                    document.getElementById('divShort{!post.feedid}{!chatterId}').style.height = 104 + 'px' ;   
+	                                                    document.getElementById('divShort{!post.feedid}{!chatterId}').style.overflow = 'hidden';  
+	                                                    if(document.getElementById('divShort{!post.feedid}{!chatterId}').style.height != document.getElementById('divShort{!post.feedid}{!chatterId}').scrollHeight)  
+	                                                        document.getElementById('togglingSec{!post.feedid}{!chatterId}').innerHTML += '...More';  
+	                                                }  
+	                                                else if(document.getElementById('divShort{!post.feedid}{!chatterId}').clientHeight > 102 && $.browser.chrome)  
+	                                                {     
+	                                                    document.getElementById('divShort{!post.feedid}{!chatterId}').style.height = 102 + 'px' ;   
+	                                                    document.getElementById('divShort{!post.feedid}{!chatterId}').style.overflow = 'hidden';  
+	                                                    if(document.getElementById('divShort{!post.feedid}{!chatterId}').style.height != document.getElementById('divShort{!post.feedid}{!chatterId}').scrollHeight)  
+	                                                        document.getElementById('togglingSec{!post.feedid}{!chatterId}').innerHTML += '...More';  
+	                                                }  
+	                                                    else  
+	                                                    {  
+	                                                        document.getElementById('togglingSec{!post.feedid}{!chatterId}').onclick = '';  
+	                                                        document.getElementById('togglingSec{!post.feedid}{!chatterId}').style.display = 'none';  
+	                                                    }     
+	                                                /* End of Show more section for Post*/ 
+	                                                </script> 
+	                                            </apex:outputPanel>        
+                                        </div>
+                                        <div id="commentErr{!post.feedId}{!chatterId}" style="color: red;font-weight: bold;"></div>
+                                    </div>
+                                    
+                                    <span class="notice" style="{!IF((CONTAINS(ChatterImpl.strFeaturedPostsIDs, LEFT(post.feedParentId,15)) && BEGINS(post.feedParentId, '0F9')), '', 'display:none;')}">{!post.feedParentName}</span> <!-- && CONTAINS(ChatterImpl.strFeaturedPostsIDs, post.Id) -->
+                                    <script>
+                                    
+                                    </script>
+                                    
+                                </div>
+                                </apex:outputPanel>
+                                <script>
+                                $('#postLI{!post.feedId}{!chatterId}').mouseover(function()   
+                                  {  
+                                      document.getElementById('deleteBtn{!post.feedid}{!chatterId}').style.display = '';  
+                                  });  
+                                $('#postLI{!post.feedId}{!chatterId}').mouseout(function()   
+                                  {  
+                                      document.getElementById('deleteBtn{!post.feedid}{!chatterId}').style.display = 'none';  
+                                  });
+                                // chatterWidget{!chatterId}.setLoadingImageCss();
+                                </script>
+                                
+                            </apex:repeat>
+                            <apex:outputPanel id="NoRecordsSection" >
+                                <apex:outputText rendered="{!ChatterImpl.lstFeeds == null || (ChatterImpl.lstFeeds != null && ChatterImpl.lstFeeds.size == 0)}">
+                                    There are no updates.
+                                </apex:outputText>
+                            </apex:outputPanel>
+                            
+                            <apex:outputPanel rendered="{!IF(AND(ChatterImpl.nextPageToken != null,ChatterImpl.lstFeeds!=null,ChatterImpl.lstFeeds.size<=999), true, false )}" layout="none"> 
+                                <a href="javascript:widget{!chatterId}.getMoreRecords();" class="see-more">{!$Label.SL_Pagination_SeeMore}</a> 
+                            </apex:outputPanel> 
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                </apex:outputPanel>
+            </apex:form>
+        </apex:outputpanel>
+        
+        <br/><br/><br/>
+        
+        <script>
+        //chatterWidget{!chatterId}.setLoadingImageCss();
+        $('.animated').autosize();
+         var strContextUsersId = '{!ChatterImpl.strContextUsersId}'; // assigning values of user id which are accessible to context user, to use it in chatterPlugIn.js file
+        </script>
+    </div>
+<!-- </span>  -->
+
+<!-- Action Status for loading image -->
+<apex:actionstatus id="loaderPost">
+    <apex:facet name="start">
+        <div id="salesforceSource_blurybackground{!chatterId}" style="margin-top:0px;height:0px;position:relative; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.4;filter:alpha(opacity=40)"></div>
+        <div id="ManageMembersViewport_loading{!chatterId}" class="waitingSearchDiv" style="display: '';position: relative;">
+            <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+                <table align="center" valign="middle" style="width: 100%; height: 30%">
+                    <tr align="center" valign="middle" style="width: 100%; height: 30%"> 
+                        <td valign="middle"><img src="/img/loading.gif"/><span class="waitingDescription"><b>Loading...</b></span></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </apex:facet>
+</apex:actionstatus>
+
+<script>
+    	
+   chatterWidget{!chatterId}.setLoadingImageCss();
+    //To get News feed based on Object Record
+   if(('{!objectRecordId}' !='' || '{!searchText}' !='') && !(chatterWidget{!chatterId}.isReRenderedAlready))
+   {
+       chatterWidget{!chatterId}.getRecordsJS();
+   }
+                    
+    function interMediateChatterGroupCall{!chatterId}(chatterGroupId){
+        
+        chatterGroupId = chatterGroupId.substring(0, 15)
+        $('#'+chatterGroupId).parent().children().removeClass('active');
+        $('#'+chatterGroupId).addClass('active');
+        widget{!chatterId}.showChatterActivity(chatterGroupId);
+    }
+</script>
+</apex:component>

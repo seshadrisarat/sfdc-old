@@ -1,0 +1,1709 @@
+<apex:component controller="sma.MAComponentCon">
+    <script type='text/javascript'>
+
+        //populate required vars to allow this component to be used outside of MA
+        if (typeof RichMarkerPosition === "undefined") {
+            window.RichMarkerPosition = {};
+        }
+    
+        //define MA
+        var MA = (function (options) {
+            return {
+
+                //assorted useful merge fields
+                CurrentUser: { Id: '{!$User.Id}', Name: '{!JSENCODE($User.FirstName)} {!JSENCODE($User.LastName)}' },
+                IsMobile: window.location.href.toLowerCase().indexOf('mapanythingmobile') != -1,
+                Namespace: '{!namespace}',
+                comCurrency : '{!userCurrency}',
+                SessionId: '{!$Api.Session_ID}',
+                SecurityToken: '{!securityToken}',
+                SitePrefix: options.sitePrefix,
+            
+                //used for client-specific access to the MA API
+                APIKey: '{!APIKey}',
+            
+                //an index to be used and incremented by anything interacting with the framework to ensure uniqueness
+                componentIndex: 1,
+                
+                //an index used to show unquie color for rulers
+                ruleIndex: 1,
+
+                //extend MA with cached marker colors
+                cachedMarkers : {},
+                
+                
+                
+                //defaults used throughout the application
+                defaults: {
+                    maxQuerySize: 2000,
+                    routeOptions: {
+                        TimeBasedOptions: {
+                            Enabled             : false,
+                            Start               : '9:00 am',
+                            End                 : '5:00 pm',
+                            AppointmentDuration : '1 hr, 0 min',
+                            Mode                : 'Quickest',
+                            Unit                : 'mi'
+                        }
+                    },
+                    waypointOptions: {
+                        TimeBasedOptions: {
+                            Start       : '???',
+                            Duration    : '1 hr, 0 min'
+                        },
+                        LockType: 'unlocked'
+                    },
+                    userSettings: {
+                        RouteDefaults: {
+                            mode        : 'Quickest',
+                            unit        : 'mi',
+                            start       : '9:00 am',
+                            end         : '5:00 pm',
+                            duration    : '0 hr, 30 min' 
+                        }
+                    }
+                },
+
+                //map capabilities
+                Map: {
+
+                    click2CreateMarkers: [],
+
+                    //update the base map tiles
+                    updateMapType: function (mapTypeId)  {
+                        MA.map.setMapTypeId(mapTypeId);
+                        
+                        //update the active view
+                        $('.MapViewTable .MapViewTitle').removeClass('Active');
+                        $('.MapViewTable [data-basemaptype="'+mapTypeId+'"] .MapViewTitle').addClass('Active');
+                    },
+
+                    //remove an overlay by name
+                    removeOverlay: function (name) {
+                        $.each(MA.map.overlayMapTypes.getArray(), function (i, overlay) {
+                            if (overlay.name == name) {
+                                MA.map.overlayMapTypes.removeAt(i);
+                                return false;
+                            }
+                        });
+                    },
+
+                    //get the container offset of a latlng point
+                    latLngOffset: function (latLng) {
+                        return MA.Map.offsetOverlay.getProjection().fromLatLngToContainerPixel(latLng);
+                    },
+
+                    //zoom to fit (utility function that we can continue building out to support different arguments)
+                    zoomToFit: function (component) {
+                        if (component instanceof google.maps.Polyline) {
+                            var bounds = new google.maps.LatLngBounds();
+                            component.getPath().forEach(function (latLng) {
+                                bounds.extend(latLng);
+                            });
+                            MA.map.fitBounds(bounds);
+                        }
+                    },
+
+                    //info bubbles
+                    InfoBubble: {
+
+                        //show an info bubble
+                        show: function (options) {
+                            
+                            //console.log(options);
+                            
+                            MA.Map.InfoBubble.hide();
+                            MA.Map.InfoBubble._bubble = new InfoBubble($.extend({
+                                position: MA.map.getCenter(),
+                                content: 'No Content',
+                                disableAnimation: true
+                            }, options));
+                            MA.Map.InfoBubble._bubble.open(MA.map, options.anchor);
+                            $(MA.Map.InfoBubble._bubble.contentContainer_).css('overflow', 'hidden');
+
+                            return MA.Map.InfoBubble._bubble;
+                        },
+
+                        //hide the current info bubble
+                        hide: function () {
+                            try { MA.Map.InfoBubble._bubble.setMap(null); } catch (err) {}
+                            MA.Map.InfoBubble._bubble = null;
+                        },
+
+                        //adjust the padding and position of the current info bubble
+                        adjust: function () {
+                            try {
+                                MA.Map.InfoBubble._bubble.padding_changed();
+                                MA.Map.InfoBubble._bubble.panToView();
+                            }
+                            catch (err) {}
+                        }
+
+                    },
+
+                    //drawing
+                    Drawing: {},
+
+                    //search
+                    Search: {
+                        markers: [],
+                        setSearchType: function (searchType) {
+                            $('#search-wrapper').attr('data-searchtype', searchType);
+                            MA.Map.Search.clearSearch();
+                        },
+                        clearSearch: function (searchType) {
+                            var searchType = searchType || $('#search-wrapper').attr('data-searchtype');
+                            $('#search-'+searchType).blur();
+                            setTimeout(function () { $('#search-'+searchType).val('').focus(); });
+                        }
+                    }
+
+                },
+                
+                //marker capabilities
+                Marker: {
+                
+                    index: 0,
+                
+                    //shape metadata
+                    shapes: {
+                        'Marker'    : { label: 'Marker',    size: { x: 28, y: 42 }, anchor: { x: 14, y: 42, rich: RichMarkerPosition.BOTTOM }, legendSize: { x: 14, y: 21 }, selector: '#templates .svg-marker',         types: ['dynamic'] },
+                        'Circle'    : { label: 'Circle',    size: { x: 28, y: 28 }, anchor: { x: 14, y: 14, rich: RichMarkerPosition.MIDDLE }, legendSize: { x: 14, y: 14 }, selector: '#templates .svg-marker-circle',      types: ['dynamic'] },
+                        'Triangle'  : { label: 'Triangle',  size: { x: 28, y: 28 }, anchor: { x: 14, y: 18, rich: RichMarkerPosition.MIDDLE }, legendSize: { x: 14, y: 14 }, selector: '#templates .svg-marker-triangle', types: ['dynamic'] },
+                        'Square'    : { label: 'Square',    size: { x: 28, y: 28 }, anchor: { x: 14, y: 14, rich: RichMarkerPosition.MIDDLE }, legendSize: { x: 14, y: 14 }, selector: '#templates .svg-marker-square',  types: ['dynamic'] },
+                        'Favorite'  : { label: 'Favorite',  size: { x: 28, y: 42 }, anchor: { x: 14, y: 42, rich: RichMarkerPosition.BOTTOM }, legendSize: { x: 14, y: 21 }, selector: '#templates .svg-marker-favorite', types: [] }
+                    },
+                    
+                    //create svg
+                    createSVG: function (options) {
+                        options = $.extend({
+                            type: 'Marker',
+                            color: '#00FF00:Marker',
+                            forLegend: false
+                        }, options);
+
+                        var colorParts = options.color.split(':');
+                        var markerColor = colorParts[0];
+                        var markerShape = MA.Marker.shapes[colorParts[1] || 'Marker'];
+                        var svgHTML;
+                        if (options.type == 'Scatter') {
+                            svgHTML = [
+                                '<svg class="svg-marker" width="16" height="16" xmlns="http://www.w3.org/2000/svg">',
+                                    '<circle cx="8" cy="8" r="8" fill="'+markerColor+'"></circle>',
+                                '</svg>'
+                            ].join('');
+                        }
+                        else {
+                            svgHTML = $(markerShape.selector).clone().wrap('<div/>').parent().html()
+                                .replace(/__INDEX__/g, MA.Marker.index++)
+                                .replace(/__GRADIENT_ONE__/g, markerColor)
+                                .replace(/__GRADIENT_TWO__/g, MA.Marker.shadeColor(markerColor, 20))
+                                .replace(/__CIRCLE_STROKE__/g, MA.Marker.shadeColor(markerColor, 25))
+                                .replace(/__CIRCLE_FILL__/g, MA.Marker.isDark(markerColor) ? MA.Marker.unshadeColor(markerColor, 90) : MA.Marker.shadeColor(markerColor, 90))
+                            ;
+
+                            if (options.forLegend) {
+                                svgHTML = $(svgHTML).attr({ width: markerShape.legendSize.x, height: markerShape.legendSize.y }).wrap('<div/>').parent().html();
+                            }
+                        }
+                        return svgHTML;
+                    },
+                    
+                    //color util
+                    shadeColor: function (color, percent) {   
+                        var num = parseInt(color.slice(1),16), amt = Math.round(2.55 * percent), R = (num >> 16) - amt, B = (num >> 8 & 0x00FF) - amt, G = (num & 0x0000FF) - amt;
+                        return "#" + (0x1000000 + (R<255?R<1?0:R:255)*0x10000 + (B<255?B<1?0:B:255)*0x100 + (G<255?G<1?0:G:255)).toString(16).slice(1);
+                    },
+                    unshadeColor: function (color, percent) {
+                        var num = parseInt(color.slice(1),16), amt = Math.round(2.55 * percent), R = (num >> 16) + amt, B = (num >> 8 & 0x00FF) + amt, G = (num & 0x0000FF) + amt;
+                        return "#" + (0x1000000 + (R<255?R<1?0:R:255)*0x10000 + (B<255?B<1?0:B:255)*0x100 + (G<255?G<1?0:G:255)).toString(16).slice(1);
+                    },
+                    isDark: function (color) {
+                        var num = parseInt(color.slice(1),16);
+                        return (num >> 16) + (num >> 8 & 0x00FF) + (num & 0x0000FF) < 225;
+                    }
+                },
+                
+                //territory management capabilities
+                TM: {
+                    countries: {
+                        'USA': {
+                            label: 'United States',
+                            adminLevels: {
+                                '1': { label: 'State',              pluralLabel: 'States',              parent: false,  hasGeometry: true,  legacyType: 'state' },
+                                '2': { label: 'County',             pluralLabel: 'Counties',            parent: '1',    hasGeometry: true,  legacyType: 'county' },
+                                '3': { label: 'City',               pluralLabel: 'Cities',              parent: '2',    hasGeometry: false, legacyType: 'city' },
+                                '4': { label: 'Zip Code',           pluralLabel: 'Zip Codes',           parent: '3',    hasGeometry: true,  legacyType: 'zip' },
+                                '5': { label: 'School District',    pluralLabel: 'School Districts',    parent: '1',    hasGeometry: true }
+                            }
+                        },
+                        'AUS': {
+                            label: 'Australia',
+                            adminLevels: {
+                                '1': { label: 'State Or Territory',     pluralLabel: 'States & Territories',    parent: false,  hasGeometry: true },
+                                '2': { label: 'Local Government Area',  pluralLabel: 'Local Government Areas',  parent: '1',    hasGeometry: true },
+                                '3': { label: 'Postal Code',            pluralLabel: 'Postal Codes',            parent: '1',    hasGeometry: true }
+                            }
+                        },
+                        'NZL': {
+                            label: 'New Zealand',
+                            adminLevels: {
+                                '1': { label: 'Regional Council', pluralLabel: 'Regional Councils', parent: false, hasGeometry: true },
+                                '2': { label: 'Territorial Authority', pluralLabel: 'Territorial Authorities', parent: '1', hasGeometry: true }
+                            }
+                        },
+                        'CAN': {
+                            label: 'Canada',
+                            adminLevels: {
+                                '1': { label: 'Province', pluralLabel: 'Provinces', parent: false, hasGeometry: true },
+                                '2': { label: 'Census Division', pluralLabel: 'Census Divisions', parent: '1', hasGeometry: true },
+                                '3': { label: 'Census Sub Division', pluralLabel: 'Census Sub Divisions', parent: '2', hasGeometry: true },
+                                '4': { label: 'Forward Sortation Area ', pluralLabel: 'Forward Sortation Areas', parent: '1', hasGeometry: true }
+                            }
+                        },
+                        'CUS': {
+                            label: 'Custom',
+                            adminLevels: {
+                                '1': { label: 'Shape', pluralLabel: 'Shapes', parent: false, hasGeometry: true }
+                            }
+                        }
+                    }
+                },
+                
+                //Routing capabilities
+                Routing: {
+                    optimizationLog: '',
+                    mapComponents: { 
+                        waypointMarkers: [],
+                        changeIndex : 0,
+                        showDragWarning : false
+                    },
+                    route: function (options, callback) {
+                        callback = callback || function () {};
+
+                        var directionsService = new google.maps.DirectionsService();
+                        directionsService.route(options, function(response, status)
+                        {
+                            //check for errors
+                            if (status == google.maps.DirectionsStatus.OK) {
+                                callback({ success: true, route: response });
+                            }
+                            else if (status == google.maps.DirectionsStatus.OVER_QUERY_LIMIT) {
+                                setTimeout(function () { MA.Routing.route(options, callback); }, 500);
+                            }
+                            else {
+                                callback({ success: false, response: response, status: status });
+                            }
+                        });
+                    }
+                },
+
+                //Geocoding capabilities
+                Geocoding: {
+                    confidenceMap: { 'ROOFTOP': 100, 'RANGE_INTERPOLATED': 90, 'GEOMETRIC_CENTER': 75, 'APPROXIMATE': 50 },
+
+                    //multithreaded geocoding
+                    threads: [],
+                    threadIndex: 0,
+                    addThread: function () {
+                        var threadIndex = MA.Geocoding.threads.length;
+                        MA.Geocoding.threads.push({
+                            requests: [],                   //sample request: { address: '123 Street', callback: function (request) { console.log(request.result); } }
+                        });
+                        $('body').first().append($("<iframe style='display: none;'></iframe>").attr('src', MA.resources.GeocoderFrame + '?index=' + threadIndex));
+                    },
+                    addThreads: function () {
+                        var geocodeThreads = parseInt('{!geocodeThreads}');
+                        while (geocodeThreads > MA.Geocoding.threads.length) {
+                            MA.Geocoding.addThread();
+                        }
+                    },
+                    threadedGeocode: function (request) {
+                        MA.Geocoding.threads[MA.Geocoding.threadIndex].requests.push(request);
+                        MA.Geocoding.threadIndex++;
+                        if (MA.Geocoding.threadIndex >= MA.Geocoding.threads.length) { MA.Geocoding.threadIndex = 0; }
+                    },
+
+                    //reverse geocode
+                    reverseGeocode: function (options, callback) {
+                        callback = callback || function () {};
+
+                        var geocoder = new google.maps.Geocoder();
+                        geocoder.geocode({ latLng: options.latLng }, function(results, status) {
+                            if (status == google.maps.GeocoderStatus.OK) {
+                                var result = results[0];
+                                var resultMap = {};
+                                $.each(result.address_components, function (i, component) {
+                                    $.each(component.types, function (j, type) {
+                                        resultMap[type] = component['short_name'];
+                                    });
+                                });
+
+                                //basic response data
+                                var responseData = {
+                                    IsBadAddress        : false,
+                                    Label               : result.geometry.location_type,
+                                    Relevance           : MA.Geocoding.confidenceMap[result.geometry.location_type] || 0,
+                                    Latitude            : result.geometry.location.lat(),
+                                    Longitude           : result.geometry.location.lng(),
+                                    FormattedAddress    : result.formatted_address,
+                                    HouseNumber         : resultMap['street_number'] || '',
+                                    Street              : resultMap['route'] || '',
+                                    City                : resultMap['locality'] || '',
+                                    County              : resultMap['administrative_area_level_2'] || '',
+                                    State               : resultMap['administrative_area_level_1'] || '',
+                                    PostalCode          : resultMap['postal_code'] || '',
+                                    District            : resultMap['neighborhood'] || '',
+                                    Country             : resultMap['country'] || ''
+                                };
+
+                                //complete street address (house number + route)
+                                var completeStreetAddress = '';
+                                if (resultMap['street_number']) {
+                                    completeStreetAddress += resultMap['street_number'] + ' ';
+                                }
+                                if (resultMap['route']) {
+                                    completeStreetAddress += resultMap['route'];
+                                }
+                                responseData['CompleteStreetAddress'] = completeStreetAddress;
+
+                                callback({
+                                    success: true,
+                                    request: options,
+                                    result: responseData
+                                });
+                            }
+                            else if (status == google.maps.GeocoderStatus.OVER_QUERY_LIMIT) {
+                                setTimeout(function () { MA.Geocoding.reverseGeocode(options, callback); }, 500);
+                            }
+                            else {
+                                MA.log('Bad Reverse Geocode', status);
+                                callback({success: false});
+                            }
+                        });
+                    },
+
+                    //geocode a single address
+                    geocode: function (options, callback) {
+                        callback = callback || function () {};
+
+                        var geocoder = new google.maps.Geocoder();
+                        geocoder.geocode({ address: options.address }, function (response, status) {
+                            if (status == google.maps.GeocoderStatus.OK) {
+                                var result = response[0];
+                                var resultMap = {};
+                                $.each(result.address_components, function (i, component) {
+                                    $.each(component.types, function (j, type) {
+                                        resultMap[type] = component['short_name'];
+                                    });
+                                });
+
+                                //basic response data
+                                var responseData = {
+                                    IsBadAddress        : false,
+                                    Label               : result.geometry.location_type,
+                                    Relevance           : MA.Geocoding.confidenceMap[result.geometry.location_type] || 0,
+                                    Latitude            : result.geometry.location.lat(),
+                                    Longitude           : result.geometry.location.lng(),
+                                    FormattedAddress    : result.formatted_address,
+                                    HouseNumber         : resultMap['street_number'] || '',
+                                    Street              : resultMap['route'] || '',
+                                    City                : resultMap['locality'] || '',
+                                    County              : resultMap['administrative_area_level_2'] || '',
+                                    State               : resultMap['administrative_area_level_1'] || '',
+                                    PostalCode          : resultMap['postal_code'] || '',
+                                    District            : resultMap['neighborhood'] || '',
+                                    Country             : resultMap['country'] || ''
+                                };
+
+                                //complete street address (house number + route)
+                                var completeStreetAddress = '';
+                                if (resultMap['street_number']) {
+                                    completeStreetAddress += resultMap['street_number'] + ' ';
+                                }
+                                if (resultMap['route']) {
+                                    completeStreetAddress += resultMap['route'];
+                                }
+                                responseData['CompleteStreetAddress'] = completeStreetAddress;
+
+                                //fire the callback
+                                callback({ success: true, result: responseData });
+                            }
+                            else if (status == google.maps.GeocoderStatus.OVER_QUERY_LIMIT) {
+                                window.overCount++;
+                                setTimeout(function () { MA.Geocoding.geocode(options, callback); }, 500);
+                            }
+                            else {
+                                callback({ success: true, result: { IsBadAddress: true }, status: status });
+                            }
+                        });
+                    },
+
+                    //geocode query records (and write the results back to the db)
+                    geocodeMultipleRecords: function (options, callback, step) {
+                        callback = callback || function () {};
+
+                        //build list of queue items
+                        var itemsToUpdate = [];
+                        var pendingItems = [];
+                        var recordMap = {};
+                        $.each(options.records, function (i, record) {
+                            pendingItems.push({ Operation: 'Geocode', Priority: 1, RequestData: { recordId: record.record.Id, address: record.markerAddress } });
+                            recordMap[record.record.Id] = record;
+                        });
+
+                        var numSuccess = 0;
+                        var numFail = 0;
+                        //$.post(MA.externalResources['Queue'], { action: 'Push', orgId: '{!$Organization.Id}', items: JSON.stringify(pendingItems) }, function (pushResponse) {
+                        $.ajax({
+                            url: MA.SitePrefix + '/services/proxy',
+                            type: 'POST',
+                            contentType: 'application/json',
+                            dataType: 'JSON',
+                            data: { action: 'Push', orgId: '{!$Organization.Id}', items: JSON.stringify(pendingItems) },
+                            success: function (pushResponse) {
+                                if (pushResponse.success)
+                                {
+                                    //start polling to get the geo data when it's ready
+                                    pendingItems = pushResponse.items;
+                                    setTimeout(function checkQueue () {
+                                        //$.post(MA.externalResources['Queue'], { action: 'Pop', orgId: '{!$Organization.Id}', items: JSON.stringify(pendingItems) }, function (popResponse) 
+                                        $.ajax({
+                                            url: MA.SitePrefix + '/services/proxy',
+                                            type: 'POST',
+                                            contentType: 'application/json',
+                                            dataType: 'JSON',
+                                            data: { action: 'Pop', orgId: '{!$Organization.Id}', items: JSON.stringify(pendingItems) },
+                                            success: function (popResponse) {
+                                                pendingItems = [];
+                                                $.each(popResponse.items, function (i, item) {
+                                                    if (item.Status == 'Pending')
+                                                    {
+                                                        //this item is still pending
+                                                        pendingItems.push(item);
+                                                    }
+                                                    else if (item.Status == 'Complete')
+                                                    {
+                                                        //push geo data into the record
+                                                        var record = recordMap[item.RequestData.recordId];
+                                                        $.extend(record, {
+                                                            isBadAddress    : item.ResponseData.IsBadAddress,
+                                                            latitude        : item.ResponseData.Latitude,
+                                                            longitude       : item.ResponseData.Longitude,
+                                                            markerLatitude  : item.ResponseData.Latitude,
+                                                            markerLongitude : item.ResponseData.Longitude
+                                                        });
+
+                                                        //keep track of this item for updating the db (also need parent record id if address information is inherited)
+                                                        var addressObject = MA.Util.g(record.plottedQuery.data(), 'coordinateFields.AddressObject') || 'SAME';
+                                                        if (addressObject != 'SAME') {
+                                                            item.RequestData.addressObjectId = record.record[addressObject];
+                                                        }
+                                                        itemsToUpdate.push(item);
+
+                                                        //keep track of success rate
+                                                        if (recordMap[item.RequestData.recordId].isBadAddress) {
+                                                            numFail++;
+                                                        }
+                                                        else {
+                                                            recordMap[item.RequestData.recordId].latLng = new google.maps.LatLng(item.ResponseData.Latitude, item.ResponseData.Longitude);
+                                                            numSuccess++;
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        //consider this a bad geocode
+                                                        $.extend(recordMap[item.RequestData.recordId], { isBadAddress: true, latitude: '', longitude: '', markerLatitude: '', markerLongitude: '' });
+                                                        itemsToUpdate.push(item);
+                                                        numFail++;
+                                                    }
+                                                });
+
+                                                //wait for pending items or we're done
+                                                if (pendingItems.length > 0) {
+                                                    setTimeout(checkQueue, 3000);
+                                                }
+                                                else 
+                                                {
+                                                    //time to write the records back to the database
+                                                    if (!options.skipSave) {
+                                                        $.post(MA.resources.Geocode+pageSuffix+'?core.apexpages.devmode.url=0', { action: 'updateRecordsFromQueueItems', serializedItems: JSON.stringify(itemsToUpdate), baseObjectId: options.baseObjectId }, function (response) {
+                                                            if (response.success) {
+                                                                $.each(response.updatedRecords, function (i, record) {
+                                                                    $.extend(recordMap[record.Id].record, record);
+                                                                });
+                                                                callback({ success: true, numSuccess: numSuccess, numFail: numFail });
+                                                            }
+                                                            else
+                                                            {
+                                                                //still proceed, but log an error that we couldn't write back to the database
+                                                                callback({ success: true, numSuccess: numSuccess, numFail: numFail });
+                                                                MA.log('Unable to write back to the database', response);
+                                                            }
+                                                        }, 'json').fail(function () { callback({ success: true, numSuccess: numSuccess, numFail: numFail }); MA.log('Unable to write back to the database'); });
+                                                    }
+                                                    else {
+                                                        callback({ success: true, numSuccess: numSuccess, numFail: numFail });
+                                                    }
+                                                }
+                                            },
+                                            error: function () {
+                                                MA.log(arguments);
+                                            },
+                                            beforeSend: function (xhr) {
+                                                xhr.setRequestHeader('SalesforceProxy-Endpoint', MA.externalResources['Queue']);
+                                                xhr.setRequestHeader('Authorization', 'OAuth ' + MA.SessionId);
+                                                xhr.setRequestHeader('X-User_Agent', 'salesforce-toolkit-rest-javascript/v31.0');
+                                            }
+                                        });
+                                    }, 3000);
+                                }
+                                else {
+                                    MA.log(pushResponse);
+                                }
+                            },
+                            error: function () {
+                                MA.log(arguments);
+                            },
+                            beforeSend: function (xhr) {
+                                xhr.setRequestHeader('SalesforceProxy-Endpoint', MA.externalResources['Queue']);
+                                xhr.setRequestHeader('Authorization', 'OAuth ' + MA.SessionId);
+                                xhr.setRequestHeader('X-User_Agent', 'salesforce-toolkit-rest-javascript/v31.0');
+                            }
+                        });
+                    },
+
+                    //find the nearest coordinates that support street view
+                    findNearestStreetView: function (pos) {
+                        var search = function (radius) {
+                            new google.maps.StreetViewService().getPanoramaByLocation(pos, radius, function (data, status) {
+                                
+                                //console.log(data);
+                                //console.log(status);
+                                
+                                if (status == 'OK') {
+                                    return data.location.latLng;
+                                }
+                                else if (radius > 1 && radius <= 500) {
+                                    return search(radius * 2);
+                                }
+                                else {
+                                    return null;
+                                }
+                            });
+                        };
+                        //If the radius is 50 meters or less, the panorama returned will be the nearest panorama to the given location.
+                        return search(50);
+                    }
+                },
+                
+                //POI capabilities
+                POI: {
+                    types: {
+                        'Restaurants'       : { iconURL: '{!URLFOR($Resource.TomTom, 'images/poi/marker-food.png')}' },
+                        'Petrol'            : { iconURL: '{!URLFOR($Resource.TomTom, 'images/poi/marker-gas.png')}' },
+                        'Car'               : { iconURL: '{!URLFOR($Resource.TomTom, 'images/poi/marker-gas.png')}' },
+                        'Hotels'            : { iconURL: '{!URLFOR($Resource.TomTom, 'images/poi/marker-motel.png')}' },
+                        'Bed and breakfast' : { iconURL: '{!URLFOR($Resource.TomTom, 'images/poi/marker-motel.png')}' },
+                        'Shopping'          : { iconURL: '{!URLFOR($Resource.TomTom, 'images/poi/marker-shopping.png')}' },
+                        'Parking'           : { iconURL: '{!URLFOR($Resource.TomTom, 'images/poi/marker-parking.png')}' }
+                    }
+                },
+
+                //Analytics
+                Analytics: {
+
+                    track: function (type, options) {
+                    
+                        //defaults
+                        options = $.extend({
+                            params: {},
+                            success: function () {}
+                        }, options);
+                        
+                        
+                        //Add coded
+                        if (type == 'queryrun' && '{!TotangoEnabled}' == 'true')
+                        {
+                            try { totango.track("Plotted query", "MapAnything"); } catch(err) { }
+                        }
+                        
+                        
+                        //send request
+                        $.getJSON(MA.resources.Analytics, $.extend(options.params || {}, { securityToken: '{!securityToken}', action: 'track', type: type, url: window.location.href }), function(response) {
+                            options.success(response);
+                        });
+                    }
+
+                },
+                
+                CurrencyTypes: {"ALL":"Lek","AFN":"؋","ARS":"$","AWG":"ƒ","AUD":"$","AZN":"ман","BSD":"$","BBD":"$","BYR":"p.","BZD":"BZ$","BMD":"$","BOB":"$b","BAM":"KM","BWP":"P","BGN":"лв","BRL":"R$","BND":"$","KHR":"៛","CAD":"$","KYD":"$","CLP":"$","CNY":"¥","COP":"$","CRC":"₡","HRK":"kn","CUP":"₱","CZK":"Kč","DKK":"kr","DOP":"RD$","XCD":"$","EGP":"£","SVC":"$","EEK":"kr","EUR":"€","FKP":"£","FJD":"$","GHC":"¢","GIP":"£","GTQ":"Q","GGP":"£","GYD":"$","HNL":"L","HKD":"$","HUF":"Ft","ISK":"kr","INR":"₹","IDR":"Rp","IRR":"﷼","IMP":"£","ILS":"₪","JMD":"J$","JPY":"¥","JEP":"£","KZT":"лв","KPW":"₩","KRW":"₩","KGS":"лв","LAK":"₭","LVL":"Ls","LBP":"£","LRD":"$","LTL":"Lt","MKD":"ден","MYR":"RM","MUR":"₨","MXN":"$","MNT":"₮","MZN":"MT","NAD":"$","NPR":"₨","ANG":"ƒ","NZD":"$","NIO":"C$","NGN":"₦","NOK":"kr","OMR":"﷼","PKR":"₨","PAB":"B/.","PYG":"Gs","PEN":"S/.","PHP":"₱","PLN":"zł","QAR":"﷼","RON":"lei","RUB":"руб","SHP":"£","SAR":"﷼","RSD":"Дин.","SCR":"₨","SGD":"$","SBD":"$","SOS":"S","ZAR":"S","LKR":"₨","SEK":"kr","CHF":"CHF","SRD":"$","SYP":"£","TWD":"NT$","THB":"฿","TTD":"TT$","TRL":"₤","TVD":"$","UAH":"₴","GBP":"£","USD":"$","UYU":"$U","UZS":"лв","VEF":"Bs","VND":"₫","YER":"﷼","ZWD":"Z$"},
+
+                //Loqate
+                Loqate: {
+                    
+                    
+                    supportedCountries: {"AF":{"label":"Afghanistan"},"AL":{"label":"Albania"},"DZ":{"label":"Algeria"},"AS":{"label":"American Samoa"},"AD":{"label":"Andorra"},"AO":{"label":"Angola"},"AI":{"label":"Anguilla"},"AQ":{"label":"Antarctica"},"AG":{"label":"Antigua Barbuda"},"AR":{"label":"Argentina"},"AM":{"label":"Armenia"},"AW":{"label":"Aruba"},"AU":{"label":"Australia"},"AT":{"label":"Austria"},"AZ":{"label":"Azerbaijan"},"BS":{"label":"Bahamas"},"BH":{"label":"Bahrain"},"BD":{"label":"Bangladesh"},"BB":{"label":"Barbados"},"BY":{"label":"Belarus"},
+                                        "BE":{"label":"Belgium"},"BZ":{"label":"Belize"},"BJ":{"label":"Benin"},"BM":{"label":"Bermuda"},"BT":{"label":"Bhutan"},"BO":{"label":"Bolivia"},"BA":{"label":"Bosnia Herzegovina"},"BW":{"label":"Botswana"},"BR":{"label":"Brazil"},"IO":{"label":"British Indian Ocean Territory"},"VG":{"label":"British Virgin Islands"},"BN":{"label":"Brunei Darussalam"},"BG":{"label":"Bulgaria"},"BF":{"label":"Burkina Faso"},"BI":{"label":"Burundi"},"KH":{"label":"Cambodia"},"CM":{"label":"Cameroon"},"CA":{"label":"Canada"},"CV":{"label":"Cape Verde Islands"},
+                                        "KY":{"label":"Cayman Islands"},"CF":{"label":"Central African Republic"},"TD":{"label":"Chad"},"CL":{"label":"Chile"},"CN":{"label":"China"},"CX":{"label":"Christmas Island"},"CC":{"label":"Cocos (Keeling) Islands"},"CO":{"label":"Colombia"},"KM":{"label":"Comoros"},"CG":{"label":"Congo"},"CD":{"label":"Congo, the Democratic Republic of the"},"CK":{"label":"Cook Islands"},"CR":{"label":"Costa Rica"},"HR":{"label":"Croatia"},"CU":{"label":"Cuba"},"CY":{"label":"Cyprus"},"CZ":{"label":"Czech Republic"},"DK":{"label":"Denmark"},"DJ":{"label":"Djibouti"},"DM":{"label":"Dominica"},
+                                        "DO":{"label":"Dominican Republic"},"EC":{"label":"Ecuador"},"EG":{"label":"Egypt"},"SV":{"label":"El Salvador"},"GQ":{"label":"Equatorial Guinea"},"ER":{"label":"Eritrea"},"EE":{"label":"Estonia"},"ET":{"label":"Ethiopia"},"FO":{"label":"Faeroe Islands"},"FK":{"label":"Falkland Islands"},"FJ":{"label":"Fiji"},"FI":{"label":"Finland"},"FR":{"label":"France"},"GF":{"label":"French Guiana"},"PF":{"label":"French Polynesia"},"TF":{"label":"French Southern Territories"},"GA":{"label":"Gabon"},"GM":{"label":"Gambia, The"},"GE":{"label":"Georgia"},"DE":{"label":"Germany"},"GH":{"label":"Ghana"},
+                                        "GI":{"label":"Gibraltar"},"GR":{"label":"Greece"},"GL":{"label":"Greenland"},"GD":{"label":"Grenada"},"GP":{"label":"Guadeloupe"},"GU":{"label":"Guam"},"GT":{"label":"Guatemala"},"GG":{"label":"Guernsey"},"GN":{"label":"Guinea"},"GW":{"label":"Guinea-Bissau"},"GY":{"label":"Guyana"},"HT":{"label":"Haiti"},"VA":{"label":"Holy See"},"HN":{"label":"Honduras"},"HK":{"label":"Hong Kong"},"HU":{"label":"Hungary"},"IS":{"label":"Iceland"},"IN":{"label":"India"},"ID":{"label":"Indonesia"},"IR":{"label":"Iran"},"IQ":{"label":"Iraq"},"IE":{"label":"Ireland"},"IM":{"label":"Isle of Man"},"IL":{"label":"Israel"},"IT":{"label":"Italy"},
+                                        "CI":{"label":"Ivory Coast"},"JM":{"label":"Jamaica"},"JP":{"label":"Japan"},"JE":{"label":"Jersey"},"JO":{"label":"Jordan"},"KZ":{"label":"Kazakhstan"},"KE":{"label":"Kenya"},"KI":{"label":"Kiribati"},"KR":{"label":"Korea, Republic of"},"KW":{"label":"Kuwait"},"KG":{"label":"Kyrgyzstan"},"LA":{"label":"Laos"},"LV":{"label":"Latvia"},"LB":{"label":"Lebanon"},"LS":{"label":"Lesotho"},"LR":{"label":"Liberia"},"LY":{"label":"Libya"},"LI":{"label":"Liechtenstein"},"LT":{"label":"Lithuania"},
+                                        "LU":{"label":"Luxembourg"},"MO":{"label":"Macao"},"MK":{"label":"Macedonia"},"MG":{"label":"Madagascar"},"MW":{"label":"Malawi"},"MY":{"label":"Malaysia"},"MV":{"label":"Maldives"},"ML":{"label":"Mali"},"MT":{"label":"Malta"},"MH":{"label":"Marshall Islands"},"MQ":{"label":"Martinique"},"MR":{"label":"Mauritania"},"MU":{"label":"Mauritius"},"YT":{"label":"Mayotte"},"MX":{"label":"Mexico"},"FM":{"label":"Micronesia"},"MD":{"label":"Moldova"},"MC":{"label":"Monaco"},"MN":{"label":"Mongolia"},"ME":{"label":"Montenegro"},"MS":{"label":"Montserrat"},"MA":{"label":"Morocco"},"MZ":{"label":"Mozambique"},"MM":{"label":"Myanmar"},
+                                        "NA":{"label":"Namibia"},"NR":{"label":"Nauru"},"NP":{"label":"Nepal"},"AN":{"label":"Netherlands Antilles"},"NL":{"label":"Netherlands, The"},"NC":{"label":"New Caledonia"},"NZ":{"label":"New Zealand"},"NI":{"label":"Nicaragua"},"NE":{"label":"Niger"},"NG":{"label":"Nigeria"},"NU":{"label":"Niue"},"NF":{"label":"Norfolk Island"},"KP":{"label":"North Korea"},"MP":{"label":"Northern Mariana Islands"},"NO":{"label":"Norway"},"OM":{"label":"Oman"},"PK":{"label":"Pakistan"},"PW":{"label":"Palau"},"PS":{"label":"Palestinian Territory"},"PA":{"label":"Panama"},"PG":{"label":"Papua New Guinea"},"PY":{"label":"Paraguay"},"PE":{"label":"Peru"},
+                                        "PH":{"label":"Philippines"},"PN":{"label":"Pitcairn Island"},"PL":{"label":"Poland"},"PT":{"label":"Portugal"},"PR":{"label":"Puerto Rico"},"QA":{"label":"Qatar"},"RE":{"label":"Réunion"},"RO":{"label":"Romania"},"RU":{"label":"Russia"},"RW":{"label":"Rwanda"},"BL":{"label":"Saint Barthélemy"},"SH":{"label":"Saint Helena"},"KN":{"label":"Saint Kitts and Nevis"},"LC":{"label":"Saint Lucia"},"MF":{"label":"Saint Martin"},"PM":{"label":"Saint Pierre & Miquelon"},"VC":{"label":"Saint Vincent & the Grenadines"},"WS":{"label":"Samoa"},"SM":{"label":"San Marino"},"ST":{"label":"Sao Tome & Principe"},"SA":{"label":"Saudi Arabia"},"SN":{"label":"Senegal"},
+                                        "RS":{"label":"Serbia"},"SC":{"label":"Seychelles"},"SL":{"label":"Sierra Leone"},"SG":{"label":"Singapore"},"SK":{"label":"Slovakia"},"SI":{"label":"Slovenia"},"SB":{"label":"Solomon Islands"},"SO":{"label":"Somalia"},"ZA":{"label":"South Africa"},"GS":{"label":"South Georgia and the South Sandwich Islands"},"ES":{"label":"Spain"},"LK":{"label":"Sri Lanka"},"SD":{"label":"Sudan"},"SR":{"label":"Suriname"},"SJ":{"label":"Svalbard and Jan Mayen Islands"},"SZ":{"label":"Swaziland"},"SE":{"label":"Sweden"},"CH":{"label":"Switzerland"},"SY":{"label":"Syria"},"TW":{"label":"Taiwan"},"TJ":{"label":"Tajikistan"},"TZ":{"label":"Tanzania"},"TH":{"label":"Thailand"},
+                                        "TL":{"label":"Timor-Leste (formerly East Timor)"},"TG":{"label":"Togo"},"TK":{"label":"Tokelau"},"TO":{"label":"Tonga"},"TT":{"label":"Trinidad & Tobago"},"TN":{"label":"Tunisia"},"TR":{"label":"Turkey"},"TM":{"label":"Turkmenistan"},"TC":{"label":"Turks and Caicos Islands"},"TV":{"label":"Tuvalu"},"UG":{"label":"Uganda"},"UA":{"label":"Ukraine"},"AE":{"label":"United Arab Emirates"},"GB":{"label":"United Kingdom"},"UM":{"label":"United States Minor Outlying Islands"},"US":{"label":"United States of America"},"VI":{"label":"United States Virgin Islands"},"UY":{"label":"Uruguay"},"UZ":{"label":"Uzbekistan"},"VU":{"label":"Vanuatu"},"VE":{"label":"Venezuela"},"VN":{"label":"Vietnam"},"WF":{"label":"Wallis & Futuna Islands"},"EH":{"label":"Western Sahara"},"YE":{"label":"Yemen"},"ZM":{"label":"Zambia"},"ZW":{"label":"Zimbabwe"}},
+                    
+                    //Build support countries select
+                    buildSupportedCountriesSelect: function () {
+                        var $select = $('<select />');
+                        $.each(MA.Loqate.supportedCountries, function (abbr, country) {
+                            $('<option />').attr('value', abbr).text(country.label).appendTo($select);
+                        });
+                        return $select;
+                    }
+                    
+                },
+
+                //SObject Info
+                SObject: {
+                    nameField: function (obj) {
+                        return {
+                            'Case': 'CaseNumber',
+                            'Task': 'Subject',
+                            'Event': 'Subject'
+                        }[obj] || 'Name';
+                    }
+                },
+                
+                //Util
+                Util: {
+                    p: function (name) {    //get query string param value by name
+                        name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
+                        var regex = new RegExp("[\\?&]" + name + "=([^&#]*)");
+                        var results = regex.exec(location.search);
+                        return results == null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
+                    },
+                    g: function (obj, path) {   //get object field value by path (. notation as a string)
+                        try {
+                            $.each(path.split('.'), function (i, part) {
+                                obj = obj[part];
+                            });
+                            return obj;
+                        }
+                        catch (err) {
+                            return null;
+                        }
+                    },
+                    isBlank: function (arg) {
+                        return (arg == null || arg == undefined || arg == '');
+                    },
+                    ifBlank: function () {
+                        var val = null;
+                        $.each(arguments, function (i, arg) {
+                            if (arg !== null && arg !== undefined && arg !== '') {
+                                val = arg;
+                                return false;
+                            }
+                        });
+                        return val;
+                    },
+                    ifNull: function () {
+                        var val = null;
+                        $.each(arguments, function (i, arg) {
+                            if (arg !== null && arg !== undefined) {
+                                val = arg;
+                                return false;
+                            }
+                        });
+                        return val;
+                    },
+                    testLatLng: function () {
+                        var markerLat;
+                        var markerLng;
+                        if (arguments[0] instanceof google.maps.LatLng) {
+                            markerLat = arguments[0].lat();
+                            markerLng = arguments[0].lng();
+                        }
+                        else {
+                            markerLat = parseFloat(arguments[0]);
+                            markerLng = parseFloat(arguments[1]);
+                        }
+                        return !isNaN(markerLat) && !isNaN(markerLng) && markerLat >= -90 && markerLat <= 90 && markerLng >= -180 && markerLng <= 180;
+                    },
+                    formatDistance: function (meters) {
+                        if (meters < 1000) {
+                            return meters.toFixed(2) + ' m';
+                        }
+                        else if (userSettings.RouteDefaults.unit == 'mi') {
+                            return (meters/1609.34).toFixed(2) + ' mi';
+                        }
+                        else {
+                            return (meters/1000).toFixed(2) + ' km';
+                        }
+                    },
+                    formatTime: function (seconds) {
+                        
+                        var totalHours = Math.floor(seconds / 3600);
+                        var totalMinutes = Math.floor((seconds - (totalHours * 3600)) / 60);
+                        
+                        if (totalHours == 0)
+                        {
+                            return totalMinutes + ' minutes';
+                        }
+                        else
+                        {
+                            return totalHours + ' hour' + (totalHours == 1 ? '' : 's') + ' ' + totalMinutes + ' minutes';
+                        }
+                    },
+                    removeNamespace: function (obj) {
+                        try {
+                            var namespacePrefix = '{!namespace}__';
+                            $.each(obj, function (key, val) {
+                                if (key.indexOf(namespacePrefix) == 0) {
+                                    obj[key.replace(namespacePrefix, '')] = val;
+                                    delete obj[key];
+                                    
+                                    //go recursive if this is an object
+                                    if (obj[key.replace(namespacePrefix, '')] != null && typeof obj[key.replace(namespacePrefix, '')] == 'object') {
+                                        MA.Util.removeNamespace(obj[key.replace(namespacePrefix, '')]);
+                                    }
+                                }
+                                else if (typeof val == 'object') {
+                                    MA.Util.removeNamespace(val);
+                                }
+                            });
+                        }
+                        catch (err) { } //this is most likely due to a null value being passed.  in any case, returning the original objects seems the correct action if we can't manipulate it
+                        
+                        return obj;
+                    }
+                },
+                
+                //supported locales
+                locales: {"ar_AE":"DD/MM/YYYY hh:mm a","ar_BH":"DD/MM/YYYY hh:mm a","ar_EG":"DD/MM/YYYY hh:mm a","ar_JO":"DD/MM/YYYY hh:mm a","ar_KW":"DD/MM/YYYY hh:mm a","ar_LB":"DD/MM/YYYY hh:mm a","ar_QA":"DD/MM/YYYY hh:mm a","ar_SA":"DD/MM/YYYY hh:mm a","az_AZ":"YYYY-MM-DD HH:mm","be_BY":"DD.MM.YYYY H.mm","bg_BG":"YYYY-MM-DD H:mm","bn_BD":"DD/MM/YYYY hh:mm a","bs_BA":"DD.MM.YYYY. H:mm","ca_ES":"DD/MM/YYYY HH:mm","cs_CZ":"DD.MM.YYYY H:mm","cy_GB":"DD/MM/YYYY H:mm","da_DK":"DD-MM-YYYY HH:mm","de_AT":"DD.MM.YYYY HH:mm","de_CH":"DD.MM.YYYY HH:mm","de_DE":"DD.MM.YYYY HH:mm","de_LU":"DD.MM.YYYY HH:mm","el_GR":"DD/MM/YYYY h:mm a","en_AU":"DD/MM/YYYY hh:mm a","en_BB":"DD/MM/YYYY HH:mm","en_BM":"MM/DD/YYYY h:mm a","en_CA":"DD/MM/YYYY h:mm a","en_GB":"DD/MM/YYYY HH:mm","en_GH":"DD/MM/YYYY HH:mm","en_ID":"DD/MM/YYYY HH:mm","en_IE":"DD/MM/YYYY HH:mm","en_IN":"DD/MM/YYYY hh:mm a","en_MY":"DD/MM/YYYY HH:mm","en_NG":"DD/MM/YYYY HH:mm","en_NZ":"DD/MM/YYYY hh:mm a","en_PH":"MM/DD/YYYY hh:mm a","en_PK":"MM/DD/YYYY hh:mm a","en_SG":"DD/MM/YYYY HH:mm","en_US":"MM/DD/YYYY h:mm a","en_ZA":"YYYY/MM/DD hh:mm a","es_AR":"DD/MM/YYYY HH:mm","es_BO":"DD-MM-YYYY hh:mm a","es_CL":"DD-MM-YYYY hh:mm a","es_CO":"DD/MM/YYYY hh:mm a","es_CR":"DD/MM/YYYY hh:mm a","es_DO":"MM/DD/YYYY hh:mm a","es_EC":"DD/MM/YYYY hh:mm a","es_ES":"MM/DD/YYYY H:mm","es_GT":"DD/MM/YYYY hh:mm a","es_HN":"MM-DD-YYYY hh:mm a","es_MX":"DD/MM/YYYY hh:mm a","es_PA":"MM/DD/YYYY hh:mm a","es_PE":"MM/DD/YYYY hh:mm a","es_PR":"DD-MM-YYYY hh:mm a","es_PY":"MM/DD/YYYY hh:mm a","es_SV":"MM-DD-YYYY hh:mm a","es_UY":"DD/MM/YYYY hh:mm a","es_VE":"DD/MM/YYYY hh:mm a","et_EE":"DD.MM.YYYY H:mm","eu_ES":"YYYY-MM-DD H:mm","fi_FI":"DD.MM.YYYY H:mm","fr_BE":"DD/MM/YYYY H:mm","fr_CA":"YYYY-MM-DD HH:mm","fr_CH":"DD.MM.YYYY HH:mm","fr_FR":"DD/MM/YYYY HH:mm","fr_LU":"DD/MM/YYYY HH:mm","fr_MC":"DD/MM/YYYY HH:mm","ga_IE":"DD/MM/YYYY HH:mm","hr_HR":"DD.MM.YYYY. HH:mm","hi_IN":"DD/MM/YYYY hh:mm a","hu_HU":"YYYY.MM.DD. H:mm","hy_AM":"MM/DD/YYYY h:mm","in_ID":"DD/MM/YYYY HH:mm","is_IS":"DD.MM.YYYY HH:mm","it_CH":"DD.MM.YYYY HH:mm","it_IT":"DD/MM/YYYY H.mm","iw_IL":"HH:mm DD/MM/YYYY","ja_JP":"YYYY/MM/DD H:mm","ka_GE":"YYYY-MM-DD H:mm","kk_KZ":"DD.MM.YYYY H:mm","km_KH":"DD/MM/YYYY, HH:mm","ko_KR":"YYYY. MM. DD a h:mm","ky_KG":"MM/DD/YYYY h:mm a","lb_LU":"DD/MM/YYYY h:MM a","lt_LT":"YYYY.MM.DD HH.mm","lv_LV":"YYYY.DD.MM HH:mm","mk_MK":"DD.MM.YYYY HH:mm","ms_BN":"DD/MM/YYYY h:mm a","ms_MY":"DD/MM/YYYY h:mm a","mt_MT":"DD/MM/YYYY H:mm","nl_BE":"DD/MM/YYYY H:mm","nl_NL":"DD-MM-YYYY H:mm","nl_SR":"DD-MM-YYYY H:mm","no_NO":"DD.MM.YYYY HH:mm","pl_PL":"DD.MM.YYYY HH:mm","pt_AO":"DD-MM-YYYY H:mm","pt_BR":"DD/MM/YYYY HH:mm","pt_PT":"DD-MM-YYYY H:mm","ro_MD":"DD.MM.YYYY, HH:mm","ro_RO":"DD.MM.YYYY HH:mm","rm_CH":"DD.MM.YYYY HH:mm","ru_RU":"DD.MM.YYYY H:mm","sh_ME":"DD.MM.YYYY H:mm","sh_BA":"DD.MM.YYYY. H:mm","sh_CS":"DD.MM.YYYY. H:mm","sk_SK":"DD.MM.YYYY H:mm","sl_SI":"DD.MM.YYYY H:mm","sq_AL":"YYYY-MM-DD hh.mm.a","sr_BA":"YYYY-MM-DD H:mm","sr_CS":"DD.MM.YYYY. H.mm","sv_SE":"YYYY-MM-DD HH:mm","tl_PH":"MM/DD/YYYY h:mm a","tg_TJ":"MM/DD/YYYY hh:mm a","th_TH":"DD/MM/YYYY, hh:mm a","tr_TR":"DD.MM.YYYY HH:mm","uk_UA":"DD.MM.YYYY H:mm","ur_PK":"DD/MM/YYYY h:mm a","vi_VN":"HH:mm DD/MM/YYYY","zh_CN":"YYYY-MM-DD ah:mm","zh_CN_PINYIN":"YYYY-MM-DD ah:mm","zh_CN_STROKE":"YYYY-MM-DD ahh:mm","zh_HK":"YYYY-MM-DD ahh:mm","zh_HK_STROKE":"YYYY-MM-DD ahh:mm","zh_MO":"YYYY-MM-DD ahh:mm","zh_SG":"DD/MM/YYYY a hh:mm","zh_TW":"YYYY/MM/DD a h:mm","zh_TW_STROKE":"YYYY/MM/DD a h:mm"},
+                
+                //limits used throughout the application.  even if a user enters a larger value, this value should be used
+                limits: {
+                    maxQuerySize: 30000,
+                    maxClusterSize: 30000
+                },
+                
+                //enabled features
+                enabledFeatures: {
+                    autoCheckOut: {!AutoCheckOutEnabled},
+                    nearbyCheckin: {!nearbyCheckinEnabled}
+                },
+                
+                //resources that are called by MA
+                resources: {
+                    'Admin'                 : options.sitePrefix + '/apex/'+options.namespace+'MAAdminAJAXResources',
+                    'Analytics'             : options.sitePrefix + '/apex/'+options.namespace+'MAAnalyticsAJAXResources',
+                    'BaseObjects'           : options.sitePrefix + '/apex/'+options.namespace+'MapAnythingBaseObjects',
+                    'ChatterFeed'           : options.sitePrefix + '/apex/'+options.namespace+'ChatterFeed',
+                    'DownloadRoute'         : options.sitePrefix + '/apex/'+options.namespace+'DownloadRoute',
+                    'Email'                 : options.sitePrefix + '/apex/'+options.namespace+'MAEmailAJAXResources',
+                    'Export'                : options.sitePrefix + '/apex/'+options.namespace+'MAExportAJAXResources',
+                    'FavoriteLocations'     : options.sitePrefix + '/apex/'+options.namespace+'MAFavoriteLocationsAJAXResources',
+                    'Click2Create'          : options.sitePrefix + '/apex/'+options.namespace+'ClickToCreateForm',
+                    'Geocode'               : options.sitePrefix + '/apex/'+options.namespace+'MAGeoCodeAJAXResources',
+                    'GeocoderFrame'         : options.sitePrefix + '/apex/'+options.namespace+'GeocoderFrame',
+                    'MA'                    : options.sitePrefix + '/apex/'+options.namespace+'MA',
+                    'MapActions'            : options.sitePrefix + '/apex/'+options.namespace+'MapActions',
+                    'MapAnything'           : options.sitePrefix + '/apex/'+options.namespace+'MapAnything',
+                    'MissingAddressExport'  : options.sitePrefix + '/apex/'+options.namespace+'MapAnythingExportMissingAddresses',
+                    'Nearby'                : options.sitePrefix + '/apex/'+options.namespace+'MANearbyAJAXResources',
+                    'PrintEmailRoute'       : options.sitePrefix + '/apex/'+options.namespace+'PrintEmailRoute',
+                    'Query'                 : options.sitePrefix + '/apex/'+options.namespace+'MASavedQueryAJAXResources',
+                    'QueryBuilder'          : options.sitePrefix + '/apex/'+options.namespace+'EditQuery',
+                    'QueryBuilderAPI'       : options.sitePrefix + '/apex/'+options.namespace+'QueryBuilderAPI',
+                    'RelatedLists'          : options.sitePrefix + '/apex/'+options.namespace+'MAPopupRelatedListInformation',
+                    'RouteCalendar'         : options.sitePrefix + '/apex/'+options.namespace+'RouteCalendar',
+                    'RouteCalendarAPI'      : options.sitePrefix + '/apex/'+options.namespace+'RouteCalendarAJAXResources',
+                    'Settings'              : options.sitePrefix + '/apex/'+options.namespace+'MapAnythingSettings',
+                    'SFDCHome'              : options.sitePrefix + '/home/home.jsp',
+                    'Territory'             : options.sitePrefix + '/apex/'+options.namespace+'MATerritoryAJAXResources',
+                    'Tooltip'               : options.sitePrefix + '/apex/'+options.namespace+'MATooltipAJAXResources',
+                    'Tree'                  : options.sitePrefix + '/apex/'+options.namespace+'MATreeAJAXResources',
+                    'TreeXML'               : options.sitePrefix + '/apex/'+options.namespace+'MapAnythingTree2',
+                    'TreeFolders'           : options.sitePrefix + '/apex/'+options.namespace+'MapAnythingTreeFolders',
+                    'User'                  : options.sitePrefix + '/apex/'+options.namespace+'MAUserAJAXResources',
+                    'VFPageProxy'           : options.sitePrefix + '/apex/'+options.namespace+'VFPageProxy',
+                    'Waypoint'              : options.sitePrefix + '/apex/'+options.namespace+'MAWaypointAJAXResources',
+                    'Weather'               : options.sitePrefix + '/apex/'+options.namespace+'WeatherAJAXResource',
+                    'XMLDoc'                : options.sitePrefix + '/apex/'+options.namespace+'XMLDocumentAJAXResources'
+                },
+                
+                //static resources
+                staticResources: {
+                    'MapAnything'           : options.sitePrefix + '/resource/'+options.namespace+'MapAnything'
+                },
+
+                //external resources
+                externalResources: {
+                    'ProductAPI'            : 'https://product-api-prod.cloudbilt.com',
+                    'Queue'                 : 'https://product-api-prod.cloudbilt.com/queue/',
+                    'Queue-Staging'         : 'http://product-api-staging.elasticbeanstalk.com/queue/'
+                },
+            
+                //events that will be fired by this framework.  developers can hook onto these events using the on method
+                events: {
+                    'ready': [],
+                    'mapready': [],
+                    'nextclick': []
+                },
+                
+                //used to attach handlers to framework events
+                on: function (event, method, options) {
+                    options = options || {};
+                
+                    try
+                    {
+                        //add this handler to the events map
+                        this.events[event].push(method);
+                        
+                        //handle special events
+                        switch(event)
+                        {
+                            case 'nextclick':
+                                $('#map-status').empty().append(options.message || 'Click the map to proceed...').show();
+                                break;
+                        }
+                    }
+                    catch (err) {
+                        MALog('Invalid Event: ' + event, err);
+                    }
+                },
+                
+                //used to remove handlers to framework events (currently removes all handlers for an event, may add support for specific handlers later)
+                off: function (event) {
+                    this.events[event] = [];
+                    
+                    //handle special events
+                    switch(event)
+                    {
+                        case 'nextclick':
+                            $('#map-status').hide();
+                            break;
+                    }
+                }, 
+                
+                //used to fire an event programatically
+                fire: function (event) {
+                    try {
+                        var args = Array.prototype.slice.apply(arguments).slice(1);
+                        $.each(this.events[event], function (index, method) {
+                            method.apply(this, args);
+                        });
+                    }
+                    catch (err) {
+                        MALog('Invalid Event: ' + event, err);
+                    }
+                },
+                
+                //used for logging to the console
+                log: function () {
+                    try { 
+                        $.each(arguments, function (index, arg) {
+                            console.log(arg);
+                            if (arg instanceof Error) {
+                                console.log(arg.stack);
+                            }
+                        }); 
+                    } catch (err) { }
+                }
+            }
+        })({ sitePrefix: '{!$Site.CurrentSiteUrl}'.substring(0, '{!$Site.CurrentSiteUrl}'.length - 1), namespace: '{!namespace}' == '' ? '' : '{!namespace}__' });
+
+        /* Shape Manager */
+        MA.Map.ShapeManager = function () {
+            this.shapes = [];
+            this.latLngs = [];
+        };
+        $.extend(MA.Map.ShapeManager.prototype, {
+            addLayer: function (layer) {
+                if (layer instanceof google.maps.Data || layer instanceof google.maps.Data.Feature) {
+                    var me = this;
+                    function addGeometry (geometry) {
+                        switch (geometry.getType()) {
+                            case 'Polygon':
+                                var shape = {
+                                    type: 'data',
+                                    boundary: new google.maps.Polygon({ paths: geometry.getAt(0).getArray() }),
+                                    holes: []
+                                };
+                                for (var i = 1; i < geometry.getLength(); i++) {
+                                    shape.holes.push(new google.maps.Polygon({ paths: geometry.getAt(i).getArray() }));
+                                }
+                                me.shapes.push(shape);
+
+                            break;
+                            case 'MultiPolygon':
+                                geometry.getArray().forEach(function (g) { addGeometry(g); });
+                            break;
+                        }
+                    }
+
+                    //add the geometry for this feature (or each feature if this is a data layer)
+                    if (layer instanceof google.maps.Data) {
+                        layer.forEach(function (feature) {
+                            addGeometry(feature.getGeometry());
+                        });
+                    }
+                    else {
+                        addGeometry(layer.getGeometry());
+                    }
+                }
+                else if (layer instanceof google.maps.Circle) {
+                    this.shapes.push({ type: 'circle', boundary: layer });
+                }
+                else if (layer instanceof google.maps.Polygon) {
+                    this.shapes.push({ type: 'polygon', boundary: layer });
+                }
+                else if (layer instanceof google.maps.Rectangle) {
+                    this.shapes.push({ type: 'rectangle', boundary: layer });
+                }
+                else if (layer instanceof google.maps.LatLng) {
+                    this.latLngs.push(layer);
+                }
+                else {
+                    MA.log('Invalid layer type');
+                }
+                return this;
+            },
+            containsLatLng: function (latLng) {
+                var inShapes = false;
+                $.each(this.shapes, function (i, shape) 
+                {
+                    //check if the record falls within this boundary
+                    switch (shape.type) {
+                        case 'data':
+
+                            if (google.maps.geometry.poly.containsLocation(latLng, shape.boundary)) 
+                            {
+                                //it does, so now check to make sure it doesn't fall within any of the holes
+                                var inHole = false;
+                                $.each(shape.holes, function (i, hole) {
+                                    if (google.maps.geometry.poly.containsLocation(latLng, hole)) {
+                                        inHole = true;
+                                        return false;
+                                    }
+                                });
+
+                                //if it's not in a hole then this is a hit and we can include this record and move on
+                                if (!inHole) {
+                                    inShapes = true;
+                                    return false;
+                                }
+                            }
+
+                        break;
+                        case 'polygon':
+
+                            if (google.maps.geometry.poly.containsLocation(latLng, shape.boundary)) {
+                                inShapes = true;
+                            }
+
+                        break;
+                        case 'rectangle':
+
+                            if (shape.boundary.getBounds().contains(latLng)) {
+                                inShapes = true;
+                            }
+
+                        break;
+                        case 'circle':
+
+                            if (google.maps.geometry.spherical.computeDistanceBetween(latLng, shape.boundary.getCenter()) <= shape.boundary.getRadius()) {
+                                inShapes = true;
+                            }
+
+                        break; 
+                    }
+                });
+
+                return inShapes;
+            },
+            hasShapes: function () {
+                return this.shapes.length > 0;
+            },
+            getDistant: function (cpt, bl) {
+                var vY = bl[1].lat() - bl[0].lat(), vX = bl[0].lng() - bl[1].lng();
+                return (vX * (cpt.lat() - bl[0].lat()) + vY * (cpt.lng() - bl[0].lng()));
+            },
+            findMostDistantPointFromBaseLine: function (baseLine) {
+                var maxD = 0, maxPt = null, newPoints = [], i, pt, d;
+                for (i = this.latLngs.length - 1; i >= 0; i--) {
+                    pt = this.latLngs[i];
+                    d = this.getDistant(pt, baseLine);
+                    if (d > 0) {
+                        newPoints.push(pt);
+                    } else {
+                        continue;
+                    }
+
+                    if (d > maxD) {
+                        maxD = d;
+                        maxPt = pt;
+                    }
+                }
+
+                return { maxPoint: maxPt, newPoints: newPoints };
+            },
+            buildConvexHull: function (baseLine) {
+                var convexHullBaseLines = [];
+                var t = this.findMostDistantPointFromBaseLine(baseLine, this.latLngs);
+                if (t.maxPoint) {
+                    convexHullBaseLines = convexHullBaseLines.concat(this.buildConvexHull([baseLine[0], t.maxPoint], t.newPoints));
+                    convexHullBaseLines = convexHullBaseLines.concat(this.buildConvexHull([t.maxPoint, baseLine[1]], t.newPoints));
+                    return convexHullBaseLines;
+                }
+                else {
+                    return [baseLine[0]];
+                }
+            },
+            getConvexHull: function () {
+                var maxLat = false, minLat = false, maxPt = null, minPt = null, i;
+                for (i = this.latLngs.length - 1; i >= 0; i--) {
+                    var pt = this.latLngs[i];
+                    if (maxLat === false || pt.lat() > maxLat) {
+                        maxPt = pt;
+                        maxLat = pt.lat();
+                    }
+                    if (minLat === false || pt.lat() < minLat) {
+                        minPt = pt;
+                        minLat = pt.lat();
+                    }
+                }
+                return [].concat(this.buildConvexHull([minPt, maxPt]), this.buildConvexHull([maxPt, minPt]));
+            }
+        });
+        MA.Map.hitTestShapeMgr = new MA.Map.ShapeManager();
+
+        /* Label */
+        MA.Map.Label = function (options) {
+            this.setValues(options);
+
+            var span = this.span_ = document.createElement('span');
+            span.style.cssText = 'position: relative; left: 0%; top: 0px; white-space: nowrap; border: 0px; border-radius: 6px; color: #FFF; font-family:arial; font-weight:bold; padding: 5px 8px; background-color: #000; opacity: .75; filter: alpha(opacity=75); -ms-filter: "alpha(opacity=75)"; -khtml-opacity: .75; -moz-opacity: .75;';
+
+            var div = this.div_ = document.createElement('div');
+            div.appendChild(span);
+            div.style.cssText = 'position: absolute; z-index: 30; display: none; -webkit-transform: translateZ(0px);';
+
+            this.bindTo('position', options.bindPositionTo, 'position');
+        };
+        MA.Map.Label.prototype = $.extend(new google.maps.OverlayView, {
+            onAdd: function () {
+                var pane = this.getPanes().overlayLayer;
+                pane.appendChild(this.div_);
+                
+                // Ensures the label is redrawn if the text or position is changed.
+                var me = this;
+                this.listeners_ = [
+                    google.maps.event.addListener(this, 'position_changed', function() { me.draw(); }),
+                    google.maps.event.addListener(this, 'text_changed', function() { me.draw(); })
+                ];
+            },
+            onRemove: function () {
+                this.div_.parentNode.removeChild(this.div_ );
+
+                // Label is removed from the map, stop updating its position/text.
+                for (var i = 0, I = this.listeners_.length; i < I; ++i) {
+                    google.maps.event.removeListener(this.listeners_[i]);
+                }
+            },
+            draw: function () {
+                var position = this.getProjection().fromLatLngToDivPixel(this.get('position'));
+
+                var div = this.div_;
+                div.style.left = position.x + 'px';
+                div.style.top = position.y + 'px';
+                div.style.display = 'block';
+
+                this.span_.innerHTML = this.get('text').toString();
+            }
+        });
+
+        /* Ruler */
+        MA.Map.Ruler = function (options) {
+            
+            
+            //Setup Ruler Variables
+            this.transitLineColor = '#FF0000';
+            this.straightLineColor = '#FF0000';
+            this.infoBubble = null;
+            this.polyline = null;
+            this.waypointArray = [];
+            this.$layersTabDOM = null;
+            this.directionsDisplay = null;
+            this.directionsService = new google.maps.DirectionsService();
+            this.infoBubbleOpen = true;
+            this.showInfoBubble = true;
+            
+            
+            
+            
+            /*
+            this.markerColor = 'red';
+            
+            if (MA.ruleIndex == 1)      { this.markerColor = 'red'; }
+            else if (MA.ruleIndex == 2) { this.markerColor = 'blue'; }
+            else if (MA.ruleIndex == 3) { this.markerColor = 'green'; }
+            else if (MA.ruleIndex == 4) { this.markerColor = 'yellow'; }
+            else if (MA.ruleIndex == 5) { this.markerColor = 'orange'; }
+            */
+            
+            //Let's add a Layer's tab Item
+            $('#PlottedQueriesWrapper .plotted-watermark').hide();
+            this.$layersTabDOM = $('#templates .RulerRowUnit').clone();
+            this.$layersTabDOM.find('.basicinfo-name').text('Ruler #' + MA.ruleIndex);
+            //this.$layersTabDOM.find('.color-box').css('color', this.straightLineColor);
+            this.$layersTabDOM.prependTo('#PlottedQueriesTable');
+            
+            
+            this.$layersTabDOM.find('.transit-line-color').attr('value', this.transitLineColor);
+            this.$layersTabDOM.find('.straight-line-color').attr('value', this.straightLineColor);
+            jscolor.init();
+            
+            
+            if($('#sidebar-content #tabs-nav-plotted').hasClass('tab-open'))
+             {
+              //do nothing tab already selected
+             }
+             else
+             {
+              //click tab to show results
+                   $('a[href="#tab-plotted"]').click();
+             }
+             
+             this.directionsDisplay = new google.maps.DirectionsRenderer({
+                suppressInfoWindows: true,
+                suppressMarkers: true,
+                preserveViewport: true,
+                map: MA.map,
+                polylineOptions: {
+                    strokeColor: this.transitLineColor,
+                    strokeOpacity: 0.7, 
+                    strokeWeight: 5
+                }
+            });
+             
+            
+             
+            //this.directionsDisplay.setMap(MA.map);
+            console.log(options);
+            
+            //store the center of the map as the position of the click just in case a position wasn't included
+            options = $.extend({ position: MA.map.getCenter() }, options);
+            
+            this.polyline = new google.maps.Polyline({ 
+              map: MA.map, 
+              path: [options.position,
+                     options.position], 
+              strokeColor: this.straightLineColor, 
+              strokeOpacity: 0.4, 
+              strokeWeight: 4,
+              draggable: false,
+              editable: false,
+              geodesic: true
+            });
+            
+            
+            
+            
+
+            var me = this;
+            
+            this.$layersTabDOM.on('click','.btn-remove', function () { 
+                
+                //remove the layer from the layers section
+                me.$layersTabDOM.slideUp(300, function () 
+                { 
+                    me.remove();
+                });
+                
+            });
+            
+            
+            this.$layersTabDOM.on('click','.button-update', function () { 
+                
+                me.transitLineColor  = me.$layersTabDOM.find('.transit-line-color').val();
+                me.straightLineColor = me.$layersTabDOM.find('.straight-line-color').val();
+                
+                me.polyline.setOptions({strokeColor: me.straightLineColor});
+                me.directionsDisplay.setOptions({polylineOptions: {strokeColor: me.transitLineColor}});
+                
+                //force redraw
+                me.directionsDisplay.setMap(MA.map);
+                
+            });
+            
+            
+            
+            
+            this.$layersTabDOM.on('click','.plotted-visibile-icon',function () {
+                $button = $(this);
+                
+                //check if the layer is currently visible or not
+                if($button.find('span').is('.glyphicon-eye-open')) 
+                {
+                    //hide
+                    $button.find('span').removeClass('glyphicon-eye-open').addClass('glyphicon-eye-close');
+                    me.polyline.setMap(null);
+                    me.directionsDisplay.setMap(null);
+                    $.each(me.waypointArray, function( index, value ) {
+                        value.setMap(null);
+                    });
+                }
+                else 
+                {
+                    //show
+                    $button.find('span').removeClass('glyphicon-eye-close').addClass('glyphicon-eye-open');
+                    me.polyline.setMap(MA.map);
+                    me.directionsDisplay.setMap(MA.map);
+                    $.each(me.waypointArray, function( index, value ) {
+                        value.setMap(MA.map);
+                    });
+                }
+            })
+            
+            me.addMarkers();
+            
+            //increment ruleIndex, if it's too high let's restart it at 1
+            MA.ruleIndex++;
+            if (MA.ruleIndex > 5) { MA.ruleIndex = 1; }
+        };
+        $.extend(MA.Map.Ruler.prototype, {
+            addMarkers: function() {
+                
+                //create place holder var, so we don't use "this" in later calls
+                var me = this;
+                
+                
+                
+                //Remove all the current markers
+                $.each(me.waypointArray, function( index, value ) {
+                    value.setMap(null);
+                });
+                
+                //Blank the waypointArray
+                me.waypointArray = [];
+                
+                //loop through all the waypoints and add markers
+                me.polyline.getPath().forEach(function(element, index) {
+
+                    var marker2Options = {
+                        map: MA.map, 
+                        position: new google.maps.LatLng(element.lat(),element.lng()), 
+                        draggable: true,
+                        index: index
+                    }
+    
+                    if (index == 0)
+                    {
+                        //Start, let's show a green circle here
+                        marker2Options.icon=
+                            {
+                                path: google.maps.SymbolPath.CIRCLE,
+                                fillColor:'green',
+                                fillOpacity : 1,
+                                strokeColor : 'black',
+                                strokeWeight : 1,
+                                scale: 7
+                            };
+                        marker2Options.type = 'start';
+                    }
+                    else if (index == (me.polyline.getPath().getLength() - 1))
+                    {
+                        //End, let's show a red marker
+                        marker2Options.icon=
+                            {
+                                path: google.maps.SymbolPath.CIRCLE,
+                                fillColor:'red',
+                                fillOpacity : 1,
+                                strokeColor : 'black',
+                                strokeWeight : 1,
+                                scale: 7
+                            };
+                        marker2Options.type = 'end';
+                    }
+                    else
+                    {
+                        //create vertex marker
+                        marker2Options.icon=
+                            {
+                                path: google.maps.SymbolPath.CIRCLE,
+                                fillColor:'white',
+                                fillOpacity : 1,
+                                strokeColor : 'black',
+                                strokeWeight : 1,
+                                scale: 7
+                            };
+                        marker2Options.type = 'vertex';
+                    }
+    
+    
+                    var marker =new google.maps.Marker(marker2Options);
+                    
+                    if (index == (me.polyline.getPath().getLength() - 1) && me.showInfoBubble == true)
+                    {
+                        me.infoBubble = new InfoBubble({
+                            position: new google.maps.LatLng(element.lat(),element.lng()),
+                            content: "<center>Please Drag the Red Marker to begin.</center>",
+                            hideCloseButton: true,
+                            disableAutoPan: true
+                        });
+                        me.infoBubble.open(MA.map, marker);
+                        me.showInfoBubble = false;
+                    }
+                    
+            
+    
+                    google.maps.event.addListener(marker, 'drag', function () { me.redraw(); });
+                    google.maps.event.addListener(marker, 'dragend', function () { me.dragend(); });
+                    google.maps.event.addListener(marker, 'dragstart', function () { me.dragstart(this); });
+    
+                    if (marker2Options.type == 'vertex')
+                    {
+                        google.maps.event.addListener(marker, 'dblclick', function () { 
+    
+                            var markerClicked = this;
+                            markerClicked.setMap(null);
+    
+                            console.log('lets remove it');
+    
+                            var TempArray = [];
+    
+                            //Remove all the midpoints
+                            $.each(me.waypointArray, function( index, value ) {
+    
+                                if (value.type == 'midpoint')
+                                {
+                                    value.setMap(null);
+                                }
+                                else if (value.index == markerClicked.index)
+                                {
+                                    value.setMap(null);
+                                }
+                                else
+                                {
+                                    TempArray.push(value);
+                                }
+    
+    
+                            });
+    
+                            console.log(TempArray);
+    
+                            
+                            
+                            me.waypointArray = [].concat(TempArray);
+    
+                            me.redraw();
+                            me.addMarkers();
+                            me.getWaypointLocations();
+    
+                        });
+                    }
+    
+                    me.waypointArray.push(marker);
+    
+    
+                    if ((index + 1) < me.polyline.getPath().getLength())
+                        {
+                            var StartOfSegment = new google.maps.LatLng(element.lat(),element.lng());
+                            var EndOfSegment = new google.maps.LatLng(me.polyline.getPath().getAt(index+1).lat(),me.polyline.getPath().getAt(index+1).lng());
+    
+                            console.log(StartOfSegment);
+                            console.log(EndOfSegment);
+    
+                            var MidpointOfSegment = google.maps.geometry.spherical.interpolate(StartOfSegment, EndOfSegment, 0.5);
+                            
+                            console.log(MidpointOfSegment);
+    
+                            var marker3Options = {
+                                map: MA.map, 
+                                position: MidpointOfSegment, 
+                                draggable: true,
+                                index: (index + 0.5),
+                                type: 'midpoint'
+                            };
+                            marker3Options.icon=
+                                {
+                                    path: google.maps.SymbolPath.CIRCLE,
+                                    fillColor:'white',
+                                    fillOpacity : 0.60,
+                                    strokeColor : 'black',
+                                    strokeWeight : 1,
+                                    scale: 5
+                                };
+    
+                            var marker2 =new google.maps.Marker(marker3Options);
+    
+                            google.maps.event.addListener(marker2, 'drag', function () { 
+                                
+                                this.type = 'vertex';
+    
+                                me.redraw(); 
+                            });
+                            google.maps.event.addListener(marker2, 'dragend', function (e) { me.dragend(e); });
+    
+                            google.maps.event.addListener(marker2, 'dragstart', function (e) { me.dragstart(this); });
+    
+                            me.waypointArray.push(marker2);
+                            
+                        }
+    
+                });
+                
+            },
+            redraw: function () {
+                /*
+                var distance = MA.Util.formatDistance(google.maps.geometry.spherical.computeDistanceBetween(this.marker1.getPosition(), this.marker2.getPosition()));
+                this.poly.setPath([this.marker1.getPosition(), this.marker2.getPosition()]);
+                
+                this.$rulerLayer.find('.info-distance').text(distance);
+                */
+                
+                var pathArray = [];
+
+                $.each(this.waypointArray, function( index, value ) {
+                    
+                    if (value.type != 'midpoint')
+                    {
+                        pathArray.push(value.getPosition());
+                    }
+    
+                    
+                });
+    
+    
+                this.polyline.setPath(pathArray);
+                
+            },
+            dragstart: function () {
+                /*
+                this.$rulerLayer.find('.info-start').text('Drop Pin to Show');
+                this.$rulerLayer.find('.info-end').text('Drop Pin to Show');
+                this.$rulerLayer.find('.info-drive').text('Drop Pin to Show');
+                */
+                if (this.infoBubbleOpen)
+                {
+                     try { this.infoBubble.setMap(null); } catch (err) {} 
+                     this.infoBubbleOpen = false;
+                }
+                
+                
+                this.changeDisplayStatus(3);
+            },
+            dragend: function () {
+                
+                  this.addMarkers();
+                  this.getWaypointLocations();
+                  
+                  
+                  
+            },
+            getWaypointLocations: function()
+            {
+                //create place holder var, so we don't use "this" in later calls
+                var me = this;
+                
+                me.changeDisplayStatus(5);
+                
+            
+
+                me.directionsDisplay.setMap(null);
+        
+                var waypoints = [];
+        
+                $.each(me.waypointArray, function( index, value ) {
+                    
+                    console.log(value);
+                    
+                    if (value.type != 'midpoint' && value.type !='start' && value.type !='end')
+                    {
+                        waypoints.push({
+                            location: value.getPosition()
+                        });
+    
+                    }
+                });
+        
+        
+        
+                var request = {
+                    origin: me.waypointArray[0].getPosition(),
+                    destination: me.waypointArray[me.waypointArray.length-1].getPosition(),
+                    travelMode: google.maps.TravelMode.DRIVING,
+                    waypoints: waypoints,
+                    durationInTraffic: true
+                };
+                
+                var TotalDistanceInMeters = 0;
+                var TotalTimeInSeconds = 0;
+                var TotalTimeWithTrafficInSeconds = 0;
+                var TotalStraightLineDistanceInMeters = 0;
+        
+                me.directionsService.route(request, function(response, status) {
+                        
+                    console.log(status);
+                    console.log(response);
+    
+                    if (status == google.maps.DirectionsStatus.OK) 
+                    {
+                        
+                        me.directionsDisplay.setDirections(response);
+                        me.directionsDisplay.setMap(MA.map);
+    
+                        var waypointHTML = '';
+                        var totalLegs = response.routes[0].legs.length;
+                        
+                        $.each(response.routes[0].legs, function( index, value ) {
+                            
+
+                            if (index == 0)
+                            {
+                                var $waypointStartRow = $('#templates .ruler-start-waypoint-row').clone().addClass('ruler-waypoint-start');
+                                $waypointStartRow.find('.ruler-waypoint-row-address').html(value.start_address);
+                                waypointHTML += $waypointStartRow[0].outerHTML;
+                            }
+                            
+                            
+                            var DirveDistanceInMeters = value.distance.value;
+                            var DriveTimeInSeconds = value.duration.value;
+                            var DriveTimeInSecondsWithTraffic = value.duration_in_traffic != null ? value.duration_in_traffic.value : 0;
+                            
+                            var totalNormalTime = MA.Util.formatTime(DriveTimeInSeconds);
+                            var totalTrafficTime = MA.Util.formatTime(DriveTimeInSecondsWithTraffic);
+                            
+                            if(DriveTimeInSecondsWithTraffic != 0 && DriveTimeInSecondsWithTraffic > DriveTimeInSeconds) 
+                            {
+                                //var TimeStr = '<span style="color: #E54E4E;font-weight: bold;">'+ totalTrafficTime + ' with traffic </span>(' + totalNormalTime +  ' normally)';
+                                var TimeStr = '<span style="color: #E54E4E;font-weight: bold;">'+ totalTrafficTime + '</span><br/><span class="info-drive-no-traffic">' + totalNormalTime +  ' without traffic</span>';
+                            }
+                            else 
+                            {
+                                var TimeStr = totalNormalTime;
+                            }
+                            
+                            var StraightLineDistanceInMeters = google.maps.geometry.spherical.computeDistanceBetween(value.start_location, value.end_location);
+                            
+                            
+                            var $waypointRow = $('#templates .ruler-waypoint-row').clone().addClass( ((index+1) == totalLegs) ?  'ruler-waypoint-end' : 'ruler-waypoint-midpoint');
+                            $waypointRow.find('.ruler-waypoint-row-drive-info').html(MA.Util.formatDistance(DirveDistanceInMeters) + ' &bull; ' + TimeStr);
+                            $waypointRow.find('.ruler-waypoint-row-straight-info').html(MA.Util.formatDistance(StraightLineDistanceInMeters));
+                            $waypointRow.find('.ruler-waypoint-row-address').html(value.end_address)
+                            waypointHTML += $waypointRow[0].outerHTML;
+                            
+                            
+                            //Add to totals
+                            
+                            //Driving Totals
+                            TotalDistanceInMeters += DirveDistanceInMeters;
+                            TotalTimeInSeconds += DriveTimeInSeconds;
+                            TotalTimeWithTrafficInSeconds += DriveTimeInSecondsWithTraffic;
+                            
+                            //Straight Line Totals
+                            TotalStraightLineDistanceInMeters += StraightLineDistanceInMeters
+    
+                        });
+                        
+
+                        var totalNormalTime = MA.Util.formatTime(TotalTimeInSeconds);
+                        var totalTrafficTime = MA.Util.formatTime(TotalTimeWithTrafficInSeconds);
+                
+                
+                        //display traffic info if needed
+                        if(TotalTimeWithTrafficInSeconds != 0 && TotalTimeWithTrafficInSeconds > TotalTimeInSeconds) 
+                        {
+                            totalTimeStr = '<span style="color: #E54E4E;font-weight: bold;">'+ totalTrafficTime + '</span><br/><span class="info-drive-no-traffic">' + totalNormalTime +  ' without traffic</span>';
+                        }
+                        else {
+                            totalTimeStr = totalNormalTime;
+                        }
+                        
+                        me.$layersTabDOM.find('.info-drive').html(MA.Util.formatDistance(TotalDistanceInMeters) + ' &bull; ' + totalTimeStr);
+                        me.$layersTabDOM.find('.info-distance').html(MA.Util.formatDistance(TotalStraightLineDistanceInMeters));
+                        
+                        
+    
+                        me.$layersTabDOM.find('.info-waypoints').html(waypointHTML);
+                        
+                        me.changeDisplayStatus(1);
+                    }
+                    else
+                    {
+                        me.changeDisplayStatus(4);
+                    }
+                });
+                
+            },
+            remove: function () {
+                //this.label1.setMap(null);
+                //this.label2.setMap(null);
+                try
+                {
+                    this.$layersTabDOM.remove();
+                    this.polyline.setMap(null);
+                    this.directionsDisplay.setMap(null);
+                    $.each(this.waypointArray, function( index, value ) {
+                        value.setMap(null);
+                    });
+                }
+                catch (rulerRemoveEx)
+                {
+                    console.log(rulerRemoveEx);
+                }
+            },
+            changeDisplayStatus: function(i)
+            {
+                //hide all warning windows
+                this.$layersTabDOM.find('.info-success, .info-warning-start, .info-warning-dragging, .info-warning-invalid-points, .info-warning-calculating').hide();
+                
+                if (i == 1)
+                {
+                    this.$layersTabDOM.find('.info-success').show();
+                }
+                else if (i == 2)
+                {
+                    this.$layersTabDOM.find('.info-warning-start').show();
+                }
+                else if (i == 3)
+                {
+                    this.$layersTabDOM.find('.info-warning-dragging').show();
+                }
+                else if (i == 4)
+                {
+                    this.$layersTabDOM.find('.info-warning-invalid-points').show();
+                }
+                else if (i == 5)
+                {
+                    this.$layersTabDOM.find('.info-warning-calculating').show();
+                }
+            }
+        });
+        
+        //track this page view
+        $(function () {
+            MA.Analytics.track('pageview', {
+                success: function (response) {
+                    try {
+                        var analyticsResponse = JSON.parse(response.message);
+                        if (parseFloat(analyticsResponse.currentVersion.number) > parseFloat(analyticsResponse.previousVersion.number)) {
+                            if (analyticsResponse.currentVersion.blog_url) {
+                                $('#notifications-topbanner-description').text(analyticsResponse.currentVersion.description || '');
+                                $('#notifications-topbanner-blogurl').attr('href', analyticsResponse.currentVersion.blog_url);
+                                $('#notifications-topbanner').slideDown();  
+                            }
+                        }
+                    }
+                    catch (err) {}
+                }
+            });
+        });
+    
+    </script>
+</apex:component>

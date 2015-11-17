@@ -1,0 +1,866 @@
+<!-- **********************************************************************************************
+* VisualForce Page: UserSettings
+* Custom Controller: UserSettingsController
+* Created by: M.Smith for eVariant, 04/14/2010
+*
+* Purpose:
+* - Allows the user to modify their Notification Options and to add/remove individual
+*   Buy Signal notifications
+* - TWO save buttons are required on the page because Apex forbids using DML on
+*   CustomSettings and objects in the same call.
+*
+* Modifications:
+* - M.Smith, 05/07/2010: 
+*    - Combine the two save buttons (merging the two sections into one)
+*    - Enable this to be displayed via a jQuery.FancyBox call from LeadManager.page
+* 
+* - M.Smith, 05/12/2010:
+*    - Disable all buttons on the page when either Save or Cancel is clicked
+*    - Hide the "To be notified for all Contacts in the Account" section
+*      Note that this also affected the dialog size calculations in LeadManager.page
+*    - Display RecurrenceTimeframe__c as an integer
+************************************************************************************************  -->
+<apex:page Controller="EDP1.UserSettingsController" title="User Settings"
+    id="UserSettingsPage" tabStyle="ProspectDiscover__tab" sidebar="false"
+    showHeader="false" standardStylesheets="true" >
+
+<apex:includeScript value="{!URLFOR($Resource.EDP1__All, 'js/jquery-1.4.2.min.js')}" />
+<apex:stylesheet value="/sCSS/17.0/{!$User.UIThemeDisplayed}/common.css" />
+<apex:stylesheet value="/sCSS/17.0/{!$User.UIThemeDisplayed}/allCustom.css" />
+ 
+<script type="text/javascript">
+    var __sfdcSessionId = '{!GETSESSIONID()}';
+</script>
+<script src="/soap/ajax/18.0/connection.js" type="text/javascript"></script>
+
+<apex:pageMessages id="messages" />
+
+<style type="text/css">
+#aniloader-animation {
+  background: url("{!URLFOR($Resource.EDP1__All, 'ajax-loader1.gif')}") no-repeat center center;
+    height: 40px;
+    width: 40px;
+}
+
+#aniloader-bg {
+    background-color: #666;
+    opacity: .6;
+    margin-top: -2px;
+}
+
+.contactSmallIcon {
+    background-image: url('/img/sprites/master.png');
+    background-position: 0px -82px;
+    height: 16px;
+    width: 16px;
+}
+
+.leadSmallIcon {
+    background-image: url('/img/sprites/master.png');
+    background-position: 0px -200px;
+    height: 16px;
+    width: 16px;
+}
+
+.contactLargeIcon {
+    background-image: url('/img/sprites/master.png');
+    background-position: 0px -502px;
+    height: 24px;
+    width: 24px;
+}
+
+.leadLargeIcon {
+    background-image: url('/img/sprites/master.png');
+    background-position: 0px -698px;
+    height: 24px;
+    width: 24px;
+}
+
+.tableCell {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    padding-right: 10px;
+    white-space: nowrap;
+}
+
+
+.urgency0 {
+    background-image: url('{!URLFOR($Resource.EDP1__All, 'icons.png')}');
+    background-position: 0px -179px;
+    height: 24px;
+    width: 56px;
+}
+.urgency1 {
+    background-image: url('{!URLFOR($Resource.EDP1__All, 'icons.png')}');
+    background-position: 0px -202px;
+    height: 24px;
+    width: 56px;
+}
+.urgency2 {
+    background-image: url('{!URLFOR($Resource.EDP1__All, 'icons.png')}');
+    background-position: 0px -227px;
+    height: 24px;
+    width: 56px;
+}
+.urgency3 {
+    background-image: url('{!URLFOR($Resource.EDP1__All, 'icons.png')}');
+    background-position: 0px -251px;
+    height: 24px;
+    width: 56px;
+}
+
+
+.interest0 {
+    background-image: url('{!URLFOR($Resource.EDP1__All, 'icons.png')}');
+    background-position: 0px -274px;
+    height: 24px;
+    width: 56px;
+}
+.interest1 {
+    background-image: url('{!URLFOR($Resource.EDP1__All, 'icons.png')}');
+    background-position: 0px -299px;
+    height: 24px;
+    width: 56px;
+}
+.interest2 {
+    background-image: url('{!URLFOR($Resource.EDP1__All, 'icons.png')}');
+    background-position: 0px -324px;
+    height: 24px;
+    width: 56px;
+}
+.interest3 {
+    background-image: url('{!URLFOR($Resource.EDP1__All, 'icons.png')}');
+    background-position: 0px -348px;
+    height: 24px;
+    width: 56px;
+}
+
+.opportunityName {
+    text-overflow: ellipsis;
+    width: 100px;
+}
+
+.ignore {
+    background-image: url('{!URLFOR($Resource.EDP1__All, 'icons.png')}');
+    background-position: 0px -129px;
+    height: 24px;
+    width: 24px;  
+}
+.unignore {
+    background-image: url('{!URLFOR($Resource.EDP1__All, 'icons.png')}');
+    background-position: 0px -154px;
+    height: 24px;
+    width: 24px;  
+}
+
+.tracked {
+    background-image: url('{!URLFOR($Resource.EDP1__All, 'icons.png')}');
+    background-position: 0px -26px;
+    height: 24px;
+    width: 56px;
+}
+.untracked {
+    background-image: url('{!URLFOR($Resource.EDP1__All, 'icons.png')}');
+    background-position: 0px 0px;
+    height: 24px;
+    width: 56px;
+}
+
+.myTabContent {
+    display: none;
+}
+
+.opportunityField {
+    padding-bottom: 6px;
+}
+.hideHeader {
+    display:none;
+}
+
+
+</style>
+
+<!-- Override CurrentTab background color if on the new UI -->
+<apex:outputPanel rendered="{!$User.UIThemeDisplayed == 'Theme3'}">
+<style>
+body .tabNavigation .tab .currentTab {
+    background-color:#007fcc;
+}
+</style>
+</apex:outputPanel>
+
+<!-- Fix issues with the tab background color if on the old UI -->
+<apex:outputPanel rendered="{!$User.UIThemeDisplayed != 'Theme3'}">
+<style>
+.tab .currentTab {
+    background-image:url("/img/motif/left007FCC.gif");
+}
+.tab .currentTab div {
+    background-image:url("/img/motif/right007FCC.gif");
+}
+</style>
+</apex:outputPanel>
+
+<script type="text/javascript">
+//jQuery.noConflict();
+var currentTab;
+var currentTabIndex = 1;
+
+
+var ajaxQueues = new Array();
+function AjaxQueue(name) {
+    this.pendingRequest = false;
+    this.backlog = new Array();
+    this.actionFunction = eval(name);
+    this.process = function(id) {
+        if ( this.pendingRequest ) {
+            //alert('Adding to the queue');
+            this.backlog.push(id);
+        } else {
+            //alert('Sending request');
+            this.pendingRequest = true;
+            this.actionFunction(id);
+        }       
+    }
+    this.onComplete = function() {
+        if ( this.backlog.length > 0 ) {
+            var ids = this.backlog.join(',');
+            this.actionFunction(ids);
+            this.backlog = new Array();
+            //alert(action + ' ' + objectType + ' queuing ids: ' + ids);
+        } else {
+            //alert(action + ' ' + objectType + ' Complete & no queued ids');
+            this.pendingRequest = false;
+        }   
+    }
+}
+
+jQuery(document).ready(function() {
+    ajaxQueues['unmuteProspect'] = new AjaxQueue('unmuteProspect');
+    ajaxQueues['unmuteAccount'] = new AjaxQueue('unmuteAccount');
+    ajaxQueues['muteProspect'] = new AjaxQueue('muteProspect');
+    ajaxQueues['muteAccount'] = new AjaxQueue('muteAccount');
+});
+
+
+function unmute_onClick(objectType, obj, id) {
+    parent.reloadPage=true;
+    jQuery(obj).parent().parent().hide();
+    var callType = 'unmute';
+    
+    queue = ajaxQueues[callType + objectType];
+    queue.process(id);
+}
+
+
+function tab_onClick(obj, index) {
+    
+    if ( currentTab ) {
+      currentTab.parent().parent().removeClass('currentTab primaryPalette');
+      jQuery('#tabContent' + currentTabIndex).hide();
+    }
+    
+    currentTab = jQuery(obj);
+    currentTab.parent().parent().addClass('currentTab primaryPalette');
+    currentTabIndex = index;
+    jQuery('#tabContent' + currentTabIndex).show();
+    
+//    if ( currentTabIndex == 4 ) {
+//        //AniLoader.show( jQuery('#pageBlock') );
+//        showAjaxLoader(
+//            jQuery('#tabContent4').find('table').first()
+//        );
+//        showRecentActivity();
+//    } 
+}
+
+</script>
+
+<script>
+function paging_onClick(direction, tableId) {
+    //AniLoader.show( jQuery('#pageBlock') );
+    var actionTable = jQuery('#' + 'tabContent1').find('table').first();
+    showAjaxLoader( actionTable );
+    if ( direction == 'next' ) nextPage();
+    else previousPage();
+}
+
+function paging_onComplete() {
+  AniLoader.close();
+}
+
+function save_onComplete() {
+    //alert('Saving Complete');
+    parent.reloadPage=true; 
+    //parent.jQuery.fancybox.close();
+}
+
+function showAjaxLoader(obj) {
+    var tBody = obj.children('tbody');
+    tBody.children('tr').hide();
+    tBody.append('<tr><td colspan="100" id="aniloader-animation">&nbsp;</td></tr>');
+}
+</script>
+
+
+<apex:form id="UserSettingsForm">
+
+<!-- -------------------------- -->
+<!-- AJAX Function Declarations -->
+<!-- -------------------------- -->
+<apex:actionFunction name="sortMutedProspects" action="{!sortMutedProspects}" reRender="mutedProspectsPanel" status="status" >
+    <apex:param name="field" value="" />
+</apex:actionFunction>  
+<apex:actionFunction name="nextPage" action="{!mutedProspects.pager.next}" 
+    reRender="mutedProspectsPanel" status="status" oncomplete="paging_onComplete()">
+</apex:actionFunction>
+<apex:actionFunction name="previousPage" action="{!mutedProspects.pager.previous}"
+    reRender="mutedProspectsPanel" status="status"
+    oncomplete="paging_onComplete()">
+</apex:actionFunction>
+
+<apex:actionFunction name="nextAccountPage" action="{!mutedAccounts.pager.next}" 
+    reRender="mutedAccountsPanel" status="status" oncomplete="paging_onComplete()">
+</apex:actionFunction>
+<apex:actionFunction name="previousAccountPage" action="{!mutedAccounts.pager.previous}"
+    reRender="mutedAccountsPanel" status="status"
+    oncomplete="paging_onComplete()">
+</apex:actionFunction>
+
+<apex:actionFunction name="unmuteProspect" action="{!unmuteProspect}" onComplete="ajaxQueues['unmuteProspect'].onComplete();"  status="status" >
+   <apex:param name="id" value=""/>
+</apex:actionFunction>
+
+
+<apex:actionFunction name="unmuteAccount" action="{!unmuteProspect}" onComplete="ajaxQueues['unmuteAccount'].onComplete();"  status="status" >
+   <apex:param name="id" value=""/>
+</apex:actionFunction>
+
+
+<!-- 
+<apex:actionFunction name="muteProspect" action="{!muteProspect}" onComplete="processQueue();" reRender="mutedProspectsPanel" status="status" >
+    <apex:param name="id" value=""/>
+</apex:actionFunction>
+<apex:actionFunction name="unmuteProspect" action="{!unmuteProspect}" onComplete="processQueue();" reRender="mutedProspectsPanel" status="status" >
+    <apex:param name="id" value=""/>
+</apex:actionFunction>
+<apex:actionFunction name="saveUserOptions" action="{!saveUserOptions}" />
+ -->
+ 
+<!-- ------------------------------- -->
+<!-- Tab Bar and Tab Headings        -->
+<!-- ------------------------------- -->
+<div style="padding: 0px 4px">
+<table class='tabsNewBar' cellpadding="0" cellspacing="0">
+    <tr>
+        <td>
+        <div class="tabNavigation" style="margin-bottom: 0px; padding-bottom: 0px; padding-left: 0px; {!If($User.UIThemeDisplayed != 'Theme3', 'background-image: none;', '')}">
+            <div class="tabBarLeft"></div>
+            <table width='100%' class="tab" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                
+                <td nowrap="nowrap"><div><a href='javascript:void(0);' id="tab2" onclick='tab_onClick(this, 2)'>Activity Notifications</a></div></td>
+                <apex:outputText rendered="{!isChatterEnabled}">
+                    <td nowrap="nowrap"><div><a href='javascript:void(0);' id="tab2" onclick='tab_onClick(this, 3)'>Chatter Tracking</a></div></td>
+                </apex:outputText>
+                <td nowrap="nowrap" style="display: {!IF(showBuySignalsTab,'block','none')}"><div><a href='javascript:void(0);' onclick='tab_onClick(this, 4)'>Buy Signal Notifications</a></div></td>
+                <td nowrap="nowrap"><div><a href='javascript:void(0);' onclick='tab_onClick(this, 5)'>Ignored Prospects</a></div></td>
+                <td nowrap="nowrap"><div><a href='javascript:void(0);' onclick='tab_onClick(this, 6)'>Ignored Accounts</a></div></td>
+                <td nowrap="nowrap" class='last'><div><a href='javascript:void(0);' id="tab1" onclick='tab_onClick(this, 1)'>General Preferences</a></div></td>
+                <td width='100%' style='background-image: none; text-align:right; padding-right: 6px; back' valign='middle'>&nbsp;</td>
+                </tr>
+            </table>
+            <div class="tabBarRight"></div>
+        </div>
+        </td>
+    </tr>
+</table>
+</div>
+        
+<div id='pageBlock' >
+<apex:pageBlock id="theTabsBlock" >
+
+    <!-- ------------------------------- -->
+    <!-- Activity Notifications (Tab 2)  -->
+    <!-- -------------------------------- -->
+    <div id='tabContent2' class="myTabContent" style="min-height: 400px;"><apex:outputPanel id="activityNotificationsPanel">
+
+        <!-- M.Smith, 05/12/2010: Disabled this section as per Ryan -->
+        <!-- Vic, 06/16/2010: Field deleted -->
+<!--
+        <apex:outputPanel rendered="false">
+            <p><b>When I mark an Account to be "Tracked", I want to receive a notification for:</b></p>
+            <p style="margin-left: 50px;"><apex:inputCheckBox value="{!userOptions.AllAccountContacts__c}"
+                onChange="enableSaveButton();" id="AllAccountContacts__c" />
+                &nbsp; <apex:outputLabel >All Contacts in the Account</apex:outputLabel>
+            </p>
+        </apex:outputPanel>
+-->
+        <p style="margin-left: 50px;"><b>When I mark someone as 'Tracked', I want to receive a notification when:</b></p>
+        <p style="margin-left: 50px;">
+        
+        <apex:inputCheckBox value="{!userOptions.EmailOpen}" 
+            onChange="enableSaveButton();" id="EmailOpen__c" />
+            &nbsp;<apex:outputLabel >They open an email sent by marketing</apex:outputLabel><br />
+        <apex:inputCheckBox value="{!userOptions.OutlookEmailOpen}" 
+            onChange="enableSaveButton();" id="OutlookEmailOpen__c" />
+            &nbsp;<apex:outputLabel >They open an email sent by sales (through the Eloqua Outlook plug-in)</apex:outputLabel><br />
+        <apex:inputCheckBox value="{!userOptions.EmailClickThrough}"
+            onChange="enableSaveButton();" id="EmailClickThrough__c" />
+            &nbsp; <apex:outputLabel >They click through on an email</apex:outputLabel><br />
+        <apex:inputCheckBox value="{!userOptions.WebsiteVisit}" 
+            onChange="enableSaveButton();" id="WebsiteVisit__c" />
+            &nbsp; <apex:outputLabel >They visit our website</apex:outputLabel><br />
+        <apex:inputCheckBox value="{!userOptions.HypersiteVisit}" 
+            onChange="enableSaveButton();" id="HypersiteVisit__c" />
+            &nbsp; <apex:outputLabel >They visit a hypersite</apex:outputLabel><br />
+        <apex:inputCheckBox value="{!userOptions.FormSubmit}" 
+            onChange="enableSaveButton();" id="FormSubmit__c" />
+            &nbsp; <apex:outputLabel >They submit a form</apex:outputLabel><br />
+        </p>
+    </apex:outputPanel>
+    </div>
+
+   <!-- ------------------------------- -->
+    <!-- Chatter Notifications (Tab 3)  -->
+    <!-- -------------------------------- -->
+    <div id='tabContent3' class="myTabContent" style="min-height: 400px;"><apex:outputPanel id="chatterNotificationsPanel">
+
+        <!-- M.Smith, 05/12/2010: Disabled this section as per Ryan -->
+        <!-- Vic, 06/16/2010: Field deleted -->
+<!--
+        <apex:outputPanel rendered="false">
+            <p><b>When I mark an Account to be "Tracked", I want to receive a notification for:</b></p>
+            <p style="margin-left: 50px;"><apex:inputCheckBox value="{!userOptions.AllAccountContacts__c}"
+                onChange="enableSaveButton();" id="AllAccountContacts__c" />
+                &nbsp; <apex:outputLabel >All Contacts in the Account</apex:outputLabel>
+            </p>
+        </apex:outputPanel>
+-->
+        <p><b></b></p>
+        <p style="margin-left: 50px;">
+        <apex:inputCheckBox value="{!userOptions.FollowOnTrack}" 
+            onChange="enableSaveButton();" id="FollowOnTrack__c" />
+            &nbsp;<apex:outputLabel >
+            <strong>When I Track someone, I also want to Follow them in Chatter ({!chatterObjectText} Only)</strong>
+            <div style="padding: 6px 0px 0px 80px; font-style: italic;" >Note: While the option above is selected, you will stop Following someone when you Untrack them from Eloqua Discover.</div>
+            </apex:outputLabel>
+
+        </p>
+        <BR/>
+        <apex:outputPanel rendered="{!hasChatterPosts}">
+        <p style="margin-left: 50px;">
+        When you are Following someone, your Chatter feed will be updated when:<BR/>
+            <ul style="margin-left: 35px">
+            <apex:repeat value="{!enabledChatterActivities}" var="chatterActivity" id="chatterActivityPost">
+                <li><apex:outputText >{!chatterActivity}</apex:outputText></li>             
+            </apex:repeat>
+            </ul>
+        </p>
+        </apex:outputpanel>
+    </apex:outputPanel>
+    </div>
+
+
+
+    <!-- --------------------------------- -->
+    <!-- Buy Signal Notifications (Tab 4)  -->
+    <!-- --------------------------------- -->
+    <div id='tabContent4' class="myTabContent" style="min-height: 400px;">
+    <apex:outputPanel id="buySignalNotificationsPanel">
+
+        <!-- ************************************************************************************ -->
+        <!-- Buy Signal Notification Options Block                                                -->
+        <!-- - Display one checkmark per BuySignalNotification__c showing the name and a          -->
+        <!--   a checkmark for the option                                                         -->
+        <!-- - The Save button saves these records back to the CustomSettings object for the user -->
+        <!-- ************************************************************************************ -->
+        <!-- <apex:pageBlock id="BuySignals_Block" title="Notify me on these Buy Signals"
+             rendered="{!buySignalOptions.size > 0 }">  
+        -->
+
+       <!-- <apex:outputPanel rendered="{!buySignalOptions.size > 0 }"> 
+            <hr /> width: 800px; height: 350px; -->
+            <p><b>I want to receive a notification when anyone I 'own' shows any of the following Buy Signals:</b></p>
+            <div style="overflow: auto; width: 820px; height: 400px;">
+            <table width="100%">
+                <tr>
+                    <td>
+                    <apex:pageBlocktable value="{!buySignalOptions}" var="bsn" id="BuySignalNotificationsList"
+                    rowClasses="odd,even" styleClass="tableClass">
+                        <apex:column >
+                            <apex:inputCheckBox onChange="enableSaveButton();" value="{!bsn.isNotify}" id="buySignalNotification" />
+                        </apex:column>
+                        <apex:column >
+                            <apex:facet name="header">Name</apex:facet>
+                            <apex:outputText value="{!bsn.name}" />
+                        </apex:column>
+                        <apex:column >
+                            <apex:facet name="header">Type</apex:facet>
+                            <apex:outputText value="{!bsn.buySignalRecord.EDP1__Type__c}" />
+                        </apex:column>
+                        <apex:column >
+                            <apex:facet name="header">Asset</apex:facet>
+                            <apex:outputText value="{!bsn.buySignalRecord.Asset__r.Name}" />
+                        </apex:column>
+                        <apex:column >
+                            <apex:facet name="header">Recurrence</apex:facet>
+                            <apex:outputText value="{!Round(bsn.buySignalRecord.EDP1__RecurrenceTimeframe__c,0)}" />
+                        </apex:column>
+                    </apex:pageBlocktable>
+                    </td>
+                </tr>
+            </table>
+            </div>
+       <!-- </apex:outputPanel>  -->
+    </apex:outputPanel>
+    </div>
+
+    <!-- -------------------------- -->
+    <!-- Ignored Prospects (Tab 5)  -->
+    <!-- -------------------------- -->
+    <div id='tabContent5' class="myTabContent" style="min-height: 400px; overflow: auto;">
+    <apex:outputPanel id="mutedProspectsPanel">
+        <div style="width: 805px"><table cellspacing="0" cellpadding="0" border="0" class="list "  style="border-bottom: none"><colgroup span="6"></colgroup>
+        <thead class="dr-table-thead">
+        <tr class="headerRow ">
+        <th colspan="1" scope="col" class="headerRow  " width="65px" style="padding-right: 12px; width: 65px;" >Buy Signal</th>
+        <th colspan="1" scope="col" class="headerRow  " width="65px" style="padding-right: 12px; width: 65px;" >Receny</th>
+        <th colspan="1" scope="col" class="headerRow  " width="205px">Name</th>
+        <th colspan="1" scope="col" class="headerRow  " width="205px">Title</th>
+        <th colspan="1" scope="col" class="headerRow  ">Account</th>
+        <th colspan="1" scope="col" class="headerRow  " style="text-align:center; width: 45px;" >Unignore</th>
+        </tr></thead>
+        </table>     </div>   
+        <div style="overflow: auto; width: 805px; height: 380px; border-bottom: 1px solid #D4DADC">
+        <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+        <td>
+        <apex:pageBlockTable value="{!mutedProspects.records}" var="prospect" headerClass="hideHeader" >
+
+
+                        
+            <!-- ------------------ -->
+            <!-- STATUS ICONS       -->
+            <!-- ------------------ -->
+            <apex:column style="padding-right: 12px; width: 65px;">
+                <!-- <apex:facet name="header">Buy Signal</apex:facet>  -->
+                <apex:image url="{!URLFOR($Resource.EDP1__All, '24x24/interest' + TEXT(prospect.interest) + '.png')}"
+                    height="24" rendered="false" />
+                <img src="/s.gif" class="interest{!prospect.interest}" style="display: block; " />
+            </apex:column>
+            <apex:column style="padding-right: 12px; width: 65px;">
+                <!-- <apex:facet name="header">Receny</apex:facet>  -->
+                <apex:image url="{!URLFOR($Resource.EDP1__All, '24x24/urgency' + TEXT(prospect.urgency) + '.png')}" rendered="false" />
+                <img src="/s.gif"  class="urgency{!prospect.urgency}" style="display: block;" />
+            </apex:column>
+
+            <!-- Data Columns -->
+            <apex:column width="205px">
+                <!-- <apex:facet name="header">Name</apex:facet>  -->
+                <img src="/s.gif" class="{!LOWER(prospect.objectType)}SmallIcon" style="padding-right: 3px;" />
+                <a href="/{!prospect.id}" style="position: relative; top: -2px;"><apex:outputText value="{!prospect.name}" /></a>
+            </apex:column>
+            <apex:column width="205px">
+                <!-- <apex:facet name="header">Title</apex:facet>  -->
+                <apex:outputText value="{!prospect.title}" />
+            </apex:column>
+            <apex:column >
+                <!-- <apex:facet name="header">Account</apex:facet>  -->
+                <a href="/{!prospect.AccountId}"><apex:outputText value="{!prospect.account}" /></a>
+            </apex:column>
+
+            <!-- Unmute/Unmute Action Icon -->
+            <apex:column style="text-align:center; width: 45px;">
+                <!-- <apex:facet name="header">Unignore</apex:facet>  -->
+                <a href="javascript:void(0);" onclick="unmute_onClick('Prospect', this, '{!prospect.id}');" title="Unignore {!prospect.objectType}" > 
+                    <img class="{!if(prospect.isMuted, 'unignore', 'ignore')}" src="/s.gif" alt="{!if(prospect.isMuted, 'Unignore', 'Ignore')} me" />
+                </a>
+            </apex:column>
+        </apex:pageBlockTable>
+        </td></tr></table>
+        </div>
+    </apex:outputPanel>
+    </div>
+
+
+
+    <!-- -------------------------- -->
+    <!-- Ignored Accounts (Tab 6)  -->
+    <!-- -------------------------- -->
+    <apex:includeScript value="{!URLFOR($Resource.EDP1__All, 'js/flexigrid/flexigrid.js')}"/>
+    <div id='tabContent6' class="myTabContent" style="min-height: 400px; overflow: auto;"><apex:outputPanel id="mutedAccountsPanel">
+        
+<div style="width: 805px">
+        <table cellspacing="0" cellpadding="0" border="0" class="list " style="border-bottom: none"><colgroup span="6"></colgroup>
+        <thead class="dr-table-thead" style="border-bottom: none">
+        <tr class="headerRow " style="border-bottom: none">
+        <th colspan="1" scope="col" class="headerRow  " style="width: 65px;" >Buy Signal</th>
+        <th colspan="1" scope="col" class="headerRow  " style="width: 65px;" >Receny</th>
+        <th colspan="1" scope="col" class="headerRow  " width="505px">Name</th>
+        <th colspan="1" scope="col" class="headerRow  " width="130px">Industry</th>
+        <th colspan="1" scope="col" class="headerRow  " style="text-align:center; width: 75px;" >Unignore</th>
+        </tr></thead>
+        </table>    </div>    
+        <div style="overflow: auto; width: 805px; height: 380px; border-bottom: 1px solid #D4DADC">
+        <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+        <td>
+        <apex:pageBlockTable value="{!mutedAccounts.records}" var="Account" headerClass="hideHeader" >
+
+            <!-- ------------------ -->
+            <!-- PAGING LINKS       -->
+            <!-- ------------------ -->
+
+                        
+            <!-- ------------------ -->
+            <!-- STATUS ICONS       -->
+            <!-- ------------------ -->
+            <apex:column style="width: 65px;">
+                <!-- <apex:facet name="header">Buy Signal</apex:facet>  -->
+                <apex:image url="{!URLFOR($Resource.EDP1__All, '24x24/interest' + TEXT(Account.interest) + '.png')}"
+                    height="24" rendered="false" />
+                <img src="/s.gif" class="interest{!Account.interest}" style="display: block; " />
+            </apex:column>
+            <apex:column style="width: 65px;">
+                <!-- <apex:facet name="header">Receny</apex:facet>  -->
+                <apex:image url="{!URLFOR($Resource.EDP1__All, '24x24/urgency' + TEXT(Account.urgency) + '.png')}" rendered="false" />
+                <img src="/s.gif"  class="urgency{!Account.urgency}" style="display: block;" />
+            </apex:column>
+
+            <!-- Data Columns -->
+            <apex:column style="width: 470px" >
+                <!-- <apex:facet name="header">Name</apex:facet>  -->
+                <img src="/s.gif" class="{!LOWER(Account.objectType)}SmallIcon" style="padding-right: 3px;" />
+                <a href="/{!Account.id}"><apex:outputText value="{!Account.name}" /></a>
+            </apex:column>
+            <apex:column style="text-align:left" ><apex:outputText value="{!Account.industry}" /></apex:column>
+            <!-- Unmute/Unmute Action Icon -->
+            <apex:column style="text-align:center; width: 45px;">
+                <!-- <apex:facet name="header">Unignore</apex:facet>  -->
+                <a href="javascript:void(0);" onclick="unmute_onClick('Account', this, '{!Account.id}');" title="Unignore Account"> 
+                    <img class="{!if(Account.isMuted, 'unignore', 'ignore')}" src="/s.gif" alt="{!if(Account.isMuted, 'Unignore', 'Ignore')} me" />
+                </a>
+            </apex:column>
+        </apex:pageBlockTable>
+        </td></tr></table>
+        </div>
+    </apex:outputPanel>
+    </div>
+
+    <!-- ------------------------------- -->
+    <!-- General Preferences    (Tab 1)  -->
+    <!-- ------------------------------- -->
+    <div id='tabContent1' class="myTabContent" style="min-height: 400px;"><apex:outputPanel id="generalPreferencesPanel">
+        <p style="margin-left: 50px;">
+        <apex:inputCheckBox value="{!UserOptions.ShowOnlyProspectsWithOppsIOwn}" id=""
+            onChange="enableSaveButton();" id="ShowOnlyProspectsWithOppsIOwn__c" />
+            &nbsp;<apex:outputLabel >Only show me contacts and accounts tied to opportunities I own</apex:outputLabel><br />
+        </p>
+    </apex:outputPanel>
+    </div>
+
+    <table width="100%">
+        <tr>
+        <td  style="text-align:center;">
+        <apex:commandButton id="SaveButton" value=" Save Options " onclick="disableButtons()" action="{!saveOptions}" 
+            onComplete="save_onComplete()" 
+             />&nbsp;&nbsp;
+        <apex:commandButton id="CancelButton" value=" Cancel "  
+            onClick="disableButtons(); parent.jQuery.fancybox.close(); " />
+        <apex:commandButton id="CloseButton" value=" Close "  
+            onClick="disableButtons(); parent.jQuery.fancybox.close(); " />
+        </td>
+        </tr>
+    </table>
+
+</apex:pageBlock>
+</div>
+
+</apex:form>
+
+<script>
+    var saveButtonID = 'UserSettingsPage:UserSettingsForm:theTabsBlock:SaveButton';
+    var saveBtn = document.getElementById(saveButtonID);
+    saveBtn.className="btnDisabled ";
+    saveBtn.disabled=true;
+</script>
+
+<apex:outputPanel rendered="{!$User.UIThemeDisplayed == 'Theme3'}">
+<script>
+// Can't get this color to change by setting a Style on the apex:pageBlock tag, 
+// so do it after loading the page
+    var theTabsBlock = document.getElementById('UserSettingsPage:UserSettingsForm:theTabsBlock');
+    theTabsBlock.style.borderTop = "2px solid #007fcc";
+</script>
+</apex:outputPanel>
+
+<apex:outputPanel rendered="{!$User.UIThemeDisplayed != 'Theme3'}">
+<script>
+// This isn't working for the old UI
+    var theTabsBlock = document.getElementById('UserSettingsPage:UserSettingsForm:theTabsBlock');
+    theTabsBlock.style.borderTop = "2px solid #007fcc";
+    theTabsBlock.style.borderLeft = "1px solid #007fcc";
+    theTabsBlock.style.borderBottom = "1px solid #007fcc";
+    theTabsBlock.style.borderRight = "1px solid #007fcc";
+</script>
+</apex:outputPanel>
+
+<script>
+
+// Disable all buttons on the page
+function disableButtons() {
+    var frm = document.getElementById("UserSettingsPage:UserSettingsForm");
+    for (var i=0; i < frm.length; i++) {
+        if (frm.elements[i].type == 'submit' || frm.elements[i].type == 'button') {
+          frm.elements[i].className="btnDisabled ";
+          frm.elements[i].disabled=true;
+        }
+    }
+    
+    var saveBtn = document.getElementById('UserSettingsPage:UserSettingsForm:theTabsBlock:CloseButton');
+    saveBtn.className="btn ";
+    saveBtn.disabled=false;
+}
+
+function enableSaveButton() {
+    var saveBtn = document.getElementById(saveButtonID);
+    saveBtn.className="btn ";
+    saveBtn.disabled=false;
+}
+
+</script>
+
+<script>
+// -------------------------------------------------------------------
+// Queue AJAX Requests to the server
+// -------------------------------------------------------------------
+// callQueue contains a list of 3 element arrays for future processing (submit to Apex controller via AJAX)
+// [0]=Action (Mute/Unmute/Track/Untrack), [1]=object, [2]=ProspectID, [3]=objType
+
+var callQueue = new Array();
+var isAJAXActive = false;
+
+// Submit a new queue entry for future processing
+function queueAction(action, obj, id, objType) {
+   // add a new entry to the Queue
+   callQueue.push(new Array(action, obj, id, objType));
+   
+   // if there are no actions pending, then start the processing
+   if (!isAJAXActive) { 
+    isAJAXActive = true; 
+    processQueue(); 
+   }
+}
+
+// Process the next item in the queue
+function processQueue() {
+
+    // if there are no other queued items to process, then just return
+    if (callQueue.length == 0) { isAJAXActive = false; return; }
+
+    // retreive the next item to process    
+    var callDetail = callQueue.shift();  // shift() removes the first element and returns that element
+    var callType = callDetail[0];
+    var obj = callDetail[1];
+    var id = callDetail[2];
+    var objType = callDetail[3];
+
+//    if (callType == 'track') {
+//       isAJAXActive = true;
+//       track_onClick(obj, id);
+//    } else if (callType == 'untrack') {
+//       isAJAXActive = true;
+//       track_onClick(obj, id);
+
+    var img = jQuery(obj).children('img');
+    if ( img.hasClass('ignore') ) callType = 'mute';
+    else callType = 'unmute';
+
+    if (callType == 'mute') {
+       isAJAXActive = true;
+       mute_async(obj, id, objType);
+    } else if (callType == 'unmute') {
+       isAJAXActive = true;
+       unmute_async(obj, id, objType);
+    }
+}
+
+// -------------------------------------------------------------------
+// M.Smith, 05/12/2010: AJAX Toolkit call to handle the TRACK/MUTE actions
+// -------------------------------------------------------------------
+
+function mute_async(obj, id, objType) {
+
+    muteProspect(id);
+/*
+    // create a new TrackedProspect__c object for UPSERT
+    var tp = new sforce.SObject("TrackedProspect__c");
+    tp.ProspectId__c = id;
+    tp.User__c       = '{!userID}';
+    tp.IsMuted__c    = true;
+    tp.Key__c        = '{!userID}-' + id;
+    if (objType == 'Contact' ) tp.Contact__c = id;
+    else tp.Lead__c = id;
+    
+    // alert('key=' + tp.Key__c);
+    
+    // inline asynchronous UPSERT call
+    var result = sforce.connection.upsert("Key__c", [tp], 
+       { onSuccess : function(result) {
+            if(!result[0].getBoolean("success")) {
+                alert("Upsert() Failed");
+            } else {
+                var img = jQuery(obj).children('img');
+                if ( img.hasClass('ignore') ) {
+                    img.removeClass('ignore').addClass('unignore');
+                }
+            }    
+            processQueue();
+        }, onFailure : function(error) {
+            alert("An error has occurred " + error);
+            processQueue();
+        }
+    } );
+*/
+}
+
+function unmute_async(obj, id, objType) {
+
+    unmuteProspect(id);
+/*    
+    var tp_key = '{!userID}-' + id;
+    var result = sforce.connection.query("SELECT Id FROM EDP1__TrackedProspect__c WHERE EDP1__Key__c = '" + tp_key + "'", 
+       { onSuccess : function(result) {
+            var records = result.getArray("records");
+            if (records.length > 0) {
+                var record = records[0];
+                sforce.connection.deleteIds([record.Id], { 
+                    onSuccess : function(result) { 
+                        var img = jQuery(obj).children('img');
+                        if ( img.hasClass('unignore') ) {
+                            img.removeClass('unignore').addClass('ignore');
+                        }
+                        processQueue(); 
+                    }, 
+                    onFailure : function(error) { alert("Delete error: " + error); processQueue(); }
+                });
+            } else processQueue();
+       }, onFailure : function(error) {
+           alert("Query error: " + error);
+           processQueue();
+       }
+    });
+*/
+}
+
+</script>
+
+<script type="text/javascript">
+// M.Smith, 05/28/2010: Moved this to the VERY bottom of the page
+// to get it to work in IE7. Otherwise, it was failing with an "object error" 
+    var tab1 = document.getElementById("tab2");
+    tab_onClick(tab1, 2);
+</script>
+
+</apex:page>

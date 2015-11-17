@@ -1,0 +1,205 @@
+<apex:component controller="SL_IntranetSobjectController" id="SObject"> 
+    
+	<apex:attribute assignTo="{!compImpl}" name="aComponentImpl" type="WidgetAbstract" 
+		description="component implementation object" required="true"/>
+	
+	<apex:form id="SObjectForm">
+		<apex:actionfunction id="showMoreAF" name="widget{!id}.showMoreAF" action="{!showMoreRecords}" 
+			rerender="oplstobjects, opSobj2" status="loaderSobject" >
+        	<apex:param name="prmListView" value="" assignTo="{!MyImpl.lstViewName}"/>
+			<apex:param name="numberOfRecordDisplayed" value="" assignTo="{!MyImpl.numRecordstodisplay}"/>
+        </apex:actionfunction>
+        
+		<apex:actionFunction id="displayListView" name="widget{!id}.displayListView" action="{!gtListViewDetail}" 
+			rerender="oplstobjects,viewAll" 	status="loader">	 	
+	        <apex:param name="listViewName" value="" assignTo="{!MyImpl.lstViewName}"/>	 	
+	    </apex:actionFunction>
+	    
+	    <apex:actionFunction id="displayChatterTopicBasedRecords" name="widget{!id}.displayChatterTopicBasedRecords" 
+	    	action="{!chatterTopicRecords}" rerender="oplstobjects,viewAll" status="loader">	 	
+	        <apex:param name="chatterTopicId" value="" assignTo="{!MyImpl.chatterTopicId}"/>	 	
+	    </apex:actionFunction>
+	    
+	    <apex:actionFunction id="getMoreRecordsMobile" 
+			name="widget{!id}getMoreRecordsMobile" action="{!myImpl.getMoreRecordsForMobile}" 
+			rerender="oplstobjectsMob" onComplete="resizeSobjectImage();reRenderCss();"/>
+			
+		<apex:actionFunction id="applyFilter" 
+			name="widget{!id}.applyFilter" action="{!myImpl.applyFilter}" 
+			rerender="oplstobjects,viewAll" onComplete="resizeSobjectImage();reRenderCss();">
+			<apex:param name="picklistFilterValue" value="" assignTo="{!MyImpl.picklistFilterValue}"/>
+		</apex:actionFunction>	
+			
+	</apex:form>
+		
+	<div class="wc-widget SL_IntranetSobject" id="widget{!id}">
+		
+		<apex:outputPanel layout="block" rendered="{!MyImpl.isPicklistFilterOn}">		
+			<select id="plf{!id}"></select>			
+		</apex:outputPanel>
+		
+		<apex:outputpanel id="oplstobjects">
+			<apex:outputpanel rendered="{!MyImpl.showSection}" layout="none">
+				<div class="widget">
+					<div class="alerts-block wc-widget" style="word-wrap: break-word;"> 
+						<ul class="alerts" style="font-size: 100.01%; margin-left:-20px">
+							<li style="padding-top: 0px;border-bottom: none;">
+								<h2 class="heading">{!compImpl.properties['heading']}</h2>
+							</li>
+							
+							<apex:repeat id="sobjectRows" value="{!MyImpl.lstSobjectWrapper}" var="sobject" rows="{!MyImpl.numRecordstodisplay}" >
+								<li id="widget{!id}.{!sobject.sObj['Id']}" >
+                                    <apex:repeat id="sobjectRowsSub1" value="{!MyImpl.lstFieldWrapper}" var="field" rows="1">
+                                    	<apex:outputPanel rendered="{!sobject.sObj[field.fieldAPIName] != null}" layout="none">
+	                                    	<span id="widget{!id}_{!sobject.sObj['Id']}_{!field.fieldAPIName}"> 
+	                                            <h3>
+	                                               	<a style="text-decoration: none; {!if(compImpl.properties['disableLinks'],'cursor:text;','cursor:pointer;')} " onclick="widget{!id}.viewSobject('{!sobject.sObj['Id']}', '{!MyImpl.sObjectName}', false);">
+	                                               		<apex:outputField value="{!sobject.sObj[field.fieldAPIName]}" rendered="{!If(field.fieldAPIName != 'LastReferencedDate' && field.fieldType != 'REFERENCE' && field.fieldType != 'URL'  && field.fieldType != 'EMAIL', true, false)}"/>
+	                                               		<apex:outputText value="{!sobject.sObj[field.fieldAPIName]}" rendered="{!If(field.fieldAPIName == 'LastReferencedDate' || field.fieldType == 'REFERENCE' || field.fieldType == 'URL' || field.fieldType == 'EMAIL', true, false)}"/>
+	                                               	</a>
+	                                            </h3>
+	                                        </span>
+	                                    </apex:outputPanel>
+                                    </apex:repeat>
+                                    <apex:repeat id="sobjectRowsSub2" value="{!MyImpl.lstFieldWrapper}" var="field" first="1">
+                                    	<apex:outputPanel rendered="{!sobject.sObj[field.fieldAPIName] != null}" layout="none">
+	                                    	<span id="widget{!id}_{!sobject.sObj['Id']}_{!field.fieldAPIName}"> 
+	                                            <span class="date">
+	                                            	<apex:outputText value="{!field.fieldLabel}: " rendered="{!compImpl.properties['showfieldlabel']}"/>
+	                                            	<apex:outputField value="{!sobject.sObj[field.fieldAPIName]}" rendered="{!If(field.fieldAPIName != 'LastReferencedDate' && field.fieldType != 'REFERENCE', true, false)}"/>
+	                                                <apex:outputText value="{!sobject.sObj[field.fieldAPIName]}" rendered="{!If(field.fieldAPIName == 'LastReferencedDate' || field.fieldType == 'REFERENCE', true, false)}"/>
+	                                            </span>
+	                                        </span>
+	                                    </apex:outputPanel>
+                                    </apex:repeat>
+								</li>	
+							</apex:repeat>
+						</ul>
+						<apex:outputPanel rendered="{!MyImpl.sObjectListSize < 1}" layout="none">
+							<span class="noResult">No records found.</span>
+						</apex:outputPanel>
+						<apex:outputpanel id="opSobj2" >
+							<div style="{!if(AND(MyImpl.sObjectListSize > MyImpl.numRecordstodisplay, MyImpl.numRecordstodisplay < MyImpl.TotalRecords),'', 'display:none;')}" class="link-holder">
+								<a class="btn" style="cursor: pointer;text-decoration: none;float:right;text-align: center;" onClick="$(this).parent().css('display','none');widget{!id}.showMoreAF('{!JSENCODE(MyImpl.lstViewName)}','{!MyImpl.numRecordstodisplay}');">Show More</a>
+							</div>
+						</apex:outputpanel>
+					</div>
+				</div>
+				<!-- Start of Action status -->  
+				<apex:actionstatus id="loaderSobject">
+					<apex:facet name="start">
+						<div id="salesforceSource_blurybackground" style="position:relative; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.4;filter:alpha(opacity=40)"></div>
+							<div id="ManagesobjsViewport_loading" class="waitingSearchDiv" style="display: '';position: relative; ">
+								<div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+									<table align="center" valign="middle" style="width: 100%; height: 30%">
+										<tr align="center" valign="middle" style="width: 100%; height: 30%">
+											<td valign="middle"><img src="/img/loading.gif"/><span class="waitingDescription"><b>Loading...</b></span></td>
+										</tr>
+									</table>
+								</div>
+							</div>
+						<div id="ManagesobjsViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; "></div>
+					<script>document.getElementById('ManagesobjsViewport_loading').height = window.innerHeight * (3/4);</script>
+					</apex:facet>
+				</apex:actionstatus>
+				<!-- End of Action status -->
+			</apex:outputpanel>
+		</apex:outputpanel>
+	</div>
+	
+	<div class="wc-widget-mobile mobile-content" >
+<!--         mobile content -->
+		<apex:outputpanel id="oplstobjectsMob">
+			<apex:outputpanel rendered="{!MyImpl.showSection}" layout="none">
+		        <section class="mobile-content">
+		            <div class="top-block">
+		                <div class="title-holder"> 
+		                    <h2>{!compImpl.properties['heading']}</h2>
+		                </div>
+		            </div>
+		            <apex:outputpanel id="mobileAlertPanel">
+		                <ul class="list" style="margin: 0px;padding:18px 0 0px;">
+		                   <apex:repeat id="mobSobjectRows" value="{!MyImpl.lstSobjectWrapper}" var="sobject" rows="{!MyImpl.numRecordstodisplay}" >
+								<li >
+									<apex:variable var="index" value="{!1}"/>
+                                    <apex:repeat id="mobSobjectRowsSub1" value="{!MyImpl.lstFieldWrapper}" var="field">
+                                    	<span id="fieldImageWrap"> 
+                                    		<apex:outputpanel rendered="{!IF(index == 1, true, false)}" layout="none">
+                                    			<div class="info" style="font: 15px Arial, Helvetica, sans-serif;">
+                                    				<h3 style="font: bold 22px Arial, Helvetica, sans-serif;">
+                                    					<apex:outputField value="{!sobject.sObj[field.fieldAPIName]}" rendered="{!If(field.fieldAPIName != 'LastReferencedDate' && field.fieldType != 'REFERENCE', true, false)}"/>
+	                                               		<apex:outputText value="{!sobject.sObj[field.fieldAPIName]}" rendered="{!If(field.fieldAPIName == 'LastReferencedDate' || field.fieldType == 'REFERENCE', true, false)}"/>
+                                    				</h3>
+                                    			</div>
+                                    		</apex:outputpanel>
+                                            <div class="info" style="font: 15px Arial, Helvetica, sans-serif;">
+                                            	<apex:outputpanel rendered="{!IF(index > 1, true, false)}" layout="none">
+	                                            	<apex:outputText value="{!field.fieldLabel}: " rendered="{!compImpl.properties['showfieldlabel'] && index > 1}"/> 
+	                                            	<apex:outputField value="{!sobject.sObj[field.fieldAPIName]}" rendered="{!If(field.fieldAPIName != 'LastReferencedDate' && field.fieldType != 'REFERENCE', true, false)}"/>
+	                                                <apex:outputText value="{!sobject.sObj[field.fieldAPIName]}" rendered="{!If(field.fieldAPIName == 'LastReferencedDate' || field.fieldType == 'REFERENCE', true, false)}"/>
+                                           		</apex:outputpanel>
+                                            </div>
+                                        </span>
+                                       	<br/>
+                                       	<apex:variable var="index" value="{!index + 1}"/>
+                                    </apex:repeat>
+								</li>	
+							</apex:repeat>
+		                </ul>
+		                <apex:outputpanel rendered="{!MyImpl.sObjectListSize = 0}" layout="none">
+		                    <ul class="list" style="margin:0 0;padding:0 0 0px;">
+		                        <li style="margin:0px;"><h3 style="font: bold 20px Arial, Helvetica, sans-serif;">No Records found.</h3></li>
+		                    </ul>
+		                </apex:outputpanel>
+		               <apex:outputPanel rendered="{!AND(MyImpl.lstSobjectWrapper != null, (MyImpl.sObjectListSize - Myimpl.numRecordstodisplay) > 0)}" layout="none">
+		               		<a href="javascript:widget{!id}getMoreRecordsMobile();" style="color: #a3a3a3;" class="see-more">{!$Label.SL_Pagination_SeeMore}</a>
+		               </apex:outputPanel> 
+		            </apex:outputpanel> 
+		        </section>
+			</apex:outputpanel>
+		</apex:outputpanel>
+    </div>
+    
+    <script>
+    	
+    	<apex:outputPanel layout="none" rendered="{!MyImpl.isPicklistFilterOn}">		
+			(function(){
+				var $el = $('#plf{!id}');
+				var cvmeta = new SL_MetaData("{!$Api.Session_ID}", '{!myImpl.sObjectName}');
+				values = cvmeta.getPicklistValues('{!MyImpl.picklistFilterApiName}');		
+				if(values.success && values.values.length > 0){
+				
+					$el.on('change', function() {
+						widget{!id}.applyFilter(this.value);
+					});
+				
+					$el.append($('<option value="">-None-</option>'));
+				
+					for(var i=0; i < values.values.length; i++){						
+						 $el						   
+				           .append($("<option></option>")
+				            .attr("value", values.values[i].value)
+				            .text(values.values[i].label)
+				           );
+						
+					}
+				}
+										
+			 })();
+		</apex:outputPanel>
+      
+    
+	    
+	    jQuery(document).ready(function($) {   
+			resizeSobjectImage();
+		});  
+		
+		function resizeSobjectImage(){
+			$(".sfdc_richtext").css("word-break","normal");
+			$("#fieldImageWrap ").find("img").each(function(){
+				$(this).css('maxWidth', 100 + '%' );
+			});
+		}
+	
+   </script>
+</apex:component>

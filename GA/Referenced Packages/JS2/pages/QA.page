@@ -1,0 +1,267 @@
+<apex:page standardController="ts2__Question_Set__c" extensions="ts2.Test_AddToList" action="{!CopyAction}" title="Question Builder: {!ts2__Question_Set__c.Name}">
+	<apex:includeScript value="/apexpages/fckeditor/fckeditor.js"/>
+	<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, 'jquery-1.8.2.min.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, 'ui/jquery-ui-1.8.24.custom.min.js')}" />
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__SSearch, 'res/css/s_style.css')}"/>
+
+<style>
+	.dataCol1 {
+		width:1px !important;
+	}
+	.ui-state-highlight {
+		border-left:2px solid;
+		border-color:#FF0000;
+		height: 1.5em;
+	}
+</style>
+
+<script type="text/javascript" charset="utf-8">
+	function RenderSortButton() {
+		jQuery('[id*=SaveOrder]').attr('disabled','disabled').addClass('btnDisabled');
+		jQuery("[id$=QALIST]").sortable({
+			axis: 'y',
+			cursor: "pointer",
+			placeholder: "ui-state-highlight",
+			update: function(event, ui) {
+				jQuery('[id*=SaveOrder]').removeAttr('disabled','disabled').removeClass('btnDisabled');
+			}
+		}).disableSelection();
+	}
+	function RerenderEditor() {
+		var NameEditor = jQuery('[id$=theTextarea]').attr('name');
+		var editor = new FCKeditor(NameEditor, null, 300);
+		editor.BasePath = '/apexpages/fckeditor/';
+		editor.Config['CustomConfigurationsPath'] = '/apexpages/richtext.config.js';
+		editor.ToolbarSet = 'SalesforceBasic';
+		editor.Config['SkinPath'] = editor.BasePath + 'editor/skins/sfdc/';
+		editor.Config['DefaultLanguage'] = 'en-us';
+		editor.Config['EditorAreaStyles'] = ['/sCSS/23.0/sprites/1323209069000/Theme3/default/gc/HtmlDetailElem.css'];
+		editor.Config['ImageUpload'] = true;
+		editor.Config['SitesPath'] = '';
+		editor.ReplaceTextarea();
+	}
+</script>
+
+<apex:form id="frm">
+	<apex:pageMessages id="pageMessages" />
+
+	<apex:sectionHeader title="{!$ObjectType.ts2__Question_Set__c.Label}" subtitle="{!ts2__Question_Set__c.Name}" />
+
+	<apex:pageBlock id="pbMainEdit" mode="edit" rendered="{!editField}">
+		<apex:pageBlockButtons location="bottom">
+			<span id="pbsMainButtons_spinner" class="spinner_indicator">&nbsp;</span>
+			<apex:commandButton value="{!$Label.SaveQuestionSet}" title="{!$Label.SaveQuestionSet}" action="{!QSSave}" />
+			<apex:commandButton value="{!$Label.CancelQuestionSet}" title="{!$Label.CancelQuestionSet}" immediate="true" action="{!cancelEditField}" />
+		</apex:pageBlockButtons>
+
+		<apex:pageBlockSection title="{!$Label.Information}" columns="1">
+			<apex:inputField id="QSName" value="{!QS.Name}"/>
+			<apex:repeat value="{!$ObjectType.ts2__Question_Set__c.FieldSets.ts2__QuestionSet}" var="f">
+				<apex:inputField value="{!QS[f]}"/>
+			</apex:repeat>
+		</apex:pageBlockSection>
+	</apex:pageBlock>
+
+	<apex:pageBlock id="pbMainInlineEdit" mode="MainDetail" rendered="{!NOT(editField)}">
+		<apex:pageBlockButtons location="bottom">
+			<span id="pbsMainButtons_spinner" class="spinner_indicator">&nbsp;</span>
+			<apex:commandButton value="{!$Label.NewQuestionSet}" title="{!$Label.NewQuestionSet}" id="newQS" onclick="if(!Confirmation('{!$Label.NewQuestionSetConfirmation}',this)) {return false;}" action="{!QSNew}" oncomplete="jQuery('[id$=QSName]').focus()" rendered="{!NOT(isBLANK(QS.id))}" rerender="frm,AllList" />
+			<apex:commandButton value="{!$Label.EditQuestionSet}" title="{!$Label.EditQuestionSet}" id="editQuestionButton" action="{!editQuestionSet}" rerender="frm,AllList" />
+			<apex:commandButton value="{!$Label.SaveQuestionSet}" title="{!$Label.SaveQuestionSet}" id="saveButton" action="{!QSSave}" style="display:none" />
+			<apex:commandButton value="{!$Label.CopyQuestionSet}" title="{!$Label.CopyQuestionSet}" id="copyQS" onclick="if(!Confirmation('{!$Label.CopyQuestionSetConfirmation}',this)) {return false;}" action="{!QSCopy}" rendered="{!NOT(isBLANK(QS.id))}" rerender="AllList" />
+			<apex:commandButton value="{!$Label.CancelQuestionSet}" title="{!$Label.CancelQuestionSet}" action="{!cancel}" id="cancelFrame" />
+			<apex:commandButton value="{!$Label.CancelQuestionSet}" title="{!$Label.CancelQuestionSet}" id="cancelButton" action="{!cancelEditField}" style="display:none" />
+		</apex:pageBlockButtons>
+
+		<apex:pageBlockSection title="{!$Label.Information}" columns="1" >
+			<apex:outputField id="QSName" value="{!QS.Name}" >
+				<apex:inlineEditSupport event="ondblclick" hideOnEdit="editQuestionButton" showOnEdit="saveButton"/>
+			</apex:outputField>
+			<apex:repeat value="{!$ObjectType.ts2__Question_Set__c.FieldSets.ts2__QuestionSet}" var="f">
+				<apex:outputField value="{!QS[f]}">
+					<apex:inlineEditSupport event="ondblclick" hideOnEdit="editQuestionButton,cancelFrame,newQS,copyQS" showOnEdit="saveButton,cancelButton"/>
+				</apex:outputField>
+			</apex:repeat>
+			<div id="j_id0:frm:pbMainEdit:j_id11:test:2:j_id12"> </div>
+		</apex:pageBlockSection>
+	</apex:pageBlock>
+</apex:form>
+
+<apex:outputPanel id="AllList">
+	<apex:pageBlock mode="detail" id="Qq" rendered="{!NOT(ISBLANK(QS.id))}">
+		<apex:panelGrid columns="2" id="theGrid" style="width:100%" columnClasses="dataCol,LabelCol">
+			<!-- OUTPUT QA LIST -->
+			<apex:form id="frmQA" >
+				<apex:inputHidden value="{!Resort}" id="ResortHidden" />
+				<apex:outputPanel style="width:30%">
+					<apex:commandButton value="{!$Label.NewQuestionQuestionSet}" title="{!$Label.NewQuestionQuestionSet}" action="{!QNew}" rerender="AllList" oncomplete="jQuery('[id$=qName]').focus()"/>
+					<apex:commandButton value="{!$Label.SaveNewOrderQuestionSet}" title="{!$Label.SaveNewOrderQuestionSet}" id="SaveOrder" action="{!ResortAction}" onclick="getTable();" oncomplete="jQuery('[id$=qName]').focus()" rerender="frmQA,button"/>
+					<span id="frmQA_spinner" class="spinner_indicator">&nbsp;</span>
+					<br/><br/>
+					<apex:variable var="rowNum" value="{!1}" />
+					<ul id="QALIST" style="list-style-type: none;margin: 0; padding: 0;">
+						<apex:repeat value="{!QAList}" var="QA" id="QATable">
+							<li title="{!$Label.DragNDrop}" id="{!QA.id}" style="margin-left: 15px"><apex:outputLabel value="Q: {!QA.Name}" style="font-weight:bold;cursor:pointer;"/>&nbsp;<apex:outputLabel value="{!$Label.OptionalQuestionQuestionSet}" rendered="{!QA.ts2__Optional__c}"/><apex:commandLink styleClass="btnLink" action="{!QEdit}" value="{!$Label.EditQuestionQuestionSet}" oncomplete="isTxtCheck()" rerender="AllList" immediate="true"><apex:param name="idq" value="{!QA.id}" assignTo="{!CurQ}"/></apex:commandLink>&nbsp;<apex:commandLink styleClass="btnLink" action="{!QDelete}" onclick="if(!Confirmation('{!$Label.DeleteQuestionConfirmation}',this)) {return false;}" value="{!$Label.DeleteQuestionQuestionSet}" rerender="AllList" immediate="true"><apex:param name="idq" value="{!QA.id}" assignTo="{!CurQ}"/></apex:commandLink>
+							<apex:repeat value="{!QA.Answers__r}" var="A" id="ATable">
+								<br/>
+								<apex:outputLabel value="A: {!A.Name}" style="font-weight:bold;padding-left:20px;padding-top:5px;cursor:pointer;"/>
+								<apex:outputLabel value="{!IF(ISBLANK(A.ts2__Score__c),'','('+TEXT(A.ts2__Score__c)+')')}" style="padding-left:2px;padding-top:5px;cursor:pointer;"/>
+							</apex:repeat>
+							<br/><br/>
+							</li>
+							<apex:variable var="rowNum" value="{!rowNum+1}"/>
+						</apex:repeat>
+					</ul>
+				</apex:outputPanel>
+				<script>
+					RenderSortButton();
+				</script>
+			</apex:form>
+			<!-- END OF OUTPUT QA LIST -->
+
+			<apex:form id="frmQ" style="width:100%">
+				<apex:panelGrid columns="4" rendered="{!Not(isBlank(CurQA))}" columnClasses="labelCol,dataCol,labelCol,dataCol1" style="width:100%">
+					<apex:outputLabel value="{!$ObjectType.ts2__Question__c.Fields.Name.Label}"/>
+					<apex:inputField value="{!CurQA.Name}" id="qName" style="width:100%;" required="true" tabOrderHint="1"/>
+					<apex:outputLabel value="{!$ObjectType.ts2__Question__c.Fields.ts2__Optional__c.Label}"/>
+					<apex:inputField value="{!CurQA.ts2__Optional__c}" tabOrderHint="4"/>
+					<apex:outputLabel value="{!$ObjectType.ts2__Question__c.Fields.ts2__Question__c.Label}"/>
+					<apex:outputPanel layout="none">
+						<div class="requiredInput">
+							<div class="requiredBlock"></div>
+							<apex:inputTextarea value="{!CurQA.ts2__Rich_Text_Question__c}" id="theTextarea" required="true" tabIndex="2"/>
+						</div>
+						<script type="text/javascript">
+							RerenderEditor();
+						</script>
+					</apex:outputPanel>
+					<apex:outputLabel value="{!$ObjectType.ts2__Question__c.Fields.ts2__IsTxt__c.Label}"/>
+					<apex:inputField id="chTxt" value="{!CurQA.ts2__IsTxt__c}" tabOrderHint="5"/>
+
+					<apex:outputLabel value=""/>
+
+					<apex:outputPanel rendered="{!Not(isBlank(CurQA))}" style="padding-left:10px;" id="frmA">
+						<apex:variable var="rowNumA" value="{!1}" />
+						<apex:dataTable value="{!Answers}" var="A" id="AList" rendered="{!Answers.size > 0}" style="width:100%">
+							<apex:column >
+								<apex:facet name="header">{!$ObjectType.ts2__Answer__c.Fields.ts2__Answer__c.Label}</apex:facet>
+								<apex:inputField value="{!A.ts2__Answer__c}" required="true" style="width:95%"/>
+							</apex:column>
+							<apex:column >
+								<apex:facet name="header">{!$ObjectType.ts2__Answer__c.Fields.ts2__Score__c.Label}</apex:facet>
+								<apex:inputField value="{!A.ts2__Score__c}" style="width:95%"/>
+							</apex:column>
+							<apex:column >
+								<apex:facet name="header">{!$ObjectType.ts2__Answer__c.Fields.ts2__Order__c.Label}</apex:facet>
+								<apex:inputField value="{!A.ts2__Order__c}" required="true" style="width:95%"/>
+							</apex:column>
+							<apex:column >
+								<apex:commandLink styleClass="btnLink" action="{!ADelete}" onclick="if(!Confirmation('{!$Label.DeleteQuestionConfirmation}',this)) {return false;}" value="Delete" rerender="frmA,frmQA" rendered="{!Answers.size>1}" immediate="true">
+									<apex:param name="idq" value="{!TEXT(rowNumA)}" assignTo="{!CurA}"/>
+								</apex:commandLink>
+								<apex:variable var="rowNumA" value="{!rowNumA+1}"/>
+							</apex:column>
+						</apex:dataTable>
+						<br/>
+						<apex:outputPanel id="button">
+							<apex:commandButton value="{!$Label.AddAnswer}" title="{!$Label.AddAnswer}" id="aNew" action="{!ANew}" rerender="frmA,frmQA" rendered="{!NOT(isBlank(CurQA))}" immediate="true" oncomplete="jQuery('[id$=qName]').focus()" />&nbsp;
+							<apex:commandButton value="{!$Label.DialogSave}" title="{!$Label.DialogSave}" id="QASave" action="{!QASave}" rerender="frmQA,frmA,frmQ,button" rendered="{!NOT(isBlank(CurQA)) && Answers.size > 0}" oncomplete="isTxtCheck()" onclick="if(!isTxtCheckSend(this)){return(false);}" />&nbsp;
+							<apex:commandButton value="{!$Label.Save_New}" title="{!$Label.Save_New}" id="QANew" action="{!AQSaveNew}" rerender="frmA,frmQA,frmQ" rendered="{!NOT(isBlank(CurQA))}" oncomplete="isTxtCheck()" onclick="if(!isTxtCheckSend(this)){return(false);}" />
+							<span id="frmQ_spinner" class="spinner_indicator">&nbsp;</span>
+						</apex:outputPanel>
+					</apex:outputPanel>
+					<br/>
+				</apex:panelGrid>
+			</apex:form>
+		</apex:panelGrid>
+	</apex:pageBlock>
+</apex:outputPanel>
+
+<script type="text/javascript" charset="utf-8">
+	jQuery.noConflict();
+	jQuery(document).ready(function() {
+		jQuery('.btn,.btnLink').live("click", function(e) {
+			var CurState = jQuery(this);
+			// Special for IE
+			if (CurState.attr('disabled') == true) {
+				return false;
+			}
+			if (CurState.attr('skip') == 'skip') {
+				CurState.removeAttr('skip');
+				return false;
+			}
+			var name = jQuery(this).attr('name')
+			if (name.indexOf('pbMain:') > 0) {
+				jQuery('#pbsMainButtons_spinner').addClass('spinner_on');
+			}
+			if (name.indexOf('frmQA:') > 0) {
+				jQuery('#frmQA_spinner').addClass('spinner_on');
+			}
+			if (name.indexOf('frmQ:') > 0) {
+				jQuery('#frmQ_spinner').addClass('spinner_on');
+			}
+			jQuery('.btnLink').removeAttr('onclick');
+			var CurStateId = CurState.attr('id');
+			if (CurStateId && CurStateId.indexOf('copyQS') != -1) {
+				jQuery('input.btn').attr('disabled','disabled').addClass('btnDisabled');
+			}
+		});
+		jQuery('[id$=chTxt]').live("click", function(e) {
+			var Value = jQuery(this).attr('checked');
+			if (Value) {
+				jQuery('[id*=AList]').attr('disabled','disabled');
+				jQuery('[id$=aNew]').attr('disabled','disabled').addClass('btnDisabled');
+			}
+			else {
+				jQuery('[id*=AList]').removeAttr('disabled');
+				jQuery('[id$=aNew]').removeAttr('disabled').attr('class','btn');
+			}
+			return true;
+		});
+	});
+
+	function Confirmation(Message, e) {
+		e.setAttribute('skip', '');
+		var Ans = window.confirm(Message);
+		if (!Ans) {
+			e.setAttribute('skip','skip');
+		}
+		return Ans;
+	}
+
+	function isTxtCheck() {
+		if (jQuery('[id$=chTxt]').attr('checked')) {
+			jQuery('[id*=AList]').attr('disabled','disabled');
+			jQuery('[id$=aNew]').attr('disabled','disabled').addClass('btnDisabled');
+		}
+		jQuery('[id$=qName]').focus();
+	}
+
+	function isTxtCheckSend(e) {
+		if (jQuery('[id$=chTxt]').attr('checked')) {
+			jQuery('[id*=AList]').attr('name','').attr('id','')
+		}
+		var NameEditor = jQuery('[id$=theTextarea___Frame]');
+		a = NameEditor.contents().find("iframe").contents().find("body").html();
+		a = jQuery.trim(a);
+		if (a == '<br />' || a=='' || a == '<br>') {
+			var err=jQuery('[id$=TextError]').html();
+			if (err == null) {
+				jQuery('[id$=theTextarea]').parent().after('<div id="TextError" class="errorMsg"><strong>Error:</strong> You must enter a value</div>');
+			}
+			e.setAttribute('skip','skip');
+			return false;
+		}
+		else {
+			jQuery('[id$=theTextarea]').val(a);
+			return true;
+		}
+	}
+
+	function getTable() {
+		var result = jQuery("[id$=QALIST]").sortable('toArray');
+		jQuery("[id$=ResortHidden]").val(result);
+	}
+</script>
+
+</apex:page>

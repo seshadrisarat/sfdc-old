@@ -1,0 +1,621 @@
+<apex:page controller="pw_cc.CountryCompleteController" title="ProvenWorks CountryComplete">
+    <apex:includeScript value="{!URLFOR($Resource.pw_cc__BaseScripts, '/BaseScripts/jQuery.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.pw_cc__BaseScripts, '/BaseScripts/jQuery.blockUI.js')}"/> 
+    <style type="text/css">
+    	.contentClass{margin:0;padding:0 0 0 1px;font-size:12px;border:0 solid white;background-color:white;}
+    	.headerClass{border:0 solid white;}
+    	.activeTab{color:white;background-image:none;background-color:#EF2B2D;}
+    	.inactiveTab{color:black;background-image:none;background-color:{!IF($User.UIThemeDisplayed = 'Theme3','#F8F8F8','#F3F3EC')};}
+		.dr-tbpnl-tb-sel{border-color:#EF2B2D;}
+    </style>
+    <apex:form >
+    	<script type="text/javascript">    		    		
+    		var pw_cc_bs_jQuery = $.noConflict();
+    		
+    		var _currentStep = 0;
+	        var _totalSteps = 0;
+	        
+	        function showElement(id) {
+	            document.getElementById(id).style.display = 'block';        
+	        }
+	        
+	        function hideElement(id) {
+	            document.getElementById(id).style.display = 'none';
+	        }
+	        
+	        function setText(elem, text) {
+	        	if (elem.textContent != undefined)
+	        		elem.textContent = text;
+	        	else if (elem.innerText != undefined)
+	        		elem.innerText = text;
+	        	else if (elem.nodeValue != undefined)
+	        		elem.nodeValue = text;
+	        }
+	        
+    		function installCustoms() {
+    			{!Confirm}
+    			_currentStep = 0;
+    			updateProgress(0, 1);
+    			hideElement('resultDiv');
+    			showElement('installingDiv');
+    			showElement('progressDiv');
+    			disableButton(document.getElementById('btnOk'), true);
+    			blockUI('dlgProgress');
+    			var langList = document.getElementById('{!$Component.pbInstall.languageList}');
+    			beginInstall('{!$Api.Session_ID}', '{!$Api.Partner_Server_URL_170}', langList.options[langList.selectedIndex].value);
+    			_currentStep++;
+    		}
+    		
+    		function insertBatch() {
+    			var errorMessage = document.getElementById('hdnError').value;
+    			if (errorMessage == 'true') {
+    				hideElement('resultDiv');
+    				hideElement('installingDiv');
+    				hideElement('progressDiv');
+    				unblockUI();
+    				return;
+    			}
+    			_totalSteps = parseInt(document.getElementById('hdnCountSteps').value);
+	            if (_totalSteps > 0 && _currentStep < _totalSteps) {
+	                updateProgress(_currentStep, _totalSteps - 1);
+	                insertMore(_currentStep++);                
+	            } else {
+    				hideElement('installingDiv');
+    				hideElement('progressDiv');
+    				showElement('resultDiv');
+    				setOptionsStatus();
+    				disableButton(document.getElementById('btnOk'), false);
+	            }
+    		}
+    		
+    		function updateProgress(currentStep, totalSteps) {
+	            var width = currentStep * (350 / totalSteps);
+	            document.getElementById('progressBar').style.width = width + 'px';
+	        }
+	        
+	        function disableButton(btn, disable) {
+				if (btn == null)
+					return;
+				if (disable) {
+					btn.setAttribute('disabled', 'true');
+					btn.className = 'btnDisabled';
+				} else {
+					btn.removeAttribute('disabled');
+					btn.className = 'btn';
+				}
+			}
+			
+	        function blockUI(id) {
+	            var dlg = pw_cc_bs_jQuery('#' + id);
+ 	            pw_cc_bs_jQuery.blockUI({
+	                message: dlg,
+	                fadeIn: 0,
+	                fadeOut: 0,
+	                css: {
+	                    borderWidth: 2,
+	                    borderColor: '#EF2B2D',
+	                    backgroundColor: '#F3F3EC',
+	                    cursor: 'default',
+	                    padding: '9px',
+	                    width: '354px'
+	                }		                
+	            });
+        	}
+        	
+        	function unblockUI() {
+        		pw_cc_bs_jQuery.unblockUI({
+        			fadeIn: 0,
+	                fadeOut: 0
+	            });
+        	}
+        	
+			function join(arr) {
+				var result = '';
+				for (var i = 0; i < arr.length; i++) {
+					if (i > 0) result += ',';
+					result += arr[i];
+				}
+			
+				return result;
+			}
+			
+			function updateSelectedCountries(left, hid, ch) {
+				pw_cc_bs_jQuery(hid).val(join(pw_cc_bs_jQuery.map(pw_cc_bs_jQuery(left + ' option'), function(o) { return o.value; })));
+				pw_cc_bs_jQuery(ch).val('true');
+			}
+			
+			function addCountries(left, right, hid, ch) {
+				pw_cc_bs_jQuery(right + ' option:selected').remove().appendTo(left);
+				updateSelectedCountries(left, hid, ch);
+			}
+			
+			function removeCountries(left, right, hid, ch) {
+				pw_cc_bs_jQuery(left + ' option:selected').remove().appendTo(right);
+				updateSelectedCountries(left, hid, ch);
+			}
+			
+			function setOptionsStatus() {
+				var isCheck = document.getElementById('{!$Component.pbStValSettings.countryCompleteEnabled}').checked;
+				var checkbox = document.getElementById('{!$Component.pbStValSettings.onlyOperateWhenChanged}');
+				var label = document.getElementById('{!$Component.pbStValSettings.onlyOperateWhenChangedLabel}');
+				var text = document.getElementById('onlyOperateWhenChangedText');
+				if (isCheck) {
+					checkbox.removeAttribute('disabled');
+					label.removeAttribute('disabled');
+					if (navigator.appName == 'Microsoft Internet Explorer') {
+						label.style.display = 'inline';
+						text.style.display = 'none';
+					}
+				} else {
+					checkbox.checked = false;
+					checkbox.setAttribute('disabled', 'true');
+					label.setAttribute('disabled', 'true');
+					if (navigator.appName == 'Microsoft Internet Explorer') {
+						label.style.display = 'none';
+						text.style.display = 'inline';
+					}
+				}
+			}
+			
+			function updateEntityFields(entityList, countryList, stateList) {
+				var mandatory = document.getElementById('{!$Component.chkCountryMandatory}').checked;
+				var onlylisted = document.getElementById('{!$Component.chkAllowOnlyListedCountries}').checked;
+				var standardize = document.getElementById('{!$Component.chkStandardize}').checked;			
+				var entity = entityList.value;
+				var country = countryList != null ? countryList.value : '';
+				var state = stateList != null ? stateList.value : ''; 
+				updateEntityFieldsAction(entity, country, state, mandatory, onlylisted, standardize);
+			}
+			
+			function validationRulesChange() {
+				var mandatory = document.getElementById('{!$Component.chkCountryMandatory}').checked;
+				var onlylisted = document.getElementById('{!$Component.chkAllowOnlyListedCountries}').checked;
+				var standardize = document.getElementById('{!$Component.chkStandardize}').checked;
+				disableButton(document.getElementById('{!$Component.btnAddField}'), !mandatory && !onlylisted && !standardize);
+			}
+			
+			function buyAdditionalCredits(name) {
+				blockUI('dlgOrgId');
+				window.open(document.getElementById('btnPurchase' + name).href);
+			}
+			
+			function buyLicense() {
+				var label = document.getElementById('lblBuyMessage');
+				label.innerHTML = ""; 
+		        var numberOfLicenses = parseInt(document.getElementById('txtLicenses').value);
+		        if (isNaN(numberOfLicenses) || numberOfLicenses <= 0) {
+		            label.innerHTML = "Please enter a number of 1 or more";
+		            return;
+		        }
+		        blockUI('dlgOrgId');
+		        var minUsers = 100; 
+		        if (numberOfLicenses <= minUsers) {
+		            window.open(document.getElementById('btnBuyLicense').href);
+		        } else {
+		            window.open(document.getElementById('btnBuyAdditionalLicense').href + (numberOfLicenses - minUsers));
+		        }
+			}
+			
+			function initTabs() {
+				var entityName = document.getElementById('{!$Component.entityName}');
+				var countryField = document.getElementById('{!$Component.entityCountryField}');
+				var stateField = document.getElementById('{!$Component.entityStateField}');
+				if (entityName != null)
+					entityName.value = '';
+				if (countryField != null)
+					countryField.value = '';
+				if (stateField != null)
+					stateField.value = '';				
+			}
+    	</script>
+    	<apex:sectionHeader title="ProvenWorks CountryComplete" />
+  		<apex:outputPanel id="install_out">
+            <input type="hidden" id="hdnCountSteps" value="{!CountInstallSteps}" />
+            <input type="hidden" id="hdnError" value="{!IsError}" />
+            <apex:pageMessages rendered="{!IsError}" />
+        </apex:outputPanel>
+        <div id="dlgProgress" style="text-align:center;display:none;">
+		    <div id="progressDiv" style="border:solid 1px #000000;padding:1px;width:350px;background-color:#F3F3EC;text-align:left;">
+		        <span id="progressBar" style="background-color:#EF2B2D;width:0px;height:50px;overflow:hidden;display:inline-block;"></span>
+		    </div>
+			<div id="installingDiv" style="width:350px;">Installing, please wait...</div>
+		    <div id="resultDiv" style="width:350px;">
+		    	<div><b>Defaults installed</b></div>
+		    	<div style="text-align:justify;">Please now force refresh your browser (under windows <span style="color:red;">CTRL+F5</span>) to ensure that the new country values are loaded</div>
+		    	<div>
+		    		<input id="btnOk" type="button" class="btn" value="OK" onclick="unblockUI();" />
+		    	</div>
+		    </div>
+		</div>
+		<div id="dlgOrgId" style="display:none;">
+           	<div>
+              	Please have your Salesforce Organization ID - <span style="color:red;"><b>{!$Organization.Id}</b></span> – ready to enter as part of the order process.  				
+   			</div>
+   			<br />
+   			<div>
+   				<input type="button" class="btn" value="OK" onclick="unblockUI();" />
+   			</div>
+		</div>
+		<div id="dlgWait" style="display:none;">
+	    	<div>Please wait...</div>
+		</div>
+		<div id="dlgFieldsAddEdit" style="display:none;">
+	    	<apex:outputPanel id="editFieldDialog">
+		    	<div style="width:350px;padding-bottom:10px;text-align:center;">
+	   			    <div style="display:{!IF(NOT(IsEditMode), 'inline', 'none')};">
+	   					<b>Add field to Validate / Standardize</b>
+	   				</div>
+	   				<div style="display:{!IF(IsEditMode, 'inline', 'none')};">
+	   					<b>Edit field to Validate / Standardize</b>
+	   				</div>
+		    	</div>		    
+		    	<div style="width:350px;text-align:left;">
+			    	<table>
+			    		<tr>
+			    			<td align="left" style="width:150px;">Object</td>
+			    			<td align="left">
+					    		<apex:selectList id="entityName" style="width:200px;" onchange="updateEntityFields(this, null, null)" value="{!SelectedEntityName}" size="0">
+					    	        <apex:selectOptions value="{!EntityNamesOptions}" />
+					            </apex:selectList>
+			    			</td>
+			    		</tr>
+		    		</table>
+		    	</div>
+		    	<div style="width:350px;text-align:left;display:{!IF(IsEntityCountryFields, 'block', 'none')};">
+		    		<table>
+			    		<tr>
+			    			<td align="left" style="width:150px;">Country Field</td>
+			    			<td align="left">
+								<apex:selectList rendered="{!IsEntityCountryFields}" id="entityCountryField" style="width:200px;" onchange="{!IF(IsVersionPro, '', 'return;')}updateEntityFields(document.getElementById('{!$Component.entityName}'), this, null)" value="{!SelectedCountryField}" size="0">
+						           <apex:selectOptions value="{!EntityCountryFieldsOptions}" />
+			                    </apex:selectList>
+			    			</td>
+			    		</tr>
+			    		<tr style="display:{!IF(IsVersionPro, 'table-row', 'none')};">
+			    			<td align="left">Associated State Field</td>
+			    			<td align="left">
+								<apex:selectList rendered="{!AND(IsEntityCountryFields, IsVersionPro)}" id="entityStateField" style="width:200px;" onchange="{!IF(IsVersionPro, '', 'return;')}updateEntityFields(document.getElementById('{!$Component.entityName}'), document.getElementById('{!$Component.entityCountryField}'), this)" value="{!SelectedStateField}" size="0">
+						             <apex:selectOptions value="{!EntityStateFieldsOptions}" />
+			                    </apex:selectList>
+			    			</td>
+			    		</tr>
+			    		<tr>
+			    			<td align="left">Country Mandatory</td>
+			    			<td align="left">
+								<apex:inputCheckbox onclick="validationRulesChange()" id="chkCountryMandatory" value="{!IsCheckedMandatory}" />
+			    			</td>
+			    		</tr>
+			    		<tr>
+			    			<td align="left">Only Listed Countries</td>
+			    			<td align="left">
+								<apex:inputCheckbox onclick="validationRulesChange()" id="chkAllowOnlyListedCountries" value="{!IsCheckedAllowOnlyListedCountries}" />
+			    			</td>
+			    		</tr>
+			    		<tr>
+			    			<td align="left">Standardize</td>
+			    			<td align="left">
+								<apex:inputCheckbox onclick="validationRulesChange()" id="chkStandardize" value="{!IsCheckedStandardize}" />
+			    			</td>
+			    		</tr>
+		    		</table>
+		    	</div>
+		    	<div style="width:350px;padding-top:8px;display:{!IF(NOT(IsEntityCountryFields), 'block', 'none')};">
+	    			<div>No fields to add</div>
+	    		</div>
+				<div style="width:350px;padding-top:10px;text-align:center;">
+					<apex:outputPanel rendered="{!IsEntityCountryFields}" style="padding-right:30px;"><apex:commandButton id="btnAddField" value="OK" onclick="addValidatedField(document.getElementById('{!$Component.entityName}').value, document.getElementById('{!$Component.entityCountryField}').value, document.getElementById('{!$Component.entityStateField}') == null ? '' : document.getElementById('{!$Component.entityStateField}').value, document.getElementById('{!$Component.chkCountryMandatory}').checked, document.getElementById('{!$Component.chkAllowOnlyListedCountries}').checked, document.getElementById('{!$Component.chkStandardize}').checked);return false;"/></apex:outputPanel>
+					<span><input type="button" class="btn" value="Cancel" onclick="unblockUI();" /></span>					
+				</div>
+			</apex:outputPanel>
+		</div>
+        <apex:tabPanel switchType="client" contentClass="contentClass" headerClass="headerClass" activeTabClass="activeTab" inactiveTabClass="inactiveTab">
+	        <apex:tab label="Installation" ontabenter="initTabs();">
+		        <apex:actionFunction name="beginInstall" action="{!BeginInstall}" oncomplete="insertBatch();" rerender="install_out">
+		        	<apex:param name="sid" assignTo="{!SessionID}" value="{!$Api.Session_ID}" />
+		        	<apex:param name="surl" assignTo="{!ServerUrl}" value="{!$Api.Partner_Server_URL_170}"  />
+		        	<apex:param name="lang" assignTo="{!SelectedLanguage}" value="en"  />
+		        </apex:actionFunction>
+		        <apex:actionFunction name="insertMore" action="{!InsertCurrentBatch}" oncomplete="insertBatch();" rerender="install_out, countries_out, validate_out, validatedFields">
+		            <apex:param name="step" assignTo="{!CurrentInstallStep}" value="1" />
+		        </apex:actionFunction>        
+		        <apex:pageBlock id="pbInstall" title="Default Installation" rendered="{!CanEditSettings}">
+					<div id="buttonDiv">
+					    <div>Click the button below to reset the CountryComplete settings and use the country list in the selected language. Note all users will see the same country names regardless of their local language</div>
+					    <div>
+					    	<table>
+					    		<tr>
+					    			<td>
+						    			<apex:selectList id="languageList" style="width:130px;" value="{!SelectedLanguage}" size="0">
+							    	        <apex:selectOptions value="{!LanguageOptions}" />
+							            </apex:selectList>
+					    			</td>
+					    			<td><input type="button" class="btn" value="Install Defaults" onclick="installCustoms();" /></td>
+					    		</tr>
+					    	</table>
+					    </div>                                                                
+					</div>
+				</apex:pageBlock>
+				<apex:pageBlock title="AutoComplete Installation" rendered="{!CanEditSettings}">	
+					<ol style="padding:0; margin:0pt;">
+					    <li>Add the CountryComplete Component to the home page layout. To do this navigate to the Setup section and expand Customize->Home->Home Page Layouts.</li>
+					    <li>To enable the CountryComplete Component on every form navigate to Setup then go to Customize->User Interface, check "Show Custom Sidebar Components on All Pages" under the Sidebar section.</li>
+					    <li>The CountryComplete Autocomplete box should now appear on every country field in Salesforce!</li>
+					</ol>	
+				</apex:pageBlock>
+				<apex:pageBlock title="Validation Installation" rendered="{!CanEditSettings}">			
+					<ol style="padding:0; margin:0pt;">
+					    <li>Country Validation is disabled by default, just turn it on in the Validation Section to start validating your country fields.</li>
+					</ol>
+				</apex:pageBlock>
+		        <apex:pageBlock rendered="{!CanEditSettings == false}">
+					CountryComplete Settings can only modified by a user with the ModifyAllData permission. If this does not fit your requirements please contact <a href="mailto:support@provenworks.com" title="Support">support@provenworks.com</a>.
+				</apex:pageBlock>
+        	</apex:tab>
+        	<apex:tab label="Settings" rendered="{!CanEditSettings}" ontabenter="initTabs();">
+        		<apex:pageBlock title="Country Specific Settings" >
+        			<apex:pageBlockButtons location="top">
+		            	<apex:commandButton value="Save All" action="{!SaveSettings}" />
+		            </apex:pageBlockButtons>
+		     		<apex:panelGroup >    
+			      		<apex:outputPanel id="countries_out">
+				     		<table>
+				     			<tr>
+						    		<td> 
+							            <apex:outputPanel >
+								            <input id="allSelectedCountries" name="allSelectedCountries" type="hidden" value="" />
+							                <input id="selectedCountriesChanged" name="selectedCountriesChanged" type="hidden" value="" />
+							     			<c:duelingListBox leftId="selectedCountries" rightId="availableCountries" leftCaption="Displayed Countries" rightCaption="Hidden Countries" leftData="{!SelectedCountries}" rightData="{!AvailableCountries}" onadd="addCountries('#selectedCountries', '#availableCountries', '#allSelectedCountries', '#selectedCountriesChanged')" onremove="removeCountries('#selectedCountries', '#availableCountries', '#allSelectedCountries', '#selectedCountriesChanged')"></c:duelingListBox>
+						     			</apex:outputPanel>					
+						            </td>
+									<td style="padding-left:40px;"> 
+							            <apex:outputPanel rendered="{!IsVersionPro}">
+								            <input id="allSelectedCountries_listedstate" name="allSelectedCountries_listedstate" type="hidden" value="" />
+							                <input id="selectedCountriesChanged_listedstate" name="selectedCountriesChanged_listedstate" type="hidden" value="" />
+											<c:duelingListBox leftId="selectedCountries_listedstate" rightId="availableCountries_listedstate" leftCaption="Allow only listed states" rightCaption="Allow any state values" leftData="{!SelectedCountriesListedState}" rightData="{!AvailableCountriesListedState}" onadd="addCountries('#selectedCountries_listedstate', '#availableCountries_listedstate', '#allSelectedCountries_listedstate', '#selectedCountriesChanged_listedstate')" onremove="removeCountries('#selectedCountries_listedstate', '#availableCountries_listedstate', '#allSelectedCountries_listedstate', '#selectedCountriesChanged_listedstate')"></c:duelingListBox>
+										</apex:outputPanel>		                
+						            </td>
+					            </tr>
+					            <tr>
+									<td> 
+							            <apex:outputPanel rendered="{!IsVersionPro}">
+								            <input id="allSelectedCountries_mandatory" name="allSelectedCountries_mandatory" type="hidden" value="" />
+							                <input id="selectedCountriesChanged_mandatory" name="selectedCountriesChanged_mandatory" type="hidden" value="" />
+											<c:duelingListBox leftId="selectedCountries_mandatory" rightId="availableCountries_mandatory" leftCaption="State is mandatory" rightCaption="State is not mandatory" leftData="{!SelectedCountriesMandatoryState}" rightData="{!AvailableCountriesMandatoryState}" onadd="addCountries('#selectedCountries_mandatory', '#availableCountries_mandatory', '#allSelectedCountries_mandatory', '#selectedCountriesChanged_mandatory')" onremove="removeCountries('#selectedCountries_mandatory', '#availableCountries_mandatory', '#allSelectedCountries_mandatory', '#selectedCountriesChanged_mandatory')"></c:duelingListBox>
+										</apex:outputPanel>                           
+						            </td>
+									<td style="padding-left:40px;">
+							            <apex:outputPanel rendered="{!IsVersionPro}">
+								            <input id="allSelectedCountries_iso" name="allSelectedCountries_iso" type="hidden" value="" />
+							                <input id="selectedCountriesChanged_iso" name="selectedCountriesChanged_iso" type="hidden" value="" />
+											<c:duelingListBox leftId="selectedCountries_iso" rightId="availableCountries_iso" leftCaption="Store state code" rightCaption="Store state name" leftData="{!SelectedCountriesISOState}" rightData="{!AvailableCountriesISOState}" onadd="addCountries('#selectedCountries_iso', '#availableCountries_iso', '#allSelectedCountries_iso', '#selectedCountriesChanged_iso')" onremove="removeCountries('#selectedCountries_iso', '#availableCountries_iso', '#allSelectedCountries_iso', '#selectedCountriesChanged_iso')"></c:duelingListBox>
+										</apex:outputPanel>                           
+						            </td>
+					            </tr>
+				            </table>
+			            </apex:outputPanel>
+		        	</apex:panelGroup>	
+				</apex:pageBlock>
+		       	<apex:pageBlock id="pbStValSettings" title="Standardization and Validation Settings" >
+		          	<apex:pageBlockButtons location="top">
+		            	<apex:commandButton value="Save All" action="{!SaveSettings}" />
+		            </apex:pageBlockButtons>		
+					<apex:panelGroup >             
+						<apex:outputPanel id="validate_out">
+				 			<div>
+								<apex:inputCheckbox id="countryCompleteEnabled" value="{!CountryCompleteEnabled}" onclick="setOptionsStatus();" />
+								<apex:outputLabel for="countryCompleteEnabled" value="CountryComplete Enabled" />
+				            </div>
+							<div>
+								<apex:inputCheckbox id="onlyOperateWhenChanged" value="{!OnlyOperateWhenChanged}" />
+								<apex:outputLabel id="onlyOperateWhenChangedLabel" for="onlyOperateWhenChanged" value="{!OnlyOperateWhenChangedText}" />
+								<label id="onlyOperateWhenChangedText" style="display:none;" disabled="true">{!OnlyOperateWhenChangedText}</label> 
+				            </div>	 
+				            <div style="display:{!IF(IsVersionPro, 'block', 'none')};">
+				            	<br />
+				            	<apex:outputLabel rendered="{!IsVersionPro}" for="countryCodeList" value="Store country value as " />
+								<apex:selectList rendered="{!IsVersionPro}" id="countryCodeList" style="width:200px;" value="{!StoreCountryInCode}" size="0">
+						           <apex:selectOptions value="{!StoreCountryCodeOptions}" />
+			                    </apex:selectList>			             
+				            </div>           
+			            </apex:outputPanel>
+			            <script type="text/javascript">
+			            	setOptionsStatus();			            
+						</script>
+			     	</apex:panelGroup>
+			     </apex:pageBlock>
+			     <apex:pageBlock title="Fields to Validate / Standardize" >
+			     	<apex:pageBlockButtons location="top">
+		            	<apex:commandButton value="Save All" action="{!SaveSettings}" />
+		            	<apex:commandButton value="Add" onclick="openAddDialog();return false;" />		            	
+		            </apex:pageBlockButtons>
+			     	<apex:panelGroup >
+						<apex:actionFunction name="updateEntityFieldsAction" action="{!UpdateEntityFields}" reRender="editFieldDialog" status="waitingStatusEditing">
+							<apex:param name="firstParam" assignTo="{!SelectedEntityName}" value=""  />
+							<apex:param name="secondParam" assignTo="{!SelectedCountryField}" value=""  />
+							<apex:param name="thirdParam" assignTo="{!SelectedStateField}" value=""  />
+							<apex:param name="updValidatedFieldMandatory" assignTo="{!IsCheckedMandatory}" value="" />
+							<apex:param name="updValidatedFieldAllowOnly" assignTo="{!IsCheckedAllowOnlyListedCountries}" value="" />
+							<apex:param name="updValidatedFieldStandardize" assignTo="{!IsCheckedStandardize}" value="" />						
+		      			</apex:actionFunction>
+						<apex:actionFunction name="addValidatedField" action="{!AddValidatedField}" reRender="validatedFields" status="waitingStatus">
+						<apex:param name="addValidatedFieldEntityName" assignTo="{!SelectedEntityName}" value="" />
+							<apex:param name="addValidatedFieldCountryName" assignTo="{!SelectedCountryField}" value="" />
+							<apex:param name="addValidatedFieldStateName" assignTo="{!SelectedStateField}" value="" />
+							<apex:param name="addValidatedFieldMandatory" assignTo="{!IsCheckedMandatory}" value="" />
+							<apex:param name="addValidatedFieldAllowOnly" assignTo="{!IsCheckedAllowOnlyListedCountries}" value="" />
+							<apex:param name="addValidatedFieldStandardize" assignTo="{!IsCheckedStandardize}" value="" />
+						</apex:actionFunction>
+						<apex:actionFunction name="openAddDialog" action="{!ShowAddDialog}" reRender="editFieldDialog" status="waitingStatusEditing" />
+						<apex:actionFunction name="openEditDialog" action="{!ShowEditDialog}" reRender="editFieldDialog" status="waitingStatusEditing">
+							<apex:param name="editValidatedFieldEntityName" assignTo="{!SelectedEntityName}" value="" />
+							<apex:param name="editValidatedFieldCountryName" assignTo="{!SelectedCountryField}" value="" />
+							<apex:param name="editValidatedFieldStateName" assignTo="{!SelectedStateField}" value="" />
+							<apex:param name="editValidatedFieldMandatory" assignTo="{!IsCheckedMandatory}" value="" />
+							<apex:param name="editValidatedFieldAllowOnly" assignTo="{!IsCheckedAllowOnlyListedCountries}" value="" />
+							<apex:param name="editValidatedFieldStandardize" assignTo="{!IsCheckedStandardize}" value="" />
+						</apex:actionFunction>
+						<apex:actionFunction name="removeValidatedField" action="{!RemoveValidatedField}" reRender="validatedFields" status="waitingStatus">
+							<apex:param name="removeValidatedFieldEntityName" assignTo="{!SelectedEntityName}" value="" />
+							<apex:param name="removeValidatedFieldCountryName" assignTo="{!SelectedCountryField}" value="" />
+						</apex:actionFunction>	
+						<apex:actionStatus id="waitingStatus" onstart="blockUI('dlgWait')" onstop="unblockUI()" />
+						<apex:actionStatus id="waitingStatusEditing" onstart="blockUI('dlgWait')" onstop="blockUI('dlgFieldsAddEdit')" />		                
+						<apex:outputPanel id="validatedFields">
+							<apex:pageBlockTable value="{!FieldToValidateList}" var="field">
+								<apex:column headerValue="Object">
+									<label style="padding-left:5px;">{!field.pw_cc__ObjectName__c}</label>
+								</apex:column>
+								<apex:column headerValue="Country Mandatory">
+									<apex:outputPanel rendered="{!NOT(field.pw_cc__IsCountryMandatory__c)}">
+                  						<img height="16" width="21" title="Not Mandatory" class="checkImg" alt="Not Mandatory" src="/img/checkbox_unchecked.gif"></img>
+									</apex:outputPanel>
+		     						<apex:outputPanel rendered="{!field.pw_cc__IsCountryMandatory__c}">
+                  						<img height="16" width="21" title="Mandatory" class="checkImg" alt="Mandatory" src="/img/checkbox_checked.gif"></img>
+                  					</apex:outputPanel>
+								</apex:column>
+								<apex:column headerValue="Only Listed Countries">
+									<apex:outputPanel rendered="{!NOT(field.pw_cc__AllowOnlyListedCountries__c)}">
+                  						<img height="16" width="21" title="Allow Any Value" class="checkImg" alt="Allow Any Value" src="/img/checkbox_unchecked.gif"></img>
+									</apex:outputPanel>
+		     						<apex:outputPanel rendered="{!field.pw_cc__AllowOnlyListedCountries__c}">
+                  						<img height="16" width="21" title="Allow Only Listed Countries" class="checkImg" alt="Allow Only Listed Countries" src="/img/checkbox_checked.gif"></img>
+                  					</apex:outputPanel>
+								</apex:column>
+								<apex:column headerValue="Standardize">
+									<apex:outputPanel rendered="{!NOT(field.pw_cc__Standardize__c)}">
+                  						<img height="16" width="21" title="Do not standardize" class="checkImg" alt="Do not standardize" src="/img/checkbox_unchecked.gif"></img>
+									</apex:outputPanel>
+		     						<apex:outputPanel rendered="{!field.pw_cc__Standardize__c}">
+                  						<img height="16" width="21" title="Standardize" class="checkImg" alt="Standardize" src="/img/checkbox_checked.gif"></img>
+                  					</apex:outputPanel>
+								</apex:column>
+								<apex:column headerValue="Country Field">
+									<label style="padding-left:5px;">{!field.pw_cc__CountryFieldName__c}</label>
+								</apex:column>
+								<apex:column headerValue="Associated State Field" rendered="{!IsVersionPro}">
+									<apex:outputPanel rendered="{!field.pw_cc__AssociatedStateFieldName__c != null}">
+                  						<label style="padding-left:5px;">{!field.pw_cc__AssociatedStateFieldName__c}</label>
+									</apex:outputPanel>
+									<apex:outputPanel rendered="{!field.pw_cc__AssociatedStateFieldName__c == null}">
+                  						&nbsp;
+                  					</apex:outputPanel>
+								</apex:column>
+								<apex:column >
+									<input type="submit" class="btn" onclick="openEditDialog('{!JSINHTMLENCODE(field.ObjectName__c)}', '{!JSINHTMLENCODE(field.CountryFieldName__c)}', '{!JSINHTMLENCODE(field.AssociatedStateFieldName__c)}', {!field.pw_cc__IsCountryMandatory__c}, {!field.pw_cc__AllowOnlyListedCountries__c}, {!field.pw_cc__Standardize__c});return false;" value="Edit" />
+									<input type="submit" class="btn" onclick="removeValidatedField('{!JSINHTMLENCODE(field.ObjectName__c)}', '{!JSINHTMLENCODE(field.CountryFieldName__c)}');return false;" value="Remove" />
+									<apex:facet name="header">
+										&nbsp;	
+									</apex:facet>
+								</apex:column>												
+							</apex:pageBlockTable>
+		            	</apex:outputPanel>
+		        	</apex:panelGroup>
+		        </apex:pageBlock>
+			</apex:tab>
+			<apex:tab label="Purchase" ontabenter="initTabs();">
+				<apex:pageBlock id="pbPurchaseExtra" title="Credits for extra services">
+	        		<apex:pageBlockButtons location="bottom">
+	        			<input type="button" class="btn" onclick="updateRemainingCreditList();return false;" value="Update" />
+		            </apex:pageBlockButtons>
+	        		<apex:panelGroup >
+						<apex:actionFunction name="updateRemainingCreditList" action="{!UpdateRemainingCreditList}" reRender="credits, install_out" status="waitingStatus">
+							<apex:param name="sid" assignTo="{!SessionID}" value="{!$Api.Session_ID}" />
+		        			<apex:param name="surl" assignTo="{!ServerUrl}" value="{!$Api.Partner_Server_URL_170}"  />
+						</apex:actionFunction>	        		
+						<apex:outputPanel id="credits">
+				    		<apex:pageBlockTable value="{!RemainingCreditList}" var="credit">
+					      		<apex:column headerValue="Service" value="{!credit.Service}" />
+								<apex:column headerValue="Licensed">
+			             			<apex:outputPanel rendered="{!NOT(credit.IsLicensed)}">
+										<img height="16" width="21" title="Not Licensed" class="checkImg" alt="Not Licensed" src="/img/checkbox_unchecked.gif"></img>
+									</apex:outputPanel>
+									<apex:outputPanel rendered="{!credit.IsLicensed}">
+										<img height="16" width="21" title="Licensed" class="checkImg" alt="Licensed" src="/img/checkbox_checked.gif"></img>
+									</apex:outputPanel>
+								</apex:column>
+								<apex:column headerValue="Credits Remaining" value="{!credit.CreditsRemaining}" />
+								<apex:column headerValue="Expiry Date">
+									<apex:outputPanel rendered="{!credit.CreditsExpiryDate != null}">
+										{!credit.CreditsExpiryDate}
+									</apex:outputPanel>
+									<apex:outputPanel rendered="{!credit.CreditsExpiryDate == null}">
+										&nbsp;
+									</apex:outputPanel>
+								</apex:column>
+			            		<apex:column headerValue="Purchase">
+			            			<input type="button" class="btn" onclick="buyAdditionalCredits('{!credit.Service}');return false;" value="Purchase Credits" />
+			            			<div style="display:none;">
+										<a id="btnPurchase{!credit.Service}" target="_blank" href="https://secure.shareit.com/shareit/checkout.html?hidecoupon=1&js=-1&PRODUCT[{!credit.ProductId}]=1">Purchase {!credit.Service} Credits</a>
+			        				</div>		            			
+			            		</apex:column>
+			        		</apex:pageBlockTable>
+		        		</apex:outputPanel>	        				
+	        		</apex:panelGroup>	
+				</apex:pageBlock>
+				<apex:pageBlock id="pbPurchase" rendered="{!IsVersionPro}" title="Purchase user licenses">
+	                <apex:panelGroup >
+		                <div>CountryCompletePro is charged at $2.50 per user/year subject to a minimum fee of $250</div>
+		                <br />
+		                <div>
+		              		Users:&nbsp;<input type="text" id="txtLicenses" style="width:40px;"/>&nbsp;
+		  					<input type="button" id="btnPurchase" class="btn" onclick="buyLicense();return false;" value="Buy" />&nbsp;
+		  					<span id="lblBuyMessage" style="color:red;"></span>
+  							<div style="display:none;">
+								<a id="btnBuyLicense" target="_blank" href="https://secure.shareit.com/shareit/checkout.html?hidecoupon=1&js=-1&PRODUCT[300377343]=1">Purchase CountryCompletePro Licenses</a>
+								<a id="btnBuyAdditionalLicense" target="_blank" href="https://secure.shareit.com/shareit/checkout.html?hidecoupon=1&js=-1&PRODUCT[300377343]=1&PRODUCT[300377344]=">Purchase additional CountryCompletePro Licenses</a>
+	        				</div>	
+		                </div>
+	                </apex:panelGroup>
+	            </apex:pageBlock>
+	       	    <div style="font-style:italic;margin-top:1em;">
+	                <div style="width:100%;text-align:center;"><a href="http://www.provenworks.com" title="ProvenWorks">ProvenWorks</a> uses <a href="http://www.shareit.com" title="share*it!">share*it!</a> for the CountryComplete ordering process</div>
+	                <div style="width:100%;text-align:center;">Prices correct as of April 2010, current pricing is shown as part of the order process or by contacting sales@provenworks.com</div>
+	                <div style="width:100%;text-align:center;">Credits are valid for 1 year from date of purchase</div>
+	            </div>
+			</apex:tab>
+			<apex:tab label="Help" ontabenter="initTabs();">
+				<apex:pageBlock title="Suggestions">
+		  	         <div>We'd love to hear your ideas on how we can improve CountryComplete, please <a href="http://countrycomplete.uservoice.com" alt="CountryComplete Ideas">suggest them</a>!</div>
+		        </apex:pageBlock>
+				<apex:pageBlock title="Frequently Asked Questions">
+		            <ul style="padding:0; margin:0pt;">
+				    	<li style="margin-bottom:10pt;">
+		        	        After updating the countries, the country Autocomplete shows incorrect items.<br/>
+		                    <i>
+		                        The browser is likely caching the old country information, force a refresh using CTRL+F5 to fetch the new country list.
+		           	        </i>
+		      			</li>
+				    	<li style="margin-bottom:10pt;">
+		        		   	Why are some of the country names truncated?<br/>
+		                    <i>
+		                        Some of the standard country fields inside Salesforce have a maximum length of 40 characters despite some full English country names being longer than this. 
+		                        To avoid any nasty errors, all the country names that we use are truncated to fit in this size.
+		           	        </i>
+		      			</li>
+				        <li style="margin-bottom:10pt;">
+		     	          	Standard Users receive the error &quot;System.QueryException: sObject type &#39;{!IF(IsVersionPro, 'pw_ccpro', 'pw_cc')}__Setting__c&#39; is not supported.: ({!IF(IsVersionPro, 'pw_ccpro', 'pw_cc')})&quot; when making changes to an Account.<br/>
+							<i>
+								This is caused by the CountryComplete not being deployed yet. 
+								To resolve this simply go to Setup->View->Installed Packaged.
+								Then click &quot;CountryComplete&quot;, then click the &quot;Deploy&quot; button
+		        	       	</i>
+		      			</li>
+		      			<li style="margin-bottom:10pt;display:{!IF(IsVersionPro,'none','list-item')}">
+		      				We would like to store the ISO code rather than the full name, how can we do that?<br/>
+		      				<i>
+		      					<a href="https://sites.secure.force.com/appexchange/listingDetail?listingId=a0N30000002zt9uEAA">CountryComplete Pro</a>, available from the AppExchange has an easily selectable option for this 
+		      				</i>
+		      			</li>
+		      			<li style="margin-bottom:10pt;display:{!IF(IsVersionPro,'none','list-item')}">
+		      				When will you be adding support for States?<br/>
+		      				<i>
+		      					<a href="https://sites.secure.force.com/appexchange/listingDetail?listingId=a0N30000002zt9uEAA">CountryComplete Pro</a>, available from the AppExchange not only has support for States but comes pre-populated with reference data for a variety of countries
+		      				</i>
+		      			</li>
+		            </ul>
+		            <div>For any enquires please contact <a href="mailto:sales@provenworks.com" title="sales@provenworks.com">sales@provenworks.com</a>.</div>
+		        </apex:pageBlock>
+        	</apex:tab>
+        </apex:tabPanel>
+    </apex:form>
+</apex:page>

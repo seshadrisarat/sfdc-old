@@ -1,0 +1,178 @@
+<apex:component controller="SL_IntranetNotificationsController" id="Notifications"> 
+    
+    <apex:attribute assignTo="{!compImpl}" name="aComponentImpl" 
+    	type="WidgetAbstract" description="component implementation object" required="true"/>
+    
+    <apex:form id="NotificationsForm"> 
+        <apex:actionfunction id="showMoreAF" 
+			name="widget{!id}.showMoreAF" action="{!showMoreRecords}" rerender="opNotifications, opNotification2" status="loaderNotification" >
+        	<apex:param name="numberToDisplay" value="" assignTo="{!MyImpl.notificationConfig.numbertodisplay}" />
+        	<apex:param name="deptId" assignTo="{!MyImpl.strDeptId}" value=""/> 
+        </apex:actionfunction>        
+        <apex:actionFunction id="getMoreRecords" 
+			name="widget{!id}getMoreRecords" action="{!Myimpl.getMoreNotifications}" status="loaderNotification" rerender="mobileAlertPanel" onComplete="resizeNotificationImage();reRenderCss();"/>
+        <!-- Newly created for Notification -->
+        <apex:actionFunction id="getFilteredByDepartment" name="widget{!id}.getFilteredByDepartment" action="{!MyImpl.getFilteredByDepartment}" status="loader" rerender="opNotifications" onComplete="reRenderCss();">
+            <apex:param name="deptId" assignTo="{!MyImpl.strDeptId}" value=""/> 
+        </apex:actionFunction>
+        <!-- This Action function is called when we Edit the Record in notification Detail -->
+        <apex:actionFunction id="updatePopup" name="widget{!id}.updatePopupDetails" action="{!MyImpl.getNotifications}" status="loaderNotification" rerender="opNotifications" />
+    </apex:form>
+    
+    <div class="wc-widget SL_IntranetNotifications" id="widget{!id}" >
+        <div class="alerts-block">
+            <apex:outputPanel id="opNotifications">
+	            <apex:outputPanel rendered="{!MyImpl.lstIntranetAlerts.size > 0}" layout="none">
+			        <h2>{!compImpl.properties['heading']}</h2>
+			         
+	                <ul class="alerts" style="font-size: 100.01%; margin-left:-18px">
+	                    <apex:repeat id="intranetAlertsRows" value="{!MyImpl.lstIntranetAlerts}" var="alerts" rows="{!MyImpl.notificationConfig.numbertodisplay}" >
+	                        <li>
+	                            <h3>
+	                                <a style="cursor:pointer;text-decoration:none;word-wrap: break-word;" onclick="widget{!id}.viewNotifications('{!alerts.objNotification.Id}', false);">{!alerts.objNotification.Name}</a>
+	                            </h3>
+	                            <apex:repeat id="notificationFieldNamesRows" value="{!MyImpl.lstNotificationFieldNames}" var="notificationField" rendered="{!MyImpl.hasFieldset}">
+									<apex:outputPanel layout="block" styleClass="date" rendered="{!If(AND(alerts.objNotification[notificationField.fieldAPIName] != null, notificationField.fieldAPIName != 'Name'), true, false)}">
+										<span class="subInfo" style="word-break: break-word;">
+		                                    <apex:outputPanel rendered="{!If(AND(notificationField.fieldType != 'DATE', notificationField.fieldType != 'DATETIME', notificationField.fieldAPIName != 'CreatedDate'),true,false)}" 
+		                                    	layout="none">
+		                                        <apex:outputField value="{!alerts.objNotification[notificationField.fieldAPIName]}" />  
+		                                    </apex:outputPanel> 
+		                                    
+		                                   <apex:outputPanel rendered="{!If(AND(notificationField.fieldType == 'DATE', notificationField.fieldAPIName != 'CreatedDate'),true,false)}" 
+		                                   		layout="none">
+												<apex:outputField value="{!alerts.objNotification[notificationField.fieldAPIName]}"/>
+		                                    </apex:outputPanel>
+		                                    
+		                                    <apex:outputPanel rendered="{!If(AND(notificationField.fieldType == 'DATETIME', notificationField.fieldAPIName != 'CreatedDate'),true,false)}" 
+		                                    	layout="none">
+		                                        <apex:outputField value="{!alerts.objNotification[notificationField.fieldAPIName]}"/> 
+		                                    </apex:outputPanel>
+		                                   
+		                                    <apex:outputPanel rendered="{!notificationField.fieldAPIName == 'CreatedDate'}" layout="none">
+												<span class="date">
+													<apex:outputText value="{0,date,EEEE}" rendered="{!IF(alerts.dateToBeDisplayed == 'NV', true, false)}">
+											    		<apex:param value="{!alerts.notificationCreatedDate}" /> 
+													</apex:outputText>
+													<apex:outputText value="{!alerts.dateToBeDisplayed}" rendered="{!IF(alerts.dateToBeDisplayed == 'NV', false, true)}"/>
+													at {!alerts.strTime} 
+												</span>	
+											</apex:outputPanel> 
+										</span>
+	                                </apex:outputPanel>
+	                            </apex:repeat>                            
+								<apex:outputPanel rendered="{!!MyImpl.hasFieldset}" layout="none">
+									<span class="date">
+										<apex:outputText value="{0,date,EEEE}" rendered="{!IF(alerts.dateToBeDisplayed == 'NV', true, false)}">
+										    <apex:param value="{!alerts.notificationCreatedDate}" /> 
+										</apex:outputText>
+										<apex:outputText value="{!alerts.dateToBeDisplayed}" rendered="{!IF(alerts.dateToBeDisplayed == 'NV', false, true)}"/>
+										at {!alerts.strTime} 
+									</span>	
+								</apex:outputPanel> 
+	                        </li>   
+	                    </apex:repeat>
+	                </ul>
+	                
+	                <apex:outputPanel rendered="{!MyImpl.lstIntranetAlerts.size < 1}" layout="none">
+	                    <span class="noResult">No records found.</span>
+	                </apex:outputPanel>  
+	                
+	                <apex:outputpanel id="opNotification2">
+	                	<apex:outputPanel rendered="{!MyImpl.lstIntranetAlerts.size > MyImpl.notificationConfig.numbertodisplay && MyImpl.notificationConfig.numbertodisplay < MyImpl.notificationConfig.totalRecords}" 
+	                		layout="none">
+	                        <a class="btn" style="cursor: pointer;text-decoration: none;float:right;text-align: center;" 
+	                        	onClick="$(this).parent().css('display','none');widget{!id}.showMoreAF('{!MyImpl.notificationConfig.numbertodisplay}','{!JSENCODE(MyImpl.strDeptId)}');">Show More</a>
+	                    </apex:outputPanel>
+	                </apex:outputpanel>
+	                 
+	                <!-- Start of Action status -->  
+	                <apex:actionstatus id="loaderNotification">
+	                    <apex:facet name="start">
+	                        <div id="salesforceSource_blurybackground" style="position:relative; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.4;filter:alpha(opacity=40)"></div>
+	                        <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="display: '';position: relative; ">
+	                            <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+	                                <table align="center" valign="middle" style="width: 100%; height: 30%">
+	                                    <tr align="center" valign="middle" style="width: 100%; height: 30%">
+	                                        <td valign="middle"><img src="/img/loading.gif"/><span class="waitingDescription"><b>Loading...</b></span></td>
+	                                    </tr>
+	                                </table>
+	                            </div>
+	                        </div>
+	                        <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; "></div>
+	                        <script>document.getElementById('ManageMembersViewport_loading').height = window.innerHeight * (3/4);</script>
+	                    </apex:facet>
+	                </apex:actionstatus>
+	                <!-- End of Action status -->
+                </apex:outputPanel>
+            </apex:outputPanel>
+        </div>
+    </div>
+    
+    <div class="wc-widget-mobile mobile-content" >
+        <!-- mobile content -->
+        <section class="mobile-content">
+            <!-- top-block -->
+            <div class="top-block">
+                <!-- title holder -->
+                <div class="title-holder"> 
+                    <h2>{!$label.SL_Tab_Notifications}</h2>
+                </div>
+            </div>
+            <!-- list -->
+            <apex:outputpanel id="mobileAlertPanel">
+                <apex:outputpanel rendered="{!Myimpl.lstIntranetAlerts.size > 0}" layout="none">
+                <ul class="list" style="margin: 0px; padding-top: 18px; padding-bottom: 0px !Important; word-wrap:break-word;">
+                    <apex:repeat id="mobIntranetAlertsrows" value="{!Myimpl.lstIntranetAlerts}" var="alerts" rows="{!MyImpl.notificationConfig.mobilePaginationSize}">
+                        <li style="margin-left:0px;">
+                            <div class="avatar">
+                                <a href="SL_Intranet?Page=Employee Profile&id={!alerts.objNotification.CreatedById}&notification=true">
+                                    <img src="{!alerts.objNotification.CreatedBy.SmallPhotoUrl}" alt="image description" width="66" height="63" />
+                                </a> 
+                            </div>
+                            <div class="info" id="pIdImage">
+                                <h3 style="font: bold 22px Arial, Helvetica, sans-serif;"><a href="" style="text-decoration: none;">{!alerts.objNotification.Name}</a></h3>
+                                <p style="font: 15px Arial, Helvetica, sans-serif;word-wrap:break-word;">
+                                	<apex:outputField value="{!alerts.objNotification.Notification_Detail__c}" style="max-width: 100%; word-wrap: break-word; word-break: break-all;"/>
+                                </p>
+                                <span class="sub-info" style="font: 15px Arial, Helvetica, sans-serif;">
+                                    <apex:outputText value="{0,date,EEEE}" rendered="{!alerts.dateToBeDisplayed == 'NV'}"> 
+                                        <apex:param value="{!alerts.notificationCreatedDate}" />
+                                    </apex:outputText>
+                                    <apex:outputText value="{!alerts.dateToBeDisplayed}" rendered="{!alerts.dateToBeDisplayed != 'NV'}"/>
+                                    at {!alerts.strTime}
+                                </span>
+                            </div>
+                        </li>
+                    </apex:repeat>
+                </ul>
+                </apex:outputpanel>
+                <apex:outputpanel rendered="{!MyImpl.lstIntranetAlerts.size = 0}" layout="none">
+                    <ul class="list" style="margin:0 0;padding:0 0 0px;">
+                        <li style="padding:20px;margin:0px;"><h3 style="font: bold 22px Arial, Helvetica, sans-serif;margin:0 0;">No Records found.</h3></li>
+                    </ul>
+                </apex:outputpanel>
+               <apex:outputPanel rendered="{!AND(MyImpl.lstIntranetAlerts != null, (MyImpl.lstIntranetAlerts.size - MyImpl.notificationConfig.mobilePaginationSize) > 0)}" layout="none"> 
+               		 <a href="javascript:widget{!id}getMoreRecords();" style="color: #a3a3a3; text-decoration: none;" class="see-more">{!$Label.SL_Pagination_SeeMore}</a>
+               </apex:outputPanel> 
+            </apex:outputpanel> 
+        </section>
+    </div>
+    
+    <script>  
+	    
+	    jQuery(document).ready(function($) 
+		{   
+			resizeNotificationImage();
+		});  
+		
+		function resizeNotificationImage(){
+			$(".sfdc_richtext").css("word-break","normal");
+			$("#pIdImage ").find("img").each(function(){
+				$(this).css('maxWidth', 100 + '%' );
+			});
+		}
+	
+   </script> 
+   
+</apex:component>

@@ -1,0 +1,982 @@
+<apex:page standardController="Account" extensions="kjo_AccountEventController">
+    
+    <apex:stylesheet value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery-ui-1.10.0.custom/css/warburg-pincus/jquery-ui-1.10.0.custom.min.css')}" />
+<apex:stylesheet value="{!URLFOR($Resource.kjo_js_libs, 'libs/bootstrap/css/bootstrap.min.css')}"/>
+
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery-ui-1.10.0.custom/js/jquery-1.9.0.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/bootstrap/js/bootstrap.min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery-ui-1.10.0.custom/js/jquery-ui-1.10.0.custom.min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery.formatcurrency/jquery.formatCurrency-1.4.0.min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/jquery.autonumeric/autoNumeric.js')}"/>
+
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/backbone/underscore-min.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/handlebars/handlebars-1.0.rc.1.js')}"/>
+
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/tinymce/jscripts/tiny_mce/tiny_mce.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.kjo_js_libs, 'libs/tinymce/jscripts/tiny_mce/jquery.tinymce.js')}"/>
+<style type="text/css"> 
+
+#dealteam { list-style-type: none; margin: 2px; padding: 4px; width: 90%; }
+#dealteam li div { background-color: #eeeeee; position: relative; padding: 4px; margin:2px; border:0px black solid;}
+#dealteam li div span { position: absolute; top:5px; right: 10px; display:inline-block;}
+#dealteam li div.hilite { border:1px red solid;}
+
+body {
+	line-height: normal !important;
+}    
+    
+h2{
+	font-size: 12px !important;
+    font-weight: 700 !important;
+    line-height: normal !important;
+}    
+.zen .zen-tabMenu a {
+	font-size: 1.0em !important;
+}    
+.mruText {
+	font-size: 12px !important;
+    color: #333435 !important;
+}    
+.sidebarModule {
+    font-size: 12px !important;
+}
+.sidebarModuleHeader .brandPrimaryFgr {
+    margin-top: 0px !important;
+    margin-bottom: 0px !important;
+}    
+    
+/*
+input:required {
+	border: 1px solid red;
+}
+
+input:valid {
+	border: 1px solid black;
+} */
+input:invalid {
+	border: 1px solid red;
+}
+
+span#tsidLabel {
+ 	font-size: .85em !important;   
+}    
+.menuButtonLabel {
+	font-size : .75em !important;    
+}
+    span#createNewLabel {
+ 	font-size: 1em !important;   
+}
+.mruItem a {
+	color: #333435 !important;
+}    
+</style>
+
+
+
+<script id="followup-dialog-template" type="text/x-handlebars-template">
+    <div id='followupdialog'>
+    <div id="call-dialog-tabs" class="tabbable">
+    
+    <ul class="nav nav-tabs">
+        <li class='active'>
+            <a href="#call-note-tab" data-toggle='tab'>Call Notes</a>
+        </li>
+        <li>
+            <a href="#followup-tab" data-toggle='tab'>Follow-Up</a>
+        </li>
+    </ul>
+
+    <div class='tab-content'>
+    <div class="container-fluid tab-pane active" id="call-note-tab">
+    <div class="row-fluid">
+        <div class="span3">
+            Caller
+        </div>
+        <div class="span9">
+            <input class="input-block-level" id='author' type='text' value='{{ user_name }}' data-user-id='{{user_id}}' data-contact-id='{{user_contact_id}}' readonly />
+        </div>
+    </div>
+    <div class="row-fluid">
+        <div class="span3">
+            Subject
+        </div>
+        <div class="span9">			           
+        	 <input required class="input-block-level" id='subject' type='text' value='{{ subject_name }}' data-subject-id='{{subject_id}}' {{#if contact_context}} readonly {{/if}} />  
+		</div>
+    </div>
+    <div class="row-fluid">
+        <div class="span3">
+            Classification
+        </div>
+        <div class="span9">
+            <select class="input-block-level" id='call-type'>
+            {{#each task_types}}
+            <option>{{this}}</option>
+            {{/each}}
+            </select>
+        </div>
+    </div>
+
+	<div class="row-fluid">
+        <div class="span3">
+            Contact(s)
+        </div>
+        <div class="span9">
+            <textarea style="height:25px; overflow: visible" class="input-block-level" id='contacts' type='text' value='{{ contact_names }}' data-subject-id='{{contact_ids}}' {{#if contact_context}} readonly {{/if}} />
+        </div>
+    </div>
+    <div class="row-fluid">
+        <div class="span3">
+            Company
+        </div>
+        <div class="span9">
+            <input class="input-block-level" id='company' type='text' value='{{ company_name }}' data-company-id='{{company_id}}' readonly />
+        </div>
+    </div>
+    <div class="row-fluid">
+        <div class="span3">
+            Date
+        </div>
+        <div class="span9">
+            <input required class="input-block-level" id='note-date' type='text' value='{{date note_date}}'/>
+        </div>
+    </div>
+    <div class="row-fluid">
+        <div class="span3">
+            Note
+        </div>
+        <div class="span9">
+            <textarea  class="input-block-level" id="call-note" rows="8", cols="64"></textarea>
+        </div>
+    </div>
+    </div>
+
+    <div class="container-fluid tab-pane" id="followup-tab">
+    <div class="row-fluid">
+        <div class="span3">
+            Create Followup
+        </div>
+        <div class="span9">
+            <input class="input-block-level" id='create-followup' type='checkbox' value=false />
+        </div>
+    </div>
+    <div class="row-fluid">
+        <div class="span3">
+            Responsible
+        </div>
+        <div class="span9">
+            <input class="input-block-level rotog" id='followup-person' type='text' value='{{ user_name }}' data-user-id='{{user_id}}' data-contact-id='{{user_contact_id}}' />
+        </div>
+    </div>
+    <div class="row-fluid">
+        <div class="span3">
+            Subject
+        </div>
+        <div class="span9">
+            <input required class="input-block-level rotog" id='followup-subject' type='text' value='{{ subject_name }}' data-subject-id='{{subject_id}}' {{#if contact_context}} readonly {{/if}} />
+        </div>
+    </div>
+	<div class="row-fluid">
+        <div class="span3">
+            Classification
+        </div>
+        <div class="span9">
+            <select class="input-block-level rotog" id='followup-type'>
+            {{#each task_types}}
+            <option>{{this}}</option>
+            {{/each}}
+            </select>
+        </div>
+    </div>
+	<div class="row-fluid">
+        <div class="span3">
+            Contact(s)
+        </div>
+        <div class="span9">
+            <textarea style="height:25px; overflow: visible" class="input-block-level rotog" id='followup-contacts' type='text' value='{{ contact_names }}' data-subject-id='{{contact_ids}}' {{#if contact_context}} readonly {{/if}} />
+        </div>
+    </div>
+    <div class="row-fluid">
+        <div class="span3">
+            Company
+        </div>
+        <div class="span9">
+            <input class="input-block-level" id='followup-company' type='text' value='{{ company_name }}' data-company-id='{{company_id}}' readonly />
+        </div>
+    </div>
+    <div class="row-fluid">
+        <div class="span3">
+            Follow-Up Date
+        </div>
+        <div class="span9">
+            <input required class="input-block-level rotog" id='followup-date' type='text' value='{{date followup_date}}'/>
+        </div>
+    </div>
+    <div class="row-fluid">
+        <div class="span3">
+            Note
+        </div>
+        <div class="span9">
+            <textarea  class="input-block-level rotog" id="followup-note" rows="8", cols="64"></textarea>
+        </div>
+    </div>
+    </div>
+    </div>
+
+    {{#if inline_mode}}
+    <div class="container-fluid" id="call-note-buttons">
+        <div class="row-fluid">
+            <div class="offset10 span2">
+                <button id='save-call-note' class="btn btn-large btn-block">Save Notes</button>
+            </div>
+        </div>
+    </div>
+    {{/if}}
+    </div>
+    </div>
+</script>
+
+<script id="staffing-dialog-template" type="text/x-handlebars-template">
+
+  <div>
+    {{#if dealname}}
+  <div style="display:none">{{dealname}}</div>
+    {{/if}}
+    <input type='text' style="width:315px" id='staff-searcher'></input>
+    <ul id='dealteam'>
+    {{#each staff}}
+        <li data-contact-id='{{this.contact_id}}' data-user-id='{{this.user_id}} data-user-initial='{{this.user_initial}}' data-contact-company-id='{{this.contact_company_id}}'  >
+   <div>
+     {{this.label}}
+        <a href='#' class='delete-user'><span class='ui-icon ui-icon-circle-close'></span></a>
+   </div>
+    </li>
+    {{/each}}
+    </ul>
+   </div>
+  </script>
+
+<script>
+    Handlebars.registerHelper('date', function(context, block) {
+        if (context) {
+            var attrs = block.hash;
+            var format = attrs.format || "m/d/y";
+            return jQuery.datepicker.formatDate(format, new Date(context));
+        }
+        return "";
+    });
+
+    Handlebars.registerHelper('money', function(context, block) {
+        if (context) {
+            var attrs = block.hash;
+            var millions = attrs.millions || false;
+            var _value = millions ? (context / 1000000.0).toFixed(2) : context;
+            return _value.toString().replace(/(\d)(?=(\d\d\d)+(?!\d))/g, "$1,");
+        }
+        return "";
+    });
+    
+    Handlebars.registerHelper('selected', function(val1, val2) {
+        return val1 == val2 ? ' selected' : '';
+    });    
+    
+    var TZ_offset = (60000 * (new Date()).getTimezoneOffset());
+    
+    function convertUTCToLocalFinance(fin_record) {
+        fin_record.Period_Ended__c += TZ_offset;
+    }
+    
+</script>
+
+<div id='inline-form'>
+    <div class='content-panel'>
+        <div id="followup-dialog-content"></div>
+    </div>
+    <div class='wait-panel'>
+        <div class='wait-panel-progress'></div>
+    </div>
+</div>
+
+<div id="messagedialog" >
+    <div id="message-content"></div>
+</div>
+
+<div id="staffingdialog">
+	<div id="dealid" style="display:none"></div>
+ 	<div class="content-panel">
+ 		<div id="staffing-dialog-content"></div>
+	</div>
+</div>
+
+<script>
+
+var $jq = jQuery.noConflict();
+var USER_CONTACT_INFO = null;
+var TASK_TYPES = null;
+
+var deal_team_initials_string = new String();
+var deal_team_info_list = new Array();
+var deal_team_contact_id_list = new Array();
+
+var followup_contacts_string = new String();
+var followup_contact_info_list = new Array();
+var followup_contact_id_list = new Array();
+
+var contatDialogCalledFrom = '';
+
+$jq(document).ready(function() {
+
+    function getUserInfoWithPromise() {
+        var p = $jq.Deferred( function(dfd) {
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.kjo_AccountEventController.getCurrentUserContactInformation}',
+                function( result, event) {
+                    if ( event.status ) {
+                        dfd.resolveWith( p, [{"result":result, "event":event }]);
+                    } else {
+                        dfd.rejectWith( p, [{"result":result, "event":event }]);
+                    }
+                }
+            );
+        });
+        return p.promise();
+    }
+        
+    function getContactInfoWithPromise(contact_id) {
+        var p = $jq.Deferred( function(dfd) {
+            try {
+                Visualforce.remoting.Manager.invokeAction(
+                    '{!$RemoteAction.kjo_AccountEventController.getContactInformation}',
+                    contact_id,
+                    function( result, event) {
+                        if ( event.status ) {
+                            dfd.resolveWith( p, [{"result":result, "event":event }]);
+                        } else {
+                            dfd.rejectWith( p, [{"result":result, "event":event }]);
+                        }
+                    }
+                );
+            } catch ( err ) {
+               return dfd.reject();
+            }
+        });
+        return p.promise();
+    }
+
+    function getAccountInfoWithPromise(account_id) {
+        var p = $jq.Deferred( function(dfd) {
+            try {
+                Visualforce.remoting.Manager.invokeAction(
+                    '{!$RemoteAction.kjo_AccountEventController.getAccountInformation}',
+                    account_id,
+                    function( result, event) {
+                        if ( event.status ) {
+                            dfd.resolveWith( p, [{"result":result, "event":event }]);
+                        } else {
+                            dfd.rejectWith( p, [{"result":result, "event":event }]);
+                        }
+                    }
+                );
+            } catch ( err ) {
+               return dfd.reject();
+            }
+        });
+        return p.promise();
+    }
+
+    function getTaskTypesWithPromise() {
+        var p = null;
+        if ( TASK_TYPES ) {
+            p = $jq.Deferred();
+            p.resolve();
+        } else {
+            p = $jq.Deferred( function(dfd) {
+                try {
+                    Visualforce.remoting.Manager.invokeAction(
+                        '{!$RemoteAction.kjo_AccountEventController.getTaskTypes}',
+                        function( result, event) {
+                            if ( event.status ) {
+                                TASK_TYPES = new Array();
+                                _.each( result, function(elem) { TASK_TYPES.push(elem); });
+                                dfd.resolveWith( p, [{"result":result, "event":event }]);
+                            } else {
+                                dfd.rejectWith( p, [{"result":result, "event":event }]);
+                            }
+                        }
+                    );
+                } catch ( err ) {
+                   return dfd.reject();
+                }
+            });
+        }
+        return p.promise();
+    }
+
+    function insertTaskWithPromise(task) { 
+        var p = $jq.Deferred( function(dfd) {
+            try {
+                if ( 1 == 0 ) {
+                    dfdresolveWith( p, [{"result":[], "event":[] }]);
+                } else {
+                    Visualforce.remoting.Manager.invokeAction(
+                        '{!$RemoteAction.kjo_AccountEventController.createTask}',
+                        task,
+                        function( result, event) {
+                            if ( event.status ) {
+                                dfd.resolveWith( p, [{"result":result, "event":event }]);
+                            } else {
+                                dfd.rejectWith( p, [{"result":result, "event":event }]);
+                            }
+                        }
+                    );
+                }
+            } catch ( err ) {
+               return dfd.reject();
+            }
+        });
+        return p.promise();
+    }
+    
+    function setFollowupEntryEnabled(checkboxelement) {
+        if ( checkboxelement ) {
+            var enabled = checkboxelement[0].checked;
+            var e = checkboxelement.closest('div.container-fluid').find('.rotog');
+            e.attr('readonly', !enabled);
+            e.attr('disabled', !enabled);
+        }
+    }
+    
+
+    function showfollowupDialog(eventInput) {
+    
+        var context = eventInput.data.context;
+        if ( !(context == 'contact' || context == 'account') ) {
+            return false;
+        }
+        
+        var is_contact = context == 'contact' || false;
+        var div_id = eventInput.data.divid;
+ 
+        var contact_id;
+        var account_id;
+        var form_mode;
+        
+        if ( eventInput.data.data_account_id ) {
+            account_id = eventInput.data.data_account_id;
+        } else {
+            account_id = $jq(this).attr('data-account-id');
+        }
+        
+        if ( eventInput.data.data_contact_id ) {
+            contact_id = eventInput.data.data_contact_id;
+        } else {
+            contact_id = $jq(this).attr('data-contact-id');
+        }
+        
+        form_mode = eventInput.data.mode || 'popup';
+
+        eventInput.preventDefault && eventInput.preventDefault();
+
+        var dlg = $jq(div_id);
+        
+        dlg.find('.content-panel').hide();
+        dlg.find('.wait-panel').show();
+
+        var dlg_template = Handlebars.compile($jq("#followup-dialog-template").html());
+        
+        var promise_task_types = getTaskTypesWithPromise();        
+        var promise_user = getUserInfoWithPromise();
+        
+        var promise_contact_or_account = null;
+        if ( is_contact ) {
+            promise_contact_or_account = getContactInfoWithPromise(contact_id);
+        } else {
+            promise_contact_or_account = getAccountInfoWithPromise(account_id);
+        }
+        
+        $jq.when(
+            promise_user,
+            promise_contact_or_account,
+            promise_task_types
+        ).then (
+            function(user_results, contact_results, types_results) {
+                
+                if ( user_results.result && user_results.result.Id ) {
+                
+                    USER_CONTACT_INFO = {
+                        user_id : user_results.result.User_ID__c, 
+                        name : user_results.result.Name, 
+                        contact_id : user_results.result.Id, 
+                        full_name : user_results.result.Full_Name__c,
+                        emg : user_results.result.EMG_Member__c,
+                        email : user_results.result.Email,
+                        employee_level : user_results.result.Employee_Level__c, 
+                        deal_professional : user_results.result.ISINVESTMENTPRO__c,
+                        initials : user_results.result.Initials__c,
+                        status : user_results.result.Status__c,
+                        title : user_results.result.Title,
+                        group : user_results.result.WP_Group__c                         
+                    };
+                    
+                    var _c = dlg_template({
+                        contact_context : is_contact ? 1 : 0,
+                        user_name : USER_CONTACT_INFO.full_name,
+                        user_id : USER_CONTACT_INFO.user_id,
+                        user_contact_id : USER_CONTACT_INFO.contact_id,
+                        note_date : "{!TODAY()}",
+                        followup_date : "",
+                        subject_name: is_contact ? contact_results.result.Full_Name__c : null,
+                        subject_id : is_contact ? contact_results.result.Id : null,
+                        company_name : is_contact ? contact_results.result.Account.Name : contact_results.result.Name,
+                        company_id : is_contact ? contact_results.result.AccountId : contact_results.result.Id,
+                        task_types : TASK_TYPES,
+                        inline_mode : form_mode == 'inline'
+                    });
+                    
+                    var _i = dlg.find('#followup-dialog-content');
+                    _i.html(_c);
+                    
+                    /*
+                    dlg.find('#subject').autocomplete({
+                        minLength : 2,
+                        source: function(request, response) {
+                            {!$RemoteAction.kjo_AccountEventController.getContactsList}(
+                                request.term,
+                                function(data, event) {
+                                    response($jq.map(data, function(item) {
+                                        var full_label = item.label + ' (' + item.company_name + ')'; 
+                                        return { label : full_label, value : full_label, id : item.contact_id, contact_id : item.contact_id} 
+                                    }));
+                                }
+                            );                   
+                        },           
+                        select: function(event, ui) {
+                            $jq(this).attr('data-subject-id', ui.item.id);
+                        },
+                        create: function(event, ui) {
+                        }                
+                    }); */
+                    
+                    $jq("#contacts").bind('click keyup', function(e) {
+				   	$jq("#contacts").val(deal_team_initials_string);
+					    if ((e.type === 'click' || e.type === 'keyup') && (e.keyCode != 27)) {
+					        contatDialogCalledFrom = "contacts";
+					        showStaffingDialog(e, deal_team_info_list);
+					    }
+				    });  
+				    
+				    
+				    $jq("#staffingdialog").dialog({
+				      autoOpen: false, 
+				      modal: true, 
+				      position: 'center',
+				      width: 350,
+				      height: 350,
+				      closeOnEscape: true,
+				      buttons: {
+				         "OK": function() {
+						 	if(contatDialogCalledFrom == "contacts")
+				            	updateDealStaffing($jq(this));
+				            else
+				            	updateFollowupContact($jq(this));   
+				               
+				            $jq(this).dialog("close");
+				            $jq("#categories").focus(); 
+				         },
+				         "Cancel": function() {
+				                    $jq(this).dialog("close");
+				                    $jq("#categories").focus(); 
+				         }
+				      }              
+				  });  
+								    
+				    
+
+                    $jq("#followup-person").autocomplete({
+                        minLength : 2,
+                        source: function(request, response) {
+                            {!$RemoteAction.kjo_AccountEventController.getProfessionalsList}(
+                                request.term,
+                                function(data, event) {
+                                    response($jq.map(data, function(item) { return { label : item.label, value : item.label, id : item.user_id, contact_id : item.contact_id} }));
+                                }
+                            );                   
+                        },           
+                        select: function(event, ui) {
+                            $jq(this).attr('data-user-id', ui.item.id);
+                        },
+                        change: function(event, ui) {
+                            if (ui.item == null) {
+                                $jq(this).val('');
+                                $jq(this).focus();
+                            }
+                        },
+                        create: function(event, ui) {
+                        }                
+                    });
+
+                    $jq("#followup-person").on("click", function(){$jq(this).select();});
+                    
+                    /*
+                    dlg.find('#followup-subject').autocomplete({
+                        minLength : 2,
+                        source: function(request, response) {
+                            {!$RemoteAction.kjo_AccountEventController.getContactsList}(
+                                request.term,
+                                function(data, event) {
+                                    response($jq.map(data, function(item) {
+                                        var full_label = item.label + ' (' + item.company_name + ')'; 
+                                        return { label : full_label, value : full_label, id : item.contact_id, contact_id : item.contact_id} 
+                                    }));
+                                }
+                            );                   
+                        },           
+                        select: function(event, ui) {
+                            $jq(this).attr('data-subject-id', ui.item.id);
+                        },
+                        create: function(event, ui) {
+                        }                
+                    });
+                    */
+                    
+					$jq("#followup-contacts").bind('click keyup', function(e) {
+					$jq("#followup-contacts").val(followup_contacts_string);
+					    if ((e.type === 'click' || e.type === 'keyup') && (e.keyCode != 27)) {
+					    	contatDialogCalledFrom = "followup-contacts";
+					    	showStaffingDialog(e, followup_contact_info_list);	        
+					    }
+				    });
+                    
+                    
+                    setFollowupEntryEnabled(dlg.find("#create-followup"));
+                    
+                    dlg.find("#create-followup").on('click', function(e) {
+                        setFollowupEntryEnabled($jq(this));
+                    });    
+    
+                    dlg.find('#note-date').datepicker();
+                    dlg.find('#followup-date').datepicker();
+                    
+                    dlg.find("#save-call-note").on('click', function(e) {
+                        saveCallNote($jq(this));
+                    });    
+                    
+                    dlg.find('.wait-panel').hide();
+                    dlg.find('.content-panel').show();
+                    
+                } else {
+                
+                    dlg.find('.wait-panel').hide();
+                    alert ('Damn!');
+                    
+                }
+            },
+            function(result, event) {
+                dlg.find('.wait-panel').hide();
+                alert("A problem occurred");
+            }
+        );
+    }   
+ 
+    
+    function saveCallNote(ctxt) {
+    
+        var dlg = ctxt.closest("#followupdialog");
+    
+        var error_messages = [];
+        var create_followup = dlg.find("#create-followup").is(':checked');
+        
+        var author = dlg.find("#author").val();
+        var author_id = dlg.find("#author").attr("data-user-id");
+        var author_contact_id = dlg.find("#author").attr("data-contact-id");
+        var subject_name = dlg.find("#subject").val();
+        if ( subject_name == '') {
+            error_messages.push('<p>Please enter a subject for the task</p>');
+        }
+        
+        var subject_id = dlg.find("#subject").attr("data-subject-id");
+        var company_id = dlg.find("#company").attr("data-company-id");
+        var note_date = dlg.find("#note-date").val();
+        var call_type = dlg.find("#call-type").val();
+        var call_note = dlg.find("#call-note").val();
+                
+        var followup_subject_id = dlg.find("#followup-subject").attr("data-subject-id");
+        var followup_subject_name = dlg.find("#followup-subject").val();  
+        var followup_author = dlg.find("#followup-person").val();
+        var followup_author_id = dlg.find("#followup-person").attr('data-user-id');
+        if ( followup_author == '' || followup_author_id == '' ) {
+            error_messages.push('<p>A Warburg Pincus employee must be assigned to the follow-up task</p>');
+        }
+        var followup_date = create_followup ? dlg.find("#followup-date").val() : null;
+        if ( create_followup && followup_date == '' ) {
+            error_messages.push('<p>A date must be assigned to the follow-up task</p>');
+        }
+        if ( followup_subject_name == '' && followup_date != null) {
+            error_messages.push('<p>Please enter a subject for the follow up task</p>');
+        }
+        var followup_type = dlg.find("#followup-type").val();
+        var followup_note = dlg.find("#followup-note").val();
+                
+        if ( error_messages.length > 0 ) {
+            error_messages.unshift('There was a problem saving the task<p/>');
+            showMessageDialog(error_messages, 'Error saving task');
+            return;
+        }
+        
+        /*
+        var contacts_list = new Array();
+        
+        for (i = 0; i < deal_team_info_list.length; ++i) {
+    		var contactInfo = deal_team_info_list[i];
+    		
+    		var contact = {
+    			Id : contactInfo.contact_id, 
+                AccountId : contactInfo.contact_company_id
+    		}
+    		contacts_list.push(contact); 		
+		}
+        */
+ 
+                
+        var task = {    
+            Id : null, 
+            WhatId : company_id, 
+            WhoId : subject_id,
+            FollowupWhatId : company_id, 
+            FollowupWhoId : followup_subject_id,
+            Subject : subject_name,// call_type + ' : ' + subject_name + ' with ' + author, 
+            FollowupAuthorId : followup_author_id,
+            FollowupSubject : followup_subject_name, // followup_type + ' : ' + followup_subject_name + ' with ' + followup_author, 
+            FollowupDescription : followup_note,
+            Description : call_note,
+          //  FollowupType : followup_type,
+          //  Type : call_type,
+            ActivityDate : note_date,
+            FollowupDate : followup_date,
+            Priority : "Normal",
+            Status : "Completed",
+            Contacts : deal_team_contact_id_list, //contacts_list
+            FollowUpContacts : followup_contact_id_list,
+            Classification : call_type,
+            FollowUpClassification : followup_type
+        }
+                
+        insert_promise = insertTaskWithPromise(task);
+                
+        $jq.when(
+            insert_promise
+        ).then (
+            function(user_results, contact_results) {
+                showMessageDialog('Task Saved Successfully');
+                window.location.href = "/{!account.id}";
+                return;
+            },
+            function(user_results, contact_results) {
+                alert("Problem saving task");
+            }
+        );
+        
+    }
+
+    $jq("#messagedialog").dialog({
+        autoOpen: false, 
+        modal: true, 
+        position: 'center',
+        buttons: {
+            "OK" : function() {
+                $jq(this).dialog("close");
+            }
+        }
+    });
+    
+    function showMessageDialog(messages, title) {
+        var _msg;
+        if ( $jq.isArray(messages) ) {
+            _msg = messages.join('<p>');
+        } else {
+            _msg = messages;
+        }
+        $jq("#messagedialog").find("#message-content").html(messages);
+        $jq("#messagedialog").dialog('option', {title : title || 'Message'});
+        $jq("#messagedialog").dialog('open');
+    }
+    
+    
+
+    
+    $jq("#progressbar").progressbar( {value : false} );
+    $jq("#inline-form .wait-panel-progress").progressbar( {value : false} );
+    
+    
+
+    
+    showfollowupDialog({
+        data : {
+            data_account_id : '{!account.id}',
+            divid:'#inline-form', 
+            context:'account',
+            mode : 'inline'
+        }
+    });
+    
+    function showStaffingDialog(event, contactInfos) {    
+	    var deal_name = "test";// $jq("#dealname").val();	    
+	    event.preventDefault();	    
+	    var dlg = $jq("#staffingdialog");	    
+	    	    
+	    dlg.dialog("open");
+	
+	    //dlg.dialog("option" , "title" , 'Enter Deal Team for deal-\"'+deal_name+'\"');
+	    dlg.dialog("option", "title", 'Enter Contact(s)');
+	    dlg.dialog('option', 'position', 'center');
+	    
+	    var dlg_template = Handlebars.compile($jq("#staffing-dialog-template").html());  	    
+	    
+	    $jq('#dealteam').empty();
+	    dlg.find('#staffing-dialog-content').html(dlg_template({dealname: deal_name,staff: ''}));
+	    $jq('#dealteam').sortable();
+	    
+	    _.each(contactInfos, function(elem, index) {
+	        //alert(contactInfos.length+':'+elem.label+':'+elem.id+':'+elem.id+':'+elem.contact_id+':'+elem.user_initial);
+	        var entry = $jq("#dealteam li[data-contact-id='" + elem.contact_id + "']");
+	        if (entry.length == 0) {
+	            var divelem = $jq('<div>');
+	            divelem.append(elem.label);
+	            divelem.append("<a href='#' class='delete-user'><span class='ui-icon ui-icon-circle-close'></span></a>");
+	            var listelem = $jq('<li>');
+	            listelem.attr('data-user-id', elem.id);
+	            listelem.attr('data-contact-id', elem.contact_id);
+	            listelem.attr('data-user-initial', elem.user_initial);
+	            listelem.append(divelem);
+	            $jq('#dealteam').append(listelem);
+	        } else {
+	            entry.children('div').stop().fadeOut(300).fadeIn(300);
+	        }
+	    });
+	    
+	    dlg.find('#staff-searcher').focus();
+	    $jq("#staffingdialog input:text, #staffingdialog textarea").eq(0).focus();
+	    
+	    $jq("#staff-searcher").autocomplete({
+	        source: function(request, response) {
+	            kjo_AccountEventController.getContactsList(
+	            request.term, 
+	            function(data, event) {
+	                response($jq.map(data, function(item) {
+	                	var full_label = item.label + ' (' + item.company_name + ')'; 
+	                    return {label: full_label,
+	                     		value: full_label,
+	                     		   id: item.user_id,
+	                       contact_id: item.contact_id,
+	                     user_initial: item.initials,
+	               contact_company_id: item.account_id}
+	                }));
+	            });
+	        },
+	        minLength: 2,
+	        select: function(event, ui) {
+	            event.preventDefault();
+	            if (ui.item) {
+	                var entry = $jq("#dealteam li[data-contact-id='" + ui.item.contact_id + "']");
+	                if (entry.length == 0) {
+	                    var divelem = $jq('<div>');
+	                    divelem.append(ui.item.label);
+	                    divelem.append("<a href='#' class='delete-user'><span class='ui-icon ui-icon-circle-close'></span></a>");
+	                    var listelem = $jq('<li>');
+	                    listelem.attr('data-user-id', ui.item.id);
+	                    listelem.attr('data-contact-id', ui.item.contact_id);
+	                    listelem.attr('data-user-initial', ui.item.user_initial);
+	                    listelem.attr('data-contact-company-id', ui.item.contact_company_id);
+	                    listelem.append(divelem);
+	                    $jq('#dealteam').append(listelem);
+	                } else {
+	                    entry.children('div').stop().fadeOut(300).fadeIn(300);
+	                }
+	                $jq("#staff-searcher").val('');
+	            } else {
+	                alert('Nothing Selected.');
+	            }
+	        }
+	    });
+	    
+	    $jq("#dealteam").on('click', 'a.delete-user', function(event) {
+	        event.preventDefault();
+	        $jq(this).parents('li').remove();
+	    });
+	    
+	    return false;
+	}
+    
+	function updateDealStaffing(dlg)
+	{	
+		 deal_team_info_list.length=0;
+	     deal_team_initials_string='';
+	     deal_team_contact_id_list.length=0;
+	     $jq("#dealteam li[data-contact-id]").each(function(index, element){                
+	         deal_team_contact_id_list.push($jq(this).attr('data-contact-id'));
+	         deal_team_info_list[deal_team_info_list.length]=
+	         { 
+	          	label : $jq(this).text(),
+	          	value :$jq(this).text(),
+	          	id : $jq(this).attr('data-user-id'), 
+				contact_id : $jq(this).attr('data-contact-id'),
+				user_initial:$jq(this).attr('data-user-initial'),
+				contact_company_id : $jq(this).attr('data-contact-company-id')				
+			 };
+	     });
+		
+		 //deal_team_initials_string =  deal_team_info_list.join(', ');    
+		 
+		  deal_team_initials_string = _.pluck(deal_team_info_list,'label').join(",   ")     
+         $jq("#contacts").val(deal_team_initials_string); 
+         //$jq("#contacts").attr('height',$jq("#contacts").attr('scrollHeight')+"px"); 
+         
+         //resizeIt("#contacts");
+    	 $jq("#contacts").css("height", $jq("#contacts").prop('scrollHeight'));
+                                                    
+	}
+    
+	function updateFollowupContact(dlg)
+	{	
+		followup_contact_info_list.length=0;
+	    followup_contacts_string='';
+	    followup_contact_id_list.length=0;
+	    $jq("#dealteam li[data-contact-id]").each(function(index, element){                
+	         followup_contact_id_list.push($jq(this).attr('data-contact-id'));
+	         followup_contact_info_list[followup_contact_info_list.length]=
+	         { 
+	          	label : $jq(this).text(),
+	          	value :$jq(this).text(),
+	          	id : $jq(this).attr('data-user-id'), 
+				contact_id : $jq(this).attr('data-contact-id'),
+				user_initial:$jq(this).attr('data-user-initial'),
+				contact_company_id : $jq(this).attr('data-contact-company-id')				
+			 };
+	    });
+		 
+		followup_contacts_string = _.pluck(followup_contact_info_list,'label').join(",   ")     
+        $jq("#followup-contacts").val(followup_contacts_string); 
+        //$jq("#contacts").attr('height',$jq("#contacts").attr('scrollHeight')+"px"); 
+        //resizeIt("#followup-contacts");  
+        
+        $jq("#followup-contacts").css("height", $jq("#followup-contacts").prop('scrollHeight'));                                                  
+	}
+	
+					    
+	 function resizeIt(textArea) {
+	    var str = $jq(textArea).value;
+	    var cols = $jq(textArea).cols;
+	
+	    var linecount = 0;
+	    $A(str.split("\n")).each( function(l) {
+	      linecount += Math.ceil( l.length / cols ); // take into account long lines
+	    } )
+	    $(textArea).rows = linecount + 1;
+	  };
+					
+
+    
+});
+
+</script>
+</apex:page>

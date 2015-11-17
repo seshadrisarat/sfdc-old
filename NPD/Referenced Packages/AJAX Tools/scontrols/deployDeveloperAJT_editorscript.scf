@@ -1,0 +1,621 @@
+/** editor.js */
+
+sforce.Apex.prototype.compileClasses = function (scripts, callback) {
+  var arg1 = new sforce.internal.Parameter("scripts", scripts, true);
+
+  return sforce.connection._invoke("compileClasses",[arg1], true,
+      callback, this.namespaceMap, "/services/Soap/s/10.0", this.namespaceMap[0].ns);
+};
+
+dojo.require("dojo.widget.Dialog");
+dojo.require("dojo.widget.Tooltip");
+dojo.require("dojo.widget.*");
+dojo.require("dojo.widget.TaskBar");
+dojo.require("dojo.widget.LayoutContainer");
+dojo.require("dojo.widget.FloatingPane");
+dojo.require("dojo.widget.ResizeHandle");
+dojo.require("dojo.widget.Menu2");
+dojo.require("dojo.widget.Tooltip");
+
+
+var msgDlg;
+var configDlg;
+var templateOptionDlg;
+//var helpDlg;
+var templateDlg;
+var saved_str = "";
+var selectedScontrol;
+var popupMenu;
+var currentFrame;
+var currentVersion = 1.4; 
+
+function initOnLoad() {
+    setup();
+    if (typeof ajax_tools_latest !== "undefined") {
+        if (ajax_tools_latest.version > currentVersion) {
+            document.getElementById("upgrade-button").style.display = "block";
+        } else {
+            document.getElementById("upgrade-button").style.display = "none";
+        }
+    }
+}
+
+function setup(firstId, type) {
+    if (!sforce.connection.sessionId) {
+        var sid = getCookie("sid");
+        if (sid) {
+            sforce.connection.sessionId = sid;
+        } else {
+            window.location = "/?startURL=" + window.location;
+            return;
+        }
+    }
+
+    if (window != window.top) {
+        window.top.location = window.location;
+        return;
+    }
+
+    currentFrame = document.getElementById("text-area-frame");
+    currentFrame._myId = "text-area-frame";
+
+    var result = sforce.connection.query("select id,name from scontrol order by name");
+    var qit = new sforce.QueryResultIterator(result);
+
+    var sb = new sforce.StringBuffer();
+    while (qit.hasNext()) {
+        var scontrol = qit.next();
+        if (!isStdScontrol(scontrol.Name)) {
+            if (!firstId) {
+                firstId = scontrol.Id;
+                type = "html";
+            }
+
+            sb.append("(<a style='color: blue' href='javascript:deleteSControl(\"").append(scontrol.Id).append("\")' >");
+            sb.append("Del").append("</a>) | ");
+            sb.append(" <a href='javascript:display2(\"").append(scontrol.Id).append("\", \"html\")' >");
+            sb.append(scontrol.Name).append("</a>");
+            sb.append("<span id='").append(scontrol.Id).append("-display'></span><br>");
+        } else {
+            //sb.append("(Del) | ");
+        }
+    }
+
+    var apexList = getApexList();
+    var list = document.getElementById("list");
+    list.innerHTML = sb.toString() + apexList.toString();
+
+    msgDlg = dojo.widget.byId("exec-pane");
+    configDlg = dojo.widget.byId("config-pane");
+    templateOptionDlg = dojo.widget.byId("template-option-pane");
+    //helpDlg = dojo.widget.byId("help-pane");
+    templateDlg = dojo.widget.byId("template-list-pane");
+    popupMenu = dojo.widget.manager.getWidgetById("main-popup-menu");
+    currentFrame.src = pageUrls.loading;
+
+    if (firstId != null) {
+        display2(firstId, type);
+    }
+}
+
+function showVersion() {
+    if (typeof ajax_tools_latest !== "undefined") {
+        window.open(ajax_tools_latest.url); //, "", "alwaysRaised,status,resizable");
+    } else {
+        window.open("http://www.salesforce.com/appexchange"); //, "", "alwaysRaised,status,resizable");
+    }
+    document.getElementById("upgrade-button").style.display = "none";
+}
+
+function getApexList() {
+    var sb = new sforce.StringBuffer();
+    sb.append("<p><h4>Apex Classes</h4>");
+    var result;
+
+    try {
+        result = sforce.connection.query("select id,name from apexClass order by name");
+    } catch(error) {
+        sb.append("Your org is not Apex enabled. Please contact support");
+        return sb;
+    }
+
+    var qit = new sforce.QueryResultIterator(result);
+
+    while (qit.hasNext()) {
+        var apexClass = qit.next();
+
+        //sb.append("(<a style='color: blue' href='javascript:deleteApexClass(\"").append(apexClass.Id).append("\")' >");
+        //sb.append("Del").append("</a>) | ");
+
+        sb.append(" <a href='javascript:display2(\"").append(apexClass.Id).append("\", \"apex\")' >");
+        sb.append(apexClass.Name).append("</a>");
+        sb.append("<span id='").append(apexClass.Id).append("-display'></span><br>");
+    }
+
+    return sb;
+}
+
+function isStdScontrol(name) {
+    return name === "AJT_main" || name == "AJT_tab" || name == "AJT_editor" ||
+           name === "AJT_apexrunner" ||
+           name === "AJT_codepress" ||
+           name === "AJT_debugshell" ||
+           name === "AJT_editor" ||
+           name === "AJT_editorscript" ||
+           name === "AJT_explorer" ||
+           name === "AJT_loading" ||
+           name === "AJT_samples" ||
+           name === "AJT_template" ||
+           name === "AJT_txsamples" ||
+           name === "AJT_docs" ||
+           name === "AJT_perf" ||
+           name === "AJT_uisamples";
+}
+
+function deleteSControl(id) {
+    var canDel = confirm("Do you want to delete SControl?");
+    if (canDel) {
+        var result = sforce.connection.deleteIds([id]);
+        setStatus("deleted " + result);
+        setup();
+        //openDlg.show();
+    } else {
+        setStatus("SControl not deleted");
+    }
+}
+
+var lastPageString = "";
+
+function display2(id, type) {
+    if (selectedScontrol) {
+        selectedScontrol.innerHTML = "";
+    }
+    selectedScontrol = document.getElementById(id+"-display");
+    if (selectedScontrol) {
+        selectedScontrol.innerHTML = "<img alt='' src='/img/alarmclock_next_arrow.gif'></img>";
+    }
+    currentFrame.src = pageUrls.editor + "&ajlang="+ type + "&ajscid=" + id +
+                       "&ic=1&rand=" + new Date().getTime();
+    handleResize();
+}
+
+function failed(error) {
+    setStatus("<font color=red>" + error + "</font>");
+}
+
+
+function save() {
+    saveAndRun(false);
+}
+
+function saveAndRun(shouldRun) {
+    var win = frames[currentFrame._myId].window;
+    var newStr = win.CodePress.getCode();
+
+    if (newStr === saved_str) {
+        setStatus("Scontrol not changed, not saving");
+        if (shouldRun) {
+            if (win.CodePress.language === "apex") {
+                runApex(win.apexId);
+            } else {
+                runScontrol();
+            }
+        }
+        return true;
+    }
+
+    if (win.CodePress.language === "apex") {
+        saveAndRunApex(shouldRun);
+        return;
+    }
+
+    try {
+        //editor_progress.startProgress();
+        var f = document.forms["display-form"];
+
+        var sobj = new sforce.SObject("SControl");
+        //sobj.Id = f["scontrol-id"].value;
+        sobj.Id = win.scontrolId; 
+        sobj.HtmlWrapper = newStr;
+        sforce.connection.update([sobj], {
+            onSuccess : function(result, shouldRun) {
+                if (result[0].getBoolean("success")) {
+                    setStatus("<font color=yellow>Saved.</font>");
+                    if (shouldRun) {
+                        runScontrol();
+                    }
+                } else {
+                    //setStatus("<font color=red>Failed to save.</font>");
+                    failed("Failed to save SControl");
+                }
+                //editor_progress.stopProgress();
+                saved_str = newStr;
+            },
+            onFailure : failed,
+            source: shouldRun
+        });
+
+
+    } catch(error) {
+        alert("oops " + error);
+    }
+
+    return true;
+}
+
+function saveAndRunApex(shouldRun) {
+    var win = frames[currentFrame._myId].window;
+    var newStr = win.CodePress.getCode();
+
+    sforce.apex.compileClasses([newStr],
+            {onSuccess: function(result, shouldRun){
+                if (result[0].getBoolean("success")) {
+                    setStatus("<font color=yellow>Compiled and saved.</font>");
+                    saved_str = newStr;
+                    if (shouldRun) {
+                        runApex(win.apexId);
+                    }
+                } else {
+                    setStatus("ERROR: " + result[0].problem + " --- " + result[0].line + ":" + result[0].column);
+                }
+             },
+             onFailure: failed,
+                source: shouldRun
+            });
+}
+
+function setStatus(str) {
+    document.getElementById("scontrol-status").innerHTML = str;
+    //setTimeout("removeStatus()", 10000);
+}
+
+function removeStatus() {
+    document.getElementById("scontrol-status").innerHTML = "";
+}
+
+/*
+function execSelected() {
+    editor_progress.startProgress();
+
+    //var win = frames['text-area-frame'].window;
+    var win = currentFrame.window;
+    var str = "alert('todo')";
+
+    try {
+        var res = eval(str);
+        if (res) {
+            var r = res.toString();
+            if (r.length > 1000) {
+                r = r.substring(0, 1000) + "...";
+            }
+            document.getElementById("msgdlg-message").innerHTML = r;
+        }
+    } catch(error) {
+        document.getElementById("msgdlg-message").innerHTML = "Failed: " + error;
+    }
+
+    msgDlg.show();
+    editor_progress.stopProgress();
+}
+*/
+
+function showConfig() {
+    configDlg.show();
+}
+
+function handleEscape() {
+    msgDlg.hide();
+    configDlg.hide();
+    //helpDlg.hide();
+    //openDlg.hide();
+    templateDlg.hide();
+    templateOptionDlg.hide();
+    popupMenu.closeAll();
+}
+
+function handleUnload(event) {
+   //todo 
+}
+
+function runApex(id) {
+    if (id.length > 15) {
+        id = id.substring(0,15);
+    }
+    var url = pageUrls.apexrunner + "&ic=1&enc=UTF-8&apexid=" + id;
+    window.open(url); //, "", "alwaysRaised,status,resizable");
+}
+
+function runScontrol() {
+    //var win = frames['text-area-frame'].window;
+    var win = frames[currentFrame._myId].window;
+    var id = win.scontrolId;
+    if (id.length > 15) {
+        id = id.substring(0,15);
+    }
+    var url = "/servlet/servlet.Integration?lid=" + id + "&ic=1&enc=UTF-8";
+    var eid = document.getElementById("config-pane-eid").value;
+    if (eid != null && eid !== "") {
+        url += "&eid=" + eid;
+    }
+    window.open(url);
+}
+
+function showHelp() {
+    //helpDlg.show();
+    window.open("https://wiki.apexdevnet.com/index.php/Ajax_Tools"); //, "", "alwaysRaised,status,resizable");
+}
+
+function showOpen() {
+    /*
+    var div = document.getElementById("open-pane");
+    if (div.style.display == 'none') {
+        div.style.display = "block";
+        //document.getElementById("open-pane-td").width = 200;
+        //document.getElementById("open-pane-more").style.display = "none";
+    } else {
+        div.style.display = "none";
+        //document.getElementById("open-pane-more").style.display = "block";
+        //document.getElementById("open-pane-td").width = 0;
+    }
+    //openDlg.show();
+    */
+}
+
+/*
+function showNew() {
+    refreshTemplateList();
+    templateDlg.show();
+}
+
+function newScontrol(id) {
+    dojo.io.bind({
+        url: "/servlet/servlet.FileDownload?file=" + id,
+        load: fileLoaded,
+        mimetype: "text/plain"});
+
+    templateDlg.hide();
+}
+
+function refreshTemplateList() {
+    var doc = document.getElementById("template-list");
+    var result = sforce.connection.query("select name,id from document where Folder.name='ajaxtemplates'");
+    var it = new sforce.QueryResultIterator(result);
+
+    var sb = new sforce.StringBuffer();
+    while(it.hasNext()) {
+        var item = it.next();
+        sb.append("<a href=\"javascript:newScontrol(\'");
+        sb.append(item.Id);
+        sb.append("\'); void 0;\">")
+        sb.append(item.Name);
+        sb.append("</a><br>");
+    }
+    doc.innerHTML = sb.toString();
+}
+
+function fileLoaded(type, data, event) {
+    var items = data.split("$$");
+
+    var script = [];
+    script.push("var out = [];");
+    var options = [];
+    for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        if (item.length > 2 && item.charAt(0) === "(" && item.charAt(item.length - 1) === ")") { //options
+            options.push(item.substring(1, item.length-1));
+        }else if (item.length > 2 && item.charAt(0) === ":" && item.charAt(item.length - 1) === ":") { //code
+            var strs = splitNewLine(item.substring(1, item.length - 1));
+            for (var j=0; j<strs.length; j++) {
+                script.push(strs[j]);
+            }
+        } else if (item.length > 2 && item.charAt(0) === "=" && item.charAt(item.length - 1) === "=") { //expression
+            script.push("out.push(" + item.substring(1, item.length-1) + ");");
+        } else { //text
+            var strs2 = splitNewLine(item);
+            for (var k=0; k<strs2.length; k++) {
+                var line = "out.push('" + clean(strs2[k]);
+                if (k<strs2.length-1) {
+                    line +=  "\\n');";
+                } else {
+                    if (item.charAt(item.length-1) === "\n") {
+                        line +=  "\\n');";
+                    } else {
+                        line +=  "');";
+                    }
+                }
+                script.push(line);
+            }
+        }
+    }
+    script.push("out;")
+    var js = script.join("\n");
+    var scriptInput = document.getElementById("template-script");
+    scriptInput.value = js;
+    var customOptions = document.getElementById("template-custom-options");
+    customOptions.innerHTML = options.join("");
+
+    templateOptionDlg.show();
+}
+
+function generateScontrol() {
+    templateOptionDlg.hide();
+    var form = document.getElementById("template-option-form");
+    var js = form['template-script'].value;
+
+     try {
+         with(form) {
+           var output = eval(js);
+         }
+    } catch(error) {
+        output = [];
+        output.push(error);
+        output.push("script :");
+        output.push(escapeHtml(js));
+    }
+    createNew(output.join(""), form['template-option-name'].value);
+}
+
+function splitNewLine(item) {
+    var results = [];
+    while(item.length > 0) {
+        var index = item.indexOf("\n");
+        var sub;
+        if (index == -1) {
+            sub = item;
+            item = "";
+        } else {
+            sub = item.substring(0, index);
+            item = item.substring(index+1, item.length);
+        }
+        results.push(sub);
+    }
+    return results;
+}
+
+function escapeHtml(str) {
+    str = str.replace(/</g, "&lt;");
+    str = str.replace(/>/g, "&gt;");
+    return str;
+}
+
+function clean(str) {
+    str = str.replace(/"/g, '\\"');
+    str = str.replace(/'/g, "\\'");
+    str = str.replace(/\n/g, "");
+    str = str.replace(/\r/g, "");
+    return str;
+}
+*/
+
+function showSamples() {
+    window.open(pageUrls.samples); //, "", "alwaysRaised,status,resizable");
+    /*
+    if (sampleWindow) {
+        sampleWindow.focus();
+    } else {
+        sampleWindow = window.open(pageUrls.samples, "ajax-tools-samples");
+    }
+    */
+}
+
+function showShell() {
+   setTimeout("setupShell()", 1);
+}
+
+function setupShell() {
+    window.open(pageUrls.debugshell); //, "", "alwaysRaised,status,resizable");
+
+    //window.open(pageUrls.debugshell); //, "", "alwaysRaised,status,resizable");
+    /*
+    if (shellWindow) {
+        shellWindow.focus();
+    } else {
+        shellWindow = window.open(pageUrls.debugshell);
+    }*/
+}
+
+function showExplorer() {
+    window.open(pageUrls.explorer); //, "AJAX Tools", "alwaysRaised,status,resizable");
+}
+
+function showDocs() {
+    window.open(pageUrls.docs); //, "AJAX Tools", "alwaysRaised,status,resizable");
+}
+
+function showPerf() {
+    window.open(pageUrls.perf); //, "AJAX Tools", "alwaysRaised,status,resizable");
+}
+
+function handleKeydown(e) {
+
+    //alert(e.keyCode);
+
+    if (e.ctrlKey) {
+        if (e.keyCode == 13) { //ctrl-enter
+            //execSelected();
+        } else if (e.keyCode == 83) { //ctrl-s
+            save();
+        } else if (e.keyCode == 68) { //ctrl-d
+            showShell();
+        } else if (e.keyCode == 69) { //ctrl-e
+            runScontrol();
+        } else if (e.keyCode == 72) { //ctrl-h
+            showHelp();
+        } else if (e.keyCode == 79) { //ctrl-o
+            //showOpen();
+        } else if (e.keyCode == 59) { //ctrl-;
+            saveAndRun(true);
+        } else if (e.keyCode == 76) { //ctrl-l
+            //runLocalScontrol();
+            return true;
+        } else {
+            return true;
+        }
+        return false;
+    }
+
+    if (e.shiftKey && e.keyCode == 13) { // shift-enter
+
+    }
+
+    if (e.keyCode == 27) { // escape
+        handleEscape();
+        return false;
+    }
+
+    if (e.keyCode == 9) { // tab
+        //var win = frames['text-area-frame'].window;
+        //var str = win.RTSH.handleTab();
+        //setStatus(str);
+        return true;
+    }
+
+    return true;
+}
+
+/*
+function createNew(text, name) {
+
+    if (name == null || name == "" || name == "Enter name") {
+        setStatus("Create new failed for " + name);
+        return false;
+    }
+
+    try {
+        var scontrol = new sforce.SObject("SControl");
+        scontrol.Name = name;
+        scontrol.DeveloperName = name + "Developer";
+        scontrol.HtmlWrapper = text;
+        var result = sforce.connection.create([scontrol]);
+
+        if (result[0].getBoolean("success")) {
+            setStatus("Created new SControl " + result[0]);
+            setup(result[0].id);
+        } else {
+            setStatus("Create new failed " + result[0]);
+        }
+    } catch(error) {
+        setStatus(error);
+    }
+
+    return false;
+}
+*/
+
+function handleResize() {
+    //var iframe = document.getElementById('text-area-frame');
+    var iframe = currentFrame;
+    var list = document.getElementById('open-message');
+    if (window.innerHeight) {
+        //ff
+        iframe.height = window.innerHeight - 140;
+        list.style.height = (window.innerHeight - 200) + "px";
+    } else {
+        //ie
+        iframe.height = document.documentElement.clientHeight - 200;
+        //var h = Math.max(600, document.body.offsetHeight);
+        //iframe.height = h - 150;
+    }
+}
+
+dojo.addOnLoad(initOnLoad);

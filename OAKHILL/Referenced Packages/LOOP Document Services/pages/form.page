@@ -1,0 +1,1047 @@
+<apex:page tabStyle="DDP_Forms__tab" controller="Loop.editFormExt" title="{!ddp.Name}" id="ap" showHeader="{!showHeader}" sidebar="{!showSidebar}" action="{!loadform}">
+<apex:stylesheet value="https://apps.drawloop.com/css/jquery.ui/jquery-ui-themeroller.css" />
+<style>
+    div.bgdl {
+        height: 41px;
+        padding-left: 4px;
+        height: 38px;
+        border-bottom: 3px solid #319431;
+    }
+    ul.tabs {
+        padding: 0;
+        margin: 0;
+    }
+    ul.tabs li {
+        float: left;
+        border-color: #BBBBBB #BBBBBB transparent;
+        border-style: solid;
+        border-width: 1px 1px 0 1px;
+        background-color: #F1F1F1;
+        -moz-border-radius: 4px 4px 0 0;
+        -webkit-border-radius: 4px 4px 0 0;
+        display: block;
+        padding: 0 8px;
+        height: 32px;
+        margin: 5px 0 -3px 5px;
+    }
+    ul.tabs li div.outer {
+        padding-bottom: 2px;
+        font-weight: bold;
+        margin-right: -13px;
+        padding: 8px 8px 4px 0;
+        cursor: pointer;
+    }
+    ul.tabs li div.outer div {
+        line-height: normal;
+        margin: 0;
+        padding-right: 7px;;
+    }
+    ul.tabs li div.outer div a { text-decoration: none; }
+    span.defaultspan span a, span.defaultspan a { text-decoration: none; }
+    ul.tabs li.selectedTab {
+        border-bottom: 3px solid #F8F8F8;
+        border-color: #319431 #319431 #F8F8F8;
+        background: -moz-linear-gradient(90deg,#F8F8F8,#FFFFFF);
+        background: -webkit-gradient(linear, center bottom, center top, from(#F8F8F8), to(#FFFFFF));
+        -ms-filter: "progid:DXImageTransform.Microsoft.gradient(startColorstr=#FFFFFF, endColorstr=#F8F8F8)";
+    }
+    ul.tabs li.notSelectedTab {
+        border-bottom: 3px solid #319431;
+    }
+    ul.tabs li.disabledTab {
+        background-color: #CCC;
+        filter: alpha(opacity=50);
+        opacity: .5;
+    }
+    div.dlPageBlock {
+        border-top: 3px solid #178AFF;
+        -moz-border-radius: 4px 4px 4px 4px;
+        -webkit-border-radius: 4px 4px 4px 4px;
+    }
+    div.dlPageBlock div.pbSubheader.tertiaryPalette {
+        margin-top: 0;
+        border-width: 0;
+    }
+    body .pbBody table.list tr.topAlign td { vertical-align: top; }
+    .invisible { display: none; }
+    img.ui-datepicker-trigger { cursor: pointer; }
+    table.inline input {
+        margin-top: 0;
+        vertical-align: sub;
+    }
+    .detailList input[type="checkbox"], .detailList input[type="radio"] {
+        margin-left: 0;
+        margin-right: 0;
+    }
+    .detailList .data2Col label {
+        margin: 0 6px 0 3px;
+    }
+    .fldTitle {
+        font-weight: bold;
+        font-size: 1.5em;
+    }
+    .fldNote {
+        font-size: 1em;
+        font-weight: normal;
+        font-style: italic;
+    }
+    .fldTitle, .fldNote {
+        margin: 4px 0;
+        display: block;
+    }
+    /*.apexp .bPageBlock .detailList { width: auto; }*/
+    .authRequired {
+        display: block;
+        margin-bottom: 10px;
+    }
+    .authRequired .msgIcon {
+        position: relative;
+        top: 3px;
+        margin-right: 4px;
+    }
+</style>
+<script type="text/javascript" src="{!URLFOR($Resource.Scripts, 'jquery-code.js')}" ></script>
+<script type="text/javascript" src="{!URLFOR($Resource.CKEditor, 'ckeditor_basic/ckeditor.js')}" ></script><!-- this must occur after jquery is referenced -->
+<script type="text/javascript" src="{!URLFOR($Resource.Scripts, 'jquery.datepicker.js')}"></script>
+<script type="text/javascript" src="{!URLFOR($Resource.Scripts, 'jquery.drawloop.js')}"></script>
+<apex:includeScript value="{!URLFOR($Resource.Loop__Scripts, 'json2.min.js')}" /> 
+<apex:includeScript value="/support/console/22.0/integration.js"/>
+<script type="text/javascript">
+    jQuery.noConflict();
+    
+    function submitVerifiedForm() {
+        jQuery('[id="aPage:aForm:pageMessages"]').hide();
+        jQuery('input.date').datepicker('destroy');
+        jQuery('[id=\'ap:af\']').hide();
+        var waitForProcessing = {!waitForProcessing};
+        var retURL = '{!JSENCODE(breadCrumbUrl)}';
+        var formMessageOnRun = '{!JSENCODE(formMessageOnRun)}';
+        jQuery('#myForm').submit();
+        if (waitForProcessing) {
+            jQuery('[id=\'ap:frameSpan\']').show();
+        } else {
+            setTimeout(function() {
+                alert(formMessageOnRun);
+                window.location = retURL;
+            }, 100);
+        }
+    };
+    function onSubmitFormResponse(allowFormSubmit) {
+        if (allowFormSubmit == 'true') { 
+            submitVerifiedForm();
+        }
+    };
+    var manager;
+    function initializeForm(rules) {
+        manager = new FormManager('[id$=":af"]', rules);
+        manager.validateRules();
+        jQuery('.nextBtn').unbind('click').click(function() {
+            var isSubmit = jQuery(this).hasClass('submitBtn');
+            if (isSubmit) {
+                if (connectedAppsEnabled && jQuery.authorize('getStatus').requiresAuthorization) {
+                    jQuery.authorize('launchAuthorizationFlow');
+                    return false;
+                }
+                isSubmitted = true;
+                manager.submitForm();
+            } else {
+	            var stepId = manager.$form.find('.selectedTab .stepName').attr('data-id'),
+	                nextStepId = null;
+	            for (var i = 0; i < manager.steps.length - 1; i++) {
+	                if (manager.steps[i].id == stepId) {
+	                    var offset = 1;
+	                    var nextStep = manager.steps[i + offset];
+	                    while (nextStep && nextStep.isDisabled()) {
+	                        offset++;
+	                        nextStep = manager.steps[i + offset];
+	                    }
+	                    nextStepId = nextStep ? nextStep.id : null;
+	                    break;
+	                }
+	            }
+	            if (!nextStepId) {
+	                log('Next step not found after specified: ' + stepId);
+	            }
+	            changeStep(nextStepId);
+            }
+            return false;
+        });
+    };
+    function FormManager(selector, rules) {
+        var $form = jQuery(selector),
+            manager = this;
+        this.selector = selector;
+        this.$form = $form;
+        var steps = [];
+        var stepMap = {};
+        $form.find('.tabs li').each(function(i, e) {
+            var $elem = jQuery(e),
+                id = $elem.find('.stepName').attr('data-id'),
+                step = {
+                id: id,
+                name: $elem.find('.stepName').text().trim(),
+                $elem: $elem,
+                isDisabled: function() { return $elem.hasClass('disabledTab'); },
+                isActive: function() { return !this.isDisabled() && $elem.is(':visible'); }
+            };
+            stepMap[id] = step;
+            steps.push(step);
+        });
+        this.steps = steps;
+        this.stepMap = stepMap;
+        this.fieldMap = this.getFieldMap();
+        this.tagMap = {};
+        for (var i in this.fieldMap) {
+            if (this.fieldMap.hasOwnProperty(i)) {
+                var field = this.fieldMap[i];
+                this.tagMap[field.tagname] = field;
+            }
+        }
+        function isNumeric(a) {
+            return !isNaN(a);
+        };
+        function isNullOrUndefined(a) {
+            return a === null || a === undefined;
+        };
+        function ifValidArgs(a, b, f) {
+            return isNullOrUndefined(a) || isNullOrUndefined(b)
+                ? false
+                : f(a, b);
+        };
+        this.operators = {
+            'equals': function(a, b) {
+                return isNumeric(a) ? +a === +b : (a === b || ifValidArgs(a, b, function(a, b) { return a.toLowerCase() === b.toLowerCase(); }));
+            },
+            'not equal to': function(a, b) {
+                return !manager.operators.equals(a, b);
+            },
+            'starts with': function(a, b) { 
+                return ifValidArgs(a, b, function(a, b) { return a.toLowerCase().indexOf(b.toLowerCase()) === 0; });   
+            },
+            'ends with': function(a, b) { 
+                return ifValidArgs(a, b, function(a, b) { return a.toLowerCase().indexOf(b.toLowerCase()) === a.length - b.length; });   
+            },
+            'contains': function(a, b) {
+                return ifValidArgs(a, b, function(a, b) { return a.toLowerCase().indexOf(b.toLowerCase()) > -1; });
+            },
+            'does not contain': function(a, b) { 
+                return ifValidArgs(a, b, function(a, b) { return a.toLowerCase().indexOf(b.toLowerCase()) === -1; });
+            },
+            'less than': function(a, b) {
+                return ifValidArgs(a, b, function(a, b) { return +a < +b; });
+            },
+            'greater than': function(a, b) { 
+                return ifValidArgs(a, b, function(a, b) { return +a > +b; });
+            },
+            'less or equal': function(a, b) { 
+                return ifValidArgs(a, b, function(a, b) { return +a <= +b; });
+            },
+            'greater or equal': function(a, b) { 
+                return ifValidArgs(a, b, function(a, b) { return +a >= +b; });
+            },
+            'includes': function(a, b) { 
+                return ifValidArgs(a, b, function(a, b) { return arrContains(manager.getListValues(a), b); });
+            },
+            'excludes': function(a, b) { 
+                return ifValidArgs(a, b, function(a, b) { return !arrContains(manager.getListValues(a), b); });
+            },
+            'matches regex': function(a, b) {
+                return ifValidArgs(a, b, function(a, b) { return new RegExp(b).test(a); });
+            }
+        };
+        this.actionTypes = {
+            'Disable': function(data) {
+                var stepIds = data.stepIds,
+                    fieldIds = data.fieldIds;
+                for (var i = 0; i < stepIds.length; i++) {
+                    var step = manager.getStep(stepIds[i]);
+                    if (step) {
+                        step.$elem.addClass('disabledTab');
+                    }
+                }
+                for (var i = 0; i < fieldIds.length; i++) {
+                    var field = manager.getField(fieldIds[i]);
+                    if (field && field.currentStepField) {
+                        field.$elem.find(':input').attr('disabled', true);
+                        field.$elem.find('.date').datepicker('disable');
+                    }
+                }
+            },
+            'Enable': function(data) {
+                var stepIds = data.stepIds,
+                    fieldIds = data.fieldIds;
+                for (var i = 0; i < stepIds.length; i++) {
+                    var step = manager.getStep(stepIds[i]);
+                    if (step) {
+                        step.$elem.removeClass('disabledTab');
+                    }
+                }
+                for (var i = 0; i < fieldIds.length; i++) {
+                    var field = manager.getField(fieldIds[i]);
+                    if (field && field.currentStepField) {
+                        field.$elem.find(':input').attr('disabled', false);
+                        field.$elem.find('.date').datepicker('enable');
+                    }
+                }
+            },
+            'Hide': function(data) {
+                var stepIds = data.stepIds,
+                    fieldIds = data.fieldIds;
+                for (var i = 0; i < stepIds.length; i++) {
+                    var step = manager.getStep(stepIds[i]);
+                    if (step) {
+                        step.$elem.hide();
+                    }
+                }
+                for (var i = 0; i < fieldIds.length; i++) {
+                    var field = manager.getField(fieldIds[i]);
+                    if (field && field.currentStepField) {
+                        field.$elem.closest('tr').hide();
+                    }
+                }
+            },
+            'Show': function(data) {
+                var stepIds = data.stepIds,
+                    fieldIds = data.fieldIds;
+                for (var i = 0; i < stepIds.length; i++) {
+                    var step = manager.getStep(stepIds[i]);
+                    if (step) {
+                        step.$elem.show();
+                    }
+                }
+                for (var i = 0; i < fieldIds.length; i++) {
+                    var field = manager.getField(fieldIds[i]);
+                    if (field && field.currentStepField) {
+                        field.$elem.closest('tr').show();
+                    }
+                }
+            },
+            'DisplayErrorMessage': function(data) {
+                var fieldIds = data.fieldIds,
+                    message = data.message || 'Invalid Entry',
+                    selector = jQuery(fieldIds).map(function(i, e) {
+                        return '.fieldContainer[data-id="' + e + '"]';
+                    }).get().join(',');
+                manager.$form.find(selector).not(':has(.errorMsg:contains("' + message + '"))').append(
+                    jQuery('<div class="errorMsg" />').text(message)
+                );
+            },
+            'RemoveErrorMessage': function(data) {
+                var fieldIds = data.fieldIds,
+                    message = data.message,
+                    selector = jQuery(fieldIds).map(function(i, e) {
+                        return '.fieldContainer[data-id="' + e + '"]';
+                    }).get().join(',');
+                manager.$form.find(selector).find('.errorMsg:contains("' + message + '")').remove();
+            }
+        };
+        this.inverseActions = {
+            'Disable': 'Enable',
+            'Enable': 'Disable',
+            'Hide': 'Show',
+            'Show': 'Hide',
+            'DisplayErrorMessage': 'RemoveErrorMessage',
+            'RemoveErrorMessage': 'DisplayErrorMessage'
+        };
+        this.initializeRules(rules);
+    }
+    FormManager.prototype.getListValues = function(a) {
+        var output = [];
+        var offset = 0;
+        var escapeCharacterFound = false;
+        var segmentInProgress = false;
+        
+        if (a.length > 0) {
+	        for (var i = 0; i < a.length; i++) {
+	            var c = a.charAt(i);
+	            
+	            if (c == '\\') {
+	                escapeCharacterFound = true;
+	            } else if (c == ',' && !escapeCharacterFound) {
+	                output.push(a.substring(offset, i).replace('\\,', ','));
+	                offset = i + 1;
+	                segmentInProgress = false;
+	            } else {
+	                escapeCharacterFound = false;
+	                segmentInProgress = true;
+	            }
+	        }
+        }
+        else {
+        	// This method accepts a comma delimited string and outputs an array of strings
+        	// If the string is empty we must still add an empty string to the output array for comparison
+        	output.push('');
+        }
+        
+        if (segmentInProgress) {
+            output.push(a.substring(offset, a.length).replace('\\,', ','));
+        }
+        
+        return output;
+    };
+    FormManager.prototype.getStep = function(recordId) {
+        if (!(recordId in this.stepMap)) {
+            log('Step not found: ' + recordId);
+        }
+        return this.stepMap[recordId];
+    };
+    FormManager.prototype.getField = function(recordId) {
+        if (!(recordId in this.fieldMap)) {
+            log('Field not found: ' + recordId);
+        }
+        return this.fieldMap[recordId];
+    };
+    FormManager.prototype.initializeRules = function(rules) {
+        var manager = this;
+        this.rules = rules;
+        
+        var depMatcher = /<<(.+)>>/;
+        for (var i = 0; i < this.rules.length; i++) {
+            var rule = this.rules[i];
+            for (var j = 0; j < rule.conditions.length; j++) {
+                var condition = rule.conditions[j];
+                var op1 = condition.operand1;
+                var match = op1.match(depMatcher);
+                if (match && match.length > 1) {
+                    var tagname = match[1];
+                    if (tagname in this.tagMap) {
+                        var field = this.tagMap[tagname];
+                        if (!arrContains(field.rules, rule)) {
+                            field.rules.push(rule);
+                        }
+                    }
+                }
+            }
+        }
+        
+        this.$form.find('.fieldContainer :input').bind('blur change keyup', function(e) {
+            var $container = jQuery(this).closest('.fieldContainer');
+            var id = $container.attr('data-id');
+            if (!(id in manager.fieldMap)) {
+                log('Field not found in manager: ' + id);
+                return;
+            }
+            var field = manager.fieldMap[id];
+            if (field.rules.length) {
+                manager.validateRules();
+                /*for (var i = 0; i < field.rules.length; i++) {
+                    manager.validateRule(field.rules[i]);
+                }*/
+            }
+        });
+    };
+    FormManager.prototype.getFieldMap = function() {
+        var $form = this.$form;
+        var fieldMap = {};
+        var getOtherStepFieldValue = function() {
+            return this.$elem.find('[data-validation-value]').attr('data-validation-value');
+        };
+        var getValue = function() {
+              var $field = this.$elem.find(':input');
+              
+              if ($field.is(':checkbox')) {
+                  return $field.filter(':checked').map(function(i, e) { return e.value.replace(',', '\\,'); }).toArray().join(',');
+              } else if ($field.is(':radio')) {
+                 return $field.filter(':checked').val();
+              }
+
+            // If we have a value for $field, then use that otherwise check to 
+            // see if this is a View and use the text from that
+              return $field.length
+                 ? $field.val()
+                 : this.$elem.find('[data-type]')
+                     .filter(function() { return this.getAttribute('data-type').toLowerCase() == 'view'; })
+                     .text();
+         };
+        jQuery('[id$=":loopInputs"] .fieldContainer').each(function(i, e) {
+               var $e = jQuery(e);
+            fieldMap[$e.attr('data-id')] = {
+                id: $e.attr('data-id'),
+                tagname: $e.find(':input').attr('name').substring(4),
+                currentStepField: false,
+                rules: [],
+                $elem: $e,
+                getValue: getOtherStepFieldValue
+            };
+        });
+        $form.find('.detailList .fieldContainer').each(function(i, e) {
+            var $e = jQuery(e);
+            fieldMap[$e.attr('data-id')] = {
+                id: $e.attr('data-id'),
+                tagname: $e.attr('data-tagname'),
+                currentStepField: true,
+                rules: [],
+                $elem: $e,
+                getValue: getValue
+            };
+        });
+        return fieldMap;
+    };
+    FormManager.prototype.evaluateOperand = function(operand) {
+        var depMatcher = /^<<(.+)>>$/;
+        if (depMatcher.test(operand)) {
+            var tagname = operand.match(depMatcher)[1];
+            return this.tagMap[tagname].getValue();
+        }
+        return operand;
+    };
+    FormManager.prototype.checkCondition = function(condition) {
+        var op1 = this.evaluateOperand(condition.operand1) || '',
+            op2 = condition.operand2 || '';
+        if (!(condition.operator in this.operators)) {
+            throw 'Invalid operator specified: ' + condition.operator;
+        }
+        
+        if (condition.operator == 'matches regex') {
+            return this.operators[condition.operator](op1.replace('\\,', ','), op2.replace('\\,', ','));
+        } else {
+            var op1List = this.getListValues(op1);
+            var op2List = this.getListValues(op2);
+            
+            var isNegativeOperator = jQuery.inArray(condition.operator, [ 'not equal to', 'does not contain', 'excludes' ]) > -1;
+            var useOp1List = jQuery.inArray(condition.operator, [ 'includes', 'excludes' ]) > -1;
+            var fulfilled = isNegativeOperator ? true : false;
+            
+            var op1Value = op1.replace('\\,', ',');
+            
+            for (var i = 0; i < op2List.length; i++) {
+                var op2Value = op2List[i];
+                
+                fulfilled = useOp1List
+                    ? this.operators[condition.operator](op1List, op2Value)
+                    : this.operators[condition.operator](op1Value, op2Value);
+                
+                if ((isNegativeOperator && !fulfilled)
+                    || (!isNegativeOperator && fulfilled)) {
+                    break;
+                }
+            }
+            
+            return fulfilled;
+        }
+    };
+    function Group(o1, op, o2) {
+        this.o1 = o1;
+        this.op = op;
+        this.o2 = o2;
+        return this;
+    };
+    function Operand(conditionNumber, inverse) {
+        this.conditionNumber = conditionNumber;
+        this.isInverse = inverse;
+        return this;
+    };
+    FormManager.prototype.getConditionMap = function() {
+        var map = {},
+            manager = this;
+        for (var i = 0; i < this.conditions.length; i++) {
+            var result = undefined,
+                condition = this.conditions[i];;
+            map[i + 1] = function() {
+                return result === undefined
+                    ? (result = manager.checkCondition(condition)) 
+                    : result;
+            };
+        }
+        return map;
+    };
+    FormManager.prototype.evaluateGroupOperand = function(operand, conditionMap) {
+        return 
+            operand instanceof Group
+                ? this.evaluateGroup(operand, conditionMap)    
+                : (operand.isInverse 
+                    ? !conditionMap[operand.conditionNumber]() 
+                    : conditionMap[operand.conditionNumber]());
+    };
+    FormManager.prototype.evaluateGroup = function(group, conditionMap) {
+        var r1 = this.evaluateGroupOperand(group.op1, conditionMap);
+        if (group.op == 'or') {
+            return r1 || this.evaluateGroupOperand(group.op2);
+        } else {
+            return r1;
+        }
+    };
+    FormManager.prototype.parseFilterLogic = function(s) {
+        var tokens = s.split(/\s+/),
+            prev = null,
+            groups = [],
+            group = null;
+        for (var i = 0; i < tokens.length; i++) {
+            var token = tokens[i].toLowerCase();
+            if (token[0] === '(') {
+            } else if (token[token.length - 1] === ')') {
+            }
+        }
+    };
+    FormManager.prototype.sanitizeFilterLogic = function(s) {
+        var tokens = s.split(/[\s]+/),
+            valid = [],
+            numMatcher = /^\d+$/;
+           for (var i = 0; i < tokens.length; i++) {
+               var token = tokens[i].toLowerCase();
+               if (token && (
+                   token === 'and' || token === 'or' || token === 'not' || token === '(' || token === ')' || numMatcher.test(token) 
+               )) {
+                   valid.push(token);
+               }
+           }
+           return valid.join(' ');
+    };
+    FormManager.prototype.evaluateFilterLogic = function(logicStr, conditionValues) {
+           var tmp = logicStr
+               .replace(/\d+/g, function(m) { return conditionValues[m - 1]; })
+               .replace(/and/g, '&&')
+               .replace(/or/g, '||')
+               .replace(/not/g, '!')
+               .replace('(', ' ( ')
+               .replace(')', ' ) ');
+          return eval(tmp);
+    };
+    FormManager.prototype.checkConditions = function(conditions, filterLogic) {
+        var valid = true,
+            logic = filterLogic ? this.sanitizeFilterLogic(filterLogic) : '',
+            hasFilterLogic = !!logic;
+        var conditionValues = [];
+        for (var i = 0; i < conditions.length; i++) {
+            conditionValues.push(this.checkCondition(conditions[i]));
+            if (!hasFilterLogic && !conditionValues[conditionValues.length - 1]) {
+                valid = false;
+                break;
+            }
+        }
+        if (hasFilterLogic) {
+            valid = this.evaluateFilterLogic(logic, conditionValues);
+        }
+        return valid;
+    };
+    /*FormManager.prototype.implementAction = function(action) {
+        if (!(action.operationType in this.actionTypes)) {
+            throw 'Invalid action type specified: ' + action.operationType;
+        }
+        this.actionTypes[action.operationType](action.operationData);
+    };
+    FormManager.prototype.undoActions = function(actions) {
+        for (var i = 0; i < actions.length; i++) {
+            var action = actions[i],
+            inverseAction = this.inverseActions[action.operationType];
+            this.implementAction({
+                operationType: inverseAction,
+                operationData: action.operationData
+            });
+        };
+    };
+    FormManager.prototype.implementActions = function(actions) {
+        for (var i = 0; i < actions.length; i++) {
+            this.implementAction(actions[i]);
+        };
+    };
+    FormManager.prototype.validateRule = function(rule) {
+        if (this.checkConditions(rule.conditions, rule.advancedConditions)) {
+            this.implementActions(rule.actions);
+        } else {
+            this.undoActions(rule.actions);
+        }
+        this.updateForm();
+    };*/
+    
+    FormManager.prototype.getOperationKey = function(action) {
+        return (action.operationType || '') +
+            (action.operationData.message || '');
+    };
+    
+    FormManager.prototype.validateRules = function(rules) {
+        rules = rules || this.rules;
+        var toDo = { };
+        for (var i = 0; i < rules.length; i++) {
+            //this.validateRule(rules[i]);
+            var rule = rules[i];
+            var active = this.checkConditions(rule.conditions, rule.advancedConditions);
+            for (var j = 0; j < rule.actions.length; j++) {
+                var action = rule.actions[j],
+                    actionKey = this.getOperationKey(action);
+                if (!(actionKey in toDo)) {
+                    toDo[actionKey] = { 'actionType': action.operationType, 'active': { 'stepIds': [], 'fieldIds': [], 'message': action.operationData.message }, 'inactive': { 'stepIds': [], 'fieldIds': [], 'message': action.operationData.message } };
+                }
+                var section = toDo[actionKey][active ? 'active' : 'inactive'];
+                section.stepIds.push.apply(section.stepIds, action.operationData.stepIds);
+                section.fieldIds.push.apply(section.fieldIds, action.operationData.fieldIds);
+            }
+        }
+        for (var actionKey in toDo) {
+            var current = toDo[actionKey],
+                actionType = current.actionType,
+                inverseActionType = this.inverseActions[actionType];
+            // Actions should be performed on all steps / fields included in active rules.
+            this.actionTypes[actionType](current.active);
+
+            // Inverse actions (undoing other actions) should be performed on steps / fields included in non-active 
+            // rules that are not also included in other active rules.
+            current.inactive.stepIds = jQuery(current.inactive.stepIds).filter(function(i, e) { return !(jQuery.inArray(e, current.active.stepIds) > -1); }).toArray();
+            current.inactive.fieldIds = jQuery(current.inactive.fieldIds).filter(function(i, e) { return !(jQuery.inArray(e, current.active.fieldIds) > -1); }).toArray();
+            this.actionTypes[inverseActionType](current.inactive);
+        }
+        this.updateForm();
+    };
+    FormManager.prototype.setNextAsSubmit = function(setAsSubmit) {
+        if (setAsSubmit) {
+            jQuery('.nextBtn').addClass('submitBtn').val('Run');
+           } else {
+               jQuery('.nextBtn').removeClass('submitBtn').val('Next');
+           }
+    };
+    FormManager.prototype.updateForm = function() {
+        var $tabs = this.$form.find('.tabs li:visible:not(.disabledTab)'),
+            isLastTab = $tabs.index(jQuery('.selectedTab')) === $tabs.length - 1,
+            nextIsSubmit = jQuery('.nextBtn').hasClass('submitBtn');
+           if (isLastTab && !nextIsSubmit) {
+              this.setNextAsSubmit(true);
+           } else if (!isLastTab && nextIsSubmit) {
+               this.setNextAsSubmit(false);
+           }
+    };
+    FormManager.prototype.submitForm = function() {
+        var inactiveStepIds = [];
+        for (var i = 0; i < this.steps.length; i++) {
+            if (!this.steps[i].isActive()) {
+                inactiveStepIds.push(this.steps[i].id);
+            }
+        }
+        submitForm(JSON.stringify(inactiveStepIds));
+    };
+    function arrIndexOf(arr, e) {
+        for (var i = 0; i < arr.length; i++) {
+            if (arr[i] === e) return i;
+        }
+           return -1; 
+    };
+    function arrContains(arr, e) {
+        return arrIndexOf(arr, e) > -1;
+    };
+    function tryChangeStep(stepId) {
+        var step = manager.getStep(stepId);
+        if (!step || !step.isActive()) {
+            return false;
+        }
+        changeStep(stepId);
+    };
+    function log(msg) {
+        window.console && console.log && console.log(msg);
+    };
+    // BEGIN SERVICE CLOUD CONSOLE SCRIPT
+    isSubmitted = false;
+    thisTabId = null;
+    primaryTabId = null;
+    redirect = null;
+    function resetPreviousTab(result) {
+        if (result.success == true)
+            sforce.console.getEnclosingTabId(refreshTab);
+    }
+    function refreshTab(result) {
+        sforce.console.refreshSubtabById(result.id);
+    }
+    function openSubTab(result) { 
+        sforce.console.openSubtab(result.id, window.location.href+'&previousTabId='+thisTabId+'&isSubTab=true', true, '', null, resetPreviousTab, '');
+    };
+    function getTabId(result) {
+        return result.id
+    }
+    function cancelClick() {
+        if (sforce.console.isInConsole()) {
+            sforce.console.closeTab(thisTabId);
+            return false;
+        }
+        jQuery('[id="aPage:aForm"]').attr('target', '_top');
+        return true;
+    }
+    function receiveMessage(e) {
+        var pattern = /(^https:\/\/[^.\/]+.drawloop.com)|(^http:\/\/localhost:1948)/gi;
+        if (pattern.test(e.origin))
+        {
+            if ((/^https:/gi).test(e.data))
+            {
+                redirect = e.data;
+                sforce.console.getEnclosingPrimaryTabId(function(result) {
+                    sforce.console.openSubtab(
+                        result.id,
+                        redirect,
+                        true,
+                        'DDP {!JSENCODE($Label.site.powered_by)} Drawloop',
+                        thisTabId
+                    );
+                });
+            }
+            else
+            {
+                if (e.data != 'closeTab')
+                    alert(e.data);
+                sforce.console.refreshSubtabById('{!JSENCODE($Request.previousTabId)}', false, function(){
+                    sforce.console.closeTab(thisTabId);
+                });
+            }
+        }
+    }
+    function breadcrumbClick() {
+        if (sforce.console.isInConsole()) {
+            if (isSubmitted) {
+                sforce.console.refreshSubtabById('{!JSENCODE(previousTabId)}', false, function(){
+                    sforce.console.closeTab(thisTabId);
+                });
+            }
+            else {
+                sforce.console.closeTab(thisTabId);
+            }
+            return false;
+        }
+        return true;
+    }
+    // END SERVICE CLOUD CONSOLE SCRIPT 
+
+    // OAuth Authorization
+    function setRunEnabled(enabled) {
+        if (!enabled) {
+            jQuery('.buttondiv .btn:not(.cancelBtn)').addClass('btnDisabled').attr('disabled', true);  
+        } else {
+            jQuery('.buttondiv .btn:not(.cancelBtn)').removeClass('btnDisabled').removeAttr('disabled');   
+        }   
+    };
+    function setRequestingAuth(requesting) {
+        setRunEnabled(!requesting);
+    };
+    function setAuthRequired(required) {
+        jQuery('.authRequired').fadeOut(400, function() { jQuery('.authRequired').remove(); });
+    };
+    function setMessage(msg, msgType) {
+        var $con = jQuery('.authRequired');
+        if (!$con.length) $con = jQuery('<span class="authRequired message infoM4" />').insertAfter('[id$=":pageMsgs"]');
+    
+        $con.text(msg || '')
+            .removeClass('infoM4 warningM4 errorM4')
+            .addClass((msgType || 'info') + 'M4')
+            .prepend('<img class="msgIcon" src="/s.gif" />');
+        if (msg) $con.show();
+        else $con.hide();
+    };
+    function handleAuthCallback(result) {
+        var status = (result.status || '').toLowerCase();
+        if (result.status == 'success') {
+            jQuery('.submitBtn:first').click();
+        } else if (result.error == 'access_denied') {
+            setMessage('You must authorize LOOP Document Services to run DDPs.', 'warning');
+        } else if (result.error == 'oauth_app_access_denied') {
+            setMessage('You are not approved to access this app. Contact your Salesforce Administrator for approval.', 'error');
+        } else {
+            setMessage(result.error + ': ' + result.error_description, 'error');
+        }
+    };
+</script>
+<apex:outputPanel id="js">
+    <script type="text/javascript">
+        jQuery(function () {
+            if (!window.authSet) {
+                authSet = true;
+                connectedAppsEnabled = {!connectedAppsEnabled};
+                if (connectedAppsEnabled) {
+                    jQuery.authorize({
+                        accessToken: '{!JSENCODE(sessionid)}',
+                        userId: '{!JSENCODE(loopUserId)}',
+                        sandbox: {!isSandbox},
+                        onChangeRequiresAuth: setAuthRequired,
+                        onChangeRequestingAuth: setRequestingAuth,
+                        verifyError: function(data) {
+                            if (!data.Response) {
+                                setMessage('An unexpected response was received attempting to verify authorization.', 'error');
+                            } else if (data.Response.toLowerCase() == 'error') {
+                                if (data.Error && data.Error.toLowerCase() == 'invalid_app_access') {
+                                   setMessage('You do not have access to this app. If you feel this is an error, please contact your Administrator about gaining access.', 'error');
+                                   setRunEnabled(false);
+                                } else {
+                                    setMessage(data.ErrorDescription, 'error');
+                                }
+                            }
+                        },
+                        authFlowComplete: handleAuthCallback
+                    });
+                }
+            }
+            initializeForm({!SerializedFormRules});
+            if (sforce.console.isInConsole()) {
+                if ('{!JSENCODE($Request.isSubTab)}' != 'true') {
+                    sforce.console.getEnclosingTabId(function(result){
+                        thisTabId=result.id;
+                        sforce.console.getEnclosingPrimaryTabId(openSubTab);
+                    });
+                    return false;
+                }
+                else {
+                    sforce.console.setTabTitle('DDP {!JSENCODE($Label.site.powered_by)} Drawloop');
+                    sforce.console.getEnclosingTabId(function(result){thisTabId=result.id;});
+                    if (window.addEventListener)
+                    {
+                        window.addEventListener('message',receiveMessage,false);
+                    }
+                    else
+                    {
+                        window.attachEvent('onmessage', receiveMessage);
+                    }
+                    jQuery('#dlContainer').show();
+                }
+            }
+            else
+                jQuery('#dlContainer').show();
+            
+            jQuery('div.selectedTab').parent().addClass('selectedTab');
+            jQuery('div.notSelectedTab').parent().addClass('notSelectedTab');
+            jQuery('input.date:visible')
+                .datepicker({buttonImage: 'https://apps.drawloop.com/images/icons/calendar.png', showOn: 'both', buttonImageOnly: true})
+                .filter(':disabled')
+                    .datepicker('disable');
+            jQuery('[id="ap:af:pb:pbs"] input:first').select();
+            manager.updateForm();
+            if (jQuery.authorize('getStatus').requiresAuthorization && jQuery('.submitBtn').length) {
+               setMessage('Authorization is required to continue. Click "Run" to authorize and run your DDP');
+            }
+            jQuery.notifie({
+                allowCompatibilityView: false,
+                requiredVersion: 7,
+                containerSelector: '#ieMsgs',
+                compatibilityViewMessage: '{!JSENCODE($Label.IE_Compatibility_View_Warning)}',
+                versionMessage: '{!JSENCODE($Label.IE_Higher_Version_Required)}'
+            });
+        });
+    </script>
+</apex:outputPanel>
+    <apex:form id="af">
+        <apex:outputPanel id="frameSpan">
+            <div class="bPageTitle"><div class="ptBreadcrumb">
+                <apex:outputLink rendered="{!NOT(breadCrumbUrl='')}" value="{!breadCrumbUrl}" onclick="return breadcrumbClick();" style="display: block;">
+                    « {!HTMLENCODE($Label.loop__DDP_Breadcrumb)} {!HTMLENCODE(objectLabel)}
+                </apex:outputLink>
+                <apex:commandLink value="« Back to Form Selection" rendered="{!objId=''}" /><br />
+                <apex:commandLink value="« Edit Form" action="{!editForm}" rendered="{!AND(isOwner,objId='')}" /><br />
+                <apex:commandLink value="« Back to {!$ObjectType.Loop__DDP__c.label} Detail" rendered="{!AND(isOwner,objId='')}" action="{!cancel}" />
+            </div></div>
+        </apex:outputPanel>
+        <div id="ieMsgs" />
+        <apex:outputPanel id="pageMsgs">
+            <apex:pageMessages />
+        </apex:outputPanel>
+        <apex:actionFunction name="changeStep" reRender="af,loopInputs,js,pageMsgs" action="{!changeStep}" status="tabsStatus">
+            <apex:param value="" assignTo="{!selectedStepId}" name="selectedStepId" />
+        </apex:actionFunction>
+        <apex:actionFunction name="changeStep2" reRender="af,loopInputs,js,pageMsgs" action="{!changeStep}" status="buttonStatus">
+            <apex:param value="" assignTo="{!selectedStepId}" name="selectedStepId" />
+        </apex:actionFunction>
+        <apex:actionFunction name="submitForm" reRender="af,loopInputs,pageMsgs,js" action="{!submitForm}" status="buttonStatus" oncomplete="onSubmitFormResponse('{!allowFormSubmit}');">
+            <apex:param value="" assignTo="{!inactiveStepIdsStr}" name="inactiveStepIdsStr" />
+        </apex:actionFunction>
+        <apex:outputPanel rendered="{!showForm}">
+            <apex:outputPanel styleClass="bgdl" layout="block">
+                <apex:dataList value="{!steps}" var="s" styleClass="tabs" style="float: left;">
+                    <apex:outputPanel layout="block" styleClass="outer {!IF(s.s.Id==selectedStepId,'selectedTab','notSelectedTab')}" onclick="tryChangeStep('{!s.s.Id}');">
+                        <div>
+                            <span class="stepName" data-id="{!s.s.Id}">{!s.s.Name}</span>
+                        </div>
+                    </apex:outputPanel>
+                </apex:dataList>
+                <apex:outputPanel style="float: left; margin: 11px;">
+                    <apex:actionStatus startText="• • •" stopText="" id="tabsStatus" />
+                </apex:outputPanel>
+            </apex:outputPanel>
+            <apex:outputPanel layout="block" id="pbOP" style="clear: both; margin-top: -3px;">
+                <apex:pageBlock id="pb" mode="edit">
+                    <apex:pageBlockButtons styleClass="buttondiv">
+                        <apex:commandButton styleClass="prevBtn cancelBtn" value="Previous" rendered="{!previousStepId != null}" onclick="changeStep2('{!previousStepId}'); return false;" />
+                        <apex:commandButton styleClass="nextBtn" value="Next" rendered="{!nextStepId != null}" />
+                        <apex:commandButton styleClass="nextBtn submitBtn" value="Run DDP" rendered="{!nextStepId == null}" status="buttonStatus" />
+                        <apex:actionStatus startText="• • •" stopText="" id="buttonStatus" />
+                    </apex:pageBlockButtons>
+                    <apex:pageBlockSection columns="1" id="pbs">
+                        <apex:repeat value="{!fields}" var="f">
+                            <apex:pageBlockSectionItem helpText="{!f.f.Loop__Help_Text__c}" labelStyle="width: {!BLANKVALUE(selectedStep.s.Loop__Label_Column_Width__c,'20%')};" dataStyle="width: {!BLANKVALUE(selectedStep.s.Loop__Input_Column_Width__c,'80%')};">
+                                <apex:outputPanel >
+                                    <apex:outputText rendered="{!f.IsTextOnly}" styleClass="fld{!IF(f.f.Loop__Type__c == 'Note', 'Note', 'Title')}" value="{!f.f.Loop__Default_Value__c}" />
+                                    <apex:outputLabel value="{!f.f.Name}" for="textField" rendered="{!OR(f.f.Loop__Type__c='',f.f.Loop__Type__c='Text',f.f.Loop__Type__c='Email',f.f.Loop__Type__c='View')}" />
+                                    <apex:outputLabel value="{!f.f.Name}" for="dateField" rendered="{!f.f.Loop__Type__c='Date'}" />
+                                    <apex:outputLabel value="{!f.f.Name}" for="dropField" rendered="{!OR(f.f.Loop__Type__c='Drop Down',f.f.Loop__Type__c='Edit Drop Down')}" />
+                                    <apex:outputLabel value="{!f.f.Name}" for="radioField" rendered="{!OR(f.f.Loop__Type__c='Radio',f.f.Loop__Type__c='Radio Inline')}" />
+                                    <apex:outputLabel value="{!f.f.Name}" for="checkboxField" rendered="{!f.isCheckboxType}" />
+                                    <apex:outputLabel value="{!f.f.Name}" for="memoField" rendered="{!f.f.Loop__Type__c='Memo'}" />
+                                    <apex:outputLabel value="{!f.f.Name}" for="richTextField" rendered="{!f.f.Loop__Type__c='Rich Text'}" />
+                                </apex:outputPanel>
+                                <apex:outputPanel styleClass="fieldContainer" html-data-id="{!f.f.Id}" html-data-tagname="{!f.f.Loop__Tag__c}" rendered="{!!f.IsTextOnly}">
+                                    <apex:inputText id="textField" value="{!f.fvalue}" rendered="{!OR(f.f.Loop__Type__c='',f.f.Loop__Type__c='Text',f.f.Loop__Type__c='Email')}" style="width: {!BLANKVALUE(selectedStep.s.Loop__Input_Column_Width__c,'200px')};" />
+                                    <apex:outputPanel rendered="{!f.f.Loop__Type__c='Date'}">
+                                        <apex:inputText id="dateField" styleClass="date" value="{!f.fvalue}" style="width: 200px;" />
+                                    </apex:outputPanel>
+                                    <apex:selectList id="dropField" size="1" value="{!f.fvalue}" rendered="{!OR(f.f.Loop__Type__c='Drop Down',f.f.Loop__Type__c='Edit Drop Down')}">
+                                        <apex:selectOptions value="{!f.options}" />
+                                    </apex:selectList>
+                                    <apex:selectRadio id="radioField" value="{!f.fvalue}" layout="{!IF(f.f.Loop__Type__c='Radio','pageDirection','lineDirection')}" rendered="{!OR(f.f.Loop__Type__c='Radio',f.f.Loop__Type__c='Radio Inline')}" styleClass="{!IF(f.f.Loop__Type__c='Radio','','inline')}">
+                                        <apex:selectOptions value="{!f.options}" />
+                                    </apex:selectRadio>
+                                    <apex:selectCheckboxes id="checkboxField" value="{!f.listValue}" layout="{!IF(f.f.Loop__Type__c='Checkbox','pageDirection','lineDirection')}" rendered="{!f.isCheckboxType}">
+                                        <apex:selectOptions value="{!f.options}" />
+                                    </apex:selectCheckboxes>
+                                    <apex:inputTextarea id="memoField" value="{!f.fvalue}" rendered="{!f.f.Loop__Type__c='Memo'}" cols="75" rows="6"/>
+                                    <apex:inputTextarea id="richTextField" value="{!f.fvalue}" rendered="{!f.f.Loop__Type__c='Rich Text'}" style="width: 200px;" styleClass="ckeditor2" />
+                                    <apex:outputText html-data-type="{!HTMLENCODE(f.f.Loop__Type__c)}" value="{!f.fvalue}" rendered="{!f.f.Loop__Type__c='View'}" />
+                                    <apex:outputPanel rendered="{!(f.isActive && f.showError)}" styleClass="errorMsg" layout="block">
+                                        {!f.errorMessage}
+                                    </apex:outputPanel>
+                                </apex:outputPanel>
+                            </apex:pageBlockSectionItem>
+                        </apex:repeat>
+                    </apex:pageBlockSection>
+                </apex:pageBlock>
+            </apex:outputPanel>
+            <script type="text/javascript">
+                jQuery('.ckeditor2').each(function(i, textarea) {
+                    var editor = CKEDITOR.replace(textarea)
+                    editor.on('change', function() {
+                        textarea.value = editor.getData();
+                    });
+                });
+            </script>
+        </apex:outputPanel>
+    </apex:form>
+    <form method="POST" id="myForm" style="height: 0px" target="lpIframe" action="{!loopUrl}/SFLogin.aspx">
+        <input type="hidden" name="sessionid" value="{!sessionId}" />
+        <input type="hidden" name="location" value="{!IF(partnerServerUrl='',$Api.Partner_Server_URL_300,partnerServerUrl)}" />
+        <input type="hidden" name="auto" value="true" />
+        <input type="hidden" name="waitForProcessing" value="{!waitForProcessing}" />
+        <input type="hidden" name="formMessageOnRun" value="{!formMessageOnRun}" />
+        <input type="hidden" name="attachments" value="{!jsonAttachments}" />
+        <input type="hidden" name="sandbox" value="{!isSandbox}" />
+        <input type="hidden" name="reportId" value="{!selectedReportId}" /> <!-- MASS ONLY -->
+        <apex:outputPanel rendered="{!connectedAppsEnabled}">
+               <input type="hidden" name="userId" value="{!loopUserId}" />
+           </apex:outputPanel>
+        <apex:outputPanel id="loopInputs">
+            <input type="hidden" name="next" value="{!formUrl}" id="loopNext" />
+            <apex:repeat value="{!steps}" var="s">
+                <apex:repeat value="{!s.fields}" var="f">
+                    <apex:outputPanel rendered="{!AND(f.f.Loop__Type__c != 'Memo', f.f.Loop__Type__c != 'Rich Text')}" styleClass="fieldContainer" html-data-id="{!f.f.Id}">
+                        <input type="hidden" data-validation-value="{!IF(f.isCheckboxType, HTMLENCODE(f.listValueStr), HTMLENCODE(f.fvalue))}" value="{!IF(f.isActive, HTMLENCODE(f.fvalue), '')}" name="frm:{!f.f.Loop__Tag__c}" />
+                    </apex:outputPanel>
+                    <apex:outputPanel rendered="{!OR(f.f.Loop__Type__c == 'Memo',f.f.Loop__Type__c == 'Rich Text')}" styleClass="fieldContainer" html-data-id="{!f.f.Id}">
+                        <textarea style="display: none;" data-validation-value="{!HTMLENCODE(f.fvalue)}" name="frm:{!f.f.Loop__Tag__c}">{!HTMLENCODE(f.fvalue)}</textarea>
+                    </apex:outputPanel>
+                </apex:repeat>
+            </apex:repeat>
+        </apex:outputPanel>
+        <apex:repeat value="{!looplusParams}" var="lp">
+            <input type="hidden" value="{!HTMLENCODE(lp.value)}" name="{!HTMLENCODE(lp.label)}" />
+        </apex:repeat>
+    </form>
+    <apex:outputPanel id="frameSpan" style="display: none;">
+        <apex:form >
+            <div class="bPageTitle"><div class="ptBreadcrumb">
+                <apex:outputLink rendered="{!NOT(breadCrumbUrl='')}" value="{!breadCrumbUrl}" onclick="return breadcrumbClick();" style="display: block;">
+                    « Back to {!objectLabel}
+                </apex:outputLink>
+                <apex:commandLink value="« Back to Form" oncomplete="jQuery('[id=\'ap:frameSpan\']').hide();" action="{!reloadForm}" rerender="af,js,frameSpan,pb,pageMsgs" />
+            </div></div>
+        </apex:form>
+        <apex:iframe id="lpIframe" frameborder="0" rendered="true" height="600" scrolling="true" />
+    </apex:outputPanel>
+</apex:page>

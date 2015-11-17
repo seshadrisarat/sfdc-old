@@ -1,0 +1,417 @@
+<apex:page cache="true" controller="StaffingTimesheetReport" contentType="{!contentType}" renderAs="{!chooseRender}">
+<head>
+    <style>
+        @page       {
+                    size: landscape;
+                    margin-top: 5mm;
+                    margin-bottom: 5mm;
+                    margin-left: {!IF(isSummary == '1','0.5in','0.25in')};
+                    margin-right: {!IF(isSummary == '1','0.5in','0.25in')};
+                    mso-page-orientation:landscape;
+                    }
+        .tabl       {
+                    background-color:white;
+                    font-size:6.0pt;
+                    font-family:Arial,sans-serif;
+                    vertical-align:top;
+                    }
+        .title      {
+                    font-weight:bold;
+                    font-family:Arial,sans-serif;
+                    font-size:10pt;
+                    }
+        .text       {
+                    font-family:Arial,sans-serif;
+                    font-size:10pt;
+                    }
+        .headerCell {
+                    vertical-align:top;
+                    text-align:left;
+                    font-family:Arial,sans-serif;
+                    font-size:{!IF(isSummary == '1','9pt','8pt')};
+                    color: #ffffff;
+                    background-color:rgb(68, 105, 125);
+                    page-break-after:avoid;
+                    }
+        .outerCell  {
+                    height:13.5pt;
+                    background-color:#bbbbbb;
+                    }
+        .subHeaderCell {
+                    vertical-align:top;
+                    page-break-before:avoid;
+                    text-align:left;
+                    font-family:Arial,sans-serif;
+                    font-size:8pt;
+                    font-weight:bold;
+                    font-style: italic;
+                    }
+        .weekCell   {
+                    vertical-align:top;
+                    text-align:left;
+                    font-family:Arial,sans-serif;
+                    font-size:{!IF(isSummary == '1','9pt','8pt')};
+                    background-color:rgb(198, 188, 137);
+                    }
+        .cell       {       
+                    height:auto;
+                    vertical-align:top;
+                    word-wrap:break-word;
+                    font-family:Arial,sans-serif;
+                    font-size: 8pt;
+                    border-bottom: 0.5pt {!IF(chooseRender == 'pdf','dotted','hairline')} #888888;
+                    }
+        .detailCell {
+                    height:auto;
+                    vertical-align:top;
+                    word-wrap:break-word;
+                    page-break-before:avoid;
+                    font-family:Arial,sans-serif;
+                    font-size: {!IF(chooseRender == 'pdf','8pt','6pt')};
+                    border-top: 0.5pt {!IF(chooseRender == 'pdf','dotted','hairline')} #888888;
+                    }
+    </style>
+</head>
+    
+    <!-- ================================ If page render as PDF ============================================= -->
+    
+    <apex:outputText rendered="{!IF(isSummary == '1' && errMsg == '' && chooseRender == 'pdf','true','false')}">
+        <h1 class="title">Summary Staffing Update - {!offices} {!titles}</h1>
+
+        <table cellspacing="0" cellpadding="0" width="100%" style="-fs-table-paginate: paginate;">
+            <thead style="display:table-header-group;">
+                <tr>
+                    <th class="headerCell" width="10%">First Name</th>
+                    <th class="headerCell" width="10%">Last Name</th>
+                    <th class="headerCell" width="10%">Office</th>
+                    <th class="headerCell" width="15%">Title</th>
+                    <th class="headerCell" width="5%">Rank</th>
+                    <th class="headerCell" width="15%">Overall Capacity</th>
+                    <th class="headerCell" width="25%">Comments</th>
+                    <th class="headerCell" width="10%">Status</th>
+                </tr>
+            </thead>
+            <apex:repeat value="{!report}" var="record">
+                <tbody style="page-break-inside:avoid;">
+                    <tr>
+                        <td colspan="8" class="weekCell">
+                            <b>Week Start Date: </b>
+                            <apex:outputText value="{0,date,M/d/yyyy}">
+                                <apex:param value="{!record.WeekStartDate}"/>
+                            </apex:outputText> 
+                            (<b>{!record.NumEmployees} employees</b>)
+                        </td>
+                    </tr>
+                    <apex:repeat value="{!record.TimeSheet}" var="timeSheet">
+                        <tr>
+                            <td class="cell" width="10%">{!timeSheet.Employee__r.First_Name__c}</td>
+                            <td class="cell" width="10%">{!timeSheet.Employee__r.Last_Name__c}</td>
+                            <td class="cell" width="10%">{!timeSheet.Employee__r.Office_Location__c}</td>
+                            <td class="cell" width="15%">{!timeSheet.Employee__r.Title__c}</td>
+                            <td class="cell" width="5%">{!timeSheet.Employee__r.Rank__c}</td>
+                            <td class="cell" width="15%">{!timeSheet.Overall_Capacity__c}</td>
+                            <td class="cell" width="25%">{!timeSheet.Text__c}</td>
+                            <td class="cell" width="10%">{!timeSheet.Stage__c}</td>
+                        </tr>
+                    </apex:repeat>
+                </tbody>
+            </apex:repeat>
+            <tr>
+                <td class="outerCell" colspan="8"> </td>
+            </tr>
+        </table>
+    </apex:outputText>
+            
+            <!-- DETAIL REPORT -->
+            
+    <apex:outputText rendered="{!IF(isSummary == '0' && errMsg == '' && chooseRender == 'pdf','true','false')}">
+        <h1 class="title">Detailed Staffing Update - {!offices} {!titles}</h1>
+        
+        <table cellspacing="0" cellpadding="0" width="100%" style="-fs-table-paginate: paginate;">
+            <thead style="display:table-header-group;">
+                <tr>
+                    <th class="headerCell" width="10%">First Name</th>
+                    <th class="headerCell" width="10%">Last Name</th>
+                    <th class="headerCell" width="15%">Project Name</th>
+                    <th class="headerCell" width="15%">Company Name</th>
+                    <th class="headerCell" width="5%" style="padding-right:5px;">Record Type</th>
+                    <th class="headerCell" width="5%">Sub-Sector</th>
+                    <th class="headerCell" width="5%">Stage</th>
+                    <th class="headerCell" width="10%">Deal Team</th>
+                    <th class="headerCell" width="5%">Hours</th>
+                    <th class="headerCell" width="5%">Status</th>
+                    <th class="headerCell" width="15%">Comments</th>
+                </tr>
+            </thead>
+            <apex:repeat value="{!detailReport}" var="record">
+                <tbody style="page-break-inside:avoid;">
+                <tr>
+                    <td bgcolor="#ccccff" colspan="11" class="weekCell">
+                        <b>Week Start Date: </b>
+                        <apex:outputText value="{0,date,M/d/yyyy}">
+                            <apex:param value="{!record.WeekStartDate}"/>
+                        </apex:outputText> 
+                        (<b>{!record.NumEmployees} employees</b>)
+                    </td>
+                </tr>
+                <apex:repeat value="{!record.TimeRecords}" var="timeRecord">
+                    <tr>
+                        <td class="subHeaderCell">{!timeRecord.FirstName}</td>
+                        <td class="subHeaderCell">{!timeRecord.LastName}</td>
+                        <td class="subHeaderCell">{!timeRecord.Office}</td>
+                        <td class="subHeaderCell">{!timeRecord.Title}</td>
+                        <td class="subHeaderCell">{!timeRecord.Rank}</td>
+                        <td class="subHeaderCell">{!timeRecord.Stage}</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                        
+                    <apex:repeat value="{!timeRecord.Records}" var="rec">
+                
+                        <tr>
+                            <td></td>
+                            <td></td>
+                                    
+                            <td class="detailCell">
+                                {!IF(rec.Deal__r.Name != 'Non-Deal Project',rec.Deal__r.Name,rec.Non_Deal_Project__c)}
+                            </td>
+                            <td class="detailCell">
+                                {!IF(rec.Deal__r.Name != 'Non-Deal Project',rec.Deal__r.Client__r.Name,'Non-Deal Project')}
+                            </td>
+                                    
+                            <td class="detailCell">{!rec.Deal__r.RecordType.Name}</td>
+                            <td class="detailCell">{!rec.Deal__r.Sector__c}</td>
+                            <td class="detailCell">
+                                {!IF(rec.Deal__r.Name != 'Non-Deal Project',rec.Deal__r.Stage__c,' ')}
+                            </td>
+                            <td class="detailCell">{!rec.Deal_Team_Members__c}</td>
+                            <td class="detailCell" style="text-align:center;">{!rec.Hours__c}</td>
+                            <td class="detailCell">{!rec.Status__c}</td>
+                            <td class="detailCell">{!rec.Note__c}</td>
+                        </tr>
+                    
+                    </apex:repeat>
+                            
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td class="detailCell"></td>
+                        <td class="detailCell"></td>
+                        <td class="detailCell"></td>
+                        <td class="detailCell"></td>
+                        <td class="detailCell"></td>
+                        <td class="detailCell"><b><i>Total: </i></b></td>
+                        <td class="detailCell" align="center"><b><i>{!timeRecord.TotalHours}</i></b></td>
+                        <td class="detailCell"><b><i>{!timeRecord.TotalCapacity}</i></b></td>
+                        <td class="detailCell"><b><i>{!IF(timeRecord.WeekComment == '','N/A',timeRecord.WeekComment)}</i></b></td>
+                    </tr>
+                    
+                    <tr>
+                        <td colspan="11" style="border-bottom:1px solid #bbbbbb;"> </td>
+                    </tr>
+                    <tr>
+                        <td colspan="11" height="6pt"></td>
+                    </tr>
+                </apex:repeat>
+                </tbody>
+            </apex:repeat>
+            <tr>
+                <td class="outerCell" colspan="11"> </td>
+            </tr>
+        </table>
+    </apex:outputText>
+    <!-- ============================= If page render as PDF (end) ========================================== -->
+    
+    <!-- ================================ If page render as XLS ============================================= -->
+    <apex:outputText rendered="{!IF(isSummary == '1' && errMsg == '' && chooseRender != 'pdf','true','false')}">
+        <h1 class="title">Summary Staffing Update - {!offices} {!titles}</h1>
+
+        <table cellspacing="0" cellpadding="0" class="tabl" rules="rows">
+            <col style="mso-width-source:userset;width: 96px;" />
+            <col style="mso-width-source:userset;width: 96px;" />
+            <col style="mso-width-source:userset;width: 96px;" />
+            <col style="mso-width-source:userset;width: 82px;" />
+            <col style="mso-width-source:userset;width: 47px;" />
+            <col style="mso-width-source:userset;width: 131px;" />
+            <col style="mso-width-source:userset;width: 285px;" />
+            <col style="mso-width-source:userset;width: 75px;" />
+            <tr>
+                <th class="headerCell">First Name</th>
+                <th class="headerCell">Last Name</th>
+                <th class="headerCell">Office</th>
+                <th class="headerCell">Title</th>
+                <th class="headerCell">Rank</th>
+                <th class="headerCell">Overall Capacity</th>
+                <th class="headerCell">Comments</th>
+                <th class="headerCell">Status</th>
+            </tr>
+            <apex:repeat value="{!report}" var="record">
+                <tr>
+                    <td colspan="8" class="weekCell">
+                        <b>Week Start Date: </b>
+                        <apex:outputText value="{0,date,M/d/yyyy}">
+                            <apex:param value="{!record.WeekStartDate}"/>
+                        </apex:outputText> 
+                        (<b>{!record.NumEmployees} employees</b>)
+                    </td>
+                </tr>
+                <apex:repeat value="{!record.TimeSheet}" var="timeSheet">
+                    <tr>
+                        <td class="cell">{!timeSheet.Employee__r.First_Name__c}</td>
+                        <td class="cell">{!timeSheet.Employee__r.Last_Name__c}</td>
+                        <td class="cell">{!timeSheet.Employee__r.Office_Location__c}</td>
+                        <td class="cell">{!timeSheet.Employee__r.Title__c}</td>
+                        <td class="cell">{!timeSheet.Employee__r.Rank__c}</td>
+                        <td class="cell">{!timeSheet.Overall_Capacity__c}</td>
+                        <td class="cell">{!timeSheet.Text__c}</td>
+                        <td class="cell">{!timeSheet.Stage__c}</td>
+                    </tr>
+                </apex:repeat>
+            </apex:repeat>
+            <tr>
+                <td class="outerCell" colspan="8"> </td>
+            </tr>
+        </table>
+    </apex:outputText>
+            
+            <!-- DETAIL REPORT -->
+            
+    <apex:outputText rendered="{!IF(isSummary == '0' && errMsg == '' && chooseRender != 'pdf','true','false')}">
+        <h1 class="title">Detailed Staffing Update - {!offices} {!titles}</h1>
+        
+            <table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;" class="tabl">
+                <col style="mso-width-source:userset;width: 68px;" />
+                <col style="mso-width-source:userset;width: 68px;" />
+                <col style="mso-width-source:userset;width: 75px;" />
+                <col style="mso-width-source:userset;width: 75px;" />
+                <col style="mso-width-source:userset;width: 75px;" />
+                <col style="mso-width-source:userset;width: 75px;" />
+                <col style="mso-width-source:userset;width: 47px;" />
+                <col style="mso-width-source:userset;width: 131px;" />
+                <col style="mso-width-source:userset;width: 47px;" />
+                <col style="mso-width-source:userset;width: 82px;" />
+                <col style="mso-width-source:userset;width: 166px;" />
+
+            <apex:repeat value="{!detailReport}" var="record">
+                <apex:outputText escape="false" rendered="{!record.isFirst}">
+                    <tr style="page-break-before:avoid;">
+                        <th class="headerCell">First Name</th>
+                        <th class="headerCell">Last Name</th>
+                        <th class="headerCell">Project Name</th>
+                        <th class="headerCell">Company Name</th>
+                        <th class="headerCell" style="padding-right:5px;">Record Type</th>
+                        <th class="headerCell">Sub-Sector</th>
+                        <th class="headerCell">Stage</th>
+                        <th class="headerCell">Deal Team</th>
+                        <th class="headerCell">Hours</th>
+                        <th class="headerCell">Status</th>
+                        <th class="headerCell">Comments</th>
+                    </tr>
+                </apex:outputText>
+                
+                <tr>
+                    <td bgcolor="#ccccff" colspan="11" class="weekCell" style="page-break-before:{!IF(record.isFirst,'avoid','auto')}">
+                        <b>Week Start Date: </b>
+                        <apex:outputText value="{0,date,M/d/yyyy}">
+                            <apex:param value="{!record.WeekStartDate}"/>
+                        </apex:outputText> 
+                        (<b>{!record.NumEmployees} employees</b>)
+                    </td>
+                </tr>
+                <apex:repeat value="{!record.TimeRecords}" var="timeRecord">
+                    <tr>
+                        <td class="subHeaderCell">{!timeRecord.FirstName}</td>
+                        <td class="subHeaderCell">{!timeRecord.LastName}</td>
+                        <td class="subHeaderCell">{!timeRecord.Office}</td>
+                        <td class="subHeaderCell">{!timeRecord.Title}</td>
+                        <td class="subHeaderCell">{!timeRecord.Rank}</td>
+                        <td class="subHeaderCell">{!timeRecord.Stage}</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                        
+                    <apex:repeat value="{!timeRecord.Records}" var="rec">
+                
+                        <tr>
+                            <td></td>
+                            <td></td>
+                                    
+                            <td class="detailCell">
+                                {!IF(rec.Deal__r.Name != 'Non-Deal Project',rec.Deal__r.Name,rec.Non_Deal_Project__c)}
+                            </td>
+                            <td class="detailCell">
+                                {!IF(rec.Deal__r.Name != 'Non-Deal Project',rec.Deal__r.Client__r.Name,'Non-Deal Project')}
+                            </td>
+                                    
+                            <td class="detailCell">{!rec.Deal__r.RecordType.Name}</td>
+                            <td class="detailCell">{!rec.Deal__r.Sector__c}</td>
+                            <td class="detailCell">
+                                {!IF(rec.Deal__r.Name != 'Non-Deal Project',rec.Deal__r.Stage__c,' ')}
+                            </td>
+                            <td class="detailCell">{!rec.Deal_Team_Members__c}</td>
+                            <td class="detailCell" style="text-align:center;">{!rec.Hours__c}</td>
+                            <td class="detailCell">{!rec.Status__c}</td>
+                            <td class="detailCell">{!rec.Note__c}</td>
+                        </tr>
+                    
+                    </apex:repeat>
+                            
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td class="detailCell"></td>
+                        <td class="detailCell"></td>
+                        <td class="detailCell"></td>
+                        <td class="detailCell"></td>
+                        <td class="detailCell"></td>
+                        <td class="detailCell"><b><i>Total: </i></b></td>
+                        <td class="detailCell" style="text-align:center;"><b><i>{!timeRecord.TotalHours}</i></b></td>
+                        <td class="detailCell"><b><i>{!timeRecord.TotalCapacity}</i></b></td>
+                        <td class="detailCell"><b><i>{!timeRecord.WeekComment}</i></b></td>
+                    </tr>
+                    
+                    <tr>
+                        <td colspan="11" style="border-bottom:1px solid #bbbbbb;"> </td>
+                    </tr>
+                    <tr>
+                        <td colspan="11" height="6pt"></td>
+                    </tr>
+                </apex:repeat>
+            </apex:repeat>
+            <tr>
+                <td class="outerCell" colspan="11"> </td>
+            </tr>
+            
+        </table>
+    </apex:outputText>
+    
+    <!-- ============================ If page render as XLS (end block) ===================================== -->
+        
+    <apex:form >
+        <apex:pageBlock title="Error" rendered="{!IF(errMsg != '','true','false')}">
+            <center><font style="color:red; font-family:Arial; border:1px dotted red; font-size:14pt;">
+                {!errMsg}
+            </font></center>
+        </apex:pageBlock>
+    </apex:form>
+    
+    <br/>
+    <font class="text">
+    <b>Generated by:</b><br/>
+    {!generatedBy}<br/>
+    {!generatedTime}<br/>
+    Filtered by:<br/>
+    Status equals: {!IF(includeInactive == True,'Active/Inactive','Active')}<br/>
+    AND Title equals: {!IF(titles == '',' - ',titles)}<br />
+    AND Office equals: {!IF(offices == '',' - ',offices)}<br />
+    AND Business Type: {!IF(businessType == '',' - ',businessType)}
+    </font>
+    
+    
+</apex:page>

@@ -1,0 +1,296 @@
+<!--
+  This page is used for to track referrals coming into the firm from contacts,
+  relating a list of contacts to a list of users for a list of companies.
+
+  @author ForceLogic - original (Company Referrals - Referred From)
+  @author jfavors (Appirio) - polish
+-->
+<apex:page tabStyle="Account"
+           sidebar="false"
+           controller="CompanyReferralsFromController"
+           title="Referrals From"
+           id="thePage">
+
+  <apex:includescript value="https://ajax.googleapis.com/ajax/libs/jquery/1.6.2/jquery.min.js"/>
+  <style>
+    .pointer { cursor: pointer; }
+    .selected-item { margin-left: 10px; }
+
+    .selection-list {
+      overflow: auto;
+      min-height: 30px;
+      max-height: 300px;
+      width: 250px;
+      background-color: white;
+      padding: 10px;
+    }
+  </style>
+
+  <script>
+    var j$ = jQuery.noConflict();
+    function escJQ(myid) {
+      return '#' + myid.replace(/(:|\.)/g,'\\\\$1');
+    }
+
+    function addObject(inputTextId, listId, shownListId) {
+
+      if (!inputTextId || !listId) {
+        return;
+      }
+
+      var idField = j$(escJQ(inputTextId+'_lkid'));
+      var nameField = j$(escJQ(inputTextId+'_lkold'));
+      var listField = j$(escJQ(listId));
+
+      if (!idField.val() || !nameField.val()) {
+        return;
+      }
+
+      var found = false;
+      var id = to18DigitId(idField.val());
+      var options = listField.find('option');
+
+      options.each(function(index, el) {
+        if (j$(el).val() === id) {
+          found = true;
+          return false;
+        }
+      });
+
+      if (found) {
+        return;
+      }
+
+      listField.append(
+        '<option value="' + id + '">' + nameField.val() + '</option>');
+
+      //sort values
+      options = listField.find('option');
+      var arr = options.map(function(_, o) {
+        return { t: j$(o).text(), v: o.value };
+      }).get();
+
+      arr.sort(function(o1, o2) {
+        return o1.t > o2.t ? 1 : o1.t < o2.t ? -1 : 0;
+      });
+
+      options.each(function(i, o) {
+        o.value = arr[i].v;
+        j$(o).text(arr[i].t);
+      });
+
+      idField.val('');
+      nameField.val('');
+      j$(escJQ(inputTextId)).val('');
+
+      createList(options, listId, shownListId);
+    }
+
+    /* creates a viewable list */
+    function createList(options, listId, shownListId) {
+      if (!options || !shownListId || !listId) {
+        return;
+      }
+
+      var listField = j$(escJQ(shownListId)).html('');
+      options.each(function(index, el) {
+        var div = j$('<div/>').addClass('search-item');
+
+        function onClickRemoveObject(value, listId, shownListId) {
+          return function() {
+            removeObject(value,listId, shownListId);
+          };
+        }
+        var deleteBtn =
+          j$('<img/>').prop('src','/img/func_icons/remove12_on.gif')
+            .addClass('pointer')
+            .prop('title', 'Click to remove from list')
+            .click(onClickRemoveObject(el.value, listId, shownListId));
+        var label = j$('<span/>').html(
+          '<a href="/' + el.value + '" target="_blank">' +
+          j$(el).text() + '</a>').addClass('selected-item');
+
+        div.append(deleteBtn).append(label);
+        listField.append(div);
+      });
+
+    }
+
+    //removes an object from the list
+    function removeObject(value, listId, shownListId) {
+      var listField = j$(escJQ(listId));
+      var options = listField.find('option');
+      options.each(function(index, el) {
+        if (j$(el).val() === value) {
+          j$(el).remove();
+          return false;
+        }
+      });
+      options = listField.find('option');
+      createList(options, listId, shownListId);
+    }
+
+    (j$(function() {
+      /*
+      j$(escJQ('{!$Component.thePage.theForm.pb.cList}')).hide();
+      j$(escJQ('{!$Component.thePage.theForm.pb.aList}')).hide();
+      j$(escJQ('{!$Component.thePage.theForm.pb.uList}')).hide();
+      */
+      createList(j$('#cListHidden').find('option'), 'cListHidden', 'cList');
+      createList(j$('#uListHidden').find('option'), 'uListHidden', 'uList');
+      createList(j$('#aListHidden').find('option'), 'aListHidden', 'aList');
+    }));
+
+    //copy the select lists on the input hiddens
+    //this is because the bug http://boards.developerforce.com/t5/Visualforce-Development/Validation-Error-Value-is-not-valid-One-Cause-Solution/td-p/180458
+    function updateValue() {
+      var hiddenC =
+        j$(escJQ('{!$Component.thePage.theForm.pb.cSubmit}')).val('');
+      var clist = [];
+      j$('#cListHidden').find('option').each(function(index, el) {
+        clist.push(el.value);
+      });
+      hiddenC.val(JSON.stringify(clist));
+
+      var hiddenU =
+        j$(escJQ('{!$Component.thePage.theForm.pb.uSubmit}')).val('');
+      var ulist = [];
+      j$('#uListHidden').find('option').each(function(index, el) {
+        ulist.push(el.value);
+      });
+      hiddenU.val(JSON.stringify(ulist));
+
+      var hiddenA =
+        j$(escJQ('{!$Component.thePage.theForm.pb.aSubmit}')).val('');
+      var alist = [];
+      j$('#aListHidden').find('option').each(function(index, el) {
+        alist.push(el.value);
+      });
+      hiddenA.val(JSON.stringify(alist));
+    }
+
+    /* converts 15 digit ID to 18 digit id (needed beacuse the standard lookup field uses 15 digit IDs)*/
+
+    function to18DigitId(id) { // fluff up a 15 char id to return an 18 char id
+      if (!id) return id;
+      if (id.length != 15) {
+        //print('well, id is not 15, bye' + id + ' ' + id.length);
+        return id;
+      }
+      var suffix = "";
+      for (var i = 0; i < 3; i++) {
+        var flags = 0;
+        for (var j = 0; j < 5; j++) {
+          var c = id.charAt(i * 5 + j);
+          if (c >= 'A' && c <= 'Z') {
+            flags += 1 << j;
+          }
+        }
+        if (flags <= 25) {
+          suffix += "ABCDEFGHIJKLMNOPQRSTUVWXYZ".charAt(flags);
+        } else {
+          suffix += "012345".charAt(flags - 26);
+        }
+      }
+      return id + suffix;
+    }
+
+
+  </script>
+
+  <apex:sectionheader title="Referral From"/>
+
+
+  <apex:form id="theForm">
+
+    <apex:pageblock id="pb">
+
+      <apex:pageblockbuttons location="bottom">
+        <apex:commandLink value="Cancel" action="{!back}"/>
+        <apex:commandButton styleClass="btn btnSharing" onclick="updateValue()" value="Save & New" action="{!saveAndNew}"/>
+        <apex:commandButton styleClass="btn btnSharing" onclick="updateValue()" value="Submit" action="{!saveAndBack}"/>
+      </apex:pageblockbuttons>
+
+      <apex:pageMessages />
+      <br/>
+
+      <table style="width:70%">
+        <tr style="text-align:left">
+
+          <td colspan="2">
+            <b>From (Contacts)</b>
+          </td>
+          <td colspan="2">
+            <b>To (Users)</b>
+          </td>
+          <td colspan="2">
+            <b>Refer (Companies)</b>
+          </td>
+
+        </tr>
+        <tr style="text-align:center">
+          <td style="text-align:right !important;">
+            <button class="btn" onclick="addObject('{!$Component.contact}','cListHidden','cList'); return false;">Add</button>
+          </td>
+          <td style="text-align:left !important;">
+            <apex:inputField id="contact" value="{!helpRef.Contact__c}">
+               <c:LookupAutocomplete objectName="Contact" additionalFields="" inputFieldId="{!$Component.contact}" />
+            </apex:inputField>
+          </td>
+          <td style="text-align:right !important;">
+            <button class="btn" onclick="addObject('{!$Component.user}','uListHidden','uList'); return false;">Add</button>
+          </td>
+          <td style="text-align:left !important;">
+            <apex:inputField id="user" value="{!helpRef.User__c}">
+               <c:LookupAutocomplete objectName="User" additionalFields="" inputFieldId="{!$Component.user}" />
+            </apex:inputField>
+          </td>
+          <td style="text-align:right !important;">
+            <button class="btn" onclick="addObject('{!$Component.account}','aListHidden','aList'); return false;">Add</button>
+          </td>
+          <td style="text-align:left !important;">
+            <apex:inputField id="account" value="{!helpRef.Company__c}">
+               <c:LookupAutocomplete objectName="Account" additionalFields="" inputFieldId="{!$Component.account}" />
+            </apex:inputField>
+          </td>
+        </tr>
+
+        <tr style="text-align:center">
+          <td></td>
+          <td style="text-align:left !important;">
+            <select id="cListHidden" multiselect="true" style="display:none;">
+              <apex:repeat value="{!selOptContacts}" var="o">
+                <option value="{!o.value}">{!o.label}</option>
+              </apex:repeat>
+            </select>
+            <div id="cList" class="selection-list" />
+            <apex:inputHidden id="cSubmit" value="{!selContacts}"/>
+          </td>
+          <td></td>
+          <td style="text-align:left !important;">
+            <select id="uListHidden" multiselect="true" style="display:none;">
+              <apex:repeat value="{!selOptUsers}" var="o">
+                <option value="{!o.value}">{!o.label}</option>
+              </apex:repeat>
+            </select>
+            <div id="uList" class="selection-list" />
+            <apex:inputHidden id="uSubmit" value="{!selUsers}"/>
+          </td>
+          <td></td>
+          <td style="text-align:left !important;">
+            <select id="aListHidden" multiselect="true" style="display:none;">
+              <apex:repeat value="{!selOptAccounts}" var="o">
+                <option value="{!o.value}">{!o.label}</option>
+              </apex:repeat>
+            </select>
+            <div id="aList" class="selection-list" />
+            <apex:inputHidden id="aSubmit" value="{!selAccounts}"/>
+          </td>
+
+        </tr>
+      </table>
+
+    </apex:pageblock>
+
+  </apex:form>
+</apex:page>

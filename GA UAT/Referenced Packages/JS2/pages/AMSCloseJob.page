@@ -1,0 +1,142 @@
+<apex:page standardController="ts2__Job__c" extensions="ts2.AMSCloseJobController" title="{!$Label.CJOW_Title}" showHeader="false" sidebar="false" tabStyle="ts2__Job__c">
+	<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, 'jquery-1.8.2.min.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, 'json2.js')}" />
+
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__SSearch, 'res/css/s_style.css')}" />
+
+<script>
+function closeWin(refresh) {
+	if (refresh) {
+		parent.opener.top.location="/{!Job__c.Id}";
+	}
+	parent.window.opener = self;
+	parent.window.close();
+}
+</script>
+<style>
+td.pbTitle {width:50% !important;}
+</style>
+
+<body style="margin: 0px 10px;">
+
+<apex:form id="frm" >
+<apex:outputText id="global_vars" value="{!serializedValue}" style="display:none;" />
+
+	<apex:pageMessages id="pageMessages" />
+
+	<apex:outputPanel style="padding:6px;">
+
+		<apex:pageBlock title="{!$Label.CJOW_Title}" mode="details">
+			<apex:pageMessage summary="{!$Label.CJOW_NotEnabled}" severity="warning" strength="2" rendered="{!NOT(IsFeatureEnabled) && NOT(EnableCloseWizard)}" />
+			<apex:pageMessage summary="{!$Label.CJOW_Requirement1}" severity="info" strength="2" rendered="{!NOT(IsFeatureEnabled) && NOT(Completed) && IsJobAlreadyClosed}" />
+			<apex:pageMessage summary="{!$Label.CJOW_Requirement2}" severity="info" strength="2" rendered="{!NOT(IsFeatureEnabled) && IsMassDispositionMode && NOT(EnableMassDisposition)}" />
+			<apex:pageMessage summary="{!$Label.CJOW_Complete}" severity="confirm" strength="2" rendered="{!Completed}" />
+
+			<apex:pageBlockButtons id="pbbsMainButtons" style="text-align: right;" location="bottom">
+				<span id="pbsMainButtons_spinner" class="spinner_indicator">&nbsp;</span>
+				<apex:commandButton value="{!$Label.CJOW_Close}" title="{!$Label.CJOW_Close}" onclick="closeWin(true);return false;" rendered="{!Completed}" />
+				<apex:commandButton value="{!$Label.CJOW_Cancel}" title="{!$Label.CJOW_Cancel}" onclick="closeWin(false);return false;" rendered="{!NOT(Completed)}" />
+				<apex:commandButton value="{!$Label.CJOW_Next}" title="{!$Label.CJOW_Next}" action="{!CloseJobAction}" onclick="jQuery('#pbsMainButtons_spinner').addClass('spinner_on');jQuery('[id*=pbbsMainButtons] input.btn').attr('disabled','disabled').addClass('btnDisabled');" rendered="{!IsFeatureEnabled && NOT(IsBatchProcessing) && NOT(Completed)}" oncomplete="startExecuteOnCompleteJS();" rerender="frm" />
+			</apex:pageBlockButtons>
+
+			<apex:pageBlockSection title="{!$Label.CJOW_OpenApplications}" columns="1" collapsible="false" rendered="{!IsFeatureEnabled && IsMassDispositionMode && NOT(Completed)}">
+				<apex:repeat value="{!AMS}" var="item">
+					<apex:pageBlockSectionItem dataStyle="width:40%" >
+						<apex:outputLabel value="{!$Label.CJOW_LabelOpen} {!item.Name}" />
+						<apex:outputText value="{!item.Value}" />
+					</apex:pageBlockSectionItem>
+				</apex:repeat>
+			</apex:pageBlockSection>
+
+			<apex:pageBlockSection title="{!$Label.CJOW_JobOrderStatus}" columns="1" collapsible="false" rendered="{!IsFeatureEnabled && NOT(IsBatchProcessing) && NOT(Completed)}">
+				<apex:inputField value="{!ThisJob.ts2__Date_Filled__c}" required="true" />
+				<apex:inputField value="{!ThisJob.ts2__Closed_Reason__c}" required="true" />
+				<apex:inputField value="{!TempApplication.ts2__Overall_Reject_Reason__c}" required="true" rendered="{!IsMassDispositionMode}" />
+			</apex:pageBlockSection>
+
+			<apex:pageBlockSection title="{!$Label.LabelProcessing}" columns="1" collapsible="false" id="progressSection" rendered="{!IsFeatureEnabled && IsBatchProcessing && NOT(Completed)}">
+				<apex:outputPanel id="progressPanel" layout="block" style="text-align: center; margin: 10px;">
+					<apex:image url="/img/loading.gif"/> <b style="position: relative;top: -3px;left: 10px;"><apex:outputText value="{!$Label.LabelProcessing}" /></b>
+					<div style="margin-top: 10px;">
+						<span id="progressValue" style="position: relative;top: 1.5em;z-index: 1;">0%</span>
+						<div id="fullProgress" style="width: 100%; height: 20px; border:1px solid black; background-color: #eee; position: relative;top: 1px;"></div>
+						<div id="progress" style="width: 0%; height: 20px; background-color: #89B62E; position: relative;top: -20px;left: 1px;"></div>
+					</div>
+				</apex:outputPanel>
+			</apex:pageBlockSection>
+
+		</apex:pageBlock>
+	</apex:outputPanel>
+
+	<apex:actionFunction name="executeBatch" action="{!executeBatch}" rerender="frm" oncomplete="batchExecuteOnCompleteJS();" />
+	<apex:actionFunction name="finishBatch" action="{!finishBatch}" rerender="frm" />
+</apex:form>
+
+</body>
+
+<script type="text/javascript">
+	function startExecuteOnCompleteJS() {
+		var BatchStatus = getGlobalVars('BatchStatus');
+		if (BatchStatus == 'Processing') {
+			executeBatch();
+		}
+	}
+	function batchExecuteOnCompleteJS() {
+		var CurrentSize = getGlobalVars('CurrentSize');
+		var ResultSize = getGlobalVars('ResultSize');
+		var BatchStatus = getGlobalVars('BatchStatus');
+		var BatchHasNext = getGlobalVars('BatchHasNext');
+		if (BatchStatus == "Failed") {
+			jQuery('[id$=progressSection]').hide();
+		}
+		if (BatchStatus == 'Processing') {
+			progressCalculation(CurrentSize, ResultSize);
+			if (BatchHasNext) {
+				executeBatch();
+			}
+			else {
+				finishBatch();
+			}
+		}
+	}
+
+	function progressCalculation(currentLength, fullLength) {
+		var progress = currentLength / fullLength * 100;
+		if (progress > 100) {
+			progress = 100;
+		}
+		jQuery("#progress").width(progress+"%");
+		jQuery('#progressValue').text(precise_round(progress,1)+"%");
+	}
+	function precise_round(num,decimals){
+		return Math.round(num*Math.pow(10,decimals)) / Math.pow(10,decimals);
+	}
+</script>
+
+<script type="text/javascript">
+	jQuery.noConflict();
+	jQuery(document).ready(function() {
+		gfxInit();
+	});
+	function gfxInit() {
+		a1=new Image; a1.src="{!URLFOR($Resource.SSearch, 'res/img/spinner.gif')}";
+	}
+	function getGlobalVars(property) {
+		var result = '';
+		var global_vars_hash = '';
+		var global_vars_val = jQuery("span[id$=global_vars]").html();
+		try {
+			global_vars_hash = JSON.parse(global_vars_val);
+		}
+		catch (e) { global_vars_hash=''; }
+		if (typeof global_vars_hash === "object") {
+			try {
+				result = global_vars_hash[property];
+			}
+			catch (e) { result=''; }
+		}
+		return result;
+	}
+</script>
+
+</apex:page>

@@ -1,0 +1,194 @@
+<apex:page id="CustomLookUp" controller="SL_CustomLookUpController" sidebar="false" showHeader="false">
+    <style>
+        .bPageBlock .pbTitle { width: 80%; }
+        
+        .tableCls
+        {
+            padding:0px;
+            border:0px;
+            border-collapse:collapse;
+            width:100%;
+        }
+        .lookUp
+        {
+            background-image: url("/img/sprites/master.png");
+            background-position: 0 -1202px;
+            height: 32px;
+            width: 32px;    
+        }
+        .bodyClass
+        {
+            background: url("/img/alohaSkin/lookup_bg.png") repeat-x scroll 0 0 #FFFFFF;
+            padding: 0;
+        }
+    </style>
+    
+    <script> 
+        //function to send the selected record's name and id to the parent page.
+       function populateParent(obj) 
+       {
+          var trNode = obj.parentNode.parentNode;
+          var tdNodes = trNode.getElementsByTagName('td');
+          var selObjId = (tdNodes[0].getElementsByTagName('span')[0]).innerHTML;
+          var selObjName = (tdNodes[0].getElementsByTagName('a')[0]).innerHTML; 
+          selObjName = selObjName.replace('&amp','&');
+          selObjName = selObjName.replace(';','');
+          
+          var recordNameInputId = '{!strRecordNameInputId}';
+          var recordIdInputId = '{!strRecordIdInputId}';
+          top.window.opener.setSelectedRelatedToDetails(recordNameInputId,recordIdInputId,selObjId, selObjName);
+          return false;
+       }
+       
+       function closeWindow(selObjId,selObjName)
+       {
+            var recordNameInputId = '{!strRecordNameInputId}';
+            var recordIdInputId = '{!strRecordIdInputId}';
+            
+            top.window.opener.setSelectedRelatedToDetails(recordNameInputId,recordIdInputId,selObjId, selObjName);
+       }
+        
+       /* function to identify whether enter has been pressed */
+       function pressEnter(e, searchInput)
+        {
+            var theEvent = e || window.event;
+            var key = theEvent.keyCode || theEvent.which;
+            if(key == 32 && searchInput.value.length == 0)
+            {
+                theEvent.returnValue = false;
+                if (theEvent.preventDefault) 
+                    theEvent.preventDefault();
+            }
+            if(e.keyCode == 13)
+            {
+                AFEnter(); 
+                return false;
+            }
+            else
+                return true;
+        }
+   </script>
+   
+   <apex:form id="theForm">
+<!--    ********* Lookup Heading Section ************   -->
+
+        <div class="bodyClass">
+            <div class="bPageTitle">
+                <div class="ptBody secondaryPalette">
+                    <div class="content">
+                        <h1>
+                            <img class="lookUp" title="" alt="" src="/s.gif"/>
+                            <apex:outputLabel value="Lookup" style="font-size:x-large;"/>
+                        </h1>
+                    </div>
+                </div>
+            </div>
+        
+        <apex:actionFunction name="AFEnter" action="{!searchRelatedTo}" rerender="main" status="loading"/>
+        
+        <apex:outputPanel id="main">
+<!--        ********Enter the search string and get the records like that search string*********    -->
+              <apex:outputPanel rendered="true"> 
+                  <table id="tblSearch">
+                      <tr>
+                          <td><B>Search</B></td>
+                          <td><apex:inputText value="{!strSearch}" onKeyPress="return pressEnter(event, this);"/></td>
+                          <td>
+                             <apex:CommandButton value="Go!" reRender="main" oncomplete="AFEnter();" immediate="true" status="loading">
+                                <apex:param value="false" assignTo="{!isNewRecord}"/>
+                             </apex:CommandButton>
+                          </td>
+                          <td>
+                             <apex:actionRegion >
+                                 <apex:CommandButton value="New" reRender="main" status="loading">
+                                    <apex:param value="true" assignTo="{!isNewRecord}"/>
+                                 </apex:CommandButton> 
+                             </apex:actionRegion>
+                             <br />
+                          </td> 
+                      </tr>
+                  </table>
+              </apex:outputPanel>
+              <br />
+    
+<!--        ********PageBlock to display the records queried in lstSObject**********-->
+              <apex:outputText value="Recently Viewed {!strObjectLabel}" style="font-size:18px;"></apex:outputText>
+              <apex:pageBlock id="tbPageBlock" rendered="{!!isNewRecord}">
+                 <apex:outputPanel id="detail" >
+                     <apex:outputPanel Id="checkOP" rendered="{!lstSObject.size > 200}">
+                        <apex:pageMessage id="errorMessage" severity="Error" 
+                        				  summary="Your search returned more than 200 records. Please enter additional search criteria to narrow your results."/>
+                     </apex:outputPanel> 
+                     <apex:outputPanel rendered="{!IF(lstFieldNames.size > 0 && lstSObject.size > 0, true, false)}">
+                         <table width="100%" class="tableCls list" id="pbTable">
+                            <thead class="rich-table-thead">
+                                <tr class='headerRow'>
+                                    <apex:repeat value="{!lstColumnLabels}" var="fieldName">
+                                        <th scope="col" class="deemphasize">
+                                            <apex:outputText value="{!fieldName}"/>
+                                        </th>
+                                    </apex:repeat>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <apex:repeat value="{!lstSObject}" var="iterator" rows="200">
+                                    <tr  class="dataRow">
+                                        <td class="dataCell">
+                                            <span style="display:none;" width="0" id="span">{!iterator['Id']}</span>
+                                            <apex:outputLink value="" onClick="return populateParent(this);">{!iterator[lstFieldNames[0]]}</apex:outputLink>
+<!--                                            return populateParent(this);-->
+                                        </td>
+                                        <apex:repeat value="{!lstFieldNames}" var="fname" first="1">
+                                            <td>
+                                                {!iterator[fname]}
+                                            </td>
+                                        </apex:repeat>
+                                    </tr>
+                                </apex:repeat>
+                            </tbody>
+                         </table> 
+                     </apex:outputPanel>
+<!--                 ********* If no fields are present in the field set then display the name field for the object *************-->
+                     <apex:outputPanel rendered="{!lstFieldNames.size == 0}">  
+                         <apex:pageBlockTable value="{!lstSObject}" var="sobj" rows="200">
+                             <apex:column headerValue="{!strObjectLabel} {!strCheckInField}">
+                                 <span style="display:none;" width="0" id="span">{!sobj['Id']}</span>
+                                 <apex:outputLink value="" onClick="return populateParent(this)">{!sobj[strCheckInField]}</apex:outputLink> 
+                             </apex:column>
+                         </apex:pageBlockTable>
+                     </apex:outputPanel>
+                     <apex:outputtext value="No Records Found" rendered="{!lstSObject.size == 0}"/>
+                  </apex:outputPanel> 
+              </apex:pageBlock>
+              
+<!--          ************* When the new record has been clicked ************** -->
+              <apex:pageBlock rendered="{!isNewRecord}">
+                  <apex:outputPanel rendered="{!lstSObjectFieldNames.size > 0}"> 
+                        <script>
+                            document.getElementById('{!$Component.tbPageBlock}').childNodes[1].style.display = 'none';
+                        </script>
+                        <apex:pageBlockSection columns="1">
+                            <apex:repeat value="{!lstSObjectFieldNames}" var="fldName">
+                                <apex:inputField value="{!dynamicSObject[fldName]}"/>
+                            </apex:repeat>
+                       </apex:pageBlockSection>
+                       <div style="padding-left:200px;">
+                            <apex:CommandButton value="Save" action="{!saveDynamicObj}" 
+                            					oncomplete="return closeWindow('{!dynamicSObject.Id}','{!dynamicSObject[strCheckInField]}');" 
+                            					reRender="main" status="loading"/>
+                            <apex:actionRegion >
+                               <apex:CommandButton value="Cancel" reRender="main" status="loading">
+                                    <apex:param value="false" assignTo="{!isNewRecord}"/>
+                               </apex:CommandButton>
+                           </apex:actionRegion>
+                       </div>
+                  </apex:outputPanel> 
+                  
+                  <apex:outputPanel rendered="{!lstSObjectFieldNames.size == 0}">
+                        No fields are selected in the field set to be displayed. 
+                  </apex:outputPanel>
+              </apex:pageBlock>
+         </apex:outputPanel>
+       </div>
+    </apex:form>
+</apex:page>

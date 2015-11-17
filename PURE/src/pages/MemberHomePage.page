@@ -1,0 +1,800 @@
+<apex:page html-class="home" showHeader="false" sidebar="false" standardStylesheets="false" controller="SL_MemberLandingPageController" action="{!pageAction}">
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" charset="utf-8"/>
+	<style>
+		.approve-edit, 
+		.deny-edit {
+			display: none;
+		}
+		.hidden {
+			display: none;
+		}
+		
+   		.message
+		{
+			display: none;
+		}
+		
+		.messageCell
+		{
+			width: 80%;
+		}
+	</style>
+	<script type="text/javascript">
+	
+		function updatePolicy(id) {
+			var elem = document.getElementById('span_'+id);
+			SL_MemberLandingPageController.updatePolicyDescription(
+				id,
+				elem.innerText.trim(),
+				function(result, event) {
+					elem.innerHTML = result;
+				}
+			);
+		}
+		
+		$(document).ready(function(){
+			
+			if('{!isError}' == 'true')
+			{
+				//document.getElementById('main-nav').style.display = 'none';
+				$('.main-navClass').hide();
+				$('#mobile-button').hide();
+			}
+			
+		});
+			
+	</script>
+	<apex:composition template="SL_SiteTemplate">
+		<apex:define name="mainSection">
+			
+			
+			<!-- Main Content -->
+<!-- 			<apex:outputpanel rendered="{!!isError}" > -->
+			<div id="main-content" class="span9"  style="display:{!If(isError == true, 'none', '')};">
+				
+				<h1 class="welcome">Welcome</h1>
+				<h2 class="welcome-message">to the PURE member portal.</h2>
+				<hr />
+				<!-- Mobile version of the main header. -->
+				<div class="table-header mobile-section-title arrow-container" id="mobileHeader">
+					<h1 >Your Profile </h1>
+					<div class="rotate-caret mobile"><i class="fa fa-caret-right fa-2x"></i></div>
+				</div>
+				<div class="mobile-expandable-div" id="mobileMember">
+					<div id="member-info" class="row-fluid" >
+						<div class="span12" >
+							<div class="row-fluid">
+								<dl class="span6">
+									<div class="member-info-container">
+										<dt>MEMBER NAME:</dt>
+										<dd><div style="width:95%; word-wrap: break-word;">{!member.Name}</div></dd>
+									</div>
+									<div class="member-info-container">
+										<dt>FIVE YEAR SERVICE DATE:<a class="has-popover" data-toggle="popover" data-placement="top" data-content="This is the date of your fifth anniversary as a PURE member.  Beginning on this date you are no longer required to make surplus contributions to PURE. By eliminating surplus contributions, the average member will see a cost savings of more than $500 a year." href="#"><i class="icon-resize icon fa fa-info-circle"></i></a></dt>
+										<dd><apex:outputText value="{0,date,MM/dd/yy}"><apex:param value="{!member.Five_Year_Service_Date__c}" />
+											</apex:outputText>
+										</dd>
+									</div>
+								</dl>
+								<dl class="span6">
+									<div class="member-info-container">
+										<dt>MEMBER ID:</dt>
+										<dd>{!member.Member_Key_EDW__c}</dd>
+									</div>
+									<div class="member-info-container">
+										<dt>SUBSCRIBER SAVINGS ACCOUNT BALANCE:<a class="has-popover" data-toggle="popover" data-placement="left" data-content="A Subscriber Savings Account (SSA) is a notional account held for each active PURE member, into which PURE may allocate surplus. These funds remain on PURE’s balance sheet and are available as part of its overall claims-paying ability, but provide a vehicle for members to participate in PURE’s continued surplus growth. This balance is not owed to PURE. To learn more about SSAs, visit <a href='http://www.pureinsurance.com/ssa' style='color:blue;' target='_blank'>www.pureinsurance.com/ssa</a>" href="#"><i class="icon-resize icon fa fa-info-circle"></i></a></dt>
+										<dd>
+											<apex:outputText value="{0, number, $###,##0}"   >
+												<apex:param value="{!member.SSA_Balance__c}"/>
+											</apex:outputText>
+											
+										</dd>
+									</div>
+									<script>
+										$("[data-toggle=popover]").popover({html:true})
+									</script>
+								</dl>
+							</div>
+							<hr />
+							<div class="row-fluid">
+								<dl class="span6">
+									<div class="member-info-container">
+										<dt>PRIMARY MAILING ADDRESS:</dt>
+										<dd><apex:outputText escape="false" value="{!PrimaryMailingAddrs}" id="mailing"/></dd>
+									</div>
+									<div class="member-info-container">
+										<dt>PRIMARY EMAIL ADDRESS:</dt>
+										<dd>{!primaryEmail}</dd>
+									</div>
+								</dl>
+								<dl class="span6">
+									<div class="member-info-container">
+										<dt>PRIMARY BILLING ADDRESS:</dt>
+										<dd><apex:outputText escape="false" value="{!PrimaryBillingAddrs}" id="billing"/></dd>
+									</div>
+									<div class="member-info-container">
+										<dt>PRIMARY PHONE:</dt>
+										<dd>{!PrimaryPhone}</dd>
+									</div>
+								</dl>
+							</div>
+							<div class="row-fluid" style="display:{!If($Profile.Name != 'Pure Customer Community Login User','none;','')}">
+								<button onclick="window.open('/ProfileSettingPage', '_self');" class="btn btn-pure" type="button">EDIT CONTACT INFORMATION <i class="fa fa-caret-right"></i></button>
+							</div>
+						</div>
+					</div>
+				</div>
+				<!-- END: Mobile version of the main header. -->
+				<!-- Active policies fill in table below. If none, hide. -->
+				<div class="default-full-table row-fluid" id="topPolicy">
+					<div class="span12">        
+						<div class="table-header arrow-container">
+							<h1 >Your Active Policies </h1>
+							<div class="rotate-caret mobile"><i class="fa fa-caret-right fa-2x"></i></div>
+						</div>
+						<!-- DESKTOP - policies table -->
+						<apex:outputpanel rendered="{!If((lstActivePolicyWrapper.size>0),false,true)}">
+							<table class="table policies-desktop table-striped">
+								<tr style="width:100%;">
+									<td class="center-icon" colspan="5" style="width:100%;">
+										No Active Policies are present for this Member.
+									</td>
+								</tr>
+							</table>
+						</apex:outputpanel>
+						<apex:outputpanel rendered="{!If((lstActivePolicyWrapper.size>0),true,false)}">
+							<table class="table policies-desktop table-striped">
+								<thead>
+									<tr>
+										<th class="type active-policy-icon-column">Policy<br/>Type</th>
+										<th class="number">Policy Number</th>
+										<th class="description">Description</th>
+										<th class="period" >Policy Period</th>
+										<th>Download Policy</th>
+									</tr>
+								</thead>
+								<tbody>
+									<apex:repeat value="{!lstActivePolicyWrapper}" var="AP">
+									<tr>
+										<td class="center-icon active-policy-icon-column">
+											<img id="theImage" src="{!URLFOR($Resource.SL_PureInsuranceResources,'images/'+AP.policyType+'.png')}" />
+										</td>
+										<apex:outputpanel rendered="{!If($Profile.Name == 'Pure Customer Community Login User',true,false)}">
+											<td>
+												<a style="cursor: pointer;" href="/PolicyDetailPage?url={!AP.policyNumber}">{!AP.policyNumber}</a>
+											</td>
+										</apex:outputpanel>
+										<apex:outputpanel rendered="{!If($Profile.Name != 'Pure Customer Community Login User',true,false)}">
+											<td>
+												<a style="cursor: pointer;" href="/BrokerView/PolicyDetailPage?url={!AP.policyNumber}&mId={!$CurrentPage.parameters.mId}">{!AP.policyNumber}</a>
+											</td>
+										</apex:outputpanel>
+										<td>
+											<apex:outputpanel rendered="{!If(OR(AP.policyType == 'flood',$Profile.Name != 'Pure Customer Community Login User'),true,false)}">
+												{!AP.policyDescription}
+											</apex:outputpanel>
+											<apex:outputpanel rendered="{!If(AND(AP.policyType != 'flood',NOT($Profile.Name != 'Pure Customer Community Login User')),true,false)}">
+												<span class="edit-info" id="span_{!AP.policyId}">{!AP.policyDescription}</span>
+													<a href="" data-toggle="tooltip" data-placement="right" title="" data-original-title="Personalize your Policy names" class="bracket-link has-tooltip">
+														[<i class="edit-icon icon icon-resize fa fa-pencil"></i>
+														<i onclick="updatePolicy('{!AP.policyId}');" class="approve-edit icon icon-resize fa fa-check"></i>
+														<i class="deny-edit icon icon-resize fa fa-times" style="color:red;"></i>]
+													</a>
+											</apex:outputpanel>
+										</td>
+										<td>
+											<apex:outputText value="{0,date,MM/dd/yy}">
+												<apex:param value="{!AP.policyEffectiveDate}" />
+											</apex:outputText>&nbsp;-&nbsp;
+											<apex:outputText value="{0,date,MM/dd/yy}">
+												<apex:param value="{!AP.policyExpirationDate}" />
+											</apex:outputText>
+										</td>
+										<td class="center-icon">
+										<apex:outputPanel rendered="{!IF(AP.policyDownloadLink == null,false,(If(AP.policyDownloadLink == '',false,true)))}">
+											<a href="{!AP.policyDownloadLink}" target="_blank"><i class="fa fa-file-text-o fa-1x"></i></a>
+										</apex:outputPanel>
+										</td>
+									</tr>
+									</apex:repeat>
+									<apex:outputPanel rendered="{!member.In_Force_Flood_Policy__c}">
+									<tr>
+										<td class="center-icon active-policy-icon-column">
+											<img id="theImage" src="{!URLFOR($Resource.SL_PureInsuranceResources,'images/flood.png')}" />
+										</td>
+										<td>
+											N/A <a style="cursor: pointer;" class="has-popover" data-toggle="popover" data-placement="right" data-content="Pure's Primary Flood Coverage is administered by National Flood Solutions (NFS). For specific details on your coverage, contact your broker." title="" href="#"><i class="icon fa fa-info-circle"></i></a>
+										</td>
+										<td>Flood</td>
+										<td></td>
+										<td></td>
+									</tr>
+									</apex:outputPanel>
+								</tbody>
+							</table>
+						</apex:outputpanel>
+						<!-- MOBILE - policies-->
+						<div class="mobile-expandable-div policies-mobile">
+							<apex:outputpanel rendered="{!If((lstActivePolicyWrapper.size>0),false,true)}">
+								<div class="mobile-policy-container">
+									<ul>
+										<li >
+										No Active Policies are present for this Member.
+										</li>
+									</ul>
+								</div>
+							</apex:outputpanel>
+							<apex:outputpanel rendered="{!If((lstActivePolicyWrapper.size>0),true,false)}">
+								<apex:repeat value="{!lstActivePolicyWrapper}" var="AP">
+									<div class="mobile-policy-container">
+										<ul>
+											<li class="Lgray">
+												<h3>POLICY TYPE</h3>
+												<p><img id="theImage" src="{!URLFOR($Resource.SL_PureInsuranceResources,'images/'+AP.policyType+'.png')}" /></p>
+											</li>
+											<li class="Dgray">
+												<h3>POLICY NUMBER</h3>
+												<apex:outputpanel rendered="{!If($Profile.Name == 'Pure Customer Community Login User',true,false)}">
+													<p><a style="cursor: pointer;" onclick="window.open('/PolicyDetailPage?url='+'{!AP.policyNumber}', '_self');">{!AP.policyNumber}</a></p>
+												</apex:outputpanel>
+												<apex:outputpanel rendered="{!If($Profile.Name != 'Pure Customer Community Login User',true,false)}">
+													<p><a style="cursor: pointer;" onclick="window.open('/BrokerView/PolicyDetailPage?url='+'{!AP.policyNumber}'+'&mId='+'{!$CurrentPage.parameters.mId}', '_self');">{!AP.policyNumber}</a></p>
+												</apex:outputpanel>
+											</li>               
+											<li class="Lgray">
+												<h3>DESCRIPTION</h3>
+												<p>{!AP.policyDescription}</p>
+											</li>
+											<li class="Dgray">
+												<h3>POLICY PERIOD</h3>
+												<p>
+													<apex:outputText value="{0,date,MM/dd/yy}">
+														<apex:param value="{!AP.policyEffectiveDate}" />
+													</apex:outputText>&nbsp;-&nbsp;
+													<apex:outputText value="{0,date,MM/dd/yy}">
+														<apex:param value="{!AP.policyExpirationDate}" />
+													</apex:outputText>
+												</p>
+											</li>
+											<li class="Lgray">
+												<h3>DOWNLOAD POLICY</h3>
+												<p><apex:outputPanel rendered="{!IF(AP.policyDownloadLink == null,false,(If(AP.policyDownloadLink == '',false,true)))}">
+												<a href="{!AP.policyDownloadLink}" target="_blank"><i class="fa fa-file-text-o fa-1x"></i></a>
+											</apex:outputPanel></p>
+											</li>
+										</ul>
+									</div>  
+								</apex:repeat>
+								<apex:outputPanel rendered="{!member.In_Force_Flood_Policy__c}">
+								<div class="mobile-policy-container">
+									<ul>
+										<li class="Lgray">
+											<h3>POLICY TYPE</h3>
+											<p><img id="theImage" src="{!URLFOR($Resource.SL_PureInsuranceResources,'images/flood.png')}" /></p>
+										</li>
+										<li class="Dgray">
+											<h3>POLICY NUMBER</h3>
+											<p>N/A <a style="cursor: pointer;" class="has-popover" data-toggle="popover" data-placement="right" data-content="Pure's Primary Flood Coverage is administered by National Flood Solutions (NFS). For specific details on your coverage, contact your broker." title="" href="#"><i class="icon fa fa-info-circle"></i></a></p>
+										</li>               
+										<li class="Lgray">
+											<h3>DESCRIPTION</h3>
+											<p>Flood</p>
+										</li>
+									</ul>
+								</div>
+								</apex:outputPanel>
+							</apex:outputpanel>
+						</div>
+						<!-- END: Mobile policies -->
+					</div>
+				</div>
+				<!-- End Active policies fill in table below. If none, hide. -->
+				
+				
+				<!-- Billing Snapshot fill in table below. If none, hide. -->
+				<div class="bill-sum-full-container row-fluid">
+					<div class="table-header table-header-short arrow-container">
+						<h1 class="table-h1-title">Billing Snapshot </h1>
+						<div class="rotate-caret mobile"><i class="fa fa-caret-right fa-2x"></i></div>
+						<apex:outputpanel rendered="{!IF(member.IsOverdue__c==null,false,true)}" layout="none">
+							<apex:outputpanel rendered="{!IF(member.IsOverdue__c>0,true,false)}" layout="none">
+								<span class="account-error">
+									<img src="{!URLFOR($Resource.SL_PureInsuranceResources,'images/pure-triangle.png')}"  class="pure-triangle"/> 
+									<span class="table-warning text-error">YOUR ACCOUNT IS PAST DUE</span>
+								</span>
+							</apex:outputpanel>
+						</apex:outputpanel>
+						<apex:outputpanel rendered="{!If($Profile.Name == 'Pure Customer Community Login User',true,false)}">
+							<h5>
+								<a style="cursor: pointer;" href="/BillingSummary" >VIEW DETAILS</a>
+								<i class="fa fa-caret-right"></i>
+							</h5>
+						</apex:outputpanel>
+						<apex:outputpanel rendered="{!If($Profile.Name != 'Pure Customer Community Login User',true,false)}">
+							<h5>
+								<a style="cursor: pointer;" href="/BrokerView/BillingSummary?mId={!$CurrentPage.parameters.mId}" >VIEW DETAILS</a>
+								<i class="fa fa-caret-right"></i>
+							</h5>
+						</apex:outputpanel>
+					</div>
+				 	<div class="row-fluid desktop">
+			        	<div class="span12 unit-content snapshot-content">   
+			            	<div class="row-fluid">
+			                	<div class="span6 bill-sum-section">
+				                    <div class="snapshot-payment">
+				                        <p><strong>LAST PAYMENT RECEIVED: </strong>
+				                        	<apex:outputpanel rendered="{!If(member.Last_Payment_Received__c == null, false,true)}">
+												<apex:outputText value="${0, number,###,##0.00}">
+													<apex:param value="{!member.Last_Payment_Received__c}"/>
+												</apex:outputText>
+											</apex:outputpanel>
+											<apex:outputpanel rendered="{!If(member.Last_Payment_Received__c == null, true,false)}">
+												$0.00
+											</apex:outputpanel>
+										</p>
+				                    </div>
+				                </div>
+				                <div class="span6 bill-sum-section">
+				                    <div class="snapshot-payment">
+				                        <p><strong>LAST PAYMENT MADE: </strong>
+				                        	<apex:outputpanel rendered="{!If(member.Last_Payment_Date__c == null, false,true)}">
+												<apex:outputText value="{0,date,MM/dd/yy}">
+													<apex:param value="{!member.Last_Payment_Date__c}"/>
+												</apex:outputText>
+											</apex:outputpanel>
+											<apex:outputpanel rendered="{!If(member.Last_Payment_Date__c == null, true,false)}">
+												N/A
+											</apex:outputpanel>	
+				                        </p>
+				                    </div>
+				                </div>
+			            	</div>
+			            	
+				            <div class="row-fluid">
+			                	<div class="span12 bill-sum-section">
+				                    <div class="arrow-container bill-sum-title">
+				                        <h1>Accounts</h1>
+				                    </div>
+									
+				                    <table class="table policies-desktop table-striped">
+				                        <thead>
+				                            <tr>
+				                                <th class="number">Bill Name <a class="has-popover" data-toggle="popover" data-placement="right" data-content="Listed below are all bills associated with your policies. Your Primary Bill is sent to your primary billing or email address and Individual Bills are separately billed policies mailed to an addresses designated by you, such as a bank." href="#"><i class="icon fa fa-info-circle"></i></a></th>
+				                                <th>Bill Type</th>
+				                                <th class="type">Total <br/>Charges <a class="has-popover" data-toggle="popover" data-placement="right" data-content="This is the sum of ALL of your current policies with PURE (regardless of how or to whom they are billed). It is inclusive of all required surplus contributions and any applicable state taxes, fees, or surcharges." href="#"><i class="icon fa fa-info-circle"></i></a></th>
+				                                <th class="type">Balance</th>
+				                                <th class="type">Minimum <br/>Due</th>
+				                            </tr>
+				                        </thead>
+				                        <tbody>
+				                        	<apex:outputpanel rendered="{!IF(isNotIndividuallyBilled,true,false)}">
+					                            <tr>
+					                                <td>Primary Bill</td>
+					                                <td>Primary</td>
+					                                <td>
+						                                <apex:outputpanel rendered="{!If(primaryTotalCharges == null, true,(If(primaryTotalCharges == 0, true, false)))}">
+						                                	$0.00
+						                                </apex:outputpanel>
+						                                <apex:outputpanel rendered="{!If(primaryTotalCharges == null, false,(If(primaryTotalCharges == 0, false, true)))}">
+						                                	<apex:outputText value="${0, number,###,##0.00}">
+																<apex:param value="{!primaryTotalCharges}"/>
+															</apex:outputText>
+						                                </apex:outputpanel>
+					                                </td>
+					                                <td>
+					                                	<apex:outputpanel rendered="{!If(primaryBalance == null, true,(If(primaryBalance == 0, true, false)))}">
+			                                				$0.00
+				                                		</apex:outputpanel>
+				                                		<apex:outputpanel rendered="{!If(primaryBalance == null, false,(If(primaryBalance == 0, false, true)))}">
+				                                			<apex:outputText value="${0, number,###,##0.00}">
+																<apex:param value="{!primaryBalance}"/>
+															</apex:outputText>
+				                                		</apex:outputpanel>
+						                                
+													</td>
+					                                <td class="{!IF((primaryMinDue>0 && member.IsOverdue__c!=null && member.IsOverdue__c>0),'text-error','')}">
+														<apex:outputpanel rendered="{!IF(primaryMinDue==null,false,(If(primaryMinDue == 0, false, true)))}" layout="none">
+															<apex:outputText value="${0, number,###,##0.00}">
+																<apex:param value="{!primaryMinDue}"/>
+															</apex:outputText>
+														</apex:outputPanel>
+														<apex:outputpanel rendered="{!IF(primaryMinDue==null,true,(If(primaryMinDue == 0, true, false)))}" layout="none">
+															$0.00
+														</apex:outputpanel>
+													</td>
+												</tr>
+											</apex:outputpanel>
+				                            <apex:outputpanel rendered="{!If(lstBillingPolicyWrapper.size > 0, true, false)}">
+					                            <apex:repeat value="{!lstBillingPolicyWrapper}" var="BP">
+						                            <tr>
+						                            	<apex:outputpanel rendered="{!If($Profile.Name == 'Pure Customer Community Login User',true,false)}">
+							                                <td><a href="/PolicyDetailPage?url={!BP.policyNumber}" target="_self">{!BP.policyDescription}</a></td>
+							                            </apex:outputpanel>
+							                            <apex:outputpanel rendered="{!If($Profile.Name != 'Pure Customer Community Login User',true,false)}">
+							                            	<td><a href="/BrokerView/PolicyDetailPage?url={!BP.policyNumber}&mId={!$CurrentPage.parameters.mId}" target="_self">{!BP.policyDescription}</a></td>
+							                            </apex:outputpanel>
+						                                <td>Individual</td>
+						                                <td>
+							                                <apex:outputpanel rendered="{!If(BP.policyTotalCharges == null, true,(If(BP.policyTotalCharges == 0, true, false)))}">
+							                                	$0.00
+							                                </apex:outputpanel>
+							                                <apex:outputpanel rendered="{!If(BP.policyTotalCharges == null, false,(If(BP.policyTotalCharges == 0, false, true)))}">
+							                                	<apex:outputText value="${0, number,###,##0.00}">
+																	<apex:param value="{!BP.policyTotalCharges}"/>
+																</apex:outputText>
+							                                </apex:outputpanel>
+														</td>
+						                                <td>
+						                                	<apex:outputpanel rendered="{!If(BP.policyBalance== null, true,(If(BP.policyBalance == 0, true, false)))}">
+							                                	$0.00
+							                                </apex:outputpanel>
+							                                <apex:outputpanel rendered="{!If(BP.policyBalance == null, false,(If(BP.policyBalance == 0, false, true)))}">
+								                                <apex:outputText value="${0, number,###,##0.00}">
+																	<apex:param value="{!BP.policyBalance}"/>
+																</apex:outputText>
+															</apex:outputpanel>
+														</td>
+						                                <td style="color:{!IF(BP.isOverDue,'red;','')}">
+							                                <apex:outputpanel rendered="{!If(BP.policyMinDue== null, true,(If(BP.policyMinDue == 0, true, false)))}">
+							                                	$0.00
+							                                </apex:outputpanel>
+							                                <apex:outputpanel rendered="{!If(BP.policyMinDue == null, false,(If(BP.policyMinDue == 0, false, true)))}">
+								                                <apex:outputText value="${0, number,###,##0.00}">
+																	<apex:param value="{!BP.policyMinDue}"/>
+																</apex:outputText>
+															</apex:outputpanel>
+														</td>
+						                            </tr>
+					                            </apex:repeat>
+				                            </apex:outputpanel>
+				                        </tbody>
+				                    </table>
+				                </div>
+				            </div>
+				        </div> <!-- snapshot-content div -->
+				    </div>
+					
+					<!-- Mobile table ("desktop" version is removed on mobile, this is displayed.) if none, hide.-->
+					<div class="mobile-expandable-div">
+
+   						<div class="policies-mobile">
+					        <div class="mobile-policy-container">
+					           <ul>  
+					                <li class="Dgray">
+					                    <h3>LAST PAYMENT RECEIVED:</h3>
+					                    <p>
+					                    	<apex:outputpanel rendered="{!If(member.Last_Payment_Received__c == null, false,true)}">
+												<apex:outputText value="${0, number,###,##0.00}">
+													<apex:param value="{!member.Last_Payment_Received__c}"/>
+												</apex:outputText>
+											</apex:outputpanel>
+											<apex:outputpanel rendered="{!If(member.Last_Payment_Received__c == null, true,false)}">
+												$0.00
+											</apex:outputpanel></p>
+					                </li>
+					                 <li class="Lgray">
+					                    <h3>LAST PAYMENT MADE:</h3>
+					                    <p>
+					                    	<apex:outputpanel rendered="{!If(member.Last_Payment_Date__c == null, false,true)}">
+												<apex:outputText value="{0,date,MM/dd/yy}">
+													<apex:param value="{!member.Last_Payment_Date__c}"/>
+												</apex:outputText>
+											</apex:outputpanel>
+											<apex:outputpanel rendered="{!If(member.Last_Payment_Date__c == null, true,false)}">
+												N/A
+											</apex:outputpanel>	</p>
+					                </li>
+					
+					            </ul>
+					        </div>
+					        <div class="mobile-policy-container">
+					           <ul>  
+					                <li class="Tgray">
+					                    <h2>Accounts</h2>
+					                </li>
+					                <apex:outputpanel rendered="{!IF(isNotIndividuallyBilled,true,false)}">
+						                <li class="Lgray">
+						                    <h3>BILL NAME</h3>
+				                    		<p>Primary Bill</p>
+						                </li>
+						            </apex:outputpanel> 
+						            <apex:outputpanel rendered="{!IF(isNotIndividuallyBilled,true,false)}">   
+						                <li class="Dgray">
+						                    <h3>BILL TYPE</h3>
+				                    		<p>Primary</p>
+						                </li>
+						            </apex:outputpanel>	
+						            <apex:outputpanel rendered="{!IF(isNotIndividuallyBilled,true,false)}">    
+						                <li class="Lgray">
+						                    <h3>TOTAL CHARGES</h3>
+						                    <p>
+						                    	<apex:outputText value="${0, number,###,##0.00}">
+													<apex:param value="{!primaryTotalCharges}"/>
+												</apex:outputText></p>
+						                </li>
+						            </apex:outputpanel>  
+						            <apex:outputpanel rendered="{!IF(isNotIndividuallyBilled,true,false)}">  
+						                <li class="Dgray">
+						                    <h3>BALANCE</h3>
+						                    <p>
+						                    <apex:outputText value="${0, number,###,##0.00}">
+												<apex:param value="{!primaryBalance}"/>
+											</apex:outputText></p>
+						                </li>
+						            </apex:outputpanel>    
+						            <apex:outputpanel rendered="{!IF(isNotIndividuallyBilled,true,false)}">
+						                <li class="Dgray">
+						                    <h3>MINIMUM DUE</h3>
+							                    <p class="{!IF(primaryMinDue>0 && member.IsOverdue__c!=null &&member.IsOverdue__c>0,'text-error','')}">
+								                    <apex:outputpanel rendered="{!IF(primaryMinDue==null,false,true)}" layout="none">
+														<apex:outputText value="${0, number,###,##0.00}">
+															<apex:param value="{!primaryMinDue}"/>
+														</apex:outputText>
+													</apex:outputpanel>
+												</p>
+						                </li>
+						            </apex:outputpanel>	    
+					            </ul>
+					        </div>
+					        <apex:repeat value="{!lstBillingPolicyWrapper}" var="BP">
+					        	<div class="mobile-policy-container">
+						            <ul>  
+						                <li class="Lgray">
+						                    <h3>BILL NAME</h3>
+						                    <apex:outputPanel rendered="{!IF($Profile.Name == 'Pure Customer Community Login User', true, false)}">
+						                    	<p><a href="/PolicyDetailPage?url={!BP.policyNumber}" target="_self">{!BP.policyDescription}</a></p>
+						                    </apex:outputPanel>
+						                    <apex:outputPanel rendered="{!IF($Profile.Name != 'Pure Customer Community Login User', true, false)}">
+						                    	<p><a href="/BrokerView/PolicyDetailPage?url={!BP.policyNumber}&mId={!$CurrentPage.parameters.mId}" target="_self">{!BP.policyDescription}</a></p>
+						                    </apex:outputPanel>
+						                </li>
+						                <li class="Dgray">
+						                    <h3>BILL TYPE</h3>
+						                    <p>Individual</p>
+						                </li>
+						                <li class="Lgray">
+						                    <h3>TOTAL CHARGES</h3>
+						                    <p>
+						                    	<apex:outputpanel rendered="{!If(BP.policyTotalCharges == null, true,false)}">
+				                                	$0.00
+				                                </apex:outputpanel>
+				                                <apex:outputpanel rendered="{!If(BP.policyTotalCharges == null, false,true)}">
+				                                	<apex:outputText value="${0, number,###,##0.00}">
+														<apex:param value="{!BP.policyTotalCharges}"/>
+													</apex:outputText>
+				                                </apex:outputpanel>
+						                    </p>
+						                </li>
+						                <li class="Dgray">
+						                    <h3>BALANCE</h3>
+						                    <p>
+						                    	<apex:outputpanel rendered="{!If(BP.policyBalance == null, true,false)}">
+				                                	$0.00
+				                                </apex:outputpanel>
+				                                <apex:outputpanel rendered="{!If(BP.policyBalance == null, false,true)}">
+					                                <apex:outputText value="${0, number,###,##0.00}">
+														<apex:param value="{!BP.policyBalance}"/>
+													</apex:outputText>
+												</apex:outputpanel>
+						                    </p>
+						                </li>
+						                <li class="Dgray">
+						                    <h3>MINIMUM DUE</h3>
+						                    <p style="color:{!IF(BP.isOverDue,'red;','')}">
+						                    	<apex:outputpanel rendered="{!If(BP.policyMinDue== null, true,false)}">
+				                                	$0.00
+				                                </apex:outputpanel>
+				                                <apex:outputpanel rendered="{!If(BP.policyMinDue == null, false,true)}">
+				                                <apex:outputText value="${0, number,###,##0.00}">
+													<apex:param value="{!BP.policyMinDue}"/>
+												</apex:outputText>
+												</apex:outputpanel>
+						                    </p>
+						                </li>
+						            </ul>
+        						</div>
+					        </apex:repeat>
+					        
+    					</div>	
+    					
+    					<!-- Extra Section Starts Here-->
+							<div class="row-fluid extra-section">
+								<div class="span6 paynow">
+									<p>Please note, you can only pay your primary account bill online. If you have individually billed polices, you can pay these with a check or by calling Member Services at (888)813-7873.</p>
+									<a href='{!payMyBillLink}' target="_blank" class="btn btn-pay" type="button">PAY NOW <i class="fa fa-caret-right"></i></a>
+								</div>
+								<div class="span6 enroll">
+									<strong>DELIVERY METHOD:</strong><br />
+									<apex:outputpanel rendered="{!If(member.Billing_Document_Delivery_Method__c == 'Paper',true,false)}">
+										<p>You are not enrolled in eDelivery. <br />
+										Your bills are currently mailed to: <br />
+											<div style="max-width: 70%;" id="mailingPreference1">
+												<strong ><apex:outputText escape="false" value="{!PrimaryBillingAddrs}"/></strong>
+											</div>
+										</p>
+										<a href="/ProfileSettingPage#deliverySection" class="btn btn-pure" type="button" style="display:{!If($Profile.Name != 'Pure Customer Community Login User','none;','')}">ENROLL <i class="fa fa-caret-right"></i></a>
+										<div class="e-leaf">
+											<apex:image value="{!URLFOR($Resource.SL_PureInsuranceResources,'images/e-leaf.png')}" />
+										</div>
+									</apex:outputpanel>
+									<apex:outputpanel rendered="{!If(member.Billing_Document_Delivery_Method__c == 'Electronic' || member.Billing_Document_Delivery_Method__c == 'Both',true,false)}">
+										<p>You are enrolled in eDelivery. <br />
+										Your bills are currently mailed to: <br />
+										<strong>{!primaryEmail}</strong></p>
+									</apex:outputpanel>
+								</div>
+							</div>
+   					</div>
+				</div>
+				
+				<!-- Open Claims fill in table below. If none, hide. -->
+				<div id="open-claims" class="default-full-table row-fluid" >
+					<div class="span12">        
+						<div class="table-header arrow-container">
+							<h1 >Open Claims </h1>
+							<div class="rotate-caret mobile"><i class="fa fa-caret-right fa-2x"></i></div>
+							<apex:outputpanel rendered="{!If((lstOpenClaims.size > 0 && $Profile.Name == 'Pure Customer Community Login User'), true,false)}">
+								<h5><a style="cursor: pointer;" href="/claimslist">VIEW DETAILS</a> <i class="fa fa-caret-right"></i></h5>
+							</apex:outputpanel>
+							<apex:outputpanel rendered="{!If((lstOpenClaims.size > 0 && $Profile.Name != 'Pure Customer Community Login User'), true,false)}">
+								<h5><a style="cursor: pointer;" href="/BrokerView/claimslist?mId={!$CurrentPage.parameters.mId}">VIEW DETAILS</a> <i class="fa fa-caret-right"></i></h5>
+							</apex:outputpanel>
+						</div>
+						<!-- Open Claims mobile table ("desktop" version is removed on mobile, this is displayed.) if none, hide. -->
+						<div class="mobile-expandable-div policies-mobile">
+							<apex:outputpanel rendered="{!If(lstOpenClaims.size > 0, false,true)}">
+								<div class="mobile-policy-container">
+									<ul><li>No open claims.</li></ul>
+								</div>
+							</apex:outputpanel>
+							<apex:outputpanel rendered="{!If(lstOpenClaims.size > 0, true,false)}">
+								<apex:repeat value="{!lstOpenClaims}" var="OC">
+								<div class="mobile-policy-container">
+									<ul>
+										<li class="Lgray">
+											<h3>POLICY TYPE</h3>
+											<p><img  src="{!URLFOR($Resource.SL_PureInsuranceResources,'images/'+OC.policyType+'.png')}"/></p>
+										</li>
+										<li class="Dgray">
+											<h3>CLAIM NUMBER</h3>
+											<p>
+												<apex:outputpanel rendered="{!If((OC.canShowDetails == false),true,false)}">
+													{!OC.claimNumber}
+												</apex:outputpanel>
+												<apex:outputpanel rendered="{!If(OC.canShowDetails && $Profile.Name == 'Pure Customer Community Login User',true,false)}">
+													<a href="/claimDetails?url={!OC.claimNumber}" >{!OC.claimNumber}</a>
+												</apex:outputpanel>
+												<apex:outputpanel rendered="{!If(OC.canShowDetails && $Profile.Name != 'Pure Customer Community Login User',true,false)}">
+													<a href="/BrokerView/claimDetails?url={!OC.claimNumber}&mId={!$CurrentPage.parameters.mId}" >{!OC.claimNumber}</a>
+												</apex:outputpanel>
+											</p>
+										</li>                
+										<li class="Lgray">
+											<h3>Amount Paid</h3>
+											<p><apex:outputpanel rendered="{!If((OC.canShowDetails == false),true,false)}">
+											N/A
+										</apex:outputpanel>
+										<apex:outputpanel rendered="{!If((OC.canShowDetails),true,false)}">
+											<apex:outputText value="${0, number, ###,##0.00}"   >
+												<apex:param value="{!OC.totalPaid}"/>
+											</apex:outputText>
+										</apex:outputpanel></p>
+										</li>
+										<li class="Dgray">
+											<h3>LOSS LOCATION</h3> 
+											<p>{!OC.lossLocation}</p>
+										</li>
+										<li class="Lgray">
+											<h3>DATE OF LOSS</h3>
+											<p><apex:outputText value="{0,date,MM/dd/yy}"><apex:param value="{!OC.dateOfLoss}" />
+												</apex:outputText></p>
+										</li>
+										
+									</ul>
+								</div>
+								</apex:repeat>
+							</apex:outputpanel>
+						</div>
+						<!-- Start - Open Claims for desktop -->
+						<apex:outputpanel rendered="{!If(lstOpenClaims.size > 0, true,false)}">
+							<table class="table policies-desktop table-striped">
+								<thead>
+									<tr>
+										<th>POLICY TYPE</th>
+										<th class="number">CLAIM NUMBER</th>
+										<th class="number">Amount Paid <a class="has-popover" data-toggle="popover" data-placement="right" data-content="This is the amount paid either to you or to those helping to service your claim. Due to privacy protection, this value excludes all medical payments made to you and/or third parties, personal injury protection, and bodily injury." href="#"><i class="icon fa fa-info-circle"></i></a></th>
+										<th class="description">LOSS LOCATION</th>
+										<th>DATE OF LOSS</th>
+										<th>NEW ACTIVITY</th>                    
+									</tr>
+								</thead>
+								<tbody>
+									<apex:repeat value="{!lstOpenClaims}" var="OC">
+									<tr>
+										<td class="center-icon">
+											<img  src="{!URLFOR($Resource.SL_PureInsuranceResources,'images/'+OC.policyType+'.png')}" />
+										</td>
+										<td>
+											<apex:outputpanel rendered="{!If((OC.canShowDetails == false),true,false)}">
+												{!OC.claimNumber}
+											</apex:outputpanel>
+											<apex:outputpanel rendered="{!If(OC.canShowDetails && $Profile.Name == 'Pure Customer Community Login User',true,false)}">
+												<a href="/claimDetails?url={!OC.claimNumber}" >{!OC.claimNumber}</a>
+											</apex:outputpanel>
+											<apex:outputpanel rendered="{!If(OC.canShowDetails && $Profile.Name != 'Pure Customer Community Login User',true,false)}">
+												<a href="/BrokerView/claimDetails?url={!OC.claimNumber}&mId={!$CurrentPage.parameters.mId}" >{!OC.claimNumber}</a>
+											</apex:outputpanel>
+										</td>
+										<td>
+											<apex:outputpanel rendered="{!If((OC.canShowDetails == false),true,false)}">
+												N/A
+											</apex:outputpanel>
+											<apex:outputpanel rendered="{!If((OC.canShowDetails),true,false)}">
+											<apex:outputpanel rendered="{!If(OC.totalPaid == null, true, false)}">
+												$0.00
+											</apex:outputpanel>
+											<apex:outputpanel rendered="{!If(OC.totalPaid == null, false, true)}">
+												<apex:outputText value="${0, number, ###,##0.00}"   >
+													<apex:param value="{!OC.totalPaid}"/>
+												</apex:outputText>
+											</apex:outputpanel>
+												
+											</apex:outputpanel>
+										</td>
+										<td>{!OC.lossLocation}</td>
+										<td>
+											<apex:outputText value="{0,date,MM/dd/yy}">
+												<apex:param value="{!OC.dateOfLoss}" />
+											</apex:outputText>
+										</td>
+										
+										<td class="center-icon">
+											<apex:outputpanel rendered="{!If((OC.isNewActivity == true),true,false)}">	
+												<a class="has-popover" data-toggle="popover" data-placement="right" data-content="New activity here." title="" href="#"><i class="icon fa fa-info-circle"></i></a>
+											</apex:outputpanel>
+										</td>
+									</tr>
+									</apex:repeat>
+								</tbody>
+							</table>
+						</apex:outputpanel>
+						<apex:outputpanel rendered="{!If(lstOpenClaims.size > 0,false,true)}">
+							<table class="table policies-desktop table-striped">
+								<tr style="width:100%;">
+									<td class="center-icon" colspan="5" style="width:100%; display:{!If(lstOpenClaims.size != 0, 'none', '')};">
+										<span >No Open Claims</span>
+									</td>
+								</tr>
+							</table>
+						</apex:outputpanel>
+						<!-- End - Open Claims for desktop -->
+					</div>
+				</div>
+				<p class="table-header-sub">
+					Please note, if you have recently submitted a claim through the member portal, it may take several days for the claim to appear.
+				</p>
+				<br/>
+				<c:SL_SiteFooterComponent />
+			</div>
+			
+			<apex:form style="margin:0px;">
+				<c:SL_PureJSScripts />
+				
+				<apex:pagemessages />
+				<div style="visibility: visible;color: red;" id="errorTextId" align="center"/>
+					<script>
+						if($('.messageText').text() != '')
+						{
+							var strError = $('.messageText').text();
+							SL_PureJSUtil.registerShowErrorMessage(strError.split(/:([^:]+)$/)[1]);
+						}
+					</script>
+				</apex:form>
+		</apex:define>
+		<apex:define name="rightSideBar" >
+			<div id="sidebar" class="span3" style="display:{!If(isError == true, 'none', '')};">
+				<c:SL_SideBarComponents />
+			</div>
+		</apex:define>
+	</apex:composition>
+</apex:page>

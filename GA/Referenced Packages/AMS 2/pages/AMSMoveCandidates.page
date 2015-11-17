@@ -1,0 +1,164 @@
+<apex:page Controller="ts2extams.AMSMassActionController"  showHeader="false" sideBar="false" action="{!SetSelectedRecords}">
+<apex:includeScript value="{!URLFOR($Resource.ts2extams__UIRes, 'res/js/jquery-1.6.min.js')}" />
+<apex:stylesheet value="{!URLFOR($Resource.ts2extams__UIRes, 'res/css/std_style.css')}"/>
+<script>
+    var Noaction = true;
+    function closeWin(refresh) {
+        if (refresh && Noaction) {
+            parent.opener.top.location = '{!JSENCODE(RefreshUrl)}';
+            parent.window.close();
+        }
+        else {
+            parent.window.opener = self;
+            parent.window.close();
+        }
+    }
+</script>
+<style>
+    td.pbTitle {width:40% !important;}
+    .ptnStatusSelector { }
+    .pntParentContainer { padding-top: 4px; }
+    .pntSectOpener { cursor: pointer; }
+    .pntChildrenContainer { margin-left: 30px; }
+    .pntParentItem { color: #333435; font-weight: bold; line-height: 15px; position: relative; top: -2px; padding: 8px; }
+    .pntChildItemContainer { padding: 2px 0; }
+    .pntChildItem { }
+    .pntItem_disabled { color: #ccc !important; }
+</style>
+<body width="100%" style="margin:10px;">
+<apex:form id="frm">
+    <apex:pageMessages id="pageMessages" />
+    <apex:pageBlock title="{!$Label.AMS_LABEL_Move}" mode="details" rendered="{!NOT($Setup.ts2__ApplicantManagementSystem__c.Move_Button__c)}">
+        <apex:pageBlockSection id="CustSetMessage" columns="1"  >
+            <apex:pageMessage summary="{!$Label.AMS_ERROR_Privileges}" severity="warning" strength="2" />
+        </apex:pageBlockSection>
+    </apex:pageBlock>
+    <apex:pageBlock title="{!$Label.AMS_LABEL_Move}" mode="details" rendered="{!$Setup.ts2__ApplicantManagementSystem__c.Move_Button__c}">
+
+        <apex:pageBlockButtons id="pbbsMainButtons" style="text-align: right;" location="bottom">
+            <span id="pbsMainButtons_spinner" class="spinner_indicator">&nbsp;</span>
+            <apex:commandButton value="{!$Label.AMS_BTN_Cancel}" title="{!$Label.AMS_BTN_Cancel}" rendered="{!NOT(Completed)}" onclick="closeWin(false);return(false);" />
+            <apex:commandButton value="{!$Label.AMS_BTN_Close}" title="{!$Label.AMS_BTN_Close}" rendered="{!Completed}" onclick="closeWin(true);return(false);" />
+            <apex:commandButton value="Reject" title="Reject" action="{!RejectButtonAction}" oncomplete="window.location.href='{!UrlForReject}';" rendered="{!RejectButton}"/>
+        </apex:pageBlockButtons>
+        <apex:pageBlockSection id="pbsMain" columns="1" rendered="{!if((NOT(Completed) && MoveStageList.size>0),true,false)}">
+            <apex:panelGrid columns="1" >
+                <apex:outputText value="{!$Label.AMS_LABEL_MoveHelpText}" />
+            </apex:panelGrid>
+            <apex:outputPanel layout="block" styleClass="ptnStatusSelector" >
+                <apex:repeat value="{!MoveStageList}" var="movestage">
+                    <apex:outputPanel layout="block" id="pntStageSet">
+                        <apex:outputPanel layout="block" styleClass="pntParentContainer">
+                            <apex:outputPanel id="toggler" layout="inline" onclick="SectionOpenerToggle(this);" styleClass="opener_move_indicator opener_move_plus pntSectOpener" title="{!movestage.LabelField}" rendered="{!$Setup.ts2__ApplicantManagementSystem__c.Enable_Move_to_Sub_Stage__c}" />
+                            <apex:commandLink action="{!MoveCandidatesAction}" value="{!movestage.LabelField}" title="{!movestage.LabelField}" styleClass="pntParentItem" onclick="if(!MoveStageOnClick(this)){return;}" oncomplete="redirectObject('{!ObjectId}',{!Completed}, {!isPopUp})" rendered="{!(movestage.Enabled || TRUE) && IF(NOT($Setup.ts2__ApplicantManagementSystem__c.Enable_Move_to_Sub_Stage__c), TRUE, NOT($Setup.ts2__ApplicantManagementSystem__c.Disable_Stage_Link_on_Move__c))}" rerender="frm">
+                                <apex:param name="param1" assignTo="{!MoveStageName}" value="{!movestage.LabelValue}" />
+                                <apex:param name="param2" assignTo="{!MoveObjectName}" value="{!movestage.NameField}" />
+                                <apex:param name="param3" assignTo="{!MoveStageStatus}" value="" />
+                            </apex:commandLink>
+                            <apex:outputText styleClass="pntParentItem" rendered="{!movestage.Enabled && IF($Setup.ts2__ApplicantManagementSystem__c.Disable_Stage_Link_on_Move__c && $Setup.ts2__ApplicantManagementSystem__c.Enable_Move_to_Sub_Stage__c, TRUE, FALSE)}" value="{!movestage.LabelField}" />
+                            <apex:outputPanel layout="inline" styleClass="spinner_indicator" rendered="{!movestage.Enabled}"/>
+                            <apex:outputText styleClass="pntParentItem pntItem_disabled" rendered="{!NOT(movestage.Enabled)}" value="{!movestage.LabelField}" />
+                        </apex:outputPanel>
+
+                        <apex:outputPanel layout="block" styleClass="pntChildrenContainer" style="display:none;" rendered="{!$Setup.ts2__ApplicantManagementSystem__c.Enable_Move_to_Sub_Stage__c}" >
+                            <apex:repeat value="{!movestage.MoveSubstageList}" var="movesubstage" >
+                                <apex:outputPanel layout="block" styleClass="pntChildItemContainer">
+                                    <apex:commandLink action="{!MoveCandidatesAction}" value="{!movesubstage.Label}" title="{!movestage.LabelField} - {!movesubstage.Label}" styleClass="pntChildItem" onclick="if(!MoveStageOnClick(this)){return;}" oncomplete="redirectObject('{!ObjectId}',{!Completed}, {!isPopUp})" rendered="{!NOT(movesubstage.Disabled)}" rerender="frm">
+                                        <apex:param name="param1" assignTo="{!MoveStageName}" value="{!movestage.LabelValue}" />
+                                        <apex:param name="param2" assignTo="{!MoveObjectName}" value="{!movestage.NameField}" />
+                                        <apex:param name="param3" assignTo="{!MoveStageStatus}" value="{!movesubstage.Value}" />
+                                    </apex:commandLink>
+                                    <apex:outputText value="{!movesubstage.Label}" styleClass="pntChildItem pntItem_disabled" rendered="{!movesubstage.Disabled}" />
+                                </apex:outputPanel>
+                            </apex:repeat>
+                        </apex:outputPanel>
+
+                    </apex:outputPanel>
+                </apex:repeat>
+            </apex:outputPanel>
+        </apex:pageBlockSection>
+        <apex:pageBlockSection id="pbsCompleted" columns="1" rendered="{!if((Completed && MoveStageList.size>0),true,false)}" >
+            <apex:pageMessage summary="{!$Label.AMS_LABEL_MoveSave}" severity="confirm" strength="2" />
+            <apex:pageBlockSectionItem labelStyle="width:50%">
+                <apex:outputLabel value="{!$Label.AMS_LABEL_MoveMoved}" for="conMOve" />
+                <apex:outputText id="conMove" value="{!CandidatesMovedCount}" />
+            </apex:pageBlockSectionItem>
+        </apex:pageBlockSection>
+        <apex:pageBlockSection id="pbsWarning" columns="1" rendered="{!if((MoveStageList.size==0 && !MassButtonError),true,false)}" >
+            <apex:pageMessage summary="{!$Label.AMS_ERROR_MoveNoApplication}" severity="warning" strength="2" />
+        </apex:pageBlockSection>
+        <apex:pageBlockSection id="pbsWarningRejected" columns="1" rendered="{!if((MoveStageList.size==0 && MassButtonError),true,false)}" >
+            <apex:pageMessage summary="{!ErrorMsg}" severity="warning" strength="2" />
+        </apex:pageBlockSection>
+    </apex:pageBlock>
+</apex:form>
+</body>
+<script type="text/javascript">
+    jQuery.noConflict();
+    jQuery(document).ready(function() {
+        gfxInit();
+    });
+    function gfxInit() {
+        /*
+        a1 = document.createElement('img'); a1.src="{!URLFOR($Resource.ts2extams__UIRes, 'res/img/spinner.gif')}";
+        a2 = document.createElement('img'); a2.src="{!URLFOR($Resource.ts2extams__UIRes, 'res/img/move_minus.gif')}";
+        a3 = document.createElement('img'); a3.src="{!URLFOR($Resource.ts2extams__UIRes, 'res/img/move_plus.gif')}";
+        */
+
+        var enableMoveToSS = "{!IF($Setup.ts2__ApplicantManagementSystem__c.Enable_Move_to_Sub_Stage__c, 'true', 'false')}";
+        var enableMoveToES = "{!IF($Setup.ts2__ApplicantManagementSystem__c.Enable_Move_Candidate_Expand_Stage__c, 'true', 'false')}";
+        if (enableMoveToES== "true" && enableMoveToSS == "true") {
+            /*Check the custom setting that allow us expand stages*/
+            var allowExpand = "{!IF($Setup.ts2__ApplicantManagementSystem__c.Expand_All__c, 'true', 'false')}";
+            if (allowExpand == 'true') {
+                /*Expand all stages*/
+                jQuery('[id$=pntStageSet]').each(function() {
+                    jQuery(this).children().next().toggle();
+                });
+                /*Chage toggler icons*/
+                jQuery('[id$=toggler]').each(function() {
+                    jQuery(this).toggleClass("opener_move_minus").toggleClass("opener_move_plus");
+                });
+            } else {
+                /*Expand only current stage*/
+                jQuery(".spinner_indicator").first().parent().children().first().toggleClass("opener_move_plus").toggleClass("opener_move_minus").parent().next().toggle();
+            }
+        }
+    }
+
+    function redirectObject(idObject, typeIn, popup) {
+        if (typeIn) {
+            if (idObject !='no') {
+                if (!popup) {
+                    parent.window.close();
+                    if (parent.window.name != 'Move') {
+                        parent.opener.top.location = idObject;
+                    }
+                }
+                else {
+                    win = window.open(idObject, '', 'directories=no,menubar=no,titlebar=no,toolbar=no,width=600,height=600,scrollbars=1');
+                    win.focus();
+                }
+            }
+            else {
+                Noaction = false;
+            }
+        }
+    }
+
+    function SectionOpenerToggle(sender) {
+        jQuery(sender).toggleClass("opener_move_plus").toggleClass("opener_move_minus").parent().next().toggle();
+    }
+
+    function MoveStageOnClick(sender) {
+        if (jQuery(sender).hasClass("pntItem_disabled")) {
+            return false;
+        }
+        jQuery(sender).parentsUntil("[id$=pntStageSet]").parent().find(".spinner_indicator").addClass("spinner_on");
+        jQuery("[id*=pbbsMainButtons] input.btn").attr("disabled","disabled").addClass("btnDisabled");
+        jQuery(".ptnStatusSelector").find(".opener_move_minus").toggleClass("opener_move_plus").toggleClass("opener_move_minus").parent().next().toggle();
+        jQuery(".ptnStatusSelector").find(".pntParentItem,.pntSectSubstatus").addClass("pntItem_disabled");
+        return true;
+    }
+</script>
+</apex:page>

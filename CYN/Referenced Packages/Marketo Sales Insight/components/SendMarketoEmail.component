@@ -1,0 +1,426 @@
+<apex:component controller="mkto_si.SendMarketoEmailController">
+  <apex:variable var="bodyEditorHeight" value="500" />
+  
+  <c:CssAndJavascript />
+  <c:CssAndJavascript2 />
+<!--   <apex:includeScript value="{!$Resource.jsTree}/jquery.jstree.js" /> -->
+<script src="{!$Resource.jsTree}/jquery.jstree.js" />
+  
+  <div class="mkto">
+  	<apex:sectionHeader title="{!$Label.Send_Marketo_Email}" help="{!helpLink}"/>
+  </div>
+
+  <div style="width: 100%; position: relative;"> 
+    <div id="mktLoadMask">
+      <img src="{!$Resource.web}/mkto/images/spinner32.gif" style="top: 250px;"/>
+    </div>
+  </div>
+  
+  <br class="mktShow-{!statusMessage != null || errorMessage != null}" />
+  
+  <apex:pageMessage severity="info" strength="1" rendered="{!statusMessage != null && errorMessage == null}" summary="{!statusMessage}" />
+  <apex:pageMessage severity="warning" strength="1" rendered="{!errorMessage != null}" summary="{!errorMessage}" />
+  <apex:pageMessage severity="error" strength="1" rendered="{!errorException != null && debug}" summary="{!errorException}" />
+ 
+  <script type="text/javascript">
+    Ext.onReady(function() {
+        Ext.namespace('Marketo', 'Marketo.email');
+        Ext.QuickTips.init();
+          
+        /**
+         *  Change Email Template
+         */
+        Marketo.email.debug = {!debug};
+        Marketo.email.emailTemplateId = '-1';
+        Marketo.email.emailSubject = '';
+        Marketo.email.changeEmailTemplate = function (templateId) {
+            Marketo.clockCursor();
+            Marketo.email.emailTemplateId = templateId;
+            Ext.query('input.mktEmailSubject')[0].value = '';
+            Marketo.email.bodyEditor.setValue('');
+            changeEmailTemplate(templateId);
+        };
+        Marketo.email.confirmChangeEmailTemplate = function () {
+          var select = Ext.get('mktSelectEmailTemplate');
+          var hasChanges = false; 
+          var subject = Ext.query('input.mktEmailSubject')[0];
+          var bodyEditor = Marketo.email.bodyEditor;
+            
+          //console.debug('emailBody=',bodyEditor.getRawValue());
+          //console.debug('emailTemplateBody=', bodyEditor.originalValue);
+            
+          if (subject.value != Marketo.email.emailSubject) {
+            // subject was edited
+          }
+          else if (bodyEditor.getRawValue() != bodyEditor.originalValue) {
+            // body was edited, or at least focused
+          }
+          else {
+            // nothing was edited
+            Marketo.email.changeEmailTemplate(select.getValue());
+            return;
+          }
+            
+          Ext.MessageBox.show({
+            title:'Change Template?',
+            msg: 'Changing templates will DISCARD all of your edits.  Are you sure?',
+            buttons: {ok:'Change Template', cancel:'Cancel'},
+            fn: function (btn) {
+              if(btn == 'ok') {
+                Marketo.email.changeEmailTemplate(select.getValue());
+              }
+              else {
+                select.value = Marketo.email.emailTemplateId;
+                
+                // revert combobox if available
+                var combo = Ext.getCmp('mktEmailCombo');
+                if (combo) {
+                  combo.setValue(Marketo.email.parseEmailTemplateName(select.options[select.selectedIndex].text));
+                }
+              }
+            },
+            animEl: select,
+            icon: Ext.MessageBox.QUESTION
+          });
+
+        };
+                            
+        /**
+         *  Email Body Editor
+         */
+        Marketo.email.createBodyEditor = function () {
+          var textarea = Ext.query('.mktEmailBody')[0];
+          var parentWidth = Ext.fly(textarea.parentNode).getWidth()-25;
+          var minWidth = 550, maxWidth = 1000;
+          parentWidth = Math.min(Math.max(parentWidth, minWidth), maxWidth);
+          Ext.fly(textarea).setWidth(parentWidth+'px');
+          
+          Marketo.email.bodyEditor = new Ext.form.HtmlEditor({
+            applyTo: textarea.id,
+            height: {!bodyEditorHeight},
+            enableSourceEdit: false,
+            cleanHtml: function(html) {
+              var el = Ext.fly(this.getEditorBody());
+              html = Ext.form.HtmlEditor.prototype.cleanHtml.call(this, html);
+			  var newHtml = '<div style="font-size:'+ el.getStyle('font-size') +'; font-family: '+ el.getStyle('font-family') + ';">' + html + '</div>';
+			  return newHtml;
+            }
+            
+          });
+        };
+        Marketo.email.parseEmailTemplateName = function(templateName)
+        {
+          return templateName.replace(/^[~]+\s/i, '');
+        };
+    });
+  </script>
+  
+  <br/>
+
+    
+  <div id="mktSendMarketoEmail" class="mktWaitPanel">
+    <apex:form >
+      <apex:actionFunction name="changeEmailTemplate" action="{!changeEmailTemplate}" rerender="mktEmailTemplateDesc, mktEmailSubject, SendMarketoEmailBody, SendMarketoEmailRender" >
+       	<apex:param name="templateId" value="-1" />
+       </apex:actionFunction>
+	           
+      <apex:pageBlock title="" id="SendMarketoEmailBlock">
+        
+        <apex:pageBlockButtons >
+          <apex:commandButton action="{!sendWithMarketo}" value="Send with Marketo" rendered="{!hasContacts}"/>
+          <apex:commandButton action="{!sendTestEmail}" value="Send Test" rendered="{!hasContacts}"/>
+          <apex:commandButton action="{!cancel}" value="Cancel"/>
+        </apex:pageBlockButtons>
+
+        <apex:pageBlockSection rendered="{!NOT(hasContacts)}">
+          {!$Label.There_are_no_valid_email_recipients}
+        </apex:pageBlockSection>
+        
+        <apex:actionRegion rendered="{!hasContacts}">
+          <apex:pageBlockSection id="SendMarketoEmailForm" collapsible="false" showHeader="false" columns="1">
+    
+            <apex:pageBlockSectionItem dataStyleClass="mktPageBlockSection" labelStyleClass="mktPageBlockSection">
+              <apex:outputText value="{!$Label.To_Message}"/>
+              <apex:outputText value="{!contactNames}"/> 
+            </apex:pageBlockSectionItem>
+
+            <apex:pageBlockSectionItem dataStyleClass="mktPageBlockSection" labelStyleClass="mktPageBlockSection">
+              <apex:outputLabel value="{!$Label.Template}" for="mktSelectEmailTemplate"/>
+              <apex:outputPanel >
+              	<select id="mktSelectEmailTemplate" onchange="Marketo.email.confirmChangeEmailTemplate" class="mktSelectEmailTemplate" style="font-family: Arial; font-size: 96%;">
+              		<apex:repeat value="{!emailTemplateObjects.emailTemplateListWrapper}" var="emailTemplateObject">
+              			<apex:repeat value="{!emailTemplateObject.emailTemplates}" var="emailTemplate">
+              				<option value="{!emailTemplate.value}" disabled="{!emailTemplate.disabled}">{!emailTemplate.label}</option>
+              			</apex:repeat>
+              		</apex:repeat>
+              	</select>
+              	</apex:outputPanel>
+            </apex:pageBlockSectionItem>
+              
+            <apex:pageBlockSectionItem dataStyleClass="mktPageBlockSection" labelStyleClass="mktPageBlockSection">
+              <apex:outputLabel value="{!$Label.Template_Description}" for="mktEmailTemplateDesc"/>
+              <apex:outputText value="{!templateDesc}" id="mktEmailTemplateDesc"/>
+            </apex:pageBlockSectionItem>
+              
+          <apex:pageBlockSectionItem dataStyleClass="mktPageBlockSection" labelStyleClass="mktPageBlockSection">
+              <apex:outputLabel value="{!$Label.Subject}" for="mktEmailSubject" />
+              <c:inputRequiredText value="{!emailSubject}" id="mktEmailSubject" styleClass="mktEmailSubject" />
+            </apex:pageBlockSectionItem>
+          </apex:pageBlockSection>
+                         
+          <div style="margin: 10px 0px; min-height: {!bodyEditorHeight}px">
+          <apex:pageBlockSection id="SendMarketoEmailBody" columns="1">
+          <apex:pageBlockSectionItem dataStyleClass="mktPageBlockSection">
+              <apex:inputTextarea value="{!emailBody}" id="mktEmailBody"
+                 styleClass="mktEmailBody" style="visibility: hidden;"/>
+            </apex:pageBlockSectionItem>
+          </apex:pageBlockSection> 
+          </div>
+            
+          <apex:outputPanel id="SendMarketoEmailRender">
+            <script type="text/javascript">
+              Ext.onReady(function() {
+                Marketo.unclockCursor();
+                Marketo.email.createBodyEditor();
+                Marketo.email.emailTemplateId = '{!emailTemplateId}';
+                var subject = Ext.query('input.mktEmailSubject')[0];
+                if (subject) {
+                  Marketo.email.emailSubject = subject.value;
+                }
+              });
+            </script>
+          </apex:outputPanel>
+          
+          <script type="text/javascript">
+            Ext.onReady(function() {
+              var emailsData = [];
+              
+              // get select box
+              var emailSelectBox = Ext.query('.mktSelectEmailTemplate')[0];
+              if (emailSelectBox) {
+                // hide select box
+                Ext.get(emailSelectBox).setDisplayed(false);
+
+                // transform select box list to the tree nodes
+                var previousNode = null,
+                    previousLevel = 1,
+                    levelNodes = {};
+                
+                for (var i = 0, il = emailSelectBox.options.length; i < il; i++) {
+                  var option = emailSelectBox.options[i];
+                  
+                  // get level
+                  var levelMatch = option.text.match(/^[~]+(?=\s)/i);
+                  var level = levelMatch ? levelMatch[0].length : 1;
+        
+                  var node = {
+                    id: option.value,
+                    text: Marketo.email.parseEmailTemplateName(option.text),
+                    iconCls: i === 0 ? 'mkiWindow' : 'mkiMail2',
+                    leaf: true
+                  };
+                  
+                  if (level > previousLevel) {
+                    // promote previous node to a folder
+                    previousNode.id = 'F' + i; // dummy id for folders
+                    previousNode.leaf = false;
+                    previousNode.iconCls = 'mkiFolder';
+                    previousNode.children = [];
+                    
+                    // set previous node as level node for *new* level
+                    levelNodes[level] = previousNode;
+                  }
+                  
+                  // add root node
+                  if (level == 1) {
+                    emailsData.push(node);
+                  }
+                  // add to level node if one exists
+                  else if (levelNodes[level]) {
+                    levelNodes[level].children.push(node);
+                  }
+                  
+                  previousNode = node;
+                  previousLevel = level;
+                }
+        
+                // dropdown tree
+                var emailTree = new Ext.tree.TreePanel({
+                  cls: 'mktEmailTreePanel',
+                  border: false,
+                  rootVisible: false,
+                  autoScroll: true,
+                  root: {
+                    nodeType: 'async',
+                    text: 'Emails',
+                    expanded: true,
+                    children: emailsData
+                  }
+                });
+
+                var myTreeSorter = new Ext.tree.TreeSorter(emailTree, {
+                	sortType: function(text){
+	                	if(text == 'No template') {
+	                		return -1;
+	                	}
+	                	return Ext.data.SortTypes.asUCString(text);
+                	}
+                });
+                
+                var emailTreeFilter = new Ext.tree.TreeFilter(emailTree, {
+                  autoClear: true,
+                  
+                  hasUnfilteredChildren: function(node) {
+                    if (node.isLeaf()) {
+                      return true; // return true so it won't be filtered
+                    }
+                    
+                    if (node.hasChildNodes()) {
+                      for (var i = 0, il = node.childNodes.length; i < il; i++) {
+                        var childNode = node.childNodes[i];
+                        
+                        if (!childNode.isLeaf()) {
+                          if (emailTreeFilter.hasUnfilteredChildren(childNode)) {
+                            return true;
+                          }
+                        }
+                        else {
+                          if (!emailTreeFilter.filtered[childNode.id]) {
+                            return true;
+                          }
+                        }
+                      }
+                    }
+                    
+                    return false;
+                  }
+                });
+                
+                // dropdown panel
+                var emailComboPanel = new Ext.Panel({
+                  unstyled: true,
+                  items: emailTree
+                });
+              
+                // email combobox
+                var emailCombo = new Ext.form.ComboBox({
+                  id: 'mktEmailCombo',
+                  editable: true,
+                  triggerAction: 'all',
+                  mode: 'local',
+                  store: ['Dummy'],
+                  emptyText: 'Search...',
+                  tpl: '<div id="mktEmailComboPanel"></div>',
+                  width: 250,
+                  //Select the first element in the drop down, which is 'No Template'
+                  value: Marketo.email.parseEmailTemplateName(emailSelectBox.options[0].text),
+                  onSelect: Ext.emptyFn,
+                  onViewClick: Ext.emptyFn,
+                  
+                  // fix combo focus -> expand bug
+				  setEditable : function(value){
+			        if(value == this.editable){
+			                return;
+			        }
+			        this.editable = value;
+			        if(!value){
+			                this.el.addClass('x-trigger-noedit').on('mousedown', this.onTriggerClick, this).dom.setAttribute('readOnly', true);
+			        }else{
+			                this.el.removeClass('x-trigger-noedit').un('mousedown', this.onTriggerClick,  this).dom.removeAttribute('readOnly');
+			        }
+				  },
+			      applyEmptyText : function(){
+			        var me = this,
+			            emptyText = me.emptyText,
+			            isEmpty;
+			        if (me.rendered && emptyText) {
+			            isEmpty = me.getRawValue().length < 1 && !me.hasFocus;
+			
+			            if ('placeholder' in document.createElement('input')) {
+			                me.el.dom.placeholder = emptyText;
+			            } else if (isEmpty) {
+			                me.setRawValue(emptyText);
+			            }
+			
+			            //all browsers need this because of a styling issue with chrome + placeholders.
+			            //the text isnt vertically aligned when empty (and using the placeholder)
+			            if (isEmpty) {
+			                me.el.addClass(me.emptyCls);
+			            }
+			            me.autoSize();
+			        }
+			      },
+                  listeners: {
+                  
+                    expand: function(combo) {
+                      combo.clearValue();
+                      emailComboPanel.render('mktEmailComboPanel');
+                      
+                      // select tree node
+                      var node = emailTree.getNodeById(emailSelectBox.value);
+                      if (node) {
+                        node.select();
+                      }
+                    },
+                    collapse: function(combo) {
+                      // make sure that value of combobox matches current selection
+                      combo.setValue(Marketo.email.parseEmailTemplateName(emailSelectBox.options[emailSelectBox.selectedIndex].text));
+                    },
+                    beforequery: function(e) {
+                      var query = e.query.toLowerCase();
+                      
+                      if (e.forceAll) {
+                        emailTreeFilter.clear();
+                      }
+                      else {
+                        // expand to make sure that tree is rendered before filtering
+                        e.combo.expand();
+                        
+                        // keep focus in the combobox
+                        e.combo.focus();
+                        
+                        emailTreeFilter.filterBy(function(node) {
+                          node.expand(false, false);
+                          return !node.isLeaf() || node.text.toLowerCase().indexOf(query) != -1;
+                        });
+                        
+                        // hide empty folders
+                        emailTreeFilter.tree.root.cascade(function(node) {
+                          if (!emailTreeFilter.hasUnfilteredChildren(node)) {
+                            node.ui.hide();
+                            emailTreeFilter.filtered[node.id] = node;
+                          }
+                        });
+                      }
+                      
+                      // always forceAll to make combobox tree visible
+                      e.forceAll = true;
+                    }
+                  }
+                });
+                emailCombo.render(emailSelectBox.parentNode);
+                
+                emailTree.on('click', function(node) {
+                  if (node.isLeaf()) {
+                    // update values before asking for confirmation
+                    emailSelectBox.value = node.id;
+                    emailCombo.setValue(node.text);
+                    
+                    // collapse after value is set
+                    emailCombo.collapse();
+        
+                    // confirm
+                    Marketo.email.confirmChangeEmailTemplate(emailSelectBox);
+                  }
+                });
+              }
+              
+              Marketo.unclockCursor();
+            });
+          </script>
+        </apex:actionRegion>
+
+      </apex:pageBlock>
+    </apex:form>
+  </div>
+</apex:component>

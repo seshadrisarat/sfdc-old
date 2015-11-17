@@ -1,0 +1,512 @@
+<apex:page standardController="RT1__Recording__c" tabStyle="Readytalk__tab"
+    extensions="RT1.RecordingController" action="{!initEdit}">
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" />
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js" />
+    <apex:includeScript value="{!URLFOR($Resource.RT1__meetingsr,'jquery.framedialog.js')}" />
+    <apex:stylesheet value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/redmond/jquery-ui.css" />
+    <apex:includeScript value="{!URLFOR($Resource.RT1__meetingsr, 'jquery.qtip.min.js')}" />
+    <apex:styleSheet value="{!URLFOR($Resource.RT1__meetingsr, 'jquery.qtip.min.css')}" />
+    <style type="text/css">
+/** 
+ *  Wanted to get SFDC VF Default theme to give me some spacing near the top of the page
+ **/
+.apexDefaultPageBlock {
+    margin-top: 4px !important;
+}
+</style>
+    <script type="text/javascript">
+$(function(){   
+    attachCredentialsDialogActions();
+    attachMessages();
+});
+
+function attachCredentialsDialogActions(){
+    attachMessages();
+    $('[id$=changeAccessCode]').click(function(e) {
+       e.preventDefault();
+       $("#credentialsDialog").dialog({
+           width: 300,
+           height: 180,
+           modal: true,
+           title: "Chairperson Login Credentials"
+       });
+       return false; 
+   });
+   $("#cancelCredentialsButton").click(function() {
+       $("#credentialsDialog").dialog("close");
+   });
+   /**
+    *  Updates the values in the hidden form before updating their refrences in the controller
+    **/
+   $("#saveCredentialsButton").click(function() {
+       $('#saveCredentialsLoader').show();
+       checkCredentials($("#tollFreeNumber").val(),$("#accessCode").val(),$("#passcode").val());
+   });
+   
+   $("#updatePasscodeId").click(function(){
+        $('#saveCredentialsLoader').show();
+        checkCredentials('{!JSENCODE(RT1__Recording__c.RT1__TollFreeNumber__c)}','{!JSENCODE(RT1__Recording__c.RT1__AccessCode__c)}',$("#passcode").val());
+   });
+}
+
+/**
+ *
+ **/
+function attachMessages(){ 
+    $('[id$=recording-invite-message]').qtip({
+    content:{
+            text: 'This text will appear on the recording invitation.'
+        }
+    });
+    
+    /**$('.recording-message').qtip({
+        content:{
+            text: 'This text will appear on the recording invitation.'
+        }
+    });**/ 
+}
+
+/**
+ *  checkCredentialsComplete
+ *  Invoke the refreshNewMeetingDetails, which will update the refreshes
+ *  to meeting details in the controller
+ **/
+function checkCredentialsComplete() {
+    $('#saveCredentialsLoader').hide();
+    var validatedForm = $('[id$=credentialsValid]').val(); 
+    if (validatedForm == "true") {
+        $('#recordings-list-loader').show();
+        //copy the values through onto the page
+        $('[id$=accessCodeDetails]').text($('#accessCode').val());
+        $("#credentialsDialog").dialog("close");
+        refreshRecordingsList();
+    }
+    else {
+        alert("The credentials entered are invalid. Please enter a valid toll free number, "
+            + " access code, and passcode.");
+    }
+}
+
+</script>
+
+    <apex:form >
+        <apex:actionFunction name="displayRecordingDetails"
+            action="{!setSelectedRecording}"
+            oncomplete="$('#recordings-list-loader').hide(); attachCredentialsDialogActions();"
+            rerender="recording-details,importselect">
+            <apex:param name="recordingId" assignTo="{!recordingId}" value="" />
+        </apex:actionFunction>
+        <!-- checkCredentials = check credentials from lightbox popup to change credentials -->
+        <apex:actionFunction name="checkCredentials"
+            action="{!checkCredentials}" rerender="credentialsValid"
+            oncomplete="checkCredentialsComplete();">
+            <apex:param name="TollFreeNumber" assignTo="{!TollFreeNumber}"
+                value="" />
+            <apex:param name="AccessCode" assignTo="{!AccessCode}" value="" />
+            <apex:param name="Passcode" assignTo="{!Passcode}" value="" />
+        </apex:actionFunction>
+        <apex:actionFunction name="validateCampaign"
+            action="{!validateCampaign}"
+            rerender="importselect,pagemessages,meeting-details"
+            oncomplete="$('#campaign-validate-loader').hide();">
+            <apex:param name="campaignId" assignTo="{!CampaignId}" value="" />
+        </apex:actionFunction>
+        <apex:actionFunction name="refreshRecordingsList"
+            rerender="recordingId,recording-details"
+            oncomplete="$('#recordings-list-loader').hide();" />
+        <!-- END ActionFunctions -->
+        <apex:inputHidden value="{!CredentialsAreValid}" id="credentialsValid" />
+        <apex:sectionHeader title="ReadyTalk Recording"
+            subtitle="{!RT1__Recording__c.Name}" rendered="{!RT1__Recording__c.Id != null}" />
+        <apex:sectionHeader title="ReadyTalk Recording"
+            subtitle="Import Recording" rendered="{!RT1__Recording__c.Id == null}" />
+        <div class="breadcrumb"><apex:outputLink value="{!URLFOR($Page.RT1__ReadytalkTab)}?tabOverride=recordings">« Back to Recordings</apex:outputLink>
+        </div>
+        <apex:pageMessages id="pagemessages" />
+        <apex:outputPanel rendered="{!RT1__Recording__c.Id == null}">
+            <apex:pageBlock id="importselect">
+                <apex:pageBlockButtons id="pageblockbuttons">
+                    <apex:commandButton value="Save" action="{!save}"
+                        disabled="{! NOT(recordingSelected) || deactivateSaveButton}" />
+                    <!-- <apex:commandButton id="changeAccessCode" value="Change Access Code" /> -->
+                    <apex:commandButton value="Cancel" action="{!cancel}" />
+                </apex:pageBlockButtons>
+                <apex:pageBlockSection >
+                    <apex:pageBlockSectionItem id="recordingslist">
+                        <apex:outputLabel for="recordingId" value="ReadyTalk Recording" />
+                        <apex:outputPanel >
+                            <apex:selectList id="recordingId" size="1"
+                                style="margin-bottom: 5px;"
+                                value="{!RT1__Recording__c.RT1__RecordingId__c}"
+                                onChange="$('#recordings-list-loader').show(); displayRecordingDetails($(this).val());">
+                                <apex:selectOptions value="{!recordingSelectOptions}" />
+                            </apex:selectList>
+                            <img src="{!URLFOR($Resource.meetingsr,'ajaxloader_green.gif')}"
+                                id="recordings-list-loader" style="display: none;" />
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                    &nbsp;
+                    &nbsp;
+                </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Access Code" for="access-code" />
+                        <apex:outputPanel >
+                            <apex:outputLabel id="accessCodeDetails" value="{!AccessCode}"></apex:outputLabel>
+                        &nbsp;<a id="changeAccessCode" href="#"
+                                style="color: #888888; font-size: 10px">change access code</a>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                </apex:pageBlockSection>
+                <apex:outputPanel id="recording-details">
+                    <apex:pageBlockSection title="Recording Details"
+                        rendered="{!recordingSelected}">
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Recording Title" for="recording-name" />
+                            <apex:outputText id="recording-name" value="{!recording.name}" />
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                        &nbsp; &nbsp;
+                    </apex:pageBlockSectionItem>
+                    
+                        <apex:pageBlockSectionItem id="campaign-selection">
+                            <apex:outputLabel value="Campaign" for="campaign" />
+                            <apex:outputPanel >
+                                <apex:inputField id="campaign" value="{!recording.RT1__Campaign__c}"
+                                    onchange="$('#campaign-validate-loader').show(); validateCampaign($(this).val());" />
+                                <img src="{!URLFOR($Resource.meetingsr,'ajaxloader_green.gif')}"
+                                    id="campaign-validate-loader" style="display: none;" />
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Start Date" for="recording-start-date" />
+                            <apex:outputText id="recording-start-date"
+                                value="{!recording.RT1__StartDate__c}" />
+                        </apex:pageBlockSectionItem>
+                        
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel Value="Recording Author" for="recording-author" />
+                            <apex:inputText value="{!recording.RT1__Recording_Author__c}"
+                                id="recording-author" style="width:75%; height:15px;" />
+                        </apex:pageBlockSectionItem>
+                        
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="End Date" for="recording-end-date" />
+                            <apex:outputText id="recording-end-date"
+                                value="{!recording.RT1__EndDate__c}" />
+                        </apex:pageBlockSectionItem>
+                        
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Allow others to Invite"
+                                for="allow-others-to-invite" />
+                            <apex:inputField id="allow-others-to-invite"
+                                value="{!recording.RT1__AllowOthersToInvite__c}" />
+                        </apex:pageBlockSectionItem>
+                        
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Original Duration"
+                                for="original-duration" />
+                            <apex:outputText id="original-duration"
+                                value="{!FLOOR(recording.RT1__Duration__c)} minutes" />
+                        </apex:pageBlockSectionItem>
+                        
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Playback Url"
+                                for="recording-playback-url" />
+                            <apex:outputLink id="recording-playback-url"
+                                value="{!recording.RT1__PlaybackUrl__c}">{!recording.RT1__PlaybackUrl__c}</apex:outputLink>
+                        </apex:pageBlockSectionItem>
+                        
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Playback Notification Enabled"
+                                for="recording-playback-enabled" />
+                            <apex:outputText id="recording-playback-enabled"
+                                value="{!recording.RT1__PlaybackNotificationEnabled__c}" />
+                        </apex:pageBlockSectionItem>
+                        
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Playback Count"
+                                for="recording-playback-count" />
+                            <apex:outputText id="recording-playback-count"
+                                value="{!FLOOR(recording.RT1__PlaybackCount__c)}" />
+                        </apex:pageBlockSectionItem>
+                        
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Passcode Enabled"
+                                for="recording-passcode-enabled" />
+                            <apex:outputText id="recording-passcode-enabled"
+                                value="{!recording.RT1__PasscodeEnabled__c}" />
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem >
+                            &nbsp;&nbsp;
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Registration Enabled"
+                                for="recording-registration-enabled" />
+                            <apex:outputText id="recording-registration-enabled"
+                                value="{!recording.RT1__RegistrationEnabled__c}" />
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel Value="Recording Description"
+                                for="recording-description" styleClass="recording-description" />
+                            <apex:inputField value="{!recording.RT1__Description__c}"
+                                id="recording-description" style="width:75%; height:75px;" />
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel Value="Recording Invitation Message"
+                                for="recording-invite-message" styleClass="recording-message" />
+                            <apex:inputField value="{!recording.RT1__Invitation_Message__c}"
+                                id="recording-invite-message" style="width:75%; height:75px;" />
+                        </apex:pageBlockSectionItem>
+                    </apex:pageBlockSection>
+                </apex:outputPanel>
+            </apex:pageBlock>
+        </apex:outputPanel>
+        <apex:outputPanel rendered="{!RT1__Recording__c.Id != null}"
+            id="meeting-details">
+            <apex:inputHidden value="{!RT1__Recording__c.RT1__TollFreeNumber__c}" />
+            <apex:inputHidden value="{!RT1__Recording__c.RT1__AccessCode__c}" />
+            <apex:inputHidden value="{!RT1__Recording__c.RT1__Passcode__c}" />
+            <apex:inputHidden value="{!RT1__Recording__c.RT1__NextMemberIndex__c}" />
+            <apex:pageBlock title="{!RT1__Recording__c.Name}">
+                <apex:pageBlockButtons id="meeting-details-buttons">
+                    <apex:commandButton value="Save" action="{!editMode}"
+                        rendered="{!editMode}" rerender="meeting-details"
+                        disabled="{!deactivateSaveButton}" />
+                    <apex:commandButton value="Edit" action="{!editMode}"
+                        rendered="{!NOT(editMode)}" rerender="meeting-details"
+                        oncomplete="attachCredentialsDialogActions();" />
+                    <apex:commandButton value="Delete" action="{!deleteRecording}" />
+                    <apex:commandButton value="Sync with ReadyTalk" action="{!sync}" />
+                </apex:pageBlockButtons>
+                <apex:pageBlockSection title="Recording Details">
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Recording Title" for="recording-name" />
+                        <apex:outputText id="recording-name" value="{!RT1__Recording__c.name}" />
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Access Code" for="recording-accesscode" />
+                        <apex:outputPanel >
+                            <apex:outputText id="recording-accesscode"
+                                value="{!RT1__Recording__c.RT1__AccessCode__c}" />
+                            <apex:outputPanel rendered="{!EditMode}">
+                                &nbsp;<a id="changeAccessCode" href="#"
+                                    style="color: #888888; font-size: 10px">change access code</a>
+                            </apex:outputPanel>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem rendered="{!NOT(editMode)}">
+                        <apex:outputLabel value="Campaign" for="campaign-enabled" />
+                        <apex:outputField id="campaign-enabled"
+                            value="{!RT1__Recording__c.RT1__Campaign__c}" />
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem rendered="{!editMode}">
+                        <apex:outputLabel value="Campaign" for="campaign-enabled" />
+                        <apex:outputPanel >
+                            <apex:inputField id="campaign-enabled"
+                                value="{!RT1__Recording__c.RT1__Campaign__c}"
+                                onchange="$('#campaign-validate-loader').show(); validateCampaign($(this).val());" />
+                            <img src="{!URLFOR($Resource.meetingsr,'ajaxloader_green.gif')}"
+                                id="campaign-validate-loader" style="display: none;" />
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Start Date" for="recording-start-date" />
+                        <apex:outputText id="recording-start-date"
+                            value="{!RT1__Recording__c.RT1__StartDate__c}" />
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem rendered="{!NOT(editMode)}">
+                        <apex:outputLabel Value="Recording Author" for="recording-author" />
+                        <apex:outputField value="{!RT1__Recording__c.RT1__Recording_Author__c}"
+                            id="recording-author" />
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem rendered="{!editMode}">
+                        <apex:outputLabel Value="Recording Author" for="recording-author" />
+                        <apex:inputText value="{!RT1__Recording__c.RT1__Recording_Author__c}"
+                            id="recording-author" style="width:75%; height:15px;" />
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="End Date" for="recording-end-date" />
+                        <apex:outputText id="recording-end-date"
+                            value="{!RT1__Recording__c.RT1__EndDate__c}" />
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem rendered="{!NOT(editMode)}">
+                        <apex:outputLabel value="Allow others to Invite"
+                            for="allow-others-to-invite" />
+                        <apex:outputField id="allow-others-to-invite"
+                            value="{!RT1__Recording__c.RT1__AllowOthersToInvite__c}" />
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem rendered="{!editMode}">
+                        <apex:outputLabel value="Allow others to Invite"
+                            for="allow-others-to-invite" />
+                        <apex:inputField id="allow-others-to-invite"
+                            value="{!RT1__Recording__c.RT1__AllowOthersToInvite__c}" />
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Original Duration"
+                            for="original-duration" />
+                        <apex:outputText id="original-duration"
+                            value="{!FLOOR(RT1__Recording__c.RT1__Duration__c)} minutes" />
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Playback Url"
+                            for="recording-playback-url" />
+                        <apex:outputLink id="recording-playback-url"
+                            value="{!RT1__Recording__c.RT1__PlaybackUrl__c}">{!RT1__Recording__c.RT1__PlaybackUrl__c}</apex:outputLink>
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Playback Notification Enabled"
+                            for="recording-playback-enabled" />
+                        <apex:outputText id="recording-playback-enabled"
+                            value="{!RT1__Recording__c.RT1__PlaybackNotificationEnabled__c}" />
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Playback Count"
+                            for="recording-playback-count" />
+                        <apex:outputText id="recording-playback-count"
+                            value="{!FLOOR(RT1__Recording__c.RT1__PlaybackCount__c)}" />
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Passcode Enabled"
+                            for="recording-passcode-enabled" />
+                        <apex:outputText id="recording-passcode-enabled"
+                            value="{!RT1__Recording__c.RT1__PasscodeEnabled__c}" />
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem >
+
+                        </apex:pageBlockSEctionItem>
+
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Registration Enabled"
+                                for="recording-registration-enabled" />
+                            <apex:outputText id="recording-registration-enabled"
+                                value="{!RT1__Recording__c.RT1__RegistrationEnabled__c}" />
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem rendered="{!editMode}">
+                            <apex:outputLabel Value="Recording Description"
+                                for="recording-description" styleClass="recording-description" />
+                            <apex:inputField value="{!RT1__Recording__c.RT1__Description__c}"
+                                id="recording-invite-message" styleClass="recording-message"
+                                style="width:75%; height:75px;" />
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem rendered="{!NOT(editMode)}">
+                            <apex:outputLabel Value="Recording Description"
+                                for="recording-description" />
+                            <apex:outputField value="{!RT1__Recording__c.RT1__Description__c}"
+                                id="recording-author" />
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem rendered="{!editMode}">
+                            <apex:outputLabel Value="Recording Invitation Message"
+                                for="recording-invite-message" styleClass="recording-message" />
+                            <apex:inputField value="{!RT1__Recording__c.RT1__Invitation_Message__c}"
+                                id="recording-invite-message" styleClass="recording-message"
+                                style="width:75%; height:75px;" />
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem rendered="{!NOT(editMode)}">
+                            <apex:outputLabel Value="Recording Invitation Message"
+                                for="recording-invite-message" styleClass="recording-message" />
+                            <apex:outputField value="{!RT1__Recording__c.RT1__Invitation_Message__c}"
+                                id="recording-invite-message" styleClass="recording-message" />
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Owner" for="recording-owner" />
+                            <apex:outputField id="recording-owner"
+                                value="{!RT1__Recording__c.OwnerId}" />
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSection rendered="{!NOT(editMode)}">
+                        &nbsp; &nbsp;
+                    </apex:pageBlockSection>
+                </apex:pageBlockSection>
+                <apex:pageBlockSection title="Recording Registration Summary">
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="New" for="new-recording-registrations" />
+                        <apex:outputField id="new-recording-registrations"
+                            value="{!RT1__Recording__c.RT1__NewRecordingRegistrations__c}" />
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Invited"
+                            for="invited-recording-registrations" />
+                        <apex:outputField id="invited-recording-registrations"
+                            value="{!RT1__Recording__c.RT1__InvitedRecordingRegistrations__c}" />
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputLabel value="Viewed"
+                            for="visited-recording-registrations" />
+                        <apex:outputField id="viewed-recording-registrations"
+                            value="{!RT1__Recording__c.RT1__ViewedRecordingRegistrations__c}" />
+                    </apex:pageBlockSectionItem>
+                </apex:pageBlockSection>
+            </apex:pageBlock>
+        </apex:outputPanel>
+    </apex:form>
+    <apex:relatedList list="Recording_Registrations__r" />
+
+    <!-- popup dialog that allows the user to change their login credentials on the page -->
+    <div id="credentialsDialog" style="display: none; font-size: 11px"
+        class="bPageBlock"><apex:form >
+        <table class="detailList">
+            <tbody>
+                <apex:outputPanel rendered="{!(RT1__Recording__c.Id == null)}">
+                    <tr>
+                        <td class="labelCol"><label>Toll Free Number</label></td>
+                        <!-- Formatted -->
+                        <td class="dataCol"><input type="text" id="tollFreeNumber"
+                            value="{!TollFreeNumber}" /></td>
+                    </tr>
+                    <tr>
+                        <td class="labelCol">Access Code</td>
+                        <td class="dataCol"><input type="text" id="accessCode"
+                            value="{!AccessCode}" /></td>
+                    </tr>
+                </apex:outputPanel>
+                <apex:outputPanel rendered="{!(RT1__Recording__c.Id != null)}">
+                    <tr>
+                        <td class="labelCol"><label>Toll Free Number</label></td>
+                        <!-- Formatted -->
+                        <td class="dataCol">{!RT1__Recording__c.RT1__TollFreeNumber__c}</td>
+                    </tr>
+                    <tr>
+                        <td class="labelCol">Access Code</td>
+                        <td class="dataCol">{!RT1__Recording__c.RT1__AccessCode__c}</td>
+                    </tr>
+                </apex:outputPanel>
+
+                <tr>
+                    <td class="labelCol">Passcode</td>
+                    <td class="dataCol"><input type="password" id="passcode"
+                        value="{!Passcode}" /></td>
+                </tr>
+            </tbody>
+        </table>
+        <div style="text-align: center; padding: 5px;"><img
+            src="{!URLFOR($Resource.meetingsr,'ajaxloader_green.gif')}"
+            id="saveCredentialsLoader" style="display: none;" /> <apex:outputPanel rendered="{!RT1__Recording__c.Id == null}">
+            <input type="button" id="saveCredentialsButton" class="btn"
+                value=" Save " />
+        </apex:outputPanel> <apex:outputPanel rendered="{!RT1__Recording__c.Id != null}">
+            <input type="button" id="updatePasscodeId" class="btn" value=" Save " />
+        </apex:outputPanel> <input type="button" id="cancelCredentialsButton" class="btn"
+            value=" Cancel " /></div>
+    </apex:form></div>
+</apex:page>

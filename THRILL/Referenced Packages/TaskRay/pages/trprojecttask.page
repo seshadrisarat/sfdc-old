@@ -1,0 +1,761 @@
+<apex:page standardController="TASKRAY__Project_Task__c" sidebar="false" showheader="false" extensions="TASKRAY.trStandardController">
+    <link href="{!URLFOR($Resource.trbootstrap, 'bootstrap/css/bootstrap.css')}" rel="stylesheet" type="text/css" />
+    <link href="{!URLFOR($Resource.trplugins, 'jquery/custom-theme/jquery-ui-1.8.17.custom.css')}" rel="stylesheet" type="text/css" />
+    <link href="{!URLFOR($Resource.trplugins, 'jquery/plugins/jquery.loadmask.css')}" rel="stylesheet" type="text/css" />
+    <link href="{!URLFOR($Resource.trpopupcss)}" rel="stylesheet" type="text/css" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/jquery-1.7.1.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trbootstrap, 'bootstrap/js/bootstrap-modal.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trbootstrap, 'bootstrap/js/bootstrap-tab.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/jquery.loadmask.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/canvasloadermin.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'jquery/plugins/sugar-1.3.9.min.js')}" />
+    <!-- ensure these values are pulled by standard controller -->
+    <apex:outputField value="{!TASKRAY__Project_Task__c.TASKRAY__Repeat_Week_Days__c}" rendered="false"/>
+    
+    <apex:outputPanel rendered="{!newTask}">
+        <style>
+            #add-tags-btn{ 
+                display:none;
+            }
+        </style>
+    </apex:outputPanel>
+
+    <style type="text/css">
+        /* Load Mask */
+        .wrapper {
+            left: 50%;
+            position: absolute;
+            top: 50%;
+        }
+        #canvasLoader{
+            z-index:10000;
+        }
+    </style>
+    
+    <!-- Enabled SFDC Components for controlling operations in Javascript, Jordan, 3/15/2012 -->
+    <script type="text/javascript">
+        var taggingEnabled = '{!taggingEnabled}';
+    </script>
+    <!-- //End Enabled components for controller operations -->
+    
+    <script type="text/javascript">
+        var labels={};
+
+        labels['TaskRay_TaskModal_NoRepeatAvailable']= '{!JSENCODE($Label.TaskRay_TaskModal_NoRepeatAvailable)}';
+        labels['TaskRay_TaskModal_NoRepeatAvailableLinkText']= '{!JSENCODE($Label.TaskRay_TaskModal_NoRepeatAvailableLinkText)}';
+        labels['TaskRay_TaskModal_DayRepeatLabel']= '{!JSENCODE($Label.TaskRay_TaskModal_DayRepeatLabel)}';
+        labels['TaskRay_TaskModal_WeekRepeatLabel']= '{!JSENCODE($Label.TaskRay_TaskModal_WeekRepeatLabel)}';
+        labels['TaskRay_TaskModal_MonthRepeatLabel']= '{!JSENCODE($Label.TaskRay_TaskModal_MonthRepeatLabel)}';
+        labels['TaskRay_TaskModal_YearRepeatLabel']= '{!JSENCODE($Label.TaskRay_TaskModal_YearRepeatLabel)}';
+        labels['TaskRay_TaskModal_RepeatTaskExplanationBase']='{!JSENCODE($Label.TaskRay_TaskModal_RepeatTaskExplanationBase)}';
+        labels['TaskRay_TaskModal_RepeatTaskExplanationVariable']= '{!JSENCODE($Label.TaskRay_TaskModal_RepeatTaskExplanationVariable)}';
+        labels['TaskRay_TaskModal_RepeatTaskExplanation_month']= '{!JSENCODE($Label.TaskRay_TaskModal_RepeatTaskExplanation_month)}';
+        labels['TaskRay_TaskModal_RepeatTaskExplanation_months']= '{!JSENCODE($Label.TaskRay_TaskModal_RepeatTaskExplanation_months)}';
+        labels['TaskRay_TaskModal_RepeatTaskExplanation_day']= '{!JSENCODE($Label.TaskRay_TaskModal_RepeatTaskExplanation_day)}';
+        labels['TaskRay_TaskModal_RepeatTaskExplanation_days']= '{!JSENCODE($Label.TaskRay_TaskModal_RepeatTaskExplanation_days)}';
+        labels['TaskRay_TaskModal_RepeatTaskExplanation_year']= '{!JSENCODE($Label.TaskRay_TaskModal_RepeatTaskExplanation_year)}';
+        labels['TaskRay_TaskModal_RepeatTaskExplanation_years']= '{!JSENCODE($Label.TaskRay_TaskModal_RepeatTaskExplanation_years)}';
+        labels['TaskRay_TaskModal_RepeatTaskExplanation_every']= '{!JSENCODE($Label.TaskRay_TaskModal_RepeatTaskExplanation_every)}';
+        labels['TaskRay_TaskModal_RepeatTaskExplanation_week']= '{!JSENCODE($Label.TaskRay_TaskModal_RepeatTaskExplanation_week)}';
+        labels['TaskRay_TaskModal_RepeatTaskExplanation_until']= '{!JSENCODE($Label.TaskRay_TaskModal_RepeatTaskExplanation_until)}';
+        labels['TaskRay_TaskModal_RepeatTaskExplanation_on']= '{!JSENCODE($Label.TaskRay_TaskModal_RepeatTaskExplanation_on)}';
+
+        var pageicon = '{!URLFOR($Resource.trplugins, 'images/star32.png')}';
+        function GetURLParameter(sParam)
+        {
+            var sPageURL = window.location.search.substring(1);
+            var sURLVariables = sPageURL.split('&');
+            for (var i = 0; i < sURLVariables.length; i++)
+            {
+                var sParameterName = sURLVariables[i].split('=');
+                if (sParameterName[0] == sParam)
+                {
+                    return sParameterName[1];
+                }
+            }
+        }
+        /* Approval Process for future date  */
+        var $j = jQuery.noConflict();
+        $j(document).ready(function(){
+            if(typeof(Ext) !== 'undefined'){parent.Ext = Ext;}
+
+        	if($j('input[title=Owner]').length > 0 && $j('.errorM3').length == 0){
+        		parent.ownerName = $j('input[title=Owner]').val();	// save this incase 'cancel' without updating for sharing
+        	} 
+        
+	        if({!closeDialog}){
+	            if(pageHasErrorMsg() == false){
+		            parent.highlightFlag = true;
+		            
+		            parent.dialogOpen = false;
+                    parent.planningViewLastEditedItem='{!JSENCODE(currentTask.Id)}';
+                    parent.columnViewLastEditedItem='{!JSENCODE(currentTask.Id)}';
+		            parent.$j('#task-modal').modal('hide');
+                    parent.initPage();
+	            }
+        	}
+            if(GetURLParameter('copyfrom')!=null){
+                parent.initPage();
+            }
+
+	        $j(document).on('click','a', function() {
+	        	if($j(this).attr('href')!== undefined){
+		        	if($j(this).attr('href').indexOf('javascript')==-1 && $j(this).attr('href')!='#' && $j(this).attr('target')!='_self')
+		        	{
+			        	window.open($j(this).attr('href'));
+					    return false;
+		        	}
+			    }
+			});
+            /* Approval Process for future date
+            if(pendingApproval=='true'){
+                $j('.pendingDisable').attr('disabled','disabled');
+                $j('.pendingDisable').attr('title','This task is pending approval and locked for editing.');
+            }*/
+            
+            $j("#task-edit-content a[target!='_self']").each(function(element){ 
+                if(typeof($j(this).attr('href')) !== 'undefined'){
+                    if($j(this).attr('href').indexOf("http") >= 0)
+                    {
+                        $j(this).attr('target','_blank');
+                    }
+                }
+            });
+            
+            $j(this).find('.pageTitleIcon').attr('src',pageicon).css('height','32px');
+            parent.currentlightboxtaskid = '{!JSENCODE(currentTask.Id)}'; //assign this first, will be reassigned if not current task;
+            parent.dialogOpen = true;
+            var loadlightboxtasklist = '{!JSENCODE(currentTask.List__c)}';
+            
+            $j(".dataCol span:contains('<a href=')").each(function(){
+                $j(this).html($j(this).text());
+            });
+            
+            $j(".save-btn").click(function(){
+                var currentlightboxtasklist = $j('.List__c').val();
+                if(loadlightboxtasklist!=currentlightboxtasklist && currentlightboxtasklist=='Finished')
+                {
+                //Call a remote action to reset the task sort order to 0
+                parent.TASKRAY.trController.moveTaskToTopOfList('{!currentTask.Id}',function(event,result){
+                        if (result.status) {             
+                        }
+                    });
+                }
+            });
+            
+            // restore any tags (inbetween form submission)
+            if(parent.tagInput != null){
+                $j('#tag-input').val(parent.tagInput);
+            }
+            
+            /*
+             *  
+             */
+            $j('.delete-btn').click(function(e){
+                e.preventDefault();
+                e.stopPropagation();
+                $j("#delete-confirm").modal('show');
+            });
+
+            /* 
+             *  add-tags-btn
+             *  Adds the tags to a record
+             *  Button is not displayed when a new task is being created
+             */
+            $j('#add-tags-btn').click(function(e){
+                e.preventDefault();
+                addTags(closeDialog);                
+            });
+    
+            /*
+             * Check to see if we're hitting button on a new task (that hasn't been saved yet)
+             */
+            $j('#tag-input').keypress(function(e){
+                if (e.keyCode == 13) {
+                    e.preventDefault();
+                    if(!($j('#task-id').val() == '')){
+                        addTags();
+                    }
+                    // hitting enter on an 'unsaved' project task (attempt to save)
+                    // and than add tags, but don't close the dialog
+                    else{
+                        parent.tagInput = $j('#tag-input').val();   //store the tags until after the task is created
+                        saveNewTaskNoClose();
+                        parent.runAddTagsDoNotClose = true;
+                    }
+                }
+            });
+            
+            /*
+             * Because we ant to trigger default VisualForce validation, save the 'tags' 
+             * portion of the form into the parent and restore it AFTER the page has
+             * posted back
+             */
+            $j('.save-new-task-close-btn').click(function(e){
+                e.preventDefault();
+                parent.tagInput = $j('#tag-input').val();
+                saveNewTaskClose();
+                parent.closeModalOnNextRefresh=true;
+            });
+
+            $j('.save-new-task-noclose-btn').click(function(e){
+                e.preventDefault();
+                parent.tagInput = $j('#tag-input').val();
+                saveNewTaskNoClose();
+                parent.runAddTagsDoNotClose = true;
+            });
+
+            /* 
+             *
+             */
+            $j('.chatterFollowUnfollow').click(function(e){
+                parent.refreshTasks();
+            });
+            
+
+            /*
+             * once page has posted back (after attempting to save to server), check to see if a new record
+             * has been created, and if so, add tags to it, or close the dialog
+             */
+            if({!addTagsAndCloseDialog} || parent.closeModalOnNextRefresh){
+                parent.closeModalOnNextRefresh = false;
+                if($j('#tag-input').val()!=undefined){
+                    if($j('#tag-input').val().length > 0 && $j('#task-id').val() != ''){
+                        parent.TASKRAY.trController.addRecordSObjectTags($j('#tag-input').val().split(","),$j('#task-id').val(),function(event,result){
+                            if (result.status) {
+                                parent.currentlightboxtaskid = $j('#task-id').val();
+                                parent.updateListSortOrderOnHighlight='{!JSENCODE(currentTask.List__c)}';
+                                parent.planningViewLastEditedItem='{!JSENCODE(currentTask.Id)}';
+                                parent.columnViewLastEditedItem='{!JSENCODE(newTaskId)}';
+                                parent.highlightFlag = true;
+                                parent.initPage();
+                                parent.dialogOpen = false;
+                                parent.tagInput = null;     //clear parent tag storage
+                                
+                                parent.$j('#task-modal').modal('hide');            
+                            }
+                        });
+                    }
+                    else if($j('#task-id').val() != ''){
+                        parent.currentlightboxtaskid = $j('#task-id').val();        
+                        parent.planningViewLastEditedItem='{!JSENCODE(currentTask.Id)}';
+                        parent.updateListSortOrderOnHighlight='{!JSENCODE(currentTask.List__c)}';
+                        parent.columnViewLastEditedItem='{!JSENCODE(newTaskId)}';
+                        parent.highlightFlag = true;
+                        parent.initPage();
+                        parent.tagInput = null; //clear parent tag storage
+                        parent.dialogOpen = false;
+                        
+                        parent.$j('#task-modal').modal('hide');
+                    }
+                    else{
+                        alert('no task id');
+                    }
+                    
+                }
+                else{
+                    if(pageHasErrorMsg() == false){
+                        parent.planningViewLastEditedItem='{!JSENCODE(currentTask.Id)}';
+                        parent.updateListSortOrderOnHighlight='{!JSENCODE(currentTask.List__c)}';
+                        parent.columnViewLastEditedItem='{!JSENCODE(newTaskId)}';
+                        parent.currentlightboxtaskid = $j('#task-id').val();        
+                        parent.highlightFlag = true;
+                        parent.initPage();
+                        parent.tagInput = null; //clear parent tag storage
+                        parent.dialogOpen = false;
+
+                        parent.$j('#task-modal').modal('hide');        
+                    }
+                    
+                } 
+
+                // if(parent.closeModalOnNextRefresh){
+                //     parent.closeModalOnNextRefresh=false;
+                //     parent.$j('#task-modal').modal('hide');
+                // }
+            }
+
+            if(parent.runAddTagsDoNotClose){
+                parent.runAddTagsDoNotClose=false;
+                if($j('#tag-input').val().length > 0 && $j('#task-id').val() != ''){
+                    parent.TASKRAY.trController.addRecordSObjectTags($j('#tag-input').val().split(","),$j('#task-id').val(),function(event,result){
+                        if (result.status) {
+                                     
+                        }
+                    });
+                }
+            }
+
+            
+            /*
+             *  
+             *  if we're not adding new tags as the page loads than we should hide the loading
+             *  Modified to check for 'tagging' prior to running operations, Jordan, 3/15/2012
+             *  Cleared the 'tag-input' if tagging enabled, Jordan, 3/31/2012 
+             */
+            if(taggingEnabled == "true"){               
+                if({!saveTaskAddTags}){
+                    $j('#task-tags-loading').hide();
+                }
+                else{
+                    $j('#tag-input').val('');   //clear the val
+                    if(!{!addTagsAndCloseDialog}){getCurrentTaskTags();}
+                    var copyFromTags='{!JSENCODE(copyFromTags)}';
+                    if(copyFromTags!=''){
+                        $j('#tag-input').val(copyFromTags);   
+                    }
+                }
+            }
+            
+            $j('#publishersharebutton').click(function(e){
+                if($j('#chatterFileStageTwo').is(':visible')){parent.initPage();}
+            });
+            
+                  // after saving the task without closing the dialog, add the tags
+            if({!saveTaskAddTags} && $j('#task-id').val() != '' && parent.tagInput != null)
+            {
+                parent.currentlightboxtaskid = $j('#task-id').val();
+                addTags();
+                parent.initPage();
+            }
+            
+            /*
+             *  Clicking the 'Confirm Delete' button
+             */
+             $j('#delete-confirm-btn').click(function(e){
+                showLoadMask();
+                deleteTask();   // this is an action function
+             });
+             
+             /* 
+              * log the user having viewed this taskcard for history
+              */
+            parent.TASKRAY.trController.logTaskcardView(parent.currentlightboxtaskid,function(event,result){
+                if (result.status) {
+                    //console.log('logged task visit');
+                } 
+             });
+             
+             attachRepeatTaskMethods();
+
+             fadeInMsg();
+
+        }); // end document.ready 
+
+        function addTags(closeDialog){
+            parent.TASKRAY.trController.addRecordSObjectTags($j('#tag-input').val().split(","),parent.currentlightboxtaskid,function(event,result){
+            if (result.status) {
+                (function(callback){
+                $j('.project-task-tag').remove();
+                $j('#task-tags-loading').show();
+                getCurrentTaskTags();
+                parent.initPage();
+                callback();
+                })(function(){
+                    $j('.project-task-tag').unbind('click');
+                    attachTaskTagHandlers();
+                });
+            }
+            parent.tagInput=null;
+            });
+            $j('#tag-input').val('');
+        }
+        
+        /* 
+         *  getCurrentTaskTags()
+         *  The method got renamed in the parent controller class fixing, Jordan, 3/15/2012
+         */
+        function getCurrentTaskTags(){
+            parent.TASKRAY.trController.recordsObjectTags(parent.currentlightboxtaskid, function(event,result){
+                if(result.status)
+                {
+                    $j('#task-tags-loading').hide();
+                    if (event.length > 0) {
+                        $j.each(result.result, function(i, tag){
+                            (i < event.length-1) ? $j('#tag-list').append('<span class="project-task-tag" id="' + tag.Id + '">' + tag.Name + '&nbsp;<span class="delete-tag-btn" id="'+tag.Id+'" style="display:none"><img src="{!URLFOR($Resource.trplugins, 'images/redxround.png')}"/></span>,&nbsp;</span>') : $j('#tag-list').append('<span class="project-task-tag" id="' + tag.Id + '">' + tag.Name + '&nbsp;<span id="'+tag.Id+'" class="delete-tag-btn" style="display:none"><img src="{!URLFOR($Resource.trplugins, 'images/redxround.png')}"/></span></span>');
+                        });
+                        $j('#tag-entry').css('margin-top','0px');
+                        attachTaskTagHandlers();
+                    }
+                    else{
+                      $j('#tag-entry').css('margin-top','-30px');
+                    }
+                }
+            });
+        }
+
+        function attachTaskTagHandlers(){
+            $j('.project-task-tag').hover(function(){
+                $j(this).find('.delete-tag-btn').show();
+                $j(this).unbind('click');
+                $j(this).click(function(e){
+                    e.preventDefault();
+                    var tag = $j(this);
+                    parent.TASKRAY.trController.deleteRecordSobjectTag($j(this).attr('id'),function(event,result){
+                        $j(tag).remove();
+                        if($j('.project-task-tag:visible')!=undefined){
+                            if($j('.project-task-tag:visible').length == 0){
+                                $j('#tag-entry').css('margin-top','-30px');
+                            }
+                        }
+                        parent.initPage();
+                   });
+                });
+            },
+            function(){
+                $j(this).find('.delete-tag-btn').hide();
+                $j(this).click(function(){ return false; });
+            });
+        }
+        
+        function fadeInMsg(){
+        	var message='{!IF((message!='' && message != null),JSINHTMLENCODE(message), '')}';
+            message=message.replace(/<\/?\w(?:[^"'>]|"[^"]*"|'[^']*')*>/g, "");
+            
+	        if(message!=""){
+	        	$j('.editPage').prepend('<h4 class="project_task_message"></h4>');
+                $j('.editPage .project_task_message').html($j('<div>').html(message).text());
+	        	$j(".project_task_message").fadeOut(10000, function(){
+				    //$j(this).remove();
+				});
+	        }
+		}
+
+        function showLoadMask(callback) {
+            $j("#canvasloader-container").empty();
+            $j("#modal-backdrop-loadmask").show();
+            $j("#canvasloader-container").show();
+            var cl = new CanvasLoader('canvasloader-container');        
+            cl.setColor('#0099ff');
+            // default is '#000000'
+            cl.setDiameter(84);
+            // default is 40
+            cl.setDensity(75);
+            // default is 40
+            cl.setRange(1);
+            // default is 1.33
+            cl.setFPS(26);
+            // default is 24
+            cl.show();
+            // Hidden by default
+            // This bit is only for positioning - not necessary
+            $j("#canvasLoader").css('margin-top', ($j("#canvasLoader").outerHeight() / 2) * -1);
+            $j("#canvasLoader").css('margin-left', ($j("#canvasLoader").outerWidth() / 2) * -1);
+            $j("#canvasLoader").css('position','fixed');
+            $j("#canvasLoader").css('top',$j(window).height()/2);
+            $j("#canvasLoader").css('left',$j(window).width()/2);
+            /*loaderObj.style.position = "absolute";
+            loaderObj.style["top"] = cl.getDiameter() * -0.5 + "px";
+            loaderObj.style["left"] = cl.getDiameter() * -0.5 + "px";*/
+            
+        }
+
+        function clearLoadMask(callback){
+            $j("#canvasloader-container").empty();
+            $j("#modal-backdrop-loadmask").hide();
+        }
+
+        function attachRepeatTaskMethods(){
+
+            hideRepeatIfNoDeadline();
+
+            $j('#repeat-anchor').on('shown', function (e) {
+                showRepeatInterfaceForIntervalType();
+            });
+
+            $j("select[id$='repeat_interval']").change(function(){
+                showRepeatInterfaceForIntervalType();
+                regenerateVariableLabel();
+            });
+
+            $j("input[id$='repeat-every']").change(function(){
+                regenerateVariableLabel();
+            });
+
+            $j("input[id$='repeat_end']").on('input',function(){
+                regenerateVariableLabel();
+            });
+            
+            $j(".repeat-weekday-opt").click(function(){
+                regenerateVariableLabel();
+            });
+
+            //Generate the label if we have data already set
+            if({!NOT(Project_Task__c.Repeat_Every__c==null)}){
+                regenerateVariableLabel();
+            }
+        }
+
+        function hideRepeatIfNoDeadline(){
+            if('{!TASKRAY__Project_Task__c.TASKRAY__Deadline__c}' === ''){
+                $j('.repeat-options').mask();
+                $j('.repeat-options').children().hide();
+                var goToDiv = $j('<div style="text-align:center;"/>');
+                goToDiv.append('<span>'+labels['TaskRay_TaskModal_NoRepeatAvailable']+'</span><br /><br />');
+                goToDiv.append('<a href="#" id="goToDeadline">'+labels['TaskRay_TaskModal_NoRepeatAvailableLinkText']+'</a>');
+                $j('.repeat-options').append(goToDiv);
+            }
+            $j('#goToDeadline').click(function(){
+                $j('#tabs-container a:first').tab('show');
+                $j('.modal-footer .edit-btn').click();
+            });
+        }
+
+        function showRepeatInterfaceForIntervalType(){
+            var selectedIndex = $j("select[id$='repeat_interval'] option:selected").index();
+            $j('.repeat_interval_dependent_control').hide();
+            if($j("input[id$='repeat-every']").val()===''){
+                $j("input[id$='repeat-every']").val('1');
+            }
+            if(selectedIndex==0){
+                //hide all
+                $j("input[id$='repeat-every']").val('');
+            } else if(selectedIndex ==1){
+                //Daily
+                $j('#repeat-every-suffix').text(labels['TaskRay_TaskModal_DayRepeatLabel']);
+                $j('.repeat-every,.repeat-end-date').show();
+            } else if(selectedIndex == 2){
+                //Weekly
+                $j('#repeat-every-suffix').text(labels['TaskRay_TaskModal_WeekRepeatLabel']);
+                //Show the week select, repeat every, and end date
+                 $j('.weekly-repeat,.repeat-every,.repeat-end-date').show();
+            } else if(selectedIndex ==3){
+                //Monthly
+                $j('#repeat-every-suffix').text(labels['TaskRay_TaskModal_MonthRepeatLabel']);
+                $j('.repeat-every,.repeat-end-date').show();
+            } else {
+                //yearly
+                //show the repeat every and end date
+                $j('#repeat-every-suffix').text(labels['TaskRay_TaskModal_YearRepeatLabel']);
+                $j('.repeat-every,.repeat-end-date').show();
+            }
+
+
+        }
+
+        function pageHasErrorMsg(){
+            return !$j('.messageTable').length==0;
+        }
+
+        function regenerateVariableLabel(){
+            var selectedIndex = $j("select[id$='repeat_interval'] option:selected").index();
+            var everyCount = $j("input[id$='repeat-every']").val();
+            var everyCountOrd = (everyCount == 1) ? '1' : parseInt(everyCount).ordinalize();
+            if(isNaN(parseInt(everyCount))){everyCountOrd = '_';}
+            var updateText=labels['TaskRay_TaskModal_RepeatTaskExplanationVariable']+' ';
+            if(selectedIndex==0){
+                //No repeat interval
+                updateText=labels['TaskRay_TaskModal_RepeatTaskExplanationBase'];
+            } else if(selectedIndex ==1){
+                //Daily
+                var suffixToUse = labels['TaskRay_TaskModal_RepeatTaskExplanation_day'];
+                var tempStr = labels['TaskRay_TaskModal_RepeatTaskExplanation_every']+' '+everyCountOrd+' '+suffixToUse;
+                updateText+=tempStr;
+            } else if(selectedIndex == 2){
+                //Weekly
+                var selectedLabelArr = $j.map($j('.repeat-weekday-opt:checked').closest('label'),function(val, index){return $j(val).text()});
+                var selectedLabelStr = selectedLabelArr.join(', ').replace(/(.*),(.*)$/, "$1 and $2");
+            
+                
+                var suffixToUse = labels['TaskRay_TaskModal_RepeatTaskExplanation_week'];
+                //updateText+=labels['TaskRay_TaskModal_RepeatTaskExplanation_every']+' '+everyCountOrd+' '+suffixToUse+' '+labels['TaskRay_TaskModal_RepeatTaskExplanation_on']+selectedLabelStr;
+                updateText+=labels['TaskRay_TaskModal_RepeatTaskExplanation_every']+' '+everyCountOrd+' '+suffixToUse;
+                
+            } else if(selectedIndex ==3){
+                //Monthly
+                var suffixToUse = labels['TaskRay_TaskModal_RepeatTaskExplanation_month'];
+                var tempStr = labels['TaskRay_TaskModal_RepeatTaskExplanation_every']+' '+everyCountOrd+' '+suffixToUse;
+                updateText+=tempStr;
+            } else {
+                //yearly
+                var suffixToUse = labels['TaskRay_TaskModal_RepeatTaskExplanation_year'];
+                var tempStr = labels['TaskRay_TaskModal_RepeatTaskExplanation_every']+' '+everyCountOrd+' '+suffixToUse;
+                updateText+=tempStr;
+            }
+
+            if($j.trim($j("input[id$='repeat_end']").val()).length>0){
+                updateText+=' '+labels['TaskRay_TaskModal_RepeatTaskExplanation_until']+' '+$j("input[id$='repeat_end']").val();
+            }
+
+            $j('#repeat-task-variable-label').text(updateText+'.');
+            
+        }
+
+        function deleteComplete(){
+            if(parent.newTaskRayUI){
+                clearLoadMask();
+                parent.animateDelete($j('#task-id').val());
+                parent.$j('#task-modal').modal('hide');
+            } else{
+                clearLoadMask();parent.getSideBarUsersPhotos(function(){void(0)});parent.$j('#task-modal').modal('hide');parent.highlightTaskRemove();
+            }
+        }
+
+    </script>
+    <style type="text/css">
+        input, textarea{
+            width: auto;
+        }
+        select{
+            width: auto;
+        }
+        select, textarea, input[type="text"], input[type="password"], input[type="datetime"], input[type="datetime-local"], input[type="date"], input[type="month"], input[type="time"], input[type="week"], input[type="number"], input[type="email"], input[type="url"], input[type="search"], input[type="tel"], input[type="color"], .uneditable-input{
+            margin-bottom: 0px;
+        }
+        label{
+            margin-top: 5px;
+        }
+        .dataCol input[type="checkbox"], .dataCol a{
+            margin-top:6px;
+        }
+        .dataCol span span{
+            margin-top:6px;
+            display: inline-block;
+        }
+        #datePicker select{
+            width: auto;
+        }
+        .modal-footer{
+            padding-top: 6px !important;
+            padding-bottom: 6px !important;
+            margin-top: 20px;
+        }
+    </style>
+    <div id="task-edit-content">
+    <apex:sectionHeader title="{!pageSubTitle}" subtitle="{!pageTitle}"/>
+    <apex:pageMessages />
+
+     <ul class="nav nav-tabs" id="tabs-container">
+        <li class="active"><a href="#details" data-toggle="tab" target="_self">{!HTMLENCODE($Label.TaskRay_TaskModal_DetailTabLabel)}</a></li>
+        <li id="repeat-tab"><a id="repeat-anchor" href="#repeat" data-toggle="tab" target="_self">{!HTMLENCODE($Label.TaskRay_TaskModal_RepeatTabLabel)}</a></li>
+    </ul>
+
+    <div id="myTabContent" class="tab-content">
+        <div class="tab-pane fade active in" id="details">
+            <apex:form >
+            <apex:outputField rendered="FALSE" value="{!TASKRAY__Project_Task__c.TASKRAY__Deadline__c}" />
+            <apex:outputField rendered="FALSE" value="{!TASKRAY__Project_Task__c.TASKRAY__List__c}" />
+            <apex:outputField rendered="FALSE" value="{!TASKRAY__Project_Task__c.TASKRAY__Repeat_Interval_Type__c}" />
+            <apex:outputField rendered="FALSE" value="{!TASKRAY__Project_Task__c.TASKRAY__Repeat_Every__c}" />
+            <apex:outputField rendered="FALSE" value="{!TASKRAY__Project_Task__c.TASKRAY__Repeat_End_Date__c}" />
+            <apex:outputField rendered="FALSE" value="{!TASKRAY__Project_Task__c.TASKRAY__Repeat_Week_Days__c}" />
+            
+            
+            
+            <input type="hidden" id="task-id" value="{!TASKRAY__Project_Task__c.Id}" />
+            <apex:actionFunction name="saveNewTaskClose" action="{!saveAndAddTags}" />
+            <apex:actionFunction name="saveNewTaskNoClose" action="{!saveAndDontClose}" />
+            <apex:actionFunction name="deleteTask" action="{!deleteTask}" oncomplete="deleteComplete();"></apex:actionFunction>
+            
+            <apex:pageBlock title="" mode="edit" id="task-details">
+                    
+                    <apex:pageBlockSection title="" showHeader="false" columns="2">
+                    
+                        <apex:repeat value="{!$ObjectType.TASKRAY__Project_Task__c.FieldSets.TASKRAY__Project_Task_Field_Set}" var="f">
+                            <apex:outputField value="{!currentTask[f]}" rendered="{!NOT(editMode) || CONTAINS(f.FieldPath,'__r')}"/>
+                            <apex:inputField value="{!currentTask[f]}" styleclass="{!f}" required="{!f.Required}" rendered="{!editMode && !CONTAINS(f.FieldPath,'__r')}"/>
+                        </apex:repeat>
+                    </apex:pageBlockSection>
+                    <apex:pageBlockSection showHeader="false" title="Public Tags" columns="1" rendered="{!taggingEnabled}">
+                        <div id="tag-existing">
+                            <h2 class="tag-title"><img src="{!URLFOR($Resource.trplugins, 'images/tags32.png')}" alt=""/>Tags</h2>
+                            <div id="tag-list"><span id="task-tags-loading"><img src="{!URLFOR($Resource.trPlugins, 'images/ajax.gif')}"/>&nbsp;<em>Loading Tags...</em></span></div>
+                            <span class="delete-x" style="display:none;"></span>
+                            <div style="clear:both;"></div>
+                        </div>
+                        <div id="tag-entry">
+                            <input type="text" id="tag-input" placeHolder="Enter new tags separated by a comma..."/>
+                            <input type="button" id="add-tags-btn" value="Add"/>
+                        </div>
+                    </apex:pageBlockSection>
+
+                    <!-- <apex:pageBlockButtons location="top"> -->
+                    <div class="modal-footer">
+                        <apex:commandLink id="save-new-task-noclose-btn" styleclass="btn-bs btn-bs-primary save-new-task-noclose-btn save-btn" value="Save" reRender="noRefresh" rendered="{!newTask}" />
+                        <apex:commandLink id="save-new-task-close-btn" styleclass="btn-bs save-new-task-close-btn save-btn" value="Save & Close" reRender="noRefresh" rendered="{!newTask}" />
+                        <apex:commandLink id="save-btn" styleclass="btn-bs save-btn" action="{!saveAndDontClose}" value="Save" rendered="{!AND(editMode,NOT(newTask))}" />
+                        <apex:commandLink id="save-and-close-btn" styleclass="btn-bs btn-bs-primary save-btn" action="{!saveAndClose}" value="Save & Close" rendered="{!AND(editMode,NOT(newTask))}" />
+                        <apex:commandLink id="save-and-copy-task-btn" action="{!saveAndCopyNoClose}" styleclass="btn-bs save-and-copy-new-task-btn save-and-copy-btn" value="Save & Copy" rendered="{!editMode}" />
+                        <!-- Added $ObjectType.Project_Task__c.updateable check, Jordan, 2/28/2012-->
+                        <!-- Approval Process for future date <apex:commandButton disabled="{!pendingApproval}" id="edit" action="{!changeForm}" styleClass="pendingDisable" value="Edit" rendered="{!(NOT(editMode) && userAccess && $ObjectType.Project_Task__c.updateable)}" /> -->
+                        <apex:commandLink id="edit" action="{!changeForm}" value="Edit" styleclass="btn-bs btn-bs-primary edit-btn" rendered="{!(NOT(editMode) && userEditAccess && $ObjectType.TASKRAY__Project_Task__c.updateable)}" />
+                        <apex:commandLink value="Cancel" styleclass="btn-bs" onclick="if(parent.ownerName != null){ $j('input[title=Owner]').val(parent.ownerName) };" action="{!cancelEdit}" rendered="{!AND(editMode,NOT(newTask))}" />
+                        <!-- Added $ObjectType.Project_Task__c.deletable check, Jordan, 2/28/2012-->
+                        <!-- Approval Process for future date <apex:commandButton disabled="{!pendingApproval}" styleClass="delete-btn pendingDisable" value="Delete" rendered="{!(NOT(newTask) && userAccess && $ObjectType.Project_Task__c.deletable)}"/> -->
+                        <apex:commandLink styleClass="delete-btn btn-bs" value="Delete" reRender="noRefresh" rendered="{!(NOT(newTask) && userAllAccess && $ObjectType.TASKRAY__Project_Task__c.deletable)}"/>
+                        <!-- Approval Process for future date <apex:commandButton styleClass="submit-for-approval" action="{!submitProjectTaskForApproval}" value="Submit For Approval" rendered="{!AND(NOT(pendingApproval),displayApprovalButton)}"/> -->
+                    </div>
+                    <!-- </apex:pageBlockButtons> -->
+                </apex:pageBlock>
+            </apex:form>
+
+            <chatter:feedWithFollowers entityId="{!currentTask.Id}"></chatter:feedWithFollowers>
+
+        </div>
+        <!-- end details tab -->
+        <div class="tab-pane fade in" id="repeat" style="width:100%">
+                <apex:form styleClass="form-horizontal">
+                    <div class="alert alert-info" id="repeat-task-variable-label">{!HTMLENCODE($Label.taskray__TaskRay_TaskModal_RepeatTaskExplanationBase)}</div>
+                        <div class="repeat-options">
+                            <div class="control-group">
+                                <label class="control-label repeat_interval_label" for="repeat_interval">{!HTMLENCODE($Label.taskray__TaskRay_TaskModal_RepeatIntervalLabel)}</label>
+                                <div class="controls">
+                                    <apex:selectList id="repeat_interval" size="1" value="{!currentTask.TASKRAY__Repeat_Interval_Type__c}">
+                                        <apex:selectOptions value="{!intervalTypeOpts}" />
+                                    </apex:selectList>
+                                    <!-- <apex:inputField id="repeat_interval" value="{!currentTask.TASKRAY__Repeat_Interval_Type__c}"></apex:inputField> -->
+                                </div>
+                            </div>
+                            <div class="control-group repeat-every repeat_interval_dependent_control">
+                                <label class="control-label repeat_every_label">{!HTMLENCODE($Label.taskray__TaskRay_TaskModal_RepeatLabel)}</label>
+                                <div class="controls">
+                                    <apex:inputField id="repeat-every" value="{!currentTask.TASKRAY__Repeat_Every__c}"/> <span id="repeat-every-suffix"></span>
+                                </div>
+                            </div>
+
+                             <!-- <div class="control-group weekly-repeat repeat_interval_dependent_control">
+
+
+                                <div class="controls"><label class="checkbox inline"><apex:inputCheckbox value="{!weekDay1}" styleClass="repeat-weekday-opt"/> {!HTMLENCODE(dayNames[0])}</label>
+                                <label class="checkbox inline"><apex:inputCheckbox value="{!weekDay2}" styleClass="repeat-weekday-opt"/> {!HTMLENCODE(dayNames[1])}</label>
+                                <label class="checkbox inline"><apex:inputCheckbox value="{!weekDay3}" styleClass="repeat-weekday-opt"/> {!HTMLENCODE(dayNames[2])}</label>
+                                <label class="checkbox inline"><apex:inputCheckbox value="{!weekDay4}" styleClass="repeat-weekday-opt"/> {!HTMLENCODE(dayNames[3])}</label>
+                                <label class="checkbox inline"><apex:inputCheckbox value="{!weekDay5}" styleClass="repeat-weekday-opt"/> {!HTMLENCODE(dayNames[4])}</label>
+                                <label class="checkbox inline"><apex:inputCheckbox value="{!weekDay6}" styleClass="repeat-weekday-opt"/> {!HTMLENCODE(dayNames[5])}</label>
+                                <label class="checkbox inline"><apex:inputCheckbox value="{!weekDay7}" styleClass="repeat-weekday-opt"/> {!HTMLENCODE(dayNames[6])}</label></div>
+                            </div> -->
+
+                            <!-- start dates / end dates -->
+                            <div class="control-group repeat-end-date repeat_interval_dependent_control">
+                                <label class="control-label" for="repeat_end">{!HTMLENCODE($Label.TaskRay_TaskModal_RepeatEndLabel)}</label>
+                                <div class="controls">
+                                    <apex:inputField id="repeat_end" value="{!currentTask.TASKRAY__Repeat_End_Date__c}" onchange="regenerateVariableLabel();" />
+                                </div>
+                            </div>
+
+                        </div>    
+                    <div class="modal-footer">
+                            <apex:commandLink id="save-recurrence-btn" styleclass="btn-bs save-recurrence-btn" action="{!updateRepeatTaskInfo}" value="Save"/>
+                            <apex:commandLink id="save-and-close-btn" styleclass="btn-bs btn-bs-primary save-btn" action="{!updateRepeatTaskInfoAndClose}" value="Save & Close"/>
+                    </div>
+                </apex:form>
+            </div>
+        </div>
+
+
+    <!-- Modals -->
+    <div id="delete-confirm" class="modal" style="display:none;">
+        <div class="modal-header">Delete Task</div>
+        <div class="modal-body">
+        Are you sure you want to delete this task?
+        </div>
+        <div class="modal-footer">
+            <a id="delete-confirm-btn" href="#" class="btn-bs btn-bs-danger">Delete</a>
+            <a onclick="$j('#delete-confirm').modal('hide');" href="#" class="btn-bs">Cancel</a>
+        </div>
+    </div>
+</div>  
+
+<div id="canvasloader-container" class="wrapper"></div>
+<div id="modal-backdrop-loadmask" class="modal-backdrop in" style="display:none;"></div>
+</apex:page>

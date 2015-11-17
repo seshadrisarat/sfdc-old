@@ -1,0 +1,1019 @@
+<apex:page standardController="RT1__ReadyTalkMeeting__c" recordSetVar="meetings"
+    extensions="RT1.ImportMeetingController" tabStyle="Readytalk__tab">
+    <apex:stylesheet value="{!URLFOR($Resource.RT1__meetingsr, 'css/multi-select.css')}" />
+    <apex:stylesheet value="{!URLFOR($Resource.RT1__meetingsr, 'jquery.loadmask.css')}" />
+    <apex:stylesheet value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.9.1/themes/redmond/jquery-ui.css" />
+    <style type="text/css">
+.loadmask-msg div {
+    background: #FBFBFB !important;
+    border-radius: 5px !important;
+    border: 0 !important;
+    border-top: 3px solid #3A7728 !important;
+    font-size: 13px;
+    text-align: center;
+}
+
+.loadmask-msg {
+    border-radius: 5px !important;
+    border: 0 !important;
+    background: none !important;
+}
+
+.select-red {
+    color: red !important;
+    border-color: red;
+}
+
+.poll-question-dropdown {
+    max-width: 450px;
+}
+
+.poll-question-output {
+    max-width: 450px;
+}
+
+.apexDefaultPageBlock {
+    margin-top: 4px !important;
+}
+</style>
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js" />
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.9.1/jquery-ui.min.js" />
+    <apex:includeScript value="{!URLFOR($Resource.RT1__meetingsr, 'jquery.multi-select.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.RT1__meetingsr, 'jquery.loadmask.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.RT1__meetingsr, 'jquery.qtip.min.js')}" />
+    <script type="text/javascript">
+    var ajaxloader_green = '{!URLFOR($Resource.RT1__meetingsr,'ajaxloader_green.gif')}';
+    var loader = "<img id=\'dataloader\' src=\'" + ajaxloader_green + "'' style=\'display:none; margin:5px; float:right;\' />";
+    var loaderOne = "<img id=\'dataloader-one\' src=\'" + ajaxloader_green + "'' style=\'display:none; margin:5px; float:right;\' />";
+    var meetingIds = [];
+    var meetingTitles = [];
+    var totalScheduledToImport = 0;
+    var selectedIds = [];
+    var leadBehaviorWidget;
+    var campaignId = "";
+
+    $(function() {
+        leadBehaviorWidget = $("[id$=leadAssignmentBehavior]").get(0);
+        $('[id$=showPastMeetings]').parent().first().prepend(loader);
+        $('.editButton:eq(0)').parents().first().append(loaderOne);
+        $('[id$=meetingsearch]').css('min-width', '1200px');
+        // force minwidth on pageblock
+        createMultiselect();
+        attachFunctions();
+        attachCredentialsDialogActions();
+        setLeadAssignmentWidgetVisibility();
+        $(leadBehaviorWidget).change(function() { 
+            setLeadAssignmentWidgetVisibility();
+        });
+        
+        $('#search-btn').click(function(e){
+            e.preventDefault();
+            var searchTerm = $('#showPastMeetingsInput').val();
+            if (searchTerm.length > 3) {
+                doSearch();
+            }
+        });
+        attachDefaultDialogs();
+    });
+    
+    /** 
+     *  displayFieldMappingErrors()
+     **/
+    function displayFieldMappingErrors(callback){
+    
+        // field mapping checks
+         $('.lead').each(function(i,o){
+          var selection = $(o).next();
+          if(invalidLeadFields.indexOf($(o).attr('Name')) > -1
+           || duplicateLeadFieldValues.indexOf($(selection).val()) > -1){
+           selection.addClass('select-red');
+           
+           selection.change(function(){
+            $(this).removeClass('select-red');
+           });
+          }
+         });
+         
+         $('.contact').each(function(i,o){
+          var selection = $(o).next();
+          if(invalidContactFields.indexOf($(o).attr('Name')) > -1
+           || duplicateContactFieldValues.indexOf($(selection).val()) > -1){
+           selection.addClass('select-red');
+           
+           selection.change(function(){
+            $(this).removeClass('select-red');
+           });
+          }
+         });
+         
+          // show validation error on 'Lead Field' header 
+         if(noLeadFieldMappedToEmail || noLeadFieldMappedToLastName){
+          $('th').each(function(i,o){
+           if($(o).text() == 'Lead Field'){
+            $(this).css('color','red');
+           }
+          });
+         }
+         
+         // show validation error on 'Contact Field' header 
+         if(noContactFieldMappedToLastName){
+          $('th').each(function(i,o){
+           if($(o).text() == 'Contact Field'){
+            $(this).css('color','red');
+           }
+          });
+          }
+          
+        
+        if(invalidLeadFields.length > 0 || invalidContactFields.length > 0
+            || duplicateLeadFieldValues.length > 0 || duplicateContactFieldValues.length > 0
+            || noLeadFieldMappedToEmail || noLeadFieldMappedToLastName || noContactFieldMappedToLastName){
+                showFieldMappingDialog();
+        } 
+        
+        callback();
+    }
+    
+    function attachDefaultDialogs(){    
+        $('[id$=default-poll-questions]').click(function(e) {
+            e.preventDefault();
+            $("#pollQuestionDialog").dialog({
+                width : 625,
+                height : 300,
+                title : "Poll Questions",
+                buttons : {
+                    "Close" : function() {
+                        showHideSettingsDataloader(function(){ setEditedValues(); $('#dataloader-one').show(); });
+                        $(this).dialog('destroy');
+                    }
+                }, 
+                create: function(event,ui){
+                    $('#pollQuestionDialog').find('select').change(function(){
+                        var fieldName = $(this).attr('class').split(' ')[0];
+                        var fieldValue = $(this).val();
+                        //loop through the corresponding form and find the input, and update it to the dialog value
+                        $('#pollQuestionInput').find('input').each(function(i,o){
+                            if($(o).hasClass(fieldName)){
+                                $(o).val(fieldValue);
+                            }
+                        });
+                    });
+                }
+            });
+        });
+    
+        $('[id$=field-mappings]').click(function(e) {
+            e.preventDefault();
+            showFieldMappingDialog();
+        });
+    }
+    
+    function attachFunctions() {
+        $('.importButton').click(function(e) {
+            e.preventDefault();
+           assignImportSettings(); 
+        });
+    
+        $('#showPastMeetingsInput').keypress(function() {
+            var searchTerm = $('#showPastMeetingsInput').val();
+            if (searchTerm.length > 3) {
+                doSearch();
+            }
+        });
+    
+        $('#showPastMeetingsInput').keyup(function() {
+            if ($('#showPastMeetingsInput').val().length == 0) {
+                refreshMeetingsList();
+            }
+        });
+    
+        $('[id$=showPastMeetings]').change(function() {
+            if ($(this).is(':checked')) {
+                $('#showHideDates').show();
+            } else {
+                $('#showHideDates').hide();
+            }
+        });
+    
+        $('.cancel').click(function(e) {
+            e.preventDefault();
+            window.location.href = '{!URLFOR($Page.RT1__ReadytalkTab)}?tabOverride=meetings}';
+        });
+    }
+    
+    function showFieldMappingDialog(){
+        $("#fieldMappingDialog").dialog({
+            width: 625,
+            height: 700,
+            title: "Meeting Member Field Mapping",
+            buttons: {
+                "Close":function(){
+                    $(this).dialog('destroy');
+                    showHideSettingsDataloader(function(){ setEditedValues(); $('#dataloader-one').show(); });
+                }   
+            },
+            create: function(event,ui){
+                /** 
+                 *  update the hidden input form that matches the dialog (placing parts of the VF form in a 
+                 *  dialog corrupts the values, so there are 2 on the page 
+                 **/    
+                $('#fieldMappingDialog').find('select').change(function(){
+                    var fieldName = $(this).attr('class');
+                    var fieldValue = $(this).val();
+                    //loop through the corresponding form and find the input, and update it to the dialog value
+                    $('#fieldMappingInput').find('select').each(function(i,o){
+                        if($(o).hasClass(fieldName)){
+                            $(o).val(fieldValue);
+                        }
+                    });
+                });    
+            }
+       });  
+    }
+    
+    function invokeImport(){
+        if ($('.ms-selected').length == 0) {
+            $('.ms-selection').qtip({
+                content : {
+                    text : '<em>Please select at least one meeting from the available meetings list to import.</em>'
+                },
+                position : {
+                    my : 'bottom center', // Use the corner...
+                    at : 'top center' // ...and opposite corner
+                },
+                show : {
+                    event : false, // Don't specify a show event...
+                    ready : true // ... but show the tooltip when ready
+                },
+                hide: {
+                    event: 'unfocus'
+                },
+                style : {
+                    classes : 'ui-tooltip-shadow ui-tooltip-red'
+                }
+            });
+        } else {
+            $('.apexp:eq(1)').mask('The meetings you selected have been scheduled for import.</br>This process may take some time depending on Salesforce.com resources. </br>You can now navigate away from this page, or select a meeting below once it\'s import has completed.');
+            // mask the div
+            $('#dataloader').show();
+            $('.ms-elem-selected').each(function(i, o) {
+                meetingIds.push($(o).attr('ms-value'));
+                var txt = $(o).text();
+        
+                var re1 = '(\\[)';
+                // Any Single Character 1
+                var re2 = '.*?';
+                // Non-greedy match on filler
+                var re3 = '(\\])';
+                // Any Single Character 2
+                var re4 = '( )';
+                // Any Single Character 3
+        
+                var p = new RegExp(re1 + re2 + re3 + re4, ["i"]);
+                var m = p.exec(txt);
+        
+                meetingTitles.push(txt.replace(m[0], ""));
+            });
+            
+            // determine if campaign should be assigned
+            campaignId = document.getElementById(campaignIdInput).value;
+        
+                
+            //if($('.ms-elem-selected').length > 1){
+                //setMeetingToImportIds(meetingIds.join(','),meetingTitles.join(','), '');
+            //} else {
+                if(!$('[id$=dummyCampaignInput]').val() == ''){
+                    $('#campaign-validate-loader').show(); 
+                    validateCampaignContinueImport($('[id$=dummyCampaignInput_lkid]').val());
+                } else {    // just import
+                    setMeetingToImportIds(meetingIds.join(','),meetingTitles.join(','), '');
+                }
+            //}
+        }
+    }
+        
+    function searchForMeetings() {
+        $('#dataloader').show();
+        $('#meetings-selection').find('option').remove();
+        var showPastMeetings, fromDate, toDate;
+        showPastMeetings = false;
+        fromDate = '';
+        toDate = '';
+        if ($('[id$=showPastMeetings]').is(':checked')) {
+            showPastMeetings = true;
+            fromDate = $('.inputStartDate').val();
+            toDate = $('.inputEndDate').val();
+            checkDates(true, showPastMeetings, fromDate, toDate);
+        } else {
+            runSearch(showPastMeetings, fromDate, toDate);
+        }
+    }
+    
+    /** 
+     *  runSearch(showPastMeetings, fromDate, toDate)
+     *  Modify to include credentials, 12/17/2012
+     **/
+    function runSearch(showPastMeetings, fromDate, toDate) {
+        var credentials = $('#tollFreeNumber').val()+":"+$('#accessCode').val()+":"+$('#passCode').val();
+        RT1.ImportMeetingController.searchMeetings($('#showPastMeetingsInput').val(), showPastMeetings, fromDate, toDate, credentials, function(e, r) {
+            if (r.status) {
+                var listResults = [];
+                if (e.length > 0) {
+                    $.each(e, function(i, o) {
+                        listResults.push('<option value="' + o.meetingId + '">' + o.meetingTitle + '</option>');
+                    });
+                    $('#meetings-selection').append(listResults.join(''));
+                } else {
+                    $('#meetings-selection').append('<option value="">No results found</option>');
+                }
+                $('#meetings-selection').multiSelect('refresh');
+                $('#dataloader').hide();
+            }
+        });
+    }
+    
+    var timeoutHnd;
+    function doSearch(ev) {
+        if (timeoutHnd) {
+            clearTimeout(timeoutHnd);
+        }
+        timeoutHnd = setTimeout("searchForMeetings();", 500);
+    }
+    
+    function updateProgressBar() {
+        var progress = 100 - (100 * ($('[id$=meetingsScheduledToImportCount]').val() / totalScheduledToImport));
+        console.log(progress);
+        $('#progressbar').progressbar("value", progress);
+        if (progress == 100) {
+            $('#dataloader').hide();
+            $('.apexp:eq(1)').unmask();
+            $('.editButton').removeAttr('disabled','disabled');
+        }
+    }
+    
+    /**
+     *  refreshes the page repeatedly
+     **/
+    function refreshProgress() {
+        if ($('[id$=meetingsScheduledToImportCount]').val() > 0) {
+            setTimeout("refreshmeetingsToImportList();", 1000);
+        }
+    }
+    
+    /** 
+     *  createMultiselect
+     *  Attach the jQuery multiselect plugin
+     **/
+    function createMultiselect() {
+        $('#meetings-selection').multiSelect({
+            keepOrder : true,
+            afterSelect : function(value, text) {
+                $('.ms-selection').qtip('distroy');
+                if($('.ms-elem-selected').length > 1){
+                    //$('[id$=campaign]').hide();
+                    $('.importButton').removeAttr('disabled');  //enable import button
+                } else {
+                    //$('[id$=campaign]').show(); 
+                    disableEnableImportButton();
+                }
+            },
+            afterDeselect: function(value, text) {
+                if($('.ms-elem-selected').length > 1){
+                    //$('[id$=campaign]').hide();
+                    $('.importButton').removeAttr('disabled');  //enable import button
+                } else {
+                    //$('[id$=campaign]').show(); 
+                    disableEnableImportButton();
+                }
+            }
+        });
+    }
+    
+    /**
+     *
+     **/
+    function enableDisableSave() {
+        if ($('.ms-selected').length > 0) {
+            $('.importButton').removeAttr('disabled');
+        } else {
+            $('.importButton').attr('disabled', 'disabled');
+        }
+    }
+    
+    function checkDates(search, showPastMeetings, fromDate, toDate) {
+        $('.inputStartDate').qtip('destroy');
+        var one_day = 1000 * 60 * 60 * 24
+        var startday = new Date($('.inputStartDate').val()).getTime();
+        var endday = new Date($('.inputEndDate').val()).getTime();
+        var differenceInDays = Math.ceil((endday - startday) / (one_day));
+        if (differenceInDays < 1) {
+            $('#dataloader').hide();    
+            $('.inputStartDate').qtip({
+                content : {
+                    text : '<em>The start date must come before the end date.</em>'
+                },
+                position : {
+                    my : 'bottom center', // Use the corner...
+                    at : 'top center' // ...and opposite corner
+                },
+                show : {
+                    event : false, // Don't specify a show event...
+                    ready : true // ... but show the tooltip when ready
+                },
+                hide : false,
+                style : {
+                    classes : 'ui-tooltip-shadow ui-tooltip-red'
+                }
+            });
+        } else if (search) {
+            runSearch(showPastMeetings, fromDate, toDate);
+        } else {
+            refreshMeetingsList();
+        }
+    }
+    
+    function attachCredentialsDialogActions(){
+        $('#changeAccessCode').click(function(e) {
+           e.preventDefault();
+           $("#credentialsDialog").dialog({
+               width: 300,
+               height: 180,
+               modal: true,
+               title: "Chairperson Login Credentials"
+           });
+           return false; 
+       });
+       $("#cancelCredentialsButton").click(function() {
+           $("#credentialsDialog").dialog("close");
+       });
+       /**
+        *  Updates the values in the hidden form before updating their refrences in the controller
+        **/
+       $("#saveCredentialsButton").click(function() {
+           $('#saveCredentialsLoader').show();
+           checkCredentials($("#tollFreeNumber").val(),$("#accessCode").val(),$("#passCode").val());
+       });
+       
+       $("#updatePasscodeId").click(function(){
+            $('#saveCredentialsLoader').show();
+            checkCredentials('{!JSENCODE(TollFreeNumber)}','{!JSENCODE(AccessCode)}',$("#passCode").val());
+       });
+    }
+    
+    /**
+     *  checkCredentialsComplete
+     *  Invoke the refreshNewMeetingDetails, which will update the refreshes
+     *  to meeting details in the controller
+     **/
+    function checkCredentialsComplete() {
+        $('#saveCredentialsLoader').hide();
+        var validatedForm = $('[id$=credentialsValid]').val(); 
+        if (validatedForm == "true") {
+            //$('#recordings-list-loader').show();
+            //copy the values through onto the page
+            $('[id$=accessCode]').text($('#accessCode').val());
+            $("#credentialsDialog").dialog("close");
+            refreshMeetingsList();
+        }
+        else {
+            alert("The credentials entered are invalid. Please enter a valid toll free number, "
+                + " access code, and passcode.");
+        }
+    }
+    
+    /** 
+     *  setLeadAssignmentWidgetVisibility()
+     **/
+     function setLeadAssignmentWidgetVisibility() {
+         var leadBehaviorWidget = $("[id$=leadAssignmentBehavior]").get(0);
+         var leadBehaviorVal = $(leadBehaviorWidget).val();
+         
+         $(leadBehaviorWidget).change(function() { 
+             setLeadAssignmentWidgetVisibility();
+         });
+         
+        if (leadBehaviorVal == "Assign to self") {
+            $("#ownerDiv, #assignmentRuleDiv").hide();
+        }
+        else if (leadBehaviorVal == "Assign to another user") {
+            $("#ownerDiv").show();
+            $("#assignmentRuleDiv").hide();
+        }
+        else if (leadBehaviorVal == "Use lead assignment rule") {
+            $("#ownerDiv").hide();
+            $("#assignmentRuleDiv").show();        
+        }
+    }
+     
+    function displayScheduledMeetingsImportProgress(){
+        // find the total scheduled meetings to import for the progressbar
+        totalScheduledToImport = $('.ms-selection').find('li').length;
+    
+        // remove them from list
+        $('.ms-selection').find('li').remove();
+        // remove selected elements
+    
+        // rerender display of importing meeings
+        showImportProgress();
+    
+        meetingIds = [];
+        // reset ids to keep them from getting scheduled twice
+    }
+     
+    function clearFieldValidationErrors(){
+        invalidLeadFields = [];
+        invalidContactFields = [];
+        duplicateLeadFieldValues = [];
+        duplicateContactFieldValues = [];
+        noLeadFieldMappedToEmail = false;
+        noLeadFieldMappedToLastName = false;
+        noContactFieldMappedToLastName = false;
+    } 
+     
+     
+    function showHideSettingsDataloader(callback){
+        if($('#dataloader-one').length === 0){
+            $('.pbTitle:eq(2)').parents().first().append(loaderOne);
+        }   
+        callback();
+    } 
+    
+    function disableEnableImportButton(){
+        if($('[id$=pagemessages]').is(':visible'))
+        {
+            $('.importButton').attr('disabled','disabled');
+        }
+        else
+        {
+            $('.importButton').removeAttr('disabled');
+        }
+    }
+    
+    function validateCampaignChange(){
+        $('#campaign-validate-loader').show(); 
+        if(!$('[id$=dummyCampaignInput]').val() == ''){
+            validateCampaign($('[id$=dummyCampaignInput_lkid]').val());
+        } else {
+            $('[id$=pagemessages]').hide();
+            disableEnableImportButton();
+            $('#campaign-validate-loader').hide(); 
+        }
+    }
+    
+    </script>
+    <apex:outputPanel rendered="{!noGlobalSettingsFlag}">
+        <apex:pageBlock >
+            No settings have been established for ReadyTalk Meeting. Please ask your administrator to vist the "Global Settings" subtab under the ReadyTalk application. <a href="{!URLFOR($Page.ReadytalkTab)}">&#171; Go back</a>
+        </apex:pageBlock>
+    </apex:outputPanel>
+    
+    <apex:outputPanel rendered="{!noUserSettingsFlag}">
+        <apex:pageBlock >
+            No settings have been established for ReadyTalk Meeting. Please visit the "Settings" subtab under the ReadyTalk application to save your credentials. <a href="{!URLFOR($Page.ReadytalkTab)}">&#171; Go back</a>
+        </apex:pageBlock>
+    </apex:outputPanel>
+    
+    <apex:outputPanel rendered="{!AND(NOT(noGlobalSettingsFlag),NOT(noUserSettingsFlag))}">
+
+        <!-- Rerender field validation mappings -->
+        <apex:outputPanel id="fieldValidationMapping">
+            <script type="text/javascript">
+            var invalidLeadFields = [<apex:repeat value="{!invalidLeadFieldNames}" var="fieldName">'{!fieldName}',</apex:repeat>];
+            var invalidContactFields = [<apex:repeat value="{!invalidContactFieldNames}" var="fieldName">'{!fieldName}',</apex:repeat>];
+            var duplicateLeadFieldValues = [<apex:repeat value="{!duplicateLeadFieldValues}" var="fieldValue">'{!fieldValue}',</apex:repeat>];
+            var duplicateContactFieldValues = [<apex:repeat value="{!duplicateContactFieldValues}" var="fieldValue">'{!fieldValue}',</apex:repeat>];
+            var noLeadFieldMappedToEmail = {!noLeadFieldMappedToEmail};
+            var noLeadFieldMappedToLastName = {!noLeadFieldMappedToLastName};
+            var noContactFieldMappedToLastName = {!noContactFieldMappedToLastName};
+        </script>
+        </apex:outputPanel>
+        <apex:styleSheet value="{!URLFOR($Resource.RT1__meetingsr, 'jquery.qtip.min.css')}" />
+        <apex:sectionHeader title="ReadyTalk Meeting" help=" "
+            subtitle="Import Meetings" />
+        <div class="breadcrumb"><apex:outputLink value="{!URLFOR($Page.RT1__ReadytalkTab)}?tabOverride=meetings">« Back to Meetings</apex:outputLink>
+        </div>
+        <apex:pageBlock id="meetingsearch">
+            <apex:form >
+                <apex:actionFunction name="validateCampaign"
+                    action="{!validateCampaign}" rerender="pagemessages"
+                    oncomplete="$('#campaign-validate-loader').hide(); disableEnableImportButton();">
+                    <apex:param name="campaignId" assignTo="{!SelectedCampaign}"
+                        value="" />
+                </apex:actionFunction>
+
+                <apex:actionFunction name="validateCampaignContinueImport"
+                    action="{!validateCampaign}" rerender="pagemessages"
+                    oncomplete="$('#campaign-validate-loader').hide(); if($('[id$=pagemessages]').text().length == 0){ setMeetingToImportIds(meetingIds.join(','),meetingTitles.join(','), campaignId); } else { $('#dataloader').hide(); $('.apexp:eq(1)').unmask(); $('.importButton').removeAttr('disabled'); } ">
+                    <apex:param name="campaignId" assignTo="{!SelectedCampaign}"
+                        value="" />
+                </apex:actionFunction>
+
+                <!-- Refresh the meetings list -->
+                <apex:actionFunction name="refreshMeetingsList"
+                    action="{!refreshAvailableMeetings}" rerender="meetingsselect"
+                    onComplete="createMultiselect(); attachFunctions(); $('#dataloader').hide();" />
+
+                <!-- Assigns the ids of meetings to be created and scheduled for import -->
+                <apex:actionFunction name="setMeetingToImportIds"
+                    rerender="meetingImportingIds"
+                    action="{!scheduleMeetingsForImport}"
+                    onComplete="displayScheduledMeetingsImportProgress();">
+                    <apex:param name="incomingMeetingIdsForImport"
+                        assignTo="{!incomingMeetingIdsForImport}" value="" />
+                    <apex:param name="meetingTitles" assignTo="{!meetingTitles}"
+                        value="" />
+                    <apex:param name="campaignId" assignTo="{!campaignId}" value="" />
+                </apex:actionFunction>
+
+                <!-- checkCredentials = check credentials from lightbox popup to change credentials -->
+                <apex:actionFunction name="checkCredentials"
+                    action="{!checkCredentials}" rerender="credentialsValid"
+                    oncomplete="checkCredentialsComplete();">
+                    <apex:param name="TollFreeNumber" assignTo="{!TollFreeNumber}"
+                        value="" />
+                    <apex:param name="AccessCode" assignTo="{!AccessCode}" value="" />
+                    <apex:param name="Passcode" assignTo="{!Passcode}" value="" />
+                </apex:actionFunction>
+
+                <apex:inputHidden value="{!CredentialsAreValid}"
+                    id="credentialsValid" />
+                <apex:pageBlockSection columns="2">
+                    <apex:pageBlockSectionItem >
+                        <span>Search for Meetings:</span>
+                        <input id="showPastMeetingsInput" type="text"
+                            placeholder="Search meetings by title..." style="width: 70%;" />
+                        <button id="search-btn" class="btn">Search</button>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <apex:outputPanel >
+                            <apex:inputCheckbox id="showPastMeetings"
+                                value="{!showPastMeetings}"
+                                onclick="$('#dataloader').show(); if($('#showPastMeetingsInput').val().length > 0){ searchForMeetings(); }else{ refreshMeetingsList(); } $('.inputStartDate').qtip('destroy');" />
+                            <apex:outputLabel for="showPastMeetings"
+                                value="Change date range" />
+                            <span id="showHideDates" style="display: none;">
+                            &nbsp;&nbsp;|&nbsp;&nbsp; <apex:outputPanel id="pastMeetingsRange">
+                                <apex:outputLabel value="Start: " for="pastCampaignStart" />
+                                <apex:inputField value="{!proxyContact1.Birthdate}"
+                                    styleClass="inputStartDate"
+                                    onchange="$('#dataloader').show(); checkDates(false,null,null,null);" />
+                                <apex:outputLabel value="End: " for="pastCampaignEnd" />
+                                <apex:inputField value="{!proxyContact2.Birthdate}"
+                                    styleClass="inputEndDate"
+                                    onchange="$('#dataloader').show(); checkDates(false,null,null,null);" />
+                            </apex:outputPanel> </span>
+                        </apex:outputPanel>
+                    </apex:pageBlockSectionItem>
+                </apex:pageBlockSection>
+            </apex:form>
+        </apex:pageBlock>
+
+        <apex:pageBlock id="meetingsselect">
+            <apex:pageBlockButtons >
+                <apex:form >
+                    <apex:commandButton value="Import" styleClass="importButton" />
+                    <apex:commandButton value="Cancel" styleClass="cancel" />
+                </apex:form>
+            </apex:pageBlockButtons>
+            <apex:pageBlockSection >
+                <apex:pageBlockSectionItem rendered="{!NOT(showPastMeetings)}">
+                &nbsp;<h1>Available Meetings</h1>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!showPastMeetings}">
+                &nbsp;<h1>Available Meetings</h1>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                &nbsp;<h1>Meetings to be Imported</h1>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            <select id="meetings-selection" multiple="multiple">
+                <apex:repeat value="{!sortedMeetingIds}" var="meetingId">
+                    <apex:repeat value="{!availableMeetingsById[meetingId]}"
+                        var="meetingTitle">
+                        <option value="{!meetingId}">{!meetingTitle}</option>
+                    </apex:repeat>
+                </apex:repeat>
+            </select>
+
+            <apex:pageBlockSection columns="1">
+                <div id="progressbar"></div>
+            </apex:pageBlockSection>
+            <apex:pageBlockSection id="meetingsList" columns="1">
+                <apex:repeat value="{!meetingsScheduledToImport}"
+                    var="meetingToImport">
+                    <apex:pageBlockSectionItem rendered="{!meetingToImport.RT1__ScheduledForImport__c}">
+                        <h1>{!meetingToImport.Name}</h1>
+                            &nbsp;
+                        </apex:pageBlockSectionItem>
+                    <apex:PageBlockSectionItem rendered="{!NOT(meetingToImport.RT1__ScheduledForImport__c)}">
+                        <h1 style="color: #3a7728;"><a
+                            href="../apex/meeting?id={!meetingToImport.Id}">{!meetingToImport.Name}</a>
+                        </h1>
+                    &nbsp;
+                </apex:PageBlockSectionItem>
+                </apex:repeat>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+        <apex:form >
+            <apex:actionFunction name="rerenderPageBlock"
+                rerender="meetingsToImportList" />
+            <apex:actionFunction name="showImportProgress"
+                rerender="meetingsToImportList"
+                oncomplete="$('#progressbar').progressbar({ value: 0 }); refreshProgress();" />
+            <apex:actionFunction name="refreshmeetingsToImportList"
+                rerender="meetingsList,importListCount"
+                onComplete="updateProgressBar(); refreshProgress();" />
+        </apex:form>
+        <apex:outputPanel id="meetingsToImportList">
+            <apex:form id="importListCount">
+                <apex:inputHidden value="{!countOfMeetingsScheduledImport}"
+                    id="meetingsScheduledToImportCount" />
+            </apex:form>
+        </apex:outputPanel>
+        <apex:outputPanel >
+            <apex:form >
+                <!-- Assign the editable defaults to controller -->
+                <apex:actionFunction name="assignImportSettings"
+                    action="{!setEditedValues}" onComplete="invokeImport();" />
+
+                <apex:actionfunction name="setEditedValues"
+                    action="{!setEditedValues}"
+                    rerender="importMeetingDefaults,pollQuestionDialogPanel,fieldMappingDialogPanel,fieldValidationMapping"
+                    onComplete="setLeadAssignmentWidgetVisibility(); showHideSettingsDataloader(function(){ $('#dataloader-one').hide(); });displayFieldMappingErrors(function(){ attachDefaultDialogs(); clearFieldValidationErrors(); });" />
+
+                <script type="text/javascript">
+                var campaignIdInput = '{!$Component.campaign.campaignInputSection.dummyCampaignInput}_lkid';
+                </script>
+
+                <apex:pageBlock title="Meeting Campaign" id="campaign">
+                    <apex:pageMessages id="pagemessages" />
+                    <apex:pageBlockSection id="campaignInputSection">
+                        <apex:inputField value="{!dummyMeeting.RT1__Campaign__c}"
+                            id="dummyCampaignInput"
+                            onchange="validateCampaignChange();" />
+                        <img src="{!URLFOR($Resource.meetingsr,'ajaxloader_green.gif')}"
+                            id="campaign-validate-loader" style="display: none;" />
+                    </apex:pageBlockSection>
+                </apex:pageBlock>
+
+                <apex:pageBlock id="importMeetingDefaults"
+                    title="Default Meeting Settings">
+
+                    <apex:pageBlockSection columns="2">
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Toll Free Number" for="tollFreeNumber" />
+                            <apex:outputPanel layout="block">
+                                <apex:outputPanel styleClass="requiredBlock" layout="block" />
+                                <apex:outputText id="tollFreeNumber"
+                                    value="{!settingsModel.TollFreeNumber}" />
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Access Code" for="accessCode" />
+                            <apex:outputPanel layout="block">
+                                <apex:outputText id="accessCode"
+                                    value="{!settingsModel.AccessCode}" />
+                            &nbsp;<a id="changeAccessCode" href="#"
+                                    style="color: #888888; font-size: 10px">change access code</a>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Lead Assignment"
+                                for="leadAssignmentBehavior" />
+                            <apex:outputPanel id="leadAssignmentOutputPanel"
+                                styleClass="requiredInput" layout="block">
+                                <apex:outputPanel styleClass="requiredBlock" layout="block" />
+                                <apex:selectList size="1" id="leadAssignmentBehavior"
+                                    value="{!settingsModel.LeadAssignmentBehavior}">
+                                    <apex:selectOption itemValue="Assign to self"
+                                        itemLabel="Assign to self" />
+                                    <apex:selectOption itemValue="Assign to another user"
+                                        itemLabel="Assign to another user" />
+                                    <apex:selectOption itemValue="Use lead assignment rule"
+                                        itemLabel="Use lead assignment rule" />
+                                </apex:selectList>
+                                <div id="ownerDiv"><apex:inputField id="leadAssignmentUser" value="{!DummyLead.OwnerId}"
+                                    required="false" /></div>
+                                <div id="assignmentRuleDiv"><apex:selectList id="leadAssignmentRule" size="1"
+                                    value="{!settingsModel.LeadAssignmentRuleId}">
+                                    <apex:selectOptions value="{!assignmentRuleSelectOptions}" />
+                                </apex:selectList></div>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Default Lead Source" />
+                            <apex:outputPanel styleClass="requiredInput" layout="block">
+                                <apex:outputPanel styleClass="requiredBlock" layout="block" />
+                                <apex:selectList size="1"
+                                    value="{!settingsModel.DefaultLeadSource}">
+                                    <apex:selectOptions value="{!LeadSourceSelectOptions}" />
+                                </apex:selectList>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel for="createNewLeads"
+                                value="Automatically Create New Leads"
+                                title="Automatically create new lead when registrant not found in Salesforce.com" />
+                            <apex:inputCheckbox id="createNewLeads"
+                                value="{!settingsModel.CreateNewLeads}"
+                                title="Automatically create new lead when registrant not found in Salesforce.com" />
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Default Meeting Type" />
+                            <apex:outputPanel styleClass="requiredInput" layout="block">
+                                <apex:outputPanel styleClass="requiredBlock" layout="block" />
+                                <apex:selectList size="1"
+                                    value="{!settingsModel.DefaultMeetingType}">
+                                    <apex:selectOptions value="{!DefaultMeetingTypeSelectOptions}" />
+                                </apex:selectList>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Allow Others to Invite" />
+                            <apex:inputCheckbox value="{!allowOthersToInvite}" />
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Poll Questions" />
+                            <apex:outputLink id="default-poll-questions" value="">Mapped Poll Questions</apex:outputLink>
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem rendered="{!fieldMappingEnabled}">
+                            <apex:outputLabel value="Field Mappings" />
+                            <apex:outputLink id="field-mappings" value="">Field Mappings</apex:outputLink>
+                        </apex:pageBlockSectionItem>
+
+                    </apex:pageBlockSection>
+
+                    <div id="pollQuestionInput" style="display: none;"><apex:inputText value="{!question1}" styleClass="question1" /> <apex:inputText value="{!question2}" styleClass="question2" /> <apex:inputText value="{!question3}" styleClass="question3" /> <apex:inputText value="{!question4}" styleClass="question4" /> <apex:inputText value="{!question5}" styleClass="question5" /></div>
+
+                    <div id="fieldMappingInput" style="display: none;"><apex:pageBlock >
+                        <table>
+                            <tr>
+                                <th>Meeting Member Field</th>
+                                <th>Lead Field</th>
+                                <th>Contact Field</th>
+                            </tr>
+                            <apex:repeat value="{!fieldMappings}" var="mapping">
+                                <tr>
+                                    <td><apex:outputField value="{!mapping.Name}" /></td>
+                                    <td><apex:selectList value="{!mapping.RT1__LeadField__c}" size="1"
+                                        disabled="{!NOT(mapping.RT1__LeadAllowUpdates__c)}" styleClass="lead-{!LOWER(SUBSTITUTE(mapping.Name,' ','-'))}-select">
+                                        <apex:selectOptions value="{!leadFieldsPickList}" />
+                                    </apex:selectList></td>
+                                    <td><apex:selectList value="{!mapping.RT1__ContactField__c}" size="1"
+                                        disabled="{!NOT(mapping.RT1__ContactAllowUpdates__c)}" styleClass="contact-{!LOWER(SUBSTITUTE(mapping.Name,' ','-'))}-select"  >
+                                        <apex:selectOptions value="{!contactFieldsPickList}" />
+                                    </apex:selectList></td>
+                                </tr>
+                            </apex:repeat>
+                        </table>
+                    </apex:pageBlock></div>
+                </apex:pageBlock>
+            </apex:form>
+        </apex:outputPanel>
+
+        <apex:outputPanel id="pollQuestionDialogPanel">
+            <apex:form >
+                <apex:outputPanel >
+                    <div id="pollQuestionDialog"
+                        style="max-width: 625px; display: none;"><apex:pageBlock >
+                        <apex:pageBlockSection columns="1">
+                            <apex:pageBlockSectionItem >
+                                <apex:outputLabel value="Poll Question 1" for="question1" />
+                                <apex:outputPanel >
+                                    <apex:inputHidden value="{!question1}" id="question1-current" />
+                                    <apex:selectList value="{!question1}" id="question1" size="1"
+                                        styleClass="question1 poll-question-dropdown">
+                                        <apex:selectOptions value="{!availablePollQuestions}" />
+                                    </apex:selectList>
+                                </apex:outputPanel>
+                            </apex:pageBlockSectionItem>
+                            <apex:pageBlockSectionItem >
+                                <apex:outputLabel value="Poll Question 2" for="question2" />
+                                <apex:outputPanel >
+                                    <apex:inputHidden value="{!question2}" id="question2-current" />
+                                    <apex:selectList value="{!question2}" id="question2" size="1"
+                                        styleClass="question2 poll-question-dropdown">
+                                        <apex:selectOptions value="{!availablePollQuestions}" />
+                                    </apex:selectList>
+                                </apex:outputPanel>
+                            </apex:pageBlockSectionItem>
+                            <apex:pageBlockSectionItem >
+                                <apex:outputLabel value="Poll Question 3" for="question3" />
+                                <apex:outputPanel >
+                                    <apex:inputHidden value="{!question3}" id="question3-current" />
+                                    <apex:selectList value="{!question3}" id="question3" size="1"
+                                        styleClass="question3 poll-question-dropdown">
+                                        <apex:selectOptions value="{!availablePollQuestions}" />
+                                    </apex:selectList>
+                                </apex:outputPanel>
+                            </apex:pageBlockSectionItem>
+                            <apex:pageBlockSectionItem >
+                                <apex:outputLabel value="Poll Question 4" for="question4" />
+                                <apex:outputPanel >
+                                    <apex:inputHidden value="{!question5}" id="question4-current" />
+                                    <apex:selectList value="{!question4}" id="question4" size="1"
+                                        styleClass="question4 poll-question-dropdown">
+                                        <apex:selectOptions value="{!availablePollQuestions}" />
+                                    </apex:selectList>
+                                </apex:outputPanel>
+                            </apex:pageBlockSectionItem>
+                            <apex:pageBlockSectionItem >
+                                <apex:outputLabel value="Poll Question 5" for="question5" />
+                                <apex:outputPanel >
+                                    <apex:inputHidden value="{!question5}" id="question5-current" />
+                                    <apex:selectList value="{!question5}" id="question5"
+                                        styleClass="question5 poll-question-dropdown" size="1">
+                                        <apex:selectOptions value="{!availablePollQuestions}" />
+                                    </apex:selectList>
+                                </apex:outputPanel>
+                            </apex:pageBlockSectionItem>
+                        </apex:pageBlockSection>
+                    </apex:pageBlock></div>
+                </apex:outputPanel>
+            </apex:form>
+        </apex:outputPanel>
+
+        <apex:outputPanel id="fieldMappingDialogPanel">
+            <!-- Field Mappings -->
+            <apex:form >
+                <apex:outputPanel >
+                    <div id="fieldMappingDialog"
+                        style="max-width: 625px; display: none;"><apex:pageBlock >
+                        <apex:pageMessages rendered="{!fieldValidationError}" />
+                        <table>
+                            <tr>
+                                <th>Meeting Member Field</th>
+                                <th>Lead Field</th>
+                                <th>Contact Field</th>
+                            </tr>
+                            <apex:repeat value="{!fieldMappings}" var="mapping">
+                                <tr>
+                                    <td><apex:outputField value="{!mapping.Name}" /></td>
+                                    <td><input name="{!mapping.Name}" type="hidden"
+                                        class="lead field-selection" value="{!mapping.RT1__LeadField__c}" />
+                                    <apex:selectList styleClass="lead-{!LOWER(SUBSTITUTE(mapping.Name,' ','-'))}-select"
+                                        value="{!mapping.RT1__LeadField__c}" size="1"
+                                        disabled="{!NOT(mapping.RT1__LeadAllowUpdates__c)}"
+                                        style="width:200px;">
+                                        <apex:selectOptions value="{!leadFieldsPickList}" />
+                                    </apex:selectList></td>
+                                    <td><input name="{!mapping.Name}" id="{!mapping.Name}"
+                                        type="hidden" class="contact field-selection"
+                                        value="{!mapping.RT1__ContactField__c}" /> <apex:selectList styleClass="contact-{!LOWER(SUBSTITUTE(mapping.Name,' ','-'))}-select"
+                                        value="{!mapping.RT1__ContactField__c}" size="1"
+                                        disabled="{!NOT(mapping.RT1__ContactAllowUpdates__c)}"
+                                        style="width:200px;">
+                                        <apex:selectOptions value="{!contactFieldsPickList}" />
+                                    </apex:selectList></td>
+                                </tr>
+                            </apex:repeat>
+                        </table>
+                    </apex:pageBlock></div>
+                </apex:outputPanel>
+            </apex:form>
+            <!-- /Field Mappings -->
+        </apex:outputPanel>
+
+        <!-- popup dialog that allows the user to change their login credentials on the page -->
+        <div id="credentialsDialog" style="display: none; font-size: 11px"
+            class="bPageBlock"><apex:form >
+            <table class="detailList">
+                <tbody>
+                    <tr>
+                        <td class="labelCol"><label>Toll Free Number</label></td>
+                        <!-- Formatted -->
+                        <td class="dataCol"><input type="text" id="tollFreeNumber"
+                            value="{!TollFreeNumber}" /></td>
+                    </tr>
+                    <tr>
+                        <td class="labelCol">Access Code</td>
+                        <td class="dataCol"><input type="text" id="accessCode"
+                            value="{!AccessCode}" /></td>
+                    </tr>
+                    <tr>
+                        <td class="labelCol">Passcode</td>
+                        <td class="dataCol"><input type="password" id="passCode"
+                            value="{!Passcode}" /></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div style="text-align: center; padding: 5px;"><img
+                src="{!URLFOR($Resource.meetingsr,'ajaxloader_green.gif')}"
+                id="saveCredentialsLoader" style="display: none;" /> <input
+                type="button" id="saveCredentialsButton" class="btn" value="Save" />
+            <input type="button" id="cancelCredentialsButton" class="btn"
+                value=" Cancel " /></div>
+        </apex:form></div>
+    </apex:outputPanel>
+    <script type='text/javascript'>  
+        Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.ImportMeetingController.countHit}', function(result, event){});        
+     </script>         
+</apex:page>

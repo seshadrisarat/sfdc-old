@@ -1,0 +1,140 @@
+<apex:page controller="SL_PrintInvoice" showHeader="false" sidebar="false" standardStylesheets="false">
+    <body>  
+        <apex:stylesheet value="{!URLFOR($Resource.bootstrapCSS, 'bootstrap-3.1.1-dist/css/lumenboostrap.min.css')}"/>
+
+        <!-- <apex:includeScript value="{!URLFOR($Resource.bootstrapCSS, 'bsAlerts.min.js')}"/> -->
+     
+            <nav class="navbar-default navbar" >
+                <a class="navbar-brand" href="#">{!inv.Name}</a>
+                
+                <button class="btn btn-primary navbar-btn inv-btn-save" id="saveButton" onclick="renderPDF();">Save and Preview PDF
+                </button>
+                <button class="btn btn-primary navbar-btn inv-btn-send" id="sendButton" onclick="sendInvoice();">Send <span class="glyphicon glyphicon-send"></span></button>
+            </nav>
+            <apex:outputPanel id="alertPanel" >
+                <apex:outputPanel rendered="{!NOT(ISBLANK(sendResult.type))}">
+                    <div id="email-alert" class="alert alert-{!sendResult.type}">{!sendResult.message}</div>
+                </apex:outputPanel>
+            </apex:outputPanel>
+                    <div class="container-fluid">
+
+    <div class="row well">
+            <apex:form id="inputForm">
+            
+                        <div class="col-md-6 form-group">
+                          <label for="{!$Component.inputForm.emailTo}">To</label>
+                          <apex:inputText id="emailTo" html-class="form-control" html-placeholder="Emails, separated by semicolon" value="{!emailTo}"></apex:inputText>
+                          <br/>
+                          <label for="{!$Component.inputForm.emailCC}">CC</label>
+                          <apex:inputText id="emailCC" html-class="form-control" html-placeholder="Emails, separated by semicolon" value="{!emailCC}"></apex:inputText>
+                          <br/>
+                          <label for="{!$Component.inputForm.emailBCC}">BCC</label>
+                          <apex:inputText id="emailBCC" html-class="form-control" html-placeholder="Emails, separated by semicolon" value="{!emailBCC}"></apex:inputText>                         
+                        </div>
+
+                        <div class="col-md-6 form-group">
+
+                          <label for="{!$Component.inputForm.senderDisplayName}">From Name</label>
+                          <apex:inputText id="senderDisplayName" html-class="form-control" html-placeholder="Name" value="{!senderDisplayName}"></apex:inputText>
+                          <br/>
+                          <label for="{!$Component.inputForm.replyTo}">Reply-To</label>
+                          <apex:inputText id="replyTo" html-class="form-control" html-placeholder="Email" value="{!replyTo}"></apex:inputText>
+                          <br/>
+                          <label for="{!$Component.inputForm.template}">Template</label>
+                          <apex:selectList onchange="changeTemplate();" style="height:36px;" styleClass="form-control" id="template" value="{!template}" size="1" multiselect="false">
+                                <apex:selectOptions value="{!templates}"/>
+                            </apex:selectList>
+                        </div>
+
+                        <div class="col-md-12 form-group">
+                            <label for="{!$Component.inputForm.subject}">Subject</label>
+                            <apex:inputText id="subject" html-class="form-control" html-placeholder="Subject" value="{!subject}"></apex:inputText>
+                        </div>
+
+                        <div class="col-md-12 form-group">
+                            <label for="{!$Component.inputForm.body}">Email Body</label>
+                            <apex:inputTextArea id="body" html-class="form-control" html-placeholder="Email Body" value="{!body}"></apex:inputTextArea>
+                        </div>  
+                        <apex:actionFunction name="changeTemplate" rerender="ob1page"/>
+                        <apex:actionFunction name="saveOH" action="{!createOutputHistory}" rerender="alertPanel, pdfFrame, saveButton" oncomplete="enableBtn('saveButton');showPDF();">
+                            <apex:param name="meh" value="{!htmlIn}" assignTo="{!htmlIn}"></apex:param>
+                        </apex:actionFunction>                  
+                        <apex:actionFunction name="sendInvoice" action="{!send}" rerender="alertPanel, pdfFrame" oncomplete="enableBtn('sendButton');"></apex:actionFunction>
+
+            </apex:form>
+                </div>
+
+
+            <apex:outputPanel id="ob1page" style="display:none;" >   
+                <apex:iframe src="/apex/ob1__outputmanager?id={!objId}&class={!template}" ></apex:iframe>   
+            </apex:outputPanel>
+            <apex:outputPanel id="pdfFrame" >   
+                <apex:outputPanel id="pdfFrameWtf" rendered="{!NOT(ISBLANK(outputHistory.Id))}">
+                    <apex:iframe src="/apex/ob1__output?output_id={!outputHistory.Id}" ></apex:iframe>  
+                </apex:outputPanel>
+                <apex:outputPanel id="htmlOutputWtf" rendered="{!ISBLANK(outputHistory.Id)}">
+                                    <span id="htmlOutput"></span>
+                </apex:outputPanel>
+            </apex:outputPanel>
+            
+        </div> 
+
+    <script src="{!URLFOR($Resource.bootstrapCSS, 'jquery-1.11.0.min.js')}"/>
+    <script src="{!URLFOR($Resource.bootstrapCSS, 'bootstrap-3.1.1-dist/js/bootstrap.js')}"/>
+     <script>
+        
+        var $jj = jQuery.noConflict();
+        var html;
+        $jj(document).ready(function() {
+        
+            $jj('#saveButton').click(function ( $ ) {
+                var btn = $jj(this);
+                btn.button('loading');
+              });
+
+            $jj('#sendButton').click(function ( $ ) {
+                var btn = $jj(this);
+                btn.button('loading');
+              });
+
+      
+            function receiveMessage(e) {
+                // Check to make sure that this message came from the correct domain.
+                if (e.origin.indexOf('.visual.force.com') == -1)
+                  return;
+
+                // Update the div element to display the message.
+                // messageEle.innerHTML = "Message Received: " + e.data;
+                html = e.data;
+                $jj('#htmlOutput').html(html);
+            }       
+            window.addEventListener('message', receiveMessage);
+        });
+
+        function enableBtn(id) {
+            $jj(document.getElementById(id)).button('reset');
+        }   
+
+        function renameButton(className, val) {
+            $jj('.' + className).val(val);
+        }
+
+        function showPDF() {
+            // $jj('.theStupidPDF').attr('src', '/apex/ob1__output?output_id={!outputHistory.Id}').removeClass('hidden');
+        }
+
+        function renderPDF() {
+            if(html != undefined) saveOH(html);
+            else alert('Something went wrong rendering the PDF, sorry. This should not happen. Ask your administrator to check.');
+        }
+
+
+        // function alertBox() {
+            // $("#alerts").bsAlerts({'titles': {'warning': '<em>Warning!</em>'}});
+        // }
+
+
+     </script>
+
+    </body>
+</apex:page>

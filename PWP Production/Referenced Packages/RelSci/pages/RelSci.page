@@ -1,0 +1,497 @@
+<apex:page controller="rels.RSHomeController" 
+action="{!pageLoadAction}" 
+sidebar="false" 
+tabStyle="RelSci__tab"
+>  
+  <script src="//static.relsci.com/Content/Crm/js/json2.min.js" type="text/javascript"></script>     
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+<div style="width:1300px">      
+  <apex:pageBlock rendered="{!showDenyMessage}">
+      <h1>Access Denied</h1> 
+      <p>You canceled the request to authorize your RelSci account.</p>
+  </apex:pageBlock>
+  
+  <apex:pageBlock rendered="{!showConnectMessage}">  
+  
+  	<div id="_iframeArea"></div>                   
+  	<script type="text/javascript"> 
+  	
+  	var logoutIframe = '<iframe height="1px" width="1px" src="{!iFrameHost}/Account/LogOff" />';
+  	var loginIframe = '<apex:iframe height="1000px" width="1190px" src="{!iFrameLoginUrl}" scrolling="true"></apex:iframe>';
+  	jQuery(document).ready(function () {
+  		jQuery("#_iframeArea").html(logoutIframe); 
+  		setTimeout(function () {
+  			jQuery("#_iframeArea").html(loginIframe);
+  		}, 1000);
+  	});
+  	
+  	
+  	</script>
+  	
+  	               
+  </apex:pageBlock> 
+
+  <apex:pageblock rendered="{!showFrame}">  
+   	 <div style="width:1190px;">
+   	   <div>
+   	  	
+  		<div style="display:inline; float:right;">
+  		<apex:outputPanel rendered="{!ShowSettingsLink}">
+  			&nbsp;|&nbsp; 
+	  		<apex:outputLink value="{!URLFOR($Page.rels__Settings)}" >
+	  		<apex:outputText value="RelSci Admin Controls" />
+	  		</apex:outputLink>
+  		</apex:outputPanel> 
+  		
+  		</div> 
+  	
+  	<div style="display:inline; float:right; padding-bottom:10px;"> 
+  	<apex:outputLink value="{!URLFOR($Page.rels__RelSci)}?logout=1" >
+  		<apex:outputText value="Logout" />
+		</apex:outputLink>
+	</div>
+	</div>
+    <apex:outputPanel rendered="{!ShowSyncButton}">
+	    <button id="_syncBtn" onclick="BeginSync()" type="button" value="Add Contacts">Add Contacts</button>   
+	    <span class="_syncing" style="display:none;"><img src="https://static.relsci.com/Content/Crm/Images/mini-loader.gif"></img></span>
+	  	Add your Salesforce Contacts to RelSci
+	 
+   
+  		<br/><br/>
+  	</apex:outputPanel> 
+</div>
+  		  	
+  	<apex:iframe height="1000px" width="1190px" src="{!iFrameUrl}" scrolling="true" />
+
+  	<script type="text/javascript">
+  		jQuery.ajax({
+  			type: 'POST',
+  			cache: false,
+  			dataType: 'json',
+  			data: {
+  				csrf: '{!JSENCODE(csrf)}',
+  				sfUserId: '{!$User.Id}',
+  				action: 'setSfUserId'
+  			}
+  		})
+  	</script>
+
+
+  </apex:pageblock>
+    
+  <apex:pageBlock rendered="{!isConnected}"> 
+       <h1>You have successfully connected your RelSci account to this Salesforce account.</h1>
+       <div style="min-height:100px; width:1px;"></div>
+       <div>
+       <a id="__openRelSci" href="{!iFrameHost}/Account/APILogin" target="_blank">
+       <img border="0" src="https://www.relsci.com/Content/Images/logo.png" />
+       <p>Click to log into RelSci</p>
+       </a>
+       </div>
+  </apex:pageBlock>
+  
+  <apex:pageBlock rendered="!{!isConnected}"> 
+       <h1>Something went wrong. Your RelSci account could not be connected.</h1>
+
+  </apex:pageBlock>
+</div>  
+  <apex:includeScript value="/soap/ajax/28.0/connection.js"/>
+  <apex:includeScript value="/soap/ajax/28.0/apex.js"/>
+  
+  <script type="text/javascript">
+  	rsci_syncClicked = false;
+  	rsci_useFollowers = {!SyncFollowed};
+      jQuery("#__openRelSci").click(function (e) {
+      	  e.preventDefault();
+      	  if(rsci_syncClicked)
+      	  	return;
+      	  	
+      	  rsci_syncClicked = true;
+         
+           window.open(jQuery(this).attr("href") + '?token={!PublicKey}','_blank');
+      });
+      
+      jQuery("#__authorizeRelSci").click(function (e) {
+          e.preventDefault();
+          window.open(jQuery(this).attr("href") + '?providerToken={!PublicKey}&redirectURL={!URLFOR($Page.RelSci)}');      
+      });
+      
+    
+	sforce.connection.sessionId = "{!$Api.Session_ID}";
+	userId = "{!$User.Id}";
+
+    Contacts = [];
+	function BeginSync() 
+	{
+		$("._syncing").show();
+		$("#_syncBtn").hide();
+		Contacts = [];		
+		
+		if(rsci_useFollowers)
+		{
+			FetchContactsInBulk(Contacts, false);
+			var FollowedContacts = [];
+			FetchMyFollowedObjects();
+			for(var i = 0; i < Contacts.length; i++)
+			{
+				var contact = Contacts[i];
+				if(myFollowedDict[contact.Id] != null)
+				{
+					FollowedContacts.push(Contacts[i]);
+				}
+			}
+			Contacts = FollowedContacts;
+		} else {
+			FetchContactsInBulk(Contacts, true);	
+		}
+		GetSyncVersion();		
+	}   
+function Upload(array, syncVersionId)
+{
+	var mobilecontacts = convertToMobileContacts(array);
+	 
+	var baseurl = "{!URLFOR($Page.RelSciSyncAjax)}";
+    if(baseurl[baseurl.length-1] == "/")
+    {
+        baseurl = baseurl.substring(0,baseurl.length-2);
+    }
+
+	jQuery.ajax({
+		async: true,	
+		cache:false,	
+		type: 'post',
+		url: baseurl,
+		data:{
+			action: 'jsonupload',
+			jsonContacts: JSON.stringify(mobilecontacts),
+			syncVersionId: syncVersionId,
+			csrf : '{!JSENCODE(csrf)}'
+		} ,
+	 beforeSend:function () {
+			AjaxUploads++;
+		},
+			
+		always: function () {
+			AjaxUploads--;
+		},
+		success: function () {
+			AjaxUploads--;
+		},
+		error: function() {
+			AjaxUploads--;
+		}
+	});
+}	
+	 
+function UploadToRelSci(objectArray, versionId)
+{	
+	var batchArray = [];
+	for(var i = 0; i < objectArray.length; i++)
+	{		
+		if(i%500==0 && i != 0)
+		{						
+			Upload(batchArray, versionId);
+			batchArray = [];
+		}
+		else
+		{
+			batchArray.push(objectArray[i], versionId);
+		}		
+	}
+	if(batchArray.length > 0)
+	{
+		Upload(batchArray, versionId);
+	}		
+}	  
+	
+	
+function GetSyncVersion()
+{	
+	jQuery("#_statusText").text('Creating Sync');
+	jQuery.ajax({
+		cache:false,
+		type:'post',
+		url:'/apex/RelSciSyncAjax',
+		data:{
+			action: 'createContactSyncVersion',	
+			csrf: '{!JSENCODE(csrf)}'		
+		},
+		dataType:'json',
+		async: true,
+		
+		success: function(data) {
+			setTimeout(function () {
+				SetupUpload(data.SyncVersionId);
+			},3000);
+		}
+		
+	});
+
+} 
+
+function Redirect(versionId)
+{
+	window.location.href='{!URLFOR($Page.Sync)}?syncId='+versionId;
+}
+
+function SetupUpload(versionId)
+{
+	AjaxUploads = 0;
+	jQuery("#_statusText").text('Sending data to RelSci');	
+	UploadToRelSci(Contacts, versionId);	
+	tryRedirect(versionId);
+}
+
+function tryRedirect(versionId)
+{
+	
+	if(AjaxUploads == 0)
+	{
+		Redirect(versionId);
+	} else {
+		setTimeout(function () {
+			tryRedirect(versionId);
+		}, 2000);
+	}
+}
+
+	
+function FetchContactsInBulk(objectArray, mineOnlyFlag)
+{
+	var query = "select {!ContactAccessibility} rels__EntityId__c, rels__MatchType__c from Contact ";
+	if(mineOnlyFlag)
+	{
+		query += " where Contact.OwnerId = '{!$User.Id}'";
+	}
+		    		 
+	var resultQuery = sforce.connection.query(query); 
+    var queryMore = true;
+    
+    while(queryMore) 
+    {
+    	var records = resultQuery.getArray("records");
+
+        for(var i = 0; i < records.length; i++) 
+        {           	
+            objectArray.push(records[i]);
+        }
+
+        if(resultQuery.getBoolean("done")) 
+        {
+        	queryMore = false;
+        } 
+        else
+        {
+        	resultQuery = sforce.connection.queryMore(resultQuery.queryLocator);
+        }
+    }        
+}
+
+function FetchMyFollowedObjects()
+{
+	myFollowedArray = [];
+	myFollowedDict = {};
+	var query = "select parentid from EntitySubscription where subscriberid = '{!$User.Id}'";
+	
+	var results = sforce.connection.query(query);
+	
+	var queryMore = true;
+	
+	while(queryMore)
+	{
+		var records = results.getArray("records");
+		for(var i = 0; i < records.length; i++)
+		{
+			myFollowedArray.push(records[i]);
+			myFollowedDict[records[i].ParentId] = records[i];
+		}
+		
+		if(results.getArray("done")) 
+        {
+        	queryMore = false;
+        } 
+        else
+        {
+        	results = sforce.connection.queryMore(results.queryLocator);
+        }
+	}			
+}
+      
+function convertToMobileContacts(array)
+{
+	var mc = [];
+	for(var i = 0; i < array.length; i++)
+	{		
+		var o = GetMobileContactFromSFObject(array[i]);				
+		mc.push(o);
+	}
+	return mc;
+}
+
+function GetMobileContactFromSFObject(SFobject)
+{
+	var o = {
+		Id:'',
+		Name:'',
+		Company:'',
+		Title: '',
+		Email: [],
+		Domains: [],
+		City: [],
+		State: [],
+		Zip: [],
+		TickerSymbol:'',
+		IsCompany:false
+	};
+		
+		o.Id = SFobject.Id;
+		if(SFobject.type == 'Opportunity')
+		{
+			
+			o.Name = SFobject.Name;
+			if(SFobject.Account != null) 
+			{
+				o.Company = SFobject.Account.Name;
+				o.City.push(SFobject.Account.ShippingCity);
+				o.State.push(SFobject.Account.ShippingState);
+				o.Zip.push(SFobject.Account.ShippingPostalCode);
+				o.Domains.push(SFobject.Account.Website);
+				o.TickerSymbol = SFobject.Account.TickerSymbol;
+			}
+			
+		} else if(SFobject.type =='Account') {
+			
+			o.IsCompany = true;
+			o.Id = SFobject.Id;
+			o.Company = SFobject.Name;
+			o.City.push(SFobject.ShippingCity);
+			o.State.push(SFobject.ShippingState);
+			o.Zip.push(SFobject.ShippingPostalCode);
+			o.TickerSymbol = SFobject.TickerSymbol;
+			o.Domains.push(SFobject.Website);
+			
+			
+		} else if(SFobject.type == 'Contact') {
+		
+			o.Name = SFobject.Name;
+			o.Title = SFobject.Title;
+			if(SFobject.Account != null)
+				o.Company = SFobject.Account.Name;
+			if(SFobject.Email != null)				
+				o.Email.push(StripLocalEmail(SFobject.Email));
+			if(SFobject.MailingCity != null)
+				o.City.push(SFobject.MailingCity);
+			if(SFobject.MailingState != null)
+				o.State.push(SFobject.MailingState);					
+			
+			
+		} else if(SFobject.type == 'Lead')	{
+		
+		
+			o.Name = SFobject.Name;
+			o.Title = SFobject.Title;
+			o.Company = SFobject.Company;
+			o.Domains.push(SFobject.Website);	
+			if(SFobject.Email != null)		
+				o.Email.push(StripLocalEmail(SFobject.Email));
+			
+			
+		}
+		
+		return o;
+}   
+
+function StripLocalEmail(email)
+{
+	var atindex = email.indexOf('@');
+	if(atindex !== -1)
+	{
+		return  email.substring(atindex, email.length);
+	}
+	return '';
+}
+  	
+sforce.Transport = function(url) {
+    this.url = url;
+    this.connection = null;
+
+    this.newConnection = function() {
+        try {
+            this.connection = new ActiveXObject('Msxml2.XMLHTTP');
+        } catch(e) {
+            try {
+                this.connection = new ActiveXObject('Microsoft.XMLHTTP');
+            } catch(e) {
+                this.connection = new XMLHttpRequest();
+            }
+        }
+
+        return this.connection;
+    };
+    
+    this.send = function (envelope, callback, async, timeout) {
+        this.newConnection();
+        if (async) {
+            this.connection.onreadystatechange = this.httpConnectionCallback;
+        }
+        var holder = new sforce.internal.ConnectionHolder(this.connection, callback);
+        sforce.internal._connections.push(holder);
+        this.connection.open("POST", this.url, async);
+        this.connection.setRequestHeader("Content-Type", "text/xml; charset=UTF-8");
+        this.connection.setRequestHeader("SOAPAction", "\"\"");
+        this.connection.setRequestHeader("Accept", "text/xml");
+     //   this.connection.setRequestHeader("User-Agent", "SFAJAX 1.0");
+        this.connection.send(envelope);
+        if (async && typeof(timeout) !== "undefined") {
+            this.setTimeoutOn(holder, timeout);
+        }
+        if (!async) {
+            this.httpConnectionCallback();
+        }
+    };
+ 
+    this.setTimeoutOn = function (holder, timeout) {
+        function abortConnection() {
+            if (holder.connection.readyState !== 4) {
+                holder.timedout = true;
+                holder.connection.abort();
+            }
+        }
+        setTimeout(abortConnection, timeout);
+    };
+
+    this.httpConnectionCallback = function () {
+
+        for (var i = 0; i < sforce.internal._connections.length; i++) {
+            var holder = sforce.internal._connections[i];
+            if (holder !== null) {
+                if (holder.timedout) {
+                    sforce.internal._connections[i] = null;
+                    sforce.internal._connections.slice(i,1);
+                    holder.callback.httpCallback("Remote invocation timed out", false);
+                } else  if (holder.connection.readyState == 4) {
+                    sforce.internal._connections[i] = null;
+                    sforce.internal._connections.slice(i,1);
+                    var success = holder.connection.status == 200;
+                    if (sforce.debug.trace) {
+                        sforce.debug.log("Response : status - " + holder.connection.status);
+                        sforce.debug.logXml(holder.connection.responseText);
+                    }
+                    if (sforce.debug.apexTrace) {
+                        sforce.debug.logApex(holder.connection.responseText);
+                    }
+                    if (holder.connection.responseXML && holder.connection.responseXML.documentElement) {
+                        holder.callback.httpCallback(holder.connection.responseXML.documentElement, success);
+                    } else {
+                        holder.callback.httpCallback("Remote invocation failed, due to: " + holder.connection.responseText +
+                                                     " status code: ", holder.connection.status);
+                    }
+                }
+            }
+        }
+    };
+};      
+  </script>
+ 
+
+</apex:page>

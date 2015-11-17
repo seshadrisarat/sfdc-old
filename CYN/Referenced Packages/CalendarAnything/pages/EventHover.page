@@ -1,0 +1,181 @@
+<apex:page controller="SLCA2.CA_EventHoverController" sidebar="false" showheader="false">
+    <apex:includeScript value="{!URLFOR($Resource.SLCA2__jQuery, 'jquery.min.js')}" />
+
+    <script>
+    var urlParameters = [];
+                
+    function refreshUrlParametersArray() { // Parsing url params and store in 'urlParameters' array
+        var url = parent.location.search.substr(1);
+        //console.log('1', url);
+        //url = decodeURIComponent(url);
+        //console.log('2', url);
+        var parts = url.split('&');
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i] != undefined) {
+                var param = parts[i].split('=');
+                if (param[1] != undefined) { // Only pairs that have a value
+                    urlParameters.push({key:param[0],value:param[1]});
+                }
+            }
+        }
+    }
+    refreshUrlParametersArray();
+    
+    function getUrlParameter(p) {
+        var res = '';
+        var url = parent.location.search.substr(1);
+        //url = decodeURIComponent(url);
+        var parts = url.split('&');
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i] != undefined) {
+                var param = parts[i].split('=');
+                if (param[0] == p) {
+                    res = param[1];
+                }
+            }
+        }
+        return res;
+    }
+    
+    function getLocalParameter(p) {
+        var res;
+        var url = location.search.substr(1);
+        //url = decodeURIComponent(url);
+        var parts = url.split('&');
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i] != undefined) {
+                var param = parts[i].split('=');
+                if (param[0] == p) {
+                    res = param[1];
+                }
+            }
+        }
+        if (res != undefined) {
+          res = decodeURIComponent((res + '').replace(/\+/g, '%20'));
+        }
+        return res;
+    }
+    
+    var urlStr = '{!JSENCODE(url)}';
+    
+    urlStr = urlStr.substr(1);
+    var sElementId = urlStr;
+    var searchStr = '';
+    for (var i=0; i < urlParameters.length; i ++) {
+        if (urlParameters[i].key != 'sfdc.tabName' && urlParameters[i].key != 'url') {
+            if (searchStr != '') {
+                searchStr += '&';
+            }
+            searchStr += urlParameters[i].key + '=' + urlParameters[i].value;
+        }
+    }
+    
+    $(function () {
+//      var oDiv = $('div[data-popup="' + sElementId + '"]');
+        var oDiv = $('div[data-popup="{!MID(url, 2, 18)}"]');
+        var urlLinkParam = getUrlParameter('url');
+        if (urlLinkParam != '') {
+            if (urlLinkParam == 'none' || urlLinkParam == '0' || urlLinkParam == 'null') {
+                oDiv.find('.popup-more').hide();
+            } else {
+                urlLinkParam = unescape(urlLinkParam);
+                urlLinkParam = urlLinkParam.replace('%id', urlStr);
+                oDiv.find('.detailLink').attr('href', urlLinkParam);
+            }
+        } else {
+//          oDiv.find('.detailLink').attr('href', '/' + urlStr);
+        }
+        
+        if (getUrlParameter('target') == 'self') {
+            oDiv.find('.detailLink').attr('target','_self');
+        }
+        
+        if ('{!JSENCODE(calendarName)}' != '') {
+            oDiv.find('.calendarNameBox')
+              .html('{!JSENCODE(calendarName)}')
+              .attr('title', '{!JSENCODE(calendarName)}');
+        } else {
+            var nWebCid = getLocalParameter('className');
+            if (nWebCid != undefined) {
+               var sTitle = window.parent.jQuery('span#' + nWebCid).next().text();
+               if (sTitle != undefined && sTitle != '') { 
+                  oDiv.find('.calendarNameBox')
+                    .html(sTitle)
+                    .attr('title', sTitle);
+               }
+               var aCheckIncome = {
+                   "title" : "Title",
+                   "ds"    : "Start date",
+                   "de"    : "End date"
+               }, 
+               sHtml = ''; 
+               jQuery.each(aCheckIncome, function(sKey, sVal) {
+                    console.log(getLocalParameter(sKey));
+                    if (getLocalParameter(sKey) != undefined) {
+                        sHtml += '<tr><td class=labelCol><div>' + sVal + '</div></td>'
+                            + '<td>' + getLocalParameter(sKey) + '</td>'
+                            + '</tr>';
+                    }
+               });
+               jQuery('table.detailList > tbody').append(jQuery(sHtml));
+            }
+        }
+        
+        if (oDiv.find('.mainTitle:last').text() == '()') {
+            oDiv.find('.mainTitle:last').hide();
+        }  
+        oDiv.find('.eh-title-container').addClass(
+            getLocalParameter('color') != '' && getLocalParameter('color') != undefined && getLocalParameter('cid') != ''
+                ? getLocalParameter('cid')
+                : getLocalParameter('className')  
+        );          
+    });
+
+
+</script>
+
+
+    <div data-popup="{!MID(url, 2, 18)}"> 
+     
+    <style>
+        table.detailList > tbody > tr > td{
+            border-bottom: 1px solid #ccc;
+        }
+        
+        table.detailList td.labelCol > div{
+            text-align: right; margin: 3px 15px 3px 0; font-weight: bold;
+        }
+    </style>         
+        <div class="close-new-button" onClick="_closePopup(this)"></div>
+        
+        <div class="popup-more" >
+              <a class="detailLink" target="_blank"
+                          href="{!HTMLENCODE(url)}" title="Go to the record's layout ({!url})"
+                          >more</a>
+        </div>
+        <div class="eh-title-container">
+            <h2 class="mainTitle calendarNameBox" style="font-size: 140%;">
+            </h2> <br />
+            <h2 class="mainTitle">({!HTMLENCODE(goalObjectLabel)})</h2>
+            <a></a>
+        </div>
+        <div class="pbBody">
+    
+            <table class="detailList" border="0" cellpadding="0" cellspacing="0"
+                width="100%">
+                <tbody>
+                <apex:repeat value="{!Fields}" var="field">
+                    <tr>
+                        <td class="labelCol">
+                            <div>{!field.Label}</div>
+                        </td>
+                        <td class="dataCol">
+                            <apex:outputText value="{!field.Value}" escape="false" rendered="true" />
+                        </td>
+                    </tr>
+                </apex:repeat>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</apex:page>

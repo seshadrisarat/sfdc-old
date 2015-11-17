@@ -1,0 +1,450 @@
+<apex:page standardStylesheets="false" sidebar="false" controller="MDFQueryController" >
+<html>
+    <apex:define name="head" >
+        <title>Usage Metrics</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1" />
+        <apex:stylesheet value="{!URLFOR($Resource.umstatic, 'usage_metrics/uilib/css/um.css')}"/>
+    </apex:define>
+
+<body>
+    <!-- We are scoping everything to the ID 'um', meaning that we can target the html inside this div only, without messing up the rest of the page. -->
+    <div id="um">
+        <div id="contentLoaded">
+            <apex:form id="theForm"    >
+                <apex:actionFunction id="doQuery" reRender="displayChart" status="loadStatus" name="doQuery" action="{!runQuery}" oncomplete="kickOffVisualization({!seriesData})" />
+                            <apex:actionFunction id="updateAppSelect" name="updateAppSelect" reRender="app1" action="{!changeNamespaceSelectOptions}" oncomplete="receiveNewAppOptions('{!JSINHTMLENCODE($Component.app1)}',
+                 '{!JSINHTMLENCODE($Component.submit_form)}')" />
+                <apex:actionStatus id="loadStatus" onstop="loading(false)" onstart="loading(true)"/>
+
+                <div class="um-filter">
+                    <div>
+                        <label class="um-label um-section-label">{!$Label.UM_viewLabel}</label>
+                    </div>
+                
+                    <div class="um-form-section um-form-section-sep">
+                        <div class="um-form-section-column">
+                            <div class="um-form-group um-form-group-radio">
+                                <input type="radio" name="orgSetting" value="all" id="orgz_all" onclick="handleRadio(this ,'{!JSINHTMLENCODE($Component.status1)}', '{!JSINHTMLENCODE($Component.org_id)}',
+                                 '{!JSINHTMLENCODE($Component.app1)}', '{!JSINHTMLENCODE($Component.submit_form)}')" />
+                                <label class="um-label" for="orgz_all">{!$Label.UM_allOrgs}&nbsp;&nbsp;&nbsp; </label>
+                            </div>
+                            
+                            <div class="um-form-group um-form-group-radio">
+                                <input type="radio" name="orgSetting" value="one" id="orgz_one" onclick="handleRadio(this ,'{!JSINHTMLENCODE($Component.status1)}', '{!JSINHTMLENCODE($Component.org_id)}',
+                                 '{!JSINHTMLENCODE($Component.app1)}', '{!JSINHTMLENCODE($Component.submit_form)}')" />
+                                <label class="um-label" for="orgz_one">{!$Label.UM_singleOrg}</label>
+                            </div>
+                        </div>
+                        
+                        <div class="um-form-section-column"> 
+                            <div class="um-form-group um-form-group-select">
+                                <div class="um-pulldown-filter">
+                                    <span class="um-select-alt" id="select-001">{!IF(orgStatus!=null, orgStatus, $Label.UM_anyStatus)}</span>
+                                    <apex:selectList id="status1" value="{!orgStatus}" onchange="handleAllOrgStatusSelectValue(this)" onfocus="handleAllOrgStatusSelectClick('{!JSINHTMLENCODE($Component.status1)}',
+                                     '{!JSINHTMLENCODE($Component.org_id)}', '{!JSINHTMLENCODE($Component.submit_form)}')" size="1">
+                                        <apex:selectOptions value="{!orgStatusList}"/>
+                                    </apex:selectList>
+                                </div>
+                            </div>
+                            
+                            <div class="um-form-group um-form-group-text">
+                                <apex:inputText id="org_id" html-placeholder="organization ID" title="organization ID" maxlength="20" styleClass="um-input-text" value="{!requestedSubscriberOrgId}"
+                                 onclick="handleSingleOrgIdSelect('{!JSINHTMLENCODE($Component.app1)}', this, '{!JSINHTMLENCODE($Component.submit_form)}')"
+                                  onkeyup="handleSingleOrgIdValue('{!JSINHTMLENCODE($Component.app1)}', this.value, '{!JSINHTMLENCODE($Component.submit_form)}')" size="20"/>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="um-form-section">
+                        <div class="um-form-section-column"> 
+                            <div class="um-form-group um-form-group-label">
+                                <label class="um-label">App</label>
+                            </div>
+                            
+                            <div class="um-form-group um-form-group-label">
+                                <label class="um-label">Show</label>
+                            </div>
+                        </div>
+                        
+                        <div class="um-form-section-column">
+                            <div class="um-form-group um-form-group-select">
+                                <div class="um-pulldown-filter">
+                                    <span class="um-select-alt" id="select-002">{!IF(requestedNamespace!=null, requestedNamespace, $Label.UM_selectApp)}</span>
+                                    <apex:selectList id="app1" value="{!requestedNamespace}" onchange="document.getElementById('select-002').innerHTML=this.options[this.selectedIndex].text;" size="1">
+                                        <apex:selectOptions value="{!namespaces}" />
+                                    </apex:selectList>
+                                </div>
+                            </div>
+ 
+                            <div class="um-form-group um-form-group-select">
+                                <div class="um-pulldown-filter">
+                                    <span class="um-select-alt" id="select-003">{!IF(chartingOption!=null, chartingOption, $Label.UM_defaultShowLabel)}</span>
+                                    <apex:selectList id="show1" value="{!chartingOption}" onchange="document.getElementById('select-003').innerHTML=this.options[this.selectedIndex].text;" size="1">
+                                        <apex:selectOptions value="{!chartingOptions}"/>
+                                    </apex:selectList>
+                                </div>
+                            </div>
+                        </div>
+                    </div>   
+              
+                    <div class="um-form-section">
+                        <div class="um-form-section-column"> 
+                            <div class="um-form-group um-form-group-label">
+                                <label class="um-label">Date Range</label>
+                            </div>
+                        </div>
+                        
+                        <div class="um-form-section-column">
+                            <div class="um-form-group um-form-group-select">
+                                <div class="um-pulldown-filter">
+                                    <span class="um-select-alt" id="select-004">{!IF(dateRange!=null, dateRange, $Label.UM_defaultDateLabel)}</span>
+                                    <apex:selectList id="range1" value="{!dateRange}" onchange="document.getElementById('select-004').innerHTML=this.options[this.selectedIndex].text;" size="1">
+                                        <apex:selectOptions value="{!dateRanges}"/>
+                                    </apex:selectList>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="um-filter-bottom" >
+                    <apex:commandButton id="submit_form" reRender="none" title="{!$Label.UM_viewMetrics}" styleClass="um-btn" value="{!$Label.UM_viewMetrics}" onclick="getData()"/>
+                </div>
+
+                <!-- The google visualization data (chart and table) live inside the div with id 'um_metrics'. -->
+                <apex:outputPanel id="displayChart">
+                    <apex:pageMessage id="theMessage" summary="{!reachedLimitsMessage}" rendered="{!!ISBLANK(reachedLimitsMessage)}" severity="info" strength="3"/>
+                    <apex:outputText id="noResultsMessage" styleClass="um-no-data" value="{!noDataFoundMessage}" rendered="{!!ISBLANK(noDataFoundMessage)}" />
+                    <apex:outputText id="nothingSelectedMessage" styleClass="um-no-data" value="{!$Label.UM_nothingSelected}" rendered="{!!ISBLANK(nothingSelectedMessage)}"/>
+                
+                    <apex:outputPanel id="um_metrics" styleClass="um-data">
+                        <div class="um-chart-div-outer">
+                            <div id="um_chart_div" style="height: 200px;"></div>
+                        </div>
+                    
+                        <div class="um-chart-legend" id="um_chart_legend" style="display: none;">
+                          <div class="um-chart-legend-item"><label id="legend1" class="um-chart-color-1"></label></div>
+                          <div class="um-chart-legend-item"><label id="legend2" class="um-chart-color-2"></label></div>                  
+                          <div class="um-chart-legend-item"><label id="legend3" class="um-chart-color-3"></label></div>
+                          <div class="um-chart-legend-item"><label id="legend4" class="um-chart-color-4"></label></div>
+                          <div class="um-chart-legend-item"><label id="legend5" class="um-chart-color-5"></label></div>
+                        </div>  
+                        <div id="um_table_div"></div>
+                    </apex:outputpanel>
+                </apex:outputPanel>
+            
+        </apex:form>
+
+        <!-- Google Visualization -->
+        <!-- Load the AJAX API -->
+        <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+        <script type="text/javascript">
+                // use this to hold an existing value for the single org for use when swapping between all / single org
+                // and also to verify a change to the value happened before sending off to the server for a new list of apps
+                var holdSingleOrgIdValue = null;
+                
+                function loading(val) {
+                    if (val) {
+                        document.getElementById('contentLoading').style.display = 'block';
+                        document.getElementById('contentLoaded').style.display = 'none';
+                    }
+                    else {
+                        document.getElementById('contentLoading').style.display = 'none';
+                        document.getElementById('contentLoaded').style.display = 'block';
+                    }
+                }
+                
+                function handleAllOrgStatusSelectClick(allOrgStatusSelectId, singleOrgIdId, viewMetricsButtonId) {
+                    var allOrgRadio = document.getElementById('orgz_all');
+                    
+                    if (!allOrgRadio.checked) {
+                        swapSingleToAllOrg(document.getElementById(allOrgStatusSelectId), document.getElementById(singleOrgIdId), document.getElementById(viewMetricsButtonId));
+                    }
+                }
+                
+                function handleAllOrgStatusSelectValue(allOrgStatusSelect) {
+                    var allOrgStatusSelectOverlay = document.getElementById('select-001');
+                    allOrgStatusSelectOverlay.innerHTML = allOrgStatusSelect.options[allOrgStatusSelect.selectedIndex].text;
+                }
+                
+                function handleRadio(selectedRadio, allOrgStatusSelectId, singleOrgIdId, appSelectId, viewMetricsButtonId) {
+                    if (selectedRadio.value == 'all') {
+                        swapSingleToAllOrg(document.getElementById(allOrgStatusSelectId), document.getElementById(singleOrgIdId), document.getElementById(viewMetricsButtonId));
+                    }
+                    else {
+                        swapAllToSingleOrg(document.getElementById(appSelectId), document.getElementById(singleOrgIdId), document.getElementById(viewMetricsButtonId));
+                    }
+                }
+                
+                function handleSingleOrgIdSelect(appSelectId, singleOrgInputText, viewMetricsButtonId) {
+                    var singleOrgRadio = document.getElementById('orgz_one');
+                    
+                    if (!singleOrgRadio.checked) {
+                        swapAllToSingleOrg(document.getElementById(appSelectId), singleOrgInputText, document.getElementById(viewMetricsButtonId));
+                    }
+                }
+                
+                function handleSingleOrgIdValue(appSelectId, orgIdValue, viewMetricsButton) {
+                    var appSelect = document.getElementById(appSelectId);
+                    var appSelectOverlay = document.getElementById('select-002');
+                    
+                    if (orgIdValue !== holdSingleOrgIdValue) {
+                        var validOrg = validateOrgId(orgIdValue);
+                        if (validOrg) {
+                            updateAppSelect();
+                        }
+                        else {
+                            appSelect.disabled = true;
+                            addDisabledClass(appSelectOverlay);
+                            viewMetricsButton.disabled = true;
+                        }
+                        
+                        holdSingleOrgIdValue = orgIdValue;
+                    }
+                }
+                
+                function receiveNewAppOptions(appSelectId, viewMetricsButtonId) {
+                    var appSelect = document.getElementById(appSelectId);
+                    var appSelectOverlay = document.getElementById('select-002');
+                    var viewMetricsButton = document.getElementById(viewMetricsButtonId);
+                     
+                    appSelect.disabled = false;
+                    appSelectOverlay.innerHTML = appSelect.options[appSelect.selectedIndex].text;
+                    removeDisabledClass(appSelectOverlay);
+
+                    removeDisabledClass(viewMetricsButton);
+                    viewMetricsButton.disabled = false;
+                }
+                
+                function swapAllToSingleOrg(appSelect, singleOrgInputText, viewMetricsButton) {
+                    var allOrgStatusSelectOverlay = document.getElementById('select-001');
+                    var appSelectOverlay = document.getElementById('select-002');
+                    var singleOrgRadio = document.getElementById('orgz_one');
+
+                    appSelect.disabled = true;
+                    addDisabledClass(allOrgStatusSelectOverlay);
+                    
+                    singleOrgRadio.checked = 'checked';
+                    singleOrgInputText.value = holdSingleOrgIdValue;
+                    
+                    // if we previously had a single org id entered recover it
+                    var oldOrgIdValue = holdSingleOrgIdValue;
+                    // reset the hold so the handleSingleOrgIdValue processes this as a 'new' value
+                    holdSingleOrgIdValue = '';
+                    handleSingleOrgIdValue(appSelect.id, oldOrgIdValue, viewMetricsButton);
+                    removeDisabledClass(singleOrgInputText)                 
+                }
+                
+                function swapSingleToAllOrg(allOrgStatusSelect, singleOrgInputText, viewMetricsButton) {
+                    var allOrgRadio = document.getElementById('orgz_all');
+                    var allOrgStatusSelectOverlay = document.getElementById('select-001');
+                    
+                    allOrgRadio.checked = 'checked';
+                    allOrgStatusSelectOverlay.innerHTML = allOrgStatusSelect.options[allOrgStatusSelect.selectedIndex].text;
+                    // admittedly a hacky way to remove the disabled class
+                    removeDisabledClass(allOrgStatusSelectOverlay); 
+                    
+                    singleOrgInputText.value = '';
+                    addDisabledClass(singleOrgInputText)
+                
+                    updateAppSelect();
+                }
+                
+                // admittedly a hacky way to remove the disabled class
+                // IMPORTANT - this only works if the disabled class is the last class
+                function removeDisabledClass(element) {
+                    if (element.className.lastIndexOf('disabled') == element.className.length - 'disabled'.length) {
+                        element.className = element.className.slice(0, element.className.lastIndexOf(' '));
+                    }
+                }
+
+                // admittedly a hacky way to add the disabled class
+                // 
+                function addDisabledClass(element) {
+                    if (element.className.lastIndexOf('disabled') != element.className.length - 'disabled'.length) {
+                        element.className += ' disabled';
+                    }
+                }
+                
+                // simple validation of an org id - the org id is going to be used to search for valid namespaces,
+                // so no reason to bother looking for namespaces till we have a "valid" one
+                // for the sake of this a valid one starts with 00D and has 15 characters               
+                function validateOrgId(orgIdValue) {
+                    var orgIdRegexPattern = /^00D\w{12}$/;
+                    var valid = orgIdRegexPattern.test(orgIdValue);
+                    
+                    return valid; 
+                }
+    
+                // Load the Visualization API and the chart & table package.
+                google.load('visualization', '1.0', {'packages':['corechart','table']});
+
+                function kickOffVisualization(dataInput) {
+                    var data = buildChartData(dataInput);
+                    setupChart(data);
+                    drawTable(data);
+                }
+      
+                function buildChartData(dataInput) {          
+                    return PageData.getData(dataInput);
+                }
+      
+                // This object holds the data on the page 
+                PageData = {
+                        //  This function grabs data for graphing all of the series 
+                        getData : function(input) {
+                            // Create the data table.
+                            data = new google.visualization.DataTable();
+                            data.addColumn('date', 'Date');
+                            var labelrow = input.shift();
+                            var labels = labelrow.toString().split(',');
+                            for (var i = 0; i < labels.length; i++) {
+                              data.addColumn('number', labels[i]);
+                            }
+                            data.addRows(input);
+                            return data;
+                        },
+                        Colors : [ "#333","#06C","#F60","#C33","#3C3","#93F","#CC0","#333" ], // first color is 0: the default color. in the arrays we start with 1, since we always display column 0.
+          
+                    AreaChartSettings : {
+                        curveType: "none",
+                        width: 1095, 
+                        height: 200,
+                        vAxis: {
+                            textPosition: "out", 
+                            textStyle: { color: '#999', fontSize: 10 },
+                            gridlineColor: "#efefef",
+                            minValue: 0
+                        },
+                        hAxis: {
+                            textPosition: "out", 
+                            textStyle: { 
+                                color: '#999', fontSize: 10 
+                            },
+                            gridlineColor: "#efefef"
+
+                        },
+                        legend: "none",
+                        pointSize: 5,
+                        lineWidth: 2,
+                        backgroundColor: "#FFF",
+                        colors: ["#06C","#F60",'#C33','#3C3','#93F','#CC0','#333'],
+                        areaOpacity: 0.1,
+                        tooltip: {textStyle: {color: '#555', fontSize: 12}, showColorCode: true},
+                        chartArea: {left:50,top:10,width:1025,height:"85%"}
+                    },
+          
+                    TableSettings : {
+                        alternatingRowStyle: false,
+                        page: 'enable',
+                        pageSize: 30,
+                        sortColumn: 0,
+                        width: 945,
+                        cssClassNames: {
+                             hoverTableRow: 'un-hover-row',
+                            selectedTableRow: 'un-selected-row'
+                        }
+                    }
+          
+                }
+      
+                function setupChart(data) {
+                    dataChart = new google.visualization.DataView(data);
+                    drawChart(dataChart);
+                }
+      
+                function drawChart(dataChart) {
+                     // looping through the n records (columns) here - in this example it is just 1  
+                    // modify this number to be the correct amount of records displayed 
+                    var recordCount = dataChart.getNumberOfColumns() - 1;
+                    var columns = [0];
+                    var colorIndex = 0;
+                    for (var i=0; i<recordCount; i++) {
+                        PageData.AreaChartSettings.colors[colorIndex] = PageData.Colors[i+1];
+                        columns[columns.length] = i+1;
+                        // populating the legend 
+                        var legendText = document.getElementById('legend'+ (i+1)).innerText;
+                        legendText +=  {!JSENCODE('dataChart.getColumnLabel(i+1)')};
+                        document.getElementById('legend'+ (i+1)).innerText = legendText;
+                        colorIndex++;
+                    }
+      
+                    // Set chart options
+                    optionsChart = PageData.AreaChartSettings;
+                    // assign to the correct div 
+                    var chart = new google.visualization.AreaChart(document.getElementById('um_chart_div'));
+                    // draw chart
+                    chart.draw(dataChart, optionsChart);
+                    // show legend if there is more than one line in the chart 
+                    if (recordCount > 1) {
+                        document.getElementById('um_chart_legend').style.display = 'block';
+                    }
+                    else {
+                        document.getElementById('um_chart_legend').style.display = 'none';
+                    }
+                }
+      
+                function drawTable(data) {
+                    dataTable = new google.visualization.DataView(data);
+                    var tableW = 945;
+                    var recordCount = dataTable.getNumberOfColumns() - 1;
+                    if (recordCount === 1) {
+                        tableW = 445;
+                    }
+                    PageData.TableSettings.width = tableW;
+
+                    // Set table options
+                    tableChart = PageData.TableSettings;
+                    // assign to the correct div 
+                    var table = new google.visualization.Table(document.getElementById('um_table_div'));
+                    // draw chart
+                    table.draw(dataTable, tableChart);
+                }
+      
+                function setCheckbox(){
+                    var singleOrgRadio = document.getElementById('orgz_one');
+                    var allOrgRadio = document.getElementById('orgz_all');
+                    //if org id was submitted and has a value make sure the checkbox stays checked
+                    if('{!JSINHTMLENCODE(requestedSubscriberOrgId)}' || '{!JSINHTMLENCODE(requestedSubscriberOrgId)}'.length != 0){
+                        singleOrgRadio.setAttribute('checked', 'checked');
+                        singleOrgRadio.focus();
+                        allOrgRadio.removeAttribute('checked');
+                    } 
+                    else{
+                        // make all org the default
+                        allOrgRadio.setAttribute('checked', 'checked');
+                        allOrgRadio.focus();
+                        singleOrgRadio.removeAttribute('checked');
+                        // disable the org id input field too
+                    }
+             
+                }
+                
+                function initPage(){
+                   setCheckbox();
+                }
+      
+                // sets the correct checkbox based on what was saved previously (what we ran the report on)
+                window.onload(initPage());
+
+                function getData() {
+                    doQuery();
+                }
+      
+                function parseDate(input) {
+                    var parts = input.split('-');
+                    return new Date(parts[0], parts[1]-1, parts[2]);
+                }
+
+            </script>
+    </div>
+        <div id="contentLoading" style="display: none;">
+            <div style="text-align: left;">
+                <img src="/img/loading.gif" alt="Loading graphic" />
+                <span class="um-data">{!$Label.UM_loadingData}</span>
+            </div>
+        </div>
+    </div><!-- end id="um" div -->
+</body>
+</html>
+</apex:page>

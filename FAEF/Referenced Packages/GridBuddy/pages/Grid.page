@@ -1,0 +1,377 @@
+<apex:page controller="GBLite.GridController" showHeader="{!showHeader}" sidebar="{!showSidebar}" title="{!gridWindowTitle}" action="{!initPage}">
+	<apex:outputText value="{!bodyStartTag}" escape="false" />
+	<c:EmptyComponent rendered="{!NOT(ISNULL(customCSSBody))}">
+		<style type="text/css">
+			{!customCSSBody}
+		</style>
+	</c:EmptyComponent>
+	
+	<script type="text/javascript">var errorRecs = new Array();</script>
+	<div class="gbPage {!IF(showHeader, '', 'gbNoHdr')} {!IF(isFilteringByParentId, 'fbp', '')} gb{!lang.langCode} {!IF(repeatParentHeader, '', 'gbNoRepeatParentHdr')} {!IF(compactView, 'compactView', '')}">
+		<c:EmptyComponent rendered="{!errors.showErrorMessages}">
+			<div class="msgBox warningMsg" id="pageWarnings">
+				<apex:repeat value="{!errors.errorMessagesMapEntries}" var="error">
+					<c:EmptyComponent rendered="{!error.isRecordTypeError}">
+						<div class="rMessages">
+							<div class="bold">{!error.ErrorForRecIdMsg}</div>
+							<apex:repeat value="{!error.messages}" var="message">
+								<apex:outputText value="{!message}" escape="false"/><br/>
+							</apex:repeat>
+							<script type="text/javascript">errorRecs.push('{!error.key}');</script>
+						</div>
+					</c:EmptyComponent>
+					
+					<c:EmptyComponent rendered="{!(!error.isRecordTypeError)}">
+						<apex:repeat value="{!error.messages}" var="message">
+							<apex:outputText value="{!message}" escape="false"/><br/>
+						</apex:repeat>
+					</c:EmptyComponent>
+				</apex:repeat>
+				
+				<apex:repeat value="{!errors.apexWarningMessages}" var="error">
+					<apex:outputText value="{!error.summary}" escape="true"/><br/>
+				</apex:repeat>
+				
+				<div class="messageTime">{!currentDateTime}</div>
+			</div>
+		</c:EmptyComponent>
+
+		<c:EmptyComponent rendered="{!errors.showInfoMessages}">
+			<div class="msgBox infoMsg">
+				<apex:repeat value="{!errors.apexInfoMessages}" var="infoMsg">
+					<apex:outputText value="{!infoMsg.summary}" escape="true"/><br/>
+				</apex:repeat>
+				
+				<div class="messageTime">{!currentDateTime}</div>
+			</div>
+		</c:EmptyComponent>
+		
+		<div class="msgBox boxShadow loaderStatus" id="gridStatus">
+			<div class="msgBody">
+				<img src="{!URLFOR($Resource.gb_resources, 'images/orange_loader.gif')}" height="35" width="35" border="0"/>
+				<span class="msgText"></span>
+			</div>
+		</div>
+		
+		<div class="msgBox warningMsg boxShadow" id="invalidFieldsWarning">
+			<div class="closeX">{!lang.CloseWarningBoxLbl}&nbsp;<b>X</b></div>
+			<div class="msgBody">{!lang.EnterRequiredDataMsg}</div>
+		</div>
+		
+		<div class="msgBox descBox boxShadow">
+			<div class="header">
+				<span class="descTitle"></span>
+				<span class="closeX">{!lang.CloseWarningBoxLbl}&nbsp;<b>X</b></span>
+				<br clear="all"/>
+			</div>
+			<div class="descContent"></div>
+			<input type="hidden" value="" id="rowId"/>
+		</div>
+	
+		<c:EmptyComponent rendered="{!massUpdatesEnabled}">
+			<div id="massUpdatesMsgBox" class="msgBox massUpdatesBox boxShadow">
+				<div id="muResizeDiv">
+					<div class="header">
+						<span class="title">{!lang.MassUpdateLbl}</span>
+						<span class="closeX">{!lang.CloseWarningBoxLbl}&nbsp;<b>X</b></span>
+						<span class="helpSep">|</span>
+						<span class="muHelpLink">{!lang.HelpLbl}</span>
+						<br clear="all"/>
+					</div>
+					<div class="rlBorders">
+						<div id="massUpdateButtons">
+							<input type="button" id="massUpdateSelected" value="{!lang.ApplyToSelectedBtnLbl}" class="btn"/>
+							<input type="button" id="massUpdateSelected" value="{!lang.ApplyToSelectedBtnLbl}" class="btnDisabled none" disabled="disabled" />
+							<input type="button" id="massUpdateAll" value="{!lang.ApplyToAllBtnLbl}" class="btn"/>
+							<input type="button" id="massUpdateAll" value="{!lang.ApplyToAllBtnLbl}" class="btnDisabled none" disabled="disabled" />
+							<input type="button" id="clearAllMassUpdate" value="{!lang.ClearAllBtnLbl}" class="btn"/>
+							<input type="button" id="clearAllMassUpdate" value="{!lang.ClearAllBtnLbl}" class="btnDisabled none" disabled="disabled" />
+							<input type="button" id="expandAllMassUpdate" value="{!lang.ExpAllBtnLbl}" class="btn toggleRecords none"/>
+							<input type="button" id="expandAllMassUpdate" value="{!lang.ExpAllBtnLbl}" class="eaMuDis hidden btnDisabled none" disabled="disabled" />
+							&nbsp;&nbsp;<span class="none muLoading">{!lang.applyingTxt}</span>
+						</div>
+						
+						<div class="massUpdtContent">
+							<div id="massUpdateMsg" class="none"></div>
+							<div id="massUpdateHelp" class="none">
+								<div class="instr">
+									<h3>{!lang.MassUpdateHelpLbl}</h3>
+									<p>{!lang.MassUpdateHelp1}</p>
+									<p><apex:outputText value="{!lang.MassUpdateHelp2}" escape="false"/></p>
+									<p><apex:outputText value="{!lang.MassUpdateHelp3}" escape="false"/></p>
+									<p><apex:outputText value="{!lang.MassUpdateHelp4}" escape="false"/></p>
+								</div>
+							</div>
+							<div id="massUpdatesContent"></div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</c:EmptyComponent>
+		
+		<!-- using prependId true (default behavior) so that the inputFields get saved properly, if set to false the inputField values are not saved (e.g. textarea fields) -->
+		<apex:form styleClass="gbForm {!IF(showReadOnly, 'gbro', '')}" rendered="{!isValidGrid}" prependId="true">
+	    	<c:GridPageComponent parentGrid="{!parentGrid}" 
+                saveReturnAction="{!saveAndReturn}" saveAction="{!save}" editGridDataAction="{!editGridData}" refreshGridDataAction="{!refreshGridData}" 
+                deleteAction="{!deleteRows}" deleteAllAction="{!deleteAll}" deletesEnabled="{!deletesEnabled}" hasCreateableObjects="{!hasCreateableObjects}"
+                renderDeleteAll="{!renderDeleteAll}" noDeleteAccess="{!noDeleteAccess}" hasParentRecords="{!content.hasParentRecords}"
+                previousPageAction="{!previousPage}" nextPageAction="{!nextPage}" goToPageAction="{!goToPageAction}" resetPageSizeAction="{!resetPageSize}" 
+                readOnlyGridAction="{!readOnlyGridAction}" pageSize="{!pageSize}" pageSizeOptions="{!showRows}" showReadOnly="{!showReadOnly}" 
+                isEditable="{!isEditable}" isCreateable="{!isCreateable}" noOfRecordsTxt="{!noOfRecordsTxt}" gridTitle="{!gridConfig.Name}" 
+                pageNumbers="{!pageNumbers}" renderFirstPage="{!renderFirstPage}" goToPageSetter="{!goToPage}"
+                firstPage="{!firstPageNumber}" renderNextPageLink="{!renderNextPageLink}" totalPages="{!totalPages}" currentPage="{!currentPage}" 
+                massUpdatesEnabled="{!massUpdatesEnabled}" UDFEnabled="{!UDFEnabled}" UDCEnabled="{!UDCEnabled}" exportEnabled="{!exportEnabled}" 
+                lang="{!lang}" userHasGridWizardPerms="{!userHasGridWizardPerms}" gridWizardURL="{!gridWizardURL}"/>
+            
+            <apex:inputHidden id="modData" value="{!modData}"/>
+            <apex:inputHidden id="newData" value="{!newData}"/>
+            <apex:inputHidden id="parentIds" value="{!parentIds}"/>
+            <apex:inputHidden id="child1Ids" value="{!child1Ids}"/>
+			<apex:inputHidden id="child2Ids" value="{!child2Ids}"/>
+			<apex:inputHidden id="child3Ids" value="{!child3Ids}"/>
+			<apex:inputHidden id="child4Ids" value="{!child4Ids}"/>
+			<apex:inputHidden id="sortParent" value="{!sortParent}"/>
+			<apex:inputHidden id="sortChild1" value="{!sortChild1}"/>
+			<apex:inputHidden id="sortChild2" value="{!sortChild2}"/>
+			<apex:inputHidden id="sortChild3" value="{!sortChild3}"/>
+			<apex:inputHidden id="sortChild4" value="{!sortChild4}"/>
+			<apex:inputHidden id="expandCollapseState" value="{!expandCollapseState}"/>
+			<apex:inputHidden id="userDefinedColumnOrder" value="{!userDefinedColumnOrder}"/>
+			
+			<script type="text/javascript">
+				var modDataHidden = document.getElementById("{!$Component.modData}"),
+					newDataHidden = document.getElementById("{!$Component.newData}"),
+					parentIdsHidden = document.getElementById("{!$Component.parentIds}"),
+					child1IdsHidden = document.getElementById("{!$Component.child1Ids}"),
+					child2IdsHidden = document.getElementById("{!$Component.child2Ids}"),
+					child3IdsHidden = document.getElementById("{!$Component.child3Ids}"),
+					child4IdsHidden = document.getElementById("{!$Component.child4Ids}"),
+					sortParentHidden = document.getElementById("{!$Component.sortParent}"),
+					sortChild1Hidden = document.getElementById("{!$Component.sortChild1}"),
+					sortChild2Hidden = document.getElementById("{!$Component.sortChild2}"),
+					sortChild3Hidden = document.getElementById("{!$Component.sortChild3}"),
+					sortChild4Hidden = document.getElementById("{!$Component.sortChild4}"),
+					expandAllHidden = document.getElementById("{!$Component.expandCollapseState}"),
+					userDefinedColumnOrderHidden = document.getElementById("{!$Component.userDefinedColumnOrder}");
+				
+			</script>
+			
+			<div id="newFieldInfo">
+			<apex:repeat value="{!parentGrid.allGridInfo}" var="gInfo" rendered="{!isCreateable}">
+	    		<table border="0" cellpadding="0" cellspacing="0" class="none apexFields" name="new_{!gInfo.id}">
+		    		<tr>
+		    		<apex:repeat value="{!gInfo.metaColumns}" var="metaCol" rendered="{!gInfo.isCreateable}">
+						<td name="v{!metaCol.colIndex}"><apex:inputField value="{!gInfo.newSObject[metaCol.fieldName]}" rendered="{!!metaCol.isRestrictedPicklist}" required="false"/></td>
+		    		</apex:repeat>
+		    		
+		    		<apex:repeat value="{!gInfo.requiredColumnsForCreate}" var="metaCol" rendered="{!gInfo.isCreateable}">
+						<td name="v{!metaCol.colIndex}"><apex:inputField value="{!gInfo.newSObject[metaCol.fieldName]}" rendered="{!!metaCol.isRestrictedPicklist}" required="false"/></td>
+		    		</apex:repeat>
+		    		</tr>
+	    		</table>
+	    	</apex:repeat>
+	    	</div>
+	    	
+	    	<div class="none" id="objectTextAreaInfo">
+	    		<c:EmptyComponent rendered="{!showReadOnly==false}">
+					<c:TextAreaHelperComponent gridInfo="{!parentGridInfo}" />
+					<c:TextAreaHelperComponent gridInfo="{!child1GridInfo}" />
+					<c:TextAreaHelperComponent gridInfo="{!child2GridInfo}" />
+					<c:TextAreaHelperComponent gridInfo="{!child3GridInfo}" />
+					<c:TextAreaHelperComponent gridInfo="{!child4GridInfo}" />
+				</c:EmptyComponent>
+			</div>
+			
+			<c:EmptyComponent rendered="{!UDCEnabled}">
+				<div id="reorderCols" class="msgBox boxShadow reorderColsBox">
+					<div id="rocResizeDiv">
+						<div class="header">
+							<span class="title">Reorder and Hide Columns</span>
+							<span class="closeX">{!lang.CloseWarningBoxLbl}&nbsp;<b>X</b></span>
+							<br clear="all"/>
+						</div>
+						<div id="rocBtns">
+							<apex:commandButton action="{!saveUserDefinedColumns}" value="{!lang.saveBtnLbl}" 
+												styleClass="btn rocSaveBtn" immediate="false"/>
+							<input type="button" class="btnDisabled none" value="{!lang.saveBtnLbl}" disabled="disabled" />
+							<input type="button" class="btn rocRefreshBtn" value="{!lang.refreshBtnLbl}" />
+							<input type="button" class="btnDisabled none" value="{!lang.refreshBtnLbl}" disabled="disabled" />
+							<c:EmptyComponent rendered="{!NOT(isLoadedFromDefaultColumnsRecord)}">
+								<apex:commandButton action="{!revertUserDefinedColumns}" value="{!lang.revertBtnLbl}" 
+													styleClass="btn rocRevertBtn" title="Revert to the default column order" immediate="false"/>
+								<input type="button" class="btnDisabled none" value="{!lang.revertBtnLbl}" disabled="disabled" />
+							</c:EmptyComponent>
+						</div>
+						<div id="rocBody">
+							<div>
+								<div><b>Reorder</b> columns by dragging and dropping them vertically.</div>
+								<div><b>Hide</b> columns by unchecking the boxes.</div><br/>
+							</div>
+							<div id="rocContent">
+							</div>
+						</div>
+					</div>
+				</div>
+			</c:EmptyComponent>
+		</apex:form>
+		
+		<c:EmptyComponent rendered="{!UDFEnabled}">
+			<div id="userFilterBox" class="msgBox filterBox boxShadow">
+				<div id="filterBoxResizeDiv">
+					<div class="header">
+						<span class="title">{!lang.UDFFilterBtnLbl}</span>
+						<span class="closeX">{!lang.CloseWarningBoxLbl}&nbsp;<b>X</b></span>
+						<br clear="all"/>
+					</div>
+					<div id="userFilterBoxContent" class="filterBoxContent frameScrollFix">
+						<div class="msgBox boxShadow loaderStatus" id="filterStatus">
+							<div class="msgBody">
+								<img src="{!URLFOR($Resource.gb_resources, 'images/orange_loader.gif')}" height="35" width="35" border="0"/>
+								<span class="msgText">{!lang.loadTxt}</span>
+							</div>
+						</div>
+						<iframe src="" id="userFilterFrame" scrolling="auto" height="100%" width="100%" frameborder="0"></iframe>
+					</div>
+				</div>
+			</div>
+			
+			<div id="fastFilter" class="msgBox boxShadow">
+				<div class="header">
+					<span class="title">{!lang.fastFiltersTitle}</span>
+					<span class="closeX">{!lang.CloseWarningBoxLbl}&nbsp;<b>X</b></span>
+					<br clear="all"/>
+				</div>					
+				<div id="ffBody">
+					<div id="ff-field"></div>
+					<div id="ff-operator"></div>
+					<div id="ff-value"></div>
+					<div id="ff-msg"></div>
+				</div>
+				<div id="ffBtns">
+					<input type="button" class="btn ffOkBtn" value="OK" title="{!lang.fastFilterOkBtnTitle}"/>
+					<input type="button" class="btn ffApplyNowBtn" value="Apply" title="{!lang.fastFilterApplyNowBtnTitle}" />
+					<input type="button" class="btn ffClearBtn" value="Clear" title="{!lang.fastFilterClearBtnTitle}" />
+				</div>
+				<input type="hidden" id="ff-obj" value="" />
+				<input type="hidden" id="ff-field-api-name" value="" />
+			</div>
+		</c:EmptyComponent>
+		
+		<!-- using actionRegion didn't work so have to use a separate form for export so that we don't unbind fields when in edit mode -->
+		<apex:form styleClass="exportForm" rendered="{!exportEnabled}" prependId="true">
+			<apex:actionFunction name="exportData" action="{!exportData}" />
+			<apex:inputHidden id="exportIds" value="{!exportRecordIds}" />
+			<script type="text/javascript">
+				var exportIds = document.getElementById("{!$Component.exportIds}");
+			</script>
+		</apex:form>
+		
+		<div class="gbCopyright">{!lang.CopyrightTxt}</div>
+	</div>
+	
+	<c:LangJSComponent lang="{!lang}"/>
+	<!--  do not use includeScript for the jquery include, as this will add the javascript to the <head> tag and slow down the page load -->
+    <apex:repeat value="{!JSFileNames}" var="fName">
+    	<script type="text/javascript" src="{!URLFOR($Resource.GBLite__gb_resources, fName)}"></script>
+    </apex:repeat>
+    <c:ServiceCloudConsoleComponent inServiceCloudConsole="{!inServiceCloudConsole}"/>
+   	<apex:repeat value="{!CSSFileNames}" var="fName">
+    	<apex:stylesheet value="{!URLFOR($Resource.GBLite__gb_resources, fName)}"/>
+    </apex:repeat>
+    
+    <script type="text/javascript">
+    	var gridIsValid = {!isValidGrid},
+    		readOnlyGrid = {!showReadOnly},
+    		isCreateable = {!isCreateable},
+    		currentLocale = '{!localeForDate}',
+    		dateFormat = '{!dateFormat}', // used by date js
+    		gridHasEditableDates = {!parentGrid.gridHasEditableDateFields && !showReadOnly},
+    		gridHasAnyDates = {!parentGrid.gridHasAnyDateFields},
+    		deletesEnabled = {!deletesEnabled},
+    		massUpdatesEnabled = {!massUpdatesEnabled},
+    		exportEnabled = {!exportEnabled},
+    		filterEnabled = {!UDFEnabled},
+    		filteringByParent = {!isFilteringByParentId},
+   			expandAll = {!expandAll},
+   			showBottomButtons = {!showBottomButtons},
+   			ownerValue = '{!ownerValueForCreateNew}',
+   			ownerId = '{!$User.Id}',
+   			userFilterURL = '{!userFilterUrl}',
+   			filterParentField = '{!FPFOnParentObject}',
+   			optsArr,
+   			ffOpts = {!operatorsJSON},
+   			multiCurrency = {!isMultiCurrencyOrg},
+   			sId = "{!$Api.Session_ID}",
+   			serverUrl160 = "{!$Api.Partner_Server_URL_160}",
+   			loaderImg = "{!URLFOR($Resource.gb_resources, 'images/orange_loader.gif')}",            
+            localeDigitSep = "{!localeDigitSeparator}",
+            localeDecimalSep = "{!localeDecimalSeparator}",
+            repeatParentHeader = {!repeatParentHeader},
+            compactView = {!compactView};
+    	
+    	if (gridIsValid && {!(showHeader==false)}) {
+   			try {
+   				document.title = "{!gridWindowTitle}";
+   			} catch(e) {}
+    	}
+    	
+    	<apex:repeat value="{!parentGrid.allGridInfo}" var="gInfo">
+			gridInfoMapId = '{!gInfo.id}';
+    		gridInfoMap[gridInfoMapId] = new GridInfo(gridInfoMapId, {!gInfo.rowCnt}, '{!gInfo.HTMLEscapedGridObjectName}', '{!gInfo.HTMLEscapedGridObjectPluralName}', '{!gInfo.fullyQualifiedObjectName}', '{!gInfo.sortFieldNames}', '{!gInfo.sortDirections}', '{!gInfo.defaultSortFieldNames}', {!gInfo.isDeletable}, {!gInfo.isCreateable}, {!gInfo.isUpdateable}, {!gInfo.supportsUserDefinedFilters});
+    		gridInfoMapLen++;
+    		
+    		<apex:repeat value="{!gInfo.metaColumns}" var="metaCol">
+				optsArr = [];
+				<apex:repeat value="{!metaCol.HTMLEscapedPicklistValues}" var="picklistValue">
+					optsArr.push({v:"{!picklistValue.value}", l:"{!picklistValue.label}"});
+				</apex:repeat>
+				
+    			gridInfoMap[gridInfoMapId].addMetaCol({!metaCol.colIndex}, "{!metaCol.fieldName}", "{!metaCol.HTMLEscapedFieldLabel}", "{!metaCol.dataTypeStr}", {!metaCol.isReadOnly}, optsArr, {!metaCol.isRequired}, {!metaCol.fieldLength}, '{!metaCol.referenceToObjectsAsString}', {!metaCol.isCreateable}, {!metaCol.isDefaultedOnCreate}, {!metaCol.isUpdateable}, {!metaCol.isSortable}, {!metaCol.isHtmlFormatted}, {!metaCol.isFilterable}, {!metaCol.isHidden}, {!metaCol.columnWidth});
+    		</apex:repeat>
+    		
+    		<apex:repeat value="{!gInfo.requiredColumnsForCreate}" var="metaCol">
+    			optsArr = [];
+				<apex:repeat value="{!metaCol.HTMLEscapedPicklistValues}" var="picklistValue">
+					optsArr.push({v:"{!picklistValue.value}", l:"{!picklistValue.label}"});
+				</apex:repeat>
+				
+    			gridInfoMap[gridInfoMapId].addRequiredMetaCol({!metaCol.colIndex}, "{!metaCol.fieldName}", "{!metaCol.HTMLEscapedFieldLabel}", "{!metaCol.dataTypeStr}", {!metaCol.isReadOnly}, optsArr, {!metaCol.isRequired}, {!metaCol.fieldLength}, '{!metaCol.referenceToObjectsAsString}', {!metaCol.isCreateable}, {!metaCol.isDefaultedOnCreate}, {!metaCol.isUpdateable}, false, false, false, false);
+    		</apex:repeat>
+    	</apex:repeat>
+    	
+		<apex:repeat value="{!recordTypePicklistData}" var="rtEntry">
+			rtPicklistMap['{!rtEntry.objectDotField}'] = jq.parseJSON('{!rtEntry.jsonString}');
+		</apex:repeat>
+
+    	<apex:repeat value="{!parentGrid.whoIdActivityObjects}" var="obj">
+    		whoIdActivityObjects.push(new Option("{!obj.label}", "{!obj.value}"));
+    	</apex:repeat>
+    	
+    	<apex:repeat value="{!parentGrid.whatIdActivityObjects}" var="obj">
+    		whatIdActivityObjects.push(new Option("{!obj.label}", "{!obj.value}"));
+    	</apex:repeat>
+    	
+    	try {
+    		if (gridIsValid) {
+    			// parse the json
+    			gridData = {!IF(ISNULL(parentGrid), 'null', parentGrid.gridDataAsJSONString)};
+    			GBActions.setCustomActions({!actionDataJSON});
+    		}
+    	} catch(e) {
+    		addPageLevelErrorMessage('<div><b>{!lang.UnableToLoadGridMsg}</b><br/>' + e + '</div>');
+    	}
+    	var dependentInfoArray = [];
+    	<apex:repeat value="{!DependentPicklistData}" var="pickListInfo">
+    		dependentInfoArray.push({parentObjectName: "{!pickListInfo.parentObjectName}", controllingField: "{!pickListInfo.controllingField}", dependentField: "{!pickListInfo.dependentField}", dependentValues: {!pickListInfo.dependentValues}});
+    	</apex:repeat>
+    </script>
+
+	<c:EmptyComponent rendered="{!NOT(ISNULL(customJSBody))}">
+		<script type="text/javascript">
+			{!customJSBody}
+		</script>
+	</c:EmptyComponent>
+	<div id="gbOverlay">&nbsp;</div>
+	<div id="gbHelpText" class="msgBox infoMsg boxShadow"></div>
+    <apex:outputText value="{!bodyEndTag}" escape="false"/>
+</apex:page>

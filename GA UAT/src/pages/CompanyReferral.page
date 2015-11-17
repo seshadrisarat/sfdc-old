@@ -1,0 +1,263 @@
+<!--
+  This page is used for to track referrals of companies to contacts, either
+  via emails or phone calls.
+
+  @author ForceDeveloper - original (Visualforce Company Referrals)
+  @author Reshma - Extending Company Referrals
+  @author Karanraj - Company Referrals - UX Enhancements
+  @author Thiyagarajan Selvaraj - Company Referrals - UX Enhancements
+  @author Reshma - Company Referrals Polish
+  @author jfavors (Appirio) - polish
+-->
+<apex:page docType="html-5.0"
+           sidebar="false"
+           controller="CompanyReferralController"
+           tabStyle="Account"
+           title="Refer a Company">
+  <style>
+    .wrapper { padding-top: 15px; }
+    .bPageBlock {
+      border-top: 1px !important;
+      background-color: #FFFFFF !important;
+    }
+    .bPageBlock .pbBody {
+      margin-top: 1px !important;
+      padding-top: 0px !important;
+    }
+
+    h3 {
+      font-size: 1.6em;
+      font-weight: normal;
+      display: block;
+      line-height: 1.1em;
+      margin-bottom: 0.5em;
+    }
+
+    .sectionSubtitle { margin-bottom: 1.0em; max-width: 50%; }
+    .descriptionBlock { margin-bottom: 2.0em; }
+    .referralInputs { border: 1px solid #8496ba; height: 2em; width: 50%; }
+    textarea.referralInputs { height: 300px; }
+    .cancelLink { margin-right: 10px; }
+
+    ul.token-input-list-facebook li input { margin: 0; padding: 0 }
+    ul.token-input-list-facebook { min-height: 2.0em; }
+  </style>
+
+  <apex:form >
+    <!-- jQuery and jQuery UI Libraries & CSS -->
+    <apex:includeScript value="//code.jquery.com/jquery-1.10.2.min.js" />
+    <apex:includeScript value="//code.jquery.com/jquery-1.9.1.js"/>
+    <apex:includeScript value="//code.jquery.com/ui/1.10.3/jquery-ui.js"/>
+    <apex:stylesheet value="//code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css"/>
+
+    <!-- jQuery Tokeninput Libraries & CSS -->
+    <apex:includeScript value="{!URLFOR($Resource.jQuery_Tokeninput, '/src/jquery.tokeninput.js')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.jQuery_Tokeninput, '/styles/token-input.css')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.jQuery_Tokeninput, '/styles/token-input-facebook.css')}"/>
+
+    <!-- Page Header starts here -->
+    <apex:sectionHeader subtitle="{!$Label.Refer_a_Company}"
+                        title="{!currentCompany.Name}" />
+
+    <apex:pageMessages id="msgPanel"/>
+
+    <apex:pageBlock mode="edit">
+      <apex:inputHidden value="{!selectedCompaniesParam}" id="selectedCompanies"/>
+      <apex:inputHidden value="{!selectedContactsParam}" id="selectedContacts"/>
+
+      <!-- PageBlock button -->
+      <apex:pageBlockButtons location="bottom">
+        <apex:commandLink value="Cancel"
+                          styleClass="cancelLink"
+                          action="{!cancel}"/>
+        <apex:commandButton value="Send as Email"
+                            onclick="validateForm(true);"
+                            action="{!sendEmail}"/>
+        <apex:commandButton value="Log as Call"
+                            onclick="validateForm(false);"
+                            action="{!logCall}"/>
+      </apex:pageBlockButtons>
+
+      <!--Section title, subtitle, description start here -->
+      <apex:pageBlockSection columns="1">
+        <apex:outputPanel layout="block" styleClass="descriptionBlock">
+          <h3>{!$Label.ReferralTitle}</h3>
+          <apex:outputPanel styleClass="sectionSubtitle" layout="block">
+            <apex:outputText value="{!$Label.Referralsubtitle}"/>
+          </apex:outputPanel>
+          <apex:outputPanel styleClass="sectionSubtitle" layout="block">
+            <apex:outputText value="{!$Label.Referral_Heading_content}"/>
+          </apex:outputPanel>
+        </apex:outputPanel>
+
+        <!-- From Section -->
+        <apex:pageBlockSectionItem >
+          <apex:outputText >{!$Label.From}</apex:outputText>
+          <apex:outputText >{!$User.FirstName} {!$User.LastName}</apex:outputText>
+        </apex:pageBlockSectionItem>
+        <br/>
+
+        <!-- To Section -->
+        <apex:pageBlockSectionItem helpText="{!$Label.Contact_Helptext}">
+          <apex:outputText >{!$Label.To_Title}</apex:outputText>
+          <input type="text" id="addContact" name="addContact"/>
+        </apex:pageBlockSectionItem>
+        <br/>
+
+        <!-- CC section -->
+        <apex:pageBlockSectionItem helpText="{!$Label.CC_Helptext}">
+          <apex:outputText >{!$Label.CC}</apex:outputText>
+          <apex:inputText styleClass="referralInputs"
+                          value="{!ccString}"
+                          id="ccString"/>
+        </apex:pageBlockSectionItem>
+        <br/>
+
+        <!-- Company section -->
+        <apex:pageBlockSectionItem helpText="{!$Label.Company_Helptext}">
+          <apex:outputText >{!$Label.Company_Title}</apex:outputText>
+          <input type="text" id="addCompany" name="addCompany"/>
+        </apex:pageBlockSectionItem>
+        <br/>
+
+        <!--Email Subject section-->
+        <apex:pageBlockSectionItem >
+          <apex:outputText > {!$Label.Subject} </apex:outputText>
+          <apex:inputText styleClass="referralInputs"
+                          id="eSubject"
+                          value="{!emailSubject}"/>
+        </apex:pageBlockSectionItem>
+        <br/>
+
+        <!-- Email Body section-->
+        <apex:pageBlockSectionItem >
+          <apex:outputLabel >{!$Label.Body}</apex:outputLabel>
+          <apex:inputTextArea styleClass="referralInputs"
+                              id="ebody"
+                              value="{!emailBody}"/>
+        </apex:pageBlockSectionItem>
+      </apex:pageBlockSection>
+    </apex:pageBlock>
+
+    <script>
+      /*
+       * Uses jquery.tokeninput (http://loopj.com/jquery-tokeninput/)
+       * to search for Contacts and Companies.
+       */
+      $(document).ready(function() {
+
+        // Initialize autocomplete for company using token input plugin
+        $("#addCompany").tokenInput(
+          "/apex/TokenInputHelper?for=Company",
+          {
+            theme: "facebook",
+            preventDuplicates: true,
+            hintText: "{!$Label.Company_Search}",
+
+            // Format the results to show name, city, state, zip
+            resultsFormatter: function(item) {
+              return "<li><div style='display: inline-block;'><div class='full_name'>" +
+                item.name + " (" + item.city + ", " +
+                item.state + ")</div></li>";
+            },
+
+            // Show only name in input box
+            tokenFormatter: function(item) {
+              return "<li><p>" + item.name + "</p></li>";
+            }
+
+            {!IF(NOT(ISNULL(currentCompany)),
+              ', prePopulate: [ {id: "' + currentCompany.Id + '", name: "' +
+              currentCompany.Name + '"} ]',
+            '')}
+          }
+        );
+
+        // Initialize autocomplete for contact using token input plugin
+        $("#addContact").tokenInput(
+          "/apex/TokenInputHelper?for=Contact",
+          {
+            theme: "facebook",
+            preventDuplicates: true,
+            hintText: "{!$Label.Contact_Search}",
+
+            // Format the results to show name, email & company
+            resultsFormatter: function(item) {
+              return "<li><div style='display: inline-block;'><div class='full_name'>" +
+              item.name + " (" + item.email + ", " +
+              item.company + ")</div></li>"
+            },
+
+            // Show only name in input box
+            tokenFormatter: function(item) {
+              return "<li><p>" + item.name + "</p></li>";
+            }
+
+            {!IF(NOT(ISNULL(currentContact)),
+              ', prePopulate: [ {id: "' + currentContact.Id + '", name: "' +
+              currentContact.Name + '"} ]',
+              '')}
+          }
+        );
+      });
+
+      /**
+       * Get the account Ids
+       */
+      function getAccountIds() {
+        $('[id$=selectedCompanies]').val($('#addCompany').val());
+      }
+
+      /**
+       * Get the contact Ids
+       */
+      function getContactIds() {
+        $('[id$=selectedContacts]').val($('#addContact').val());
+      }
+
+      /**
+       * This function will check if a company, contact, subject and email body
+       * is present.
+       */
+      function validateForm(isEmail) {
+        getAccountIds();
+        getContactIds();
+
+        var errorMessage = '';
+
+        if ($('[id$=#selectedCompanies]').val() == '') {
+          errorMessage =
+            addErrorMessage('{!$Label.Blank_Company_Error}', errorMessage);
+        }
+
+        if ($('[id$=#selectedContacts]').val() == '') {
+          errorMessage =
+            addErrorMessage('{!$Label.Blank_Contact_Error}', errorMessage);
+        }
+
+        if ($('[id$=eSubject]').val() == '') {
+          errorMessage =
+            addErrorMessage('{!$Label.Blank_SubjectError}', errorMessage);
+        }
+
+        if ($('[id$=ebody]').val() == '') {
+          errorMessage =
+            addErrorMessage('{!$Label.Blank_Body_Error}', errorMessage);
+        }
+
+        if (errorMessage.match(/\S/)) {
+          alert(errorMessage);
+
+          return false;
+        }
+      }
+
+      /**
+       * This method simply forms the error message string
+       */
+      function addErrorMessage(error, message) {
+        return (message) ? message + '\n' + error : error;
+      }
+    </script>
+  </apex:form>
+</apex:page>

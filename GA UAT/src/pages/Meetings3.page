@@ -1,0 +1,641 @@
+<apex:page showHeader="false"  standardStylesheets="false" cache="false" controller="MeetingsController3" docType="html-5.0" >
+<apex:outputText escape="false" value="{!'<!DOCTYPE html>'}"/>
+<html>
+<head>
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="apple-touch-icon" href="{!BaseURL}{! URLFOR($Resource.GAAppIcon)}"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+
+<title>GA Meetings</title>
+<apex:stylesheet value="{!BaseURL}{! URLFOR($Resource.jQueryMobile, 'jquery.mobile-1.0.1/jquery.mobile-1.0.1.min.css') }"/>
+<apex:stylesheet value="{!BaseURL}{! URLFOR($Resource.jQueryMobile, 'jquery.mobile-1.0.1/jquery.mobile.structure-1.0.1.min.css') }"/>
+
+<script type="text/javascript" src="{!BaseURL}{!URLFOR($Resource.cloudtunes_jQuery, 'jquery.min.js')}"></script>
+<script type="text/javascript" src="{!BaseURL}{!URLFOR($Resource.jQueryMobile, 'jquery.mobile-1.0.1/jquery.mobile-1.0.1.min.js')}"></script>
+
+<script type="text/javascript" >
+
+
+var MeetingManager=function()
+{
+  var _aMeetings=new Array();
+  var _aAgendaItems=new Array();
+  var _aNotes=new Array();
+  var _IsICAdmin=false;
+  
+  var _getMeetings=function(strType) 
+    {
+      var callback=function(){ $j.mobile.hidePageLoadingMsg(); };
+    
+      $j('#meetinglist').empty();
+
+      if(strType)
+        MeetingsController3.queryActiveMeetingsByType(strType,function(records, e) { _showMeetings(records, callback) }, {escape:true}); 
+      else
+        MeetingsController3.queryActiveMeetings(function(records, e) { _showMeetings(records, callback) }, {escape:true}); 
+    };
+  
+  var _showMeetings=function(records, callback)
+  {
+    _aMeetings.length = 0;
+    for(var i = 0; i < records.length; i++) { _aMeetings[records[i].Id] = records[i]; }
+
+    if(records.length==0)
+    {
+      $j('<li></li>').append('<h2>Sorry. No meetings found at this time.</h2>').appendTo('#meetinglist').show();
+    }
+
+    var x = 0;
+    $j.mobile.showPageLoadingMsg();  
+    
+    $j.each(records,
+        function() {
+          $j('<li></li>')
+          .attr('id',this.Id)         
+          .append('<h2>'+this.RecordType.Name+' Meeting: ' + new Date(this.Start_Time__c).toDateString()+  '</h2>')
+          .click(function(e) {
+            e.preventDefault();            
+            $j('#MeetingName').html(_aMeetings[this.id].RecordType.Name+': '+new Date(_aMeetings[this.id].Start_Time__c).toDateString());
+            $j('#MeetingStart').html(new Date(_aMeetings[this.id].Start_Time__c).toTimeString());
+            $j('#MeetingEnd').html(new Date(_aMeetings[this.id].End_Time__c).toTimeString());
+            $j('#MeetingLocation').html(_aMeetings[this.id].Location__c);
+            $j('#MeetingId').val(_aMeetings[this.id].Id);            
+            $j.mobile.changePage('#detailpage', {changeHash: true});
+           
+            var onAgendaLoaded = function(){
+                $j.mobile.hidePageLoadingMsg();
+                //$j.mobile.changePage('#detailpage', {changeHash: true});
+              }
+
+            _getAgenda(_aMeetings[this.id].Id, onAgendaLoaded );
+            
+          })
+        .appendTo('#meetinglist');
+        x++;
+      });
+
+
+//CWD-- logo click
+
+            $j('#companyLogo').click(function(e){      
+              e.preventDefault();
+              $j.mobile.showPageLoadingMsg(); 
+              MeetingsController3.getCompanyDetails($j('#companyId').val(), function(records, e)
+                {
+                  
+                  console.log(records[0]);
+                  
+                  var aFields=['Name', 'Code_Name__c', 'Description','Industry','Status__c','Sector__c','Sub_Sector__c','Latest_Status_Note__c','Next_Steps__c', 'Latest_Status_Note_Subject__c','Website', 'Themes__c', 'Latest_Financials_Year__c', 'Latest_Revenue__c', 'Projected_Financials_Year__c', 'Projected_Revenue__c'];
+                  
+                  if(records.length>0)
+                  {
+                      for(var i=0;i<aFields.length;++i)
+                      {
+                        $j("#companyDetail_"+aFields[i]).html(' ');
+                        console.log($j("#companyDetail_"+aFields[i]).html() + ': '+ records[0][aFields[i]]);
+                        if((aFields[i]=='Name')&&(records[0]['Website']))
+                            $j("#companyDetail_"+aFields[i]).html('<a data-rel="dialog" data-transition="pop" href="'+records[0]['Website']+'">'+records[0][aFields[i]]+'</a>').trigger("create");
+                        else
+                            $j("#companyDetail_"+aFields[i]).html(records[0][aFields[i]]);
+                        
+                      }
+                  }
+                  else
+                  {
+                  }
+                  
+                  $j.mobile.hidePageLoadingMsg();
+                  $j.mobile.changePage('#companydetailpage', {changeHash: true});
+                }
+              );
+            });
+
+//CWD-- end logo click      
+      
+            
+    $j.mobile.hidePageLoadingMsg();
+    $j('#meetinglist').listview('refresh');
+    if(callback != null) { callback(); }
+  };
+  
+  var _getAgenda=function(iMID,callback)
+  {
+    $j('#agendalist').empty();
+    $j.mobile.showPageLoadingMsg(); 
+    MeetingsController3.queryAgenda(iMID,function(records, e) { _showAgenda(records, callback) }, {escape:true});
+    MeetingsController3.getAgendaMaterialsURLs(iMID,function(records, e) { _showMaterialsList('#agendaMaterialsList','#agendaMaterialsIFrame','#agendaMaterialsShimPage',records, callback) }, {escape:true}); 
+  };
+  
+  var _showAgenda=function(records, callback) 
+  {
+    _aAgendaItems.length=0;
+    for(var i = 0; i < records.length; i++) { _aAgendaItems[records[i].Id] = records[i]; }
+
+    if(records.length==0)
+    {
+      $j('<li></li>').append('<h2>Sorry. No agenda items found at this time.</h2>').appendTo('#agendalist').show();
+    }
+    
+    var strTopic='';
+    var strDealSize='';
+    var strDealTeam='';
+    var strMDTeam='';
+    
+    $j.each(records,
+      function()
+      {
+        strTopic=(_aAgendaItems[this.Id].Related_Topic__c)?_aAgendaItems[this.Id].Related_Topic__c+': ':' ';
+
+        var oDivider=$j('<li ><h3>'+strTopic+_aAgendaItems[this.Id].Name+'</h3> </li>')
+          .attr('id',this.Id)
+          .appendTo('#agendalist')
+          .attr('data-role','list-divider')
+          .append('<p>'+new Date(_aAgendaItems[this.Id].Start_Time__c).toTimeString()+'-'+new Date(_aAgendaItems[this.Id].End_Time__c).toDateString()+'</p>')
+          .click(function(e){      
+            e.preventDefault();
+            $j.mobile.showPageLoadingMsg();
+            $j('#agendaId').val(this.id);
+            $j('#companyDetail_Logo').html( $j('<div/>').html( ' ') );
+            
+            if(_aAgendaItems[this.id]. hasOwnProperty('Deal__r') && _aAgendaItems[this.id].Deal__r.hasOwnProperty('Related_Company__c') )
+            {
+              $j('#companyId').val(_aAgendaItems[this.id].Deal__r.Related_Company__c);
+
+              if(_aAgendaItems[this.id].Deal__r.Related_Company__r.RKCB__Logo__c)
+              {
+                $j('#companyLogo').html( $j('<div/>').html(_aAgendaItems[this.id].Deal__r.Related_Company__r.RKCB__Logo__c).text()+' (tap for details)' );
+                $j('#companyDetail_Logo').html( $j('<div/>').html(_aAgendaItems[this.id].Deal__r.Related_Company__r.RKCB__Logo__c).text() );
+              }
+              else
+              {
+                $j('#companyLogo').html( $j('<div/>').html( '<strong>'+_aAgendaItems[this.id].Deal__r.Related_Company__r.Name+':</strong> (tap for details)') );
+                $j('#companyDetail_Logo').html( $j('<div/>').html( ' ') );
+              }
+            
+            
+              $j('#materialsOnTime').html( ( (_aAgendaItems[this.id].Materials_submitted_on_time__c)?'Yes':'No'));
+              $j('#dealName').html(_aAgendaItems[this.id].Deal__r?_aAgendaItems[this.id].Deal__r.Name:'');
+            }
+
+            if(_IsICAdmin)
+            {
+              var blnFireCreate=($j('#UserVotes').html().trim()=='')?false:true;
+
+              $j('#UserVotes').empty();
+              $j('#meetingNotesEntered').show();
+              
+              MeetingsController3.getMeetingNotesEnteredStats(this.id, function(records, e) 
+                {
+                  var avgVote=0;
+                  var avgQoM=0;
+                  
+                  if((records.length>0)&&(records[0].NumVotes>0))
+                  {
+                    avgVote=parseFloat(Math.round(records[0].AvgVote * 100) / 100).toFixed(2);
+                    avgQoM=parseFloat(Math.round(records[0].AvgQoM * 100) / 100).toFixed(2)
+                  }
+                  
+                  $j('#AvgVote').html(avgVote);
+                  $j('#AvgQoM').html(avgQoM);
+                  //$j('#AvgWouldInvest').html(avgQoM);
+                }, {escape: false});
+                
+              MeetingsController3.getMeetingNotesEntered(this.id, function(records, e)
+                { 
+                  if(records.length==0)
+                    $j('#UserVotes').append('<h3>Sorry. No votes yet.</h3>').trigger('create');
+                
+                  $j.each(records,function()
+                    {
+                      var oSection=$j('<div data-role="collapsible" data-content-theme="d"> </div>')
+                      .append('<h4>'+this.Owner.Name+'</h4>')
+                      .append('<div class="ui-grid-b"><div class="ui-block-a"><strong>Vote: </strong>'+this.Vote__c+'</div>'
+                        +'<div class="ui-block-b"><strong>QoM Vote: </strong>'+this.Quality_of_Materials__c+'</div>'
+                        +'<div class="ui-block-c"><strong>Would Invest: </strong>'+this.Would_Invest__c+'</div></div>')
+                      .append('<p>'+(this.Note__c?this.Note__c:"no comment")+'</p>');
+                      $j('#UserVotes').append(oSection);
+                    });
+                  
+                  if(blnFireCreate) 
+                    $j('#UserVotes').trigger('create'); 
+                                   
+               }, {escape: false}); 
+            }
+            
+            
+            MeetingsController3.getNoteForAgendaItem(this.id, function(records, e) { _showInputForm(records) }, {escape: false});
+            MeetingsController3.getItemMaterialsURLs(this.id, function(records, e) { _showMaterialsList('#materialsList','#materialsIFrame','#materialsShimPage',records) }, {escape: false});
+           
+          });
+          
+        var oContent=$j('<li ></li>'); //.append('<h3><h3>')
+          
+          if(_aAgendaItems[this.Id].Deal__r)
+          {
+            strDealSize=(_aAgendaItems[this.Id].Deal__r.Deal_Size_MM__c)?(_aAgendaItems[this.Id].Deal__r.Deal_Size_MM__c+'MM '+_aAgendaItems[this.Id].Deal__r.CurrencyIsoCode):'n/a';
+            strDealTeam=(_aAgendaItems[this.Id].Deal__r.Deal_Team_Members__c)?_aAgendaItems[this.Id].Deal__r.Deal_Team_Members__c:'n/a';
+            strMDTeam=(_aAgendaItems[this.Id].Deal__r.MD_Principal_Members__c)?_aAgendaItems[this.Id].Deal__r.MD_Principal_Members__c:'n/a';
+            oContent.append('<p><b>Deal team (MDs & Principals): </b> '+strMDTeam+'</p>')
+            oContent.append('<p><b>Deal team: </b> '+strDealTeam+'</p>');
+            oDivider.append('<p class="ui-li-count">size: <strong>'+strDealSize+'</strong></p>');
+          }
+
+        oContent.appendTo('#agendalist').show();
+
+      });
+      
+    $j.mobile.hidePageLoadingMsg();
+    $j('#agendalist').listview('refresh');
+    if(callback != null) { callback(); }
+  };
+ 
+  var _showMaterialsList=function(strListName, strShimIFrame ,strShimPageName, records, callback)
+  {
+    $j(strListName).empty();
+
+    if(records.length==0)
+    {
+      $j('<li >Sorry. No documents on this item</li>').appendTo(strListName);
+    }
+
+    $j.each(records,function()
+      {
+        var strURL=this.URL;
+        /*
+        $j('<li ><a href="#'+strShimPageName+'" data-transition="flip">'+this.Title+'</a></li>')
+        .click(function(e)
+          {      
+            e.preventDefault();
+            //$j.mobile.changePage(strShimPageName,{ transition : 'flip' } , {changeHash: true});
+            $j(strShimIFrame ).attr('src',strURL);
+          })
+        */
+        $j('<li ><a href="'+strURL+'" data-transition="flip" rel="external">'+this.Title+'</a></li>')
+        .appendTo(strListName);
+      });
+
+    if(callback != null) { callback(); }  
+
+    $j(strListName).listview('refresh');  
+  };
+  
+  var _showInputForm=function(records, callback)
+  {       
+    if(records!=null)
+    {
+      $j('#noteId').val(records.Id);
+      $j('#voteValue').val(records.Vote__c).selectmenu('refresh', true);
+      $j('#wouldInvestValue').val(records.Would_Invest__c).selectmenu('refresh', true);
+      $j('#materialsValue').val(records.Quality_of_Materials__c).selectmenu('refresh', true);
+      $j('#commentsValue').val((records.Note__c?records.Note__c:''));
+    }
+    else
+    {
+      $j('#noteId').val('');
+      $j('#voteValue').val('3').selectmenu('refresh', true);
+      $j('#wouldInvestValue').val('Undecided').selectmenu('refresh', true);
+      $j('#materialsValue').val('3').selectmenu('refresh', true);
+      $j('#commentsValue').val('');   
+    }
+    
+    
+    $j.mobile.hidePageLoadingMsg();  
+    $j.mobile.changePage('#inputpage', {changeHash: true});
+    if(callback != null) { callback(); }  
+  };
+   
+  var _save=function(evt)
+  {
+    var iID=($j('#noteId').val()=='')?null:$j('#noteId').val();
+    var oNote={ id: iID, Note__c: $j('#commentsValue').val(), Vote__c: $j('#voteValue').val(), Would_Invest__c: $j('#wouldInvestValue').val() , Quality_of_Materials__c: $j('#materialsValue').val(), Agenda_Item__c: $j('#agendaId').val()  };
+    MeetingsController3.saveNote(oNote, function(records, e) 
+      { 
+        if(records)
+        {
+          $j('#noteId').val(records);
+          alert('saved!'); 
+        }
+        else
+        {
+          alert('An error occured while saving. Please contact the administrator');
+        }
+      }, {escape: false})
+  };
+  
+  return {
+    init: function()
+    {
+      MeetingsController3.isICAdmin(function(records,e) { _IsICAdmin=records; }, {escape: false});          
+      _getMeetings();
+    
+      MeetingsController3.getVoteValues(function(records,e)
+        {    
+          for(var i=0;i<records.length;++i)
+            $j('<option value="'+records[i]+'">'+records[i]+'</option>').appendTo('#voteValue');
+        });
+
+      MeetingsController3.getWouldInvestValues(function(records,e)
+        {    
+          for(var i=0;i<records.length;++i)
+            $j('<option value="'+records[i]+'">'+records[i]+'</option>').appendTo('#wouldInvestValue');
+        });      
+        
+      MeetingsController3.getQualityOfMaterialsValues(function(records,e)
+        { 
+          for(var i=0;i<records.length;++i)
+            $j('<option value="'+records[i]+'">'+records[i]+'</option>').appendTo('#materialsValue');
+        });       
+
+        
+      $j('#voteValue').selectmenu();
+      $j('#wouldInvestValue').selectmenu();
+      $j('#materialsValue').selectmenu();
+      $j('#saveButton').click(_save);       
+    },
+    
+    getMeetings: function(strType) 
+    {
+      _getMeetings(strType);
+    }
+  };
+};
+
+var $j = jQuery.noConflict();
+
+$j(document).bind("mobileinit", function()
+  {
+    $.mobile.touchOverflow = true;
+    $j.mobile.touchOverflowEnabled = true;
+    $j.extend($.mobile, { metaViewportContent: "width=device-width, height=device-height, minimum-scale=1, maximum-scale=1" });
+  });
+
+$j(document).ready(function() 
+  {
+    if (navigator.userAgent.match(/iPhone/i) || navigator.userAgent.match(/iPad/i)) {
+    var viewportmeta = document.querySelector('meta[name="viewport"]');
+    if (viewportmeta) {
+        viewportmeta.content = 'width=device-width, minimum-scale=1.0, maximum-scale=1.0, initial-scale=1.0';
+        document.body.addEventListener('gesturestart', function () {
+            viewportmeta.content = 'width=device-width, minimum-scale=0.25, maximum-scale=1.6';
+        }, false);
+    }}
+    
+    /*
+      $j.get('/services/data/v23.0/chatter/feeds/news/me', function(data) {
+        alert(data);
+        alert('Load was performed.');
+      });
+    */
+    //$('.ui-page').css('minHeight', screen.availHeight);
+
+    if(window.location.href.indexOf('#') > 0)
+    {
+      window.location.href = window.location.href.split("#")[0];
+    }
+    
+    window.scrollTo(0,1);
+    var oMtgMgr=new MeetingManager();
+    oMtgMgr.init();
+    addPageListeners();
+    $j.mobile.showPageLoadingMsg();
+  });
+
+function addPageListeners()
+{
+//  $j(document).bind('swipeleft',function() { $j.mobile.changePage('#chatterpage ',{ transition : 'flip' } , {changeHash: true});} );
+//  $j(document).bind('swiperight',function() { $j.mobile.changePage('#mainpage',{ transition : 'flip' } , {changeHash: true});} );
+}
+
+
+
+
+
+</script>
+<style>
+/** fix for jquery transition jitter in iOS **/
+    .ui-page 
+    {
+        -webkit-backface-visibility: hidden;
+    } 
+    
+.wrapperdiv
+{
+  background-image:url(img/loading.gif);
+  background-repeat:no-repeat;
+  background-position:center center; /*Can place your loader where ever you like */
+}
+
+.companyDetailContent
+{
+  padding: 10px 25px;
+}
+    
+</style>
+
+</head>
+<body>
+  <div data-role="page"  id="mainpage" data-theme="b">
+    <div data-role="header" data-theme="b">
+      <a href='#' id="logout" class='ui-btn-left' data-icon='home'  >Home</a>
+      
+      <h1>Meetings</h1>
+      
+      <div data-role="navbar" data-type="horizontal" >
+        <ul id="topNav"> </ul>
+      </div>
+    </div>
+    <div data-role="content" data-theme="b">
+      <ul id="meetinglist" data-role="listview" data-inset="true"  data-filter="true" data-filter-placeholder="Filter meetings"> </ul>
+    </div>
+    
+  </div>
+  
+  <div data-role="page" id="detailpage" data-theme="b">
+    <div data-role="header" data-theme="b">
+      <a href='#mainpage' id="backMeetings" class='ui-btn-left' data-icon='arrow-l' data-direction="reverse">back to Meetings</a>
+      <h1>Meeting</h1>
+    </div>
+    <div data-role="content" data-theme="b">
+      <h1 id="MeetingName"></h1>
+      <div class="ui-grid-b" style="display: none;">
+        <div class="ui-block-a"><strong>Location:</strong></div>
+        <div class="ui-block-b"><strong>Start Time:</strong></div>
+        <div class="ui-block-c"><strong>End Time:</strong></div>
+        
+        <div class="ui-block-a" id="MeetingLocation"></div>
+        <div class="ui-block-b" id="MeetingStart"></div>
+        <div class="ui-block-c" id="MeetingEnd"></div>
+      </div>
+        
+      <input type="hidden" id="MeetingId" />
+      
+      <div  data-role="collapsible-set" data-content-theme="c">
+        <div data-role="collapsible" data-collapsed="false" data-theme="b" data-content-theme="b">
+          <h3 id="Agenda">Agenda:</h3>
+          <ul id="agendalist"  data-role="listview" data-inset="true" data-theme="b" data-dividertheme="b"> </ul>
+        </div>
+        
+        <div data-role="collapsible" data-collapsed="false" data-theme="b" data-content-theme="b">
+          <h3>Materials</h3>
+          <ul id="agendaMaterialsList" data-role="listview" data-inset="true" data-filter="false" data-filter-placeholder="Filter documents"> </ul>     
+          
+        </div>
+      </div>
+    </div>
+  </div>
+    
+  <div data-role="page" id="inputpage" data-rel="dialog" data-transition="pop" data-theme="b" data-content-theme="b">
+    <div data-role="header" data-theme="b">
+      <a href='#detailpage' id="backMeeting" class='ui-btn-left' data-icon='arrow-l' data-direction="reverse">back to Meeting Agenda</a>
+      <h1>Agenda Item</h1>
+    </div>
+    <div data-role="content">
+      <div class="content-primary">
+
+        <div  data-role="collapsible-set" data-content-theme="c">
+          <form>
+          <input type="hidden" id="noteId" />
+          <input type="hidden" id="agendaId" />
+          <input type="hidden" id="companyId" />
+          <div id="companyLogo" style="margin: 10px 5px;"> </div>
+          <div id="meetingNotesEntered" data-role="collapsible" data-collapsed="false" data-theme="b" data-content-theme="b" style="display: none;">
+            
+            <h3>Meeting Feedback Entered</h3>
+            <div data-role="content">
+              <p>
+                <div class="ui-grid-a">
+                  <div class="ui-block-a"><strong>Average Vote: </strong> <span id="AvgVote"> </span></div>
+                  <div class="ui-block-b"><strong>Average Quality of Business Model Vote:</strong> <span id="AvgQoM"> </span></div>
+                </div>
+              </p>
+            
+              <div data-role="collapsible-set" data-theme="c" data-content-theme="d" id="UserVotes"> </div>
+            </div>
+          </div>
+        
+          <div data-role="collapsible" data-collapsed="false" data-theme="b" data-content-theme="b">
+            <h3>Feedback: <span id="dealName"></span></h3>
+
+            <div data-role="fieldcontain">
+              <label for="voteValue" class="select"><strong>Company Attractiveness:</strong><br/><span><small>1=low, 5=very high</small></span></label><select id="voteValue" ></select>
+              <label for="wouldInvestValue" class="select"><strong>Would you invest?:</strong></label><select id="wouldInvestValue" ></select>
+            </div>
+            <div data-role="fieldcontain" >
+              <label for="materialsValue"><strong>Quality of Business Model:</strong><br/><span><small>poor - excellent</small></span></label><select id="materialsValue"></select>
+            </div>
+            <div data-role="fieldcontain" >
+              <label for="materialsOnTime" class=""><strong>Materials On Time:</strong></label><span id="materialsOnTime" style="padding-left: 20px;" />
+            </div>
+            <div data-role="fieldcontain">
+              <label for="commentsValue"><strong>Comments:</strong></label><textarea id="commentsValue" data-theme="c" data-content-theme="c"/>
+              <input type="button" id="saveButton" value="save"/>
+            </div>
+          </div>
+        
+          </form>
+          
+          <div data-role="collapsible" data-theme="b" data-content-theme="b">
+            <h3>Materials</h3>
+            <p>
+              <ul id="materialsList" data-role="listview" data-inset="true" data-filter="true" data-filter-placeholder="Filter documents"> </ul>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div data-role="page" id="materialsShimPage" data-rel="dialog" data-transition="flip" data-theme="b" data-content-theme="b">
+    <div data-role="header" data-theme="b">
+      <a href='#inputpage' id="backDetails" class='ui-btn-left' data-icon='arrow-l' data-transition="flip" data-direction="reverse">Back</a>
+      <h1>Materials</h1>
+    </div>
+    <div data-role="content">
+      <iframe id="materialsIFrame" name="materialsIFrame" src="" width="100%" height="100%" scrolling="on" frameborder="0"> </iframe>
+    </div>
+  </div>    
+
+  <div data-role="page" id="agendaMaterialsShimPage" data-rel="dialog" data-transition="flip" data-theme="b" data-content-theme="b">
+    <div data-role="header" data-theme="b">
+      <a href='#detailpage' id="backDetails" class='ui-btn-left' data-icon='arrow-l' data-transition="flip" data-direction="reverse">Back</a>
+      <h1>Agenda Materials</h1>
+    </div>
+    <div data-role="content" style="-webkit-overflow-scrolling:touch">
+      <iframe id="agendaMaterialsIFrame" name="agendaMaterialsIFrame" src="" width="100%" height="90%" scrolling="on" frameborder="0" > </iframe>
+    </div>
+  </div>  
+  
+  <div data-role="page" id="companydetailpage" data-rel="dialog" data-transition="pop" data-theme="b" data-content-theme="b">
+    <div data-role="header" data-theme="b">
+      <a href='#inputpage' id="backAgendaItem" class='ui-btn-left' data-icon='arrow-l' data-direction="reverse">back to Agenda Item</a>
+      <h1>Company Details</h1>
+    </div>  
+  
+    <div data-role="content">
+      <div class="content-primary">
+        <div id="companydetails">
+          <div class="ui-grid-b ui-body ui-body-b" data-theme="b" data-inset="true">
+
+            <div class="ui-block-a"><hr class="ui-bar ui-bar-b"/></div>
+            <div class="ui-block-b"><hr class="ui-bar ui-bar-b"/></div>
+            <div class="ui-block-c"><hr class="ui-bar ui-bar-b"/></div>
+                        
+            <div class="ui-block-a" data-inset="true">
+              <div class="ui-bar ui-bar-b"><strong>Name/Code Name:</strong></div>
+              <div class="companyDetailContent">
+                <div id="companyDetail_Name">Block A</div>
+                <div id="companyDetail_Code_Name__c">Block b</div> 
+                <div id="companyDetail_Logo"> </div> 
+              </div>  
+            </div>
+            <div class="ui-block-b" data-inset="true">
+              <div class="ui-bar ui-bar-b"> <strong>GA Team:</strong></div> 
+              <div class="companyDetailContent" id="companyDetail_Industry">Block c</div> 
+            </div> 
+             <div class="ui-block-b" data-inset="true">
+              <div class="ui-bar ui-bar-b"> <strong>Financials:</strong></div> 
+              <div class="companyDetailContent">
+                <div><strong>Revenue:</strong></div>
+                <div ><strong><span id="companyDetail_Latest_Financials_Year__c">Block c </span>:</strong> $<span id="companyDetail_Latest_Revenue__c">Block c </span> (actual)</div>
+                <div ><strong><span id="companyDetail_Projected_Financials_Year__c">Block c </span>:</strong> $<span id="companyDetail_Projected_Revenue__c">Block c </span> (projected)</div>
+              </div>
+            </div> 
+
+            <div class="ui-block-a"><hr class="ui-bar ui-bar-b"/></div>
+            <div class="ui-block-b"><hr class="ui-bar ui-bar-b"/></div>
+            <div class="ui-block-c"><hr class="ui-bar ui-bar-b"/></div>
+            
+            <div class="ui-block-a "> <div class="ui-bar ui-bar-b"><strong>Status:</strong></div> <div class="companyDetailContent" id="companyDetail_Status__c">Block b</div> </div>  
+            <div class="ui-block-b "> <div class="ui-bar ui-bar-b"><strong>Sector:</strong></div> <div class="companyDetailContent"> <div id="companyDetail_Sector__c">Block c</div> <div id="companyDetail_Sub_Sector__c"> </div> </div> </div>          
+            <div class="ui-block-c" data-inset="true">
+              <div class="ui-bar ui-bar-b"> <strong>Themes:</strong></div> 
+              <div class="companyDetailContent" id="companyDetail_Themes__c">Block c</div> 
+            </div> 
+            
+            <div class="ui-block-a"><hr class="ui-bar ui-bar-b"/></div>
+            <div class="ui-block-b"><hr class="ui-bar ui-bar-b"/></div>
+            <div class="ui-block-c"><hr class="ui-bar ui-bar-b"/></div>
+            
+            <div class="ui-block-a"><div class="ui-bar ui-bar-b"><strong>Description:</strong></div> <div class="companyDetailContent" id="companyDetail_Description">Block d</div> </div>
+            <div class="ui-block-b"><div class="ui-bar ui-bar-b"><strong>Status Note:</strong></div> <div class="companyDetailContent" id="companyDetail_Latest_Status_Note__c">Block d</div> </div>
+            <div class="ui-block-c"><div class="ui-bar ui-bar-b"><strong>Next Steps:</strong></div> <div class="companyDetailContent" id="companyDetail_Next_Steps__c">Block b</div> </div>
+                    
+            
+  
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div data-role="page" id="chatterpage" data-rel="dialog" data-transition="pop" data-theme="b" data-content-theme="b">
+    <div style="margin: 10 auto;">
+      <!-- chatter:feed entityId="0F9Z0000000CbDw" showHeader="false" / -->
+    </div>
+  </div>
+  
+</body>
+</html>
+</apex:page>

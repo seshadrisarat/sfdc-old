@@ -1,0 +1,218 @@
+<apex:page controller="RT1.GlobalSettingsController"
+    tabStyle="Readytalk__tab" action="{!init}">
+    <script type="text/javascript">
+/**
+ *  Having some trouble getting VF to honor 'first-time load' values from the controller
+ *  when creating the list of default values, so I'm hacking the assignments.
+ *  Quick and dirty 'validation' - Jordan, 7/2/2012
+ **/
+ 
+ // need for older versions of IE
+if(!Array.prototype.indexOf) {
+    Array.prototype.indexOf = function(needle) {
+        for(var i = 0; i < this.length; i++) {
+            if(this[i] === needle) {
+                return i;
+            }
+        }
+        return -1;
+    };
+} 
+ 
+var invalidLeadFields = [<apex:repeat value="{!invalidLeadFieldNames}" var="fieldName">'{!fieldName}',</apex:repeat>];
+var invalidContactFields = [<apex:repeat value="{!invalidContactFieldNames}" var="fieldName">'{!fieldName}',</apex:repeat>];
+var duplicateLeadFieldValues = [<apex:repeat value="{!duplicateLeadFieldValues}" var="fieldValue">'{!fieldValue}',</apex:repeat>];
+var duplicateContactFieldValues = [<apex:repeat value="{!duplicateContactFieldValues}" var="fieldValue">'{!fieldValue}',</apex:repeat>];
+var noLeadFieldMappedToEmail = {!noLeadFieldMappedToEmail};
+var noLeadFieldMappedToLastName = {!noLeadFieldMappedToLastName};
+var noContactFieldMappedToLastName = {!noContactFieldMappedToLastName};
+ 
+$j(function(){
+    var label = '';
+    $j('input.field-selection').each(function(i,o){
+        label = $j(o).val();
+        $j(o).siblings().first().children().each(function(i,o){
+            if($j(this).text() == label)
+            {
+                $j(this).attr('selected','selected');
+            }
+        });
+    });
+
+    $j('.lead').each(function(i,o){
+        var selection = $j(o).next();
+        if(invalidLeadFields.indexOf($j(o).attr('Name')) > -1
+            || duplicateLeadFieldValues.indexOf($j(selection).val()) > -1){
+            selection.addClass('select-red');
+            
+            selection.change(function(){
+                $j(this).removeClass('select-red');
+            });
+        }
+    });
+    
+    $j('.contact').each(function(i,o){
+        var selection = $j(o).next();
+        if(invalidContactFields.indexOf($j(o).attr('Name')) > -1
+            || duplicateContactFieldValues.indexOf($j(selection).val()) > -1){
+            selection.addClass('select-red');
+            
+            selection.change(function(){
+                $j(this).removeClass('select-red');
+            });
+        }
+    });
+
+    // show validation error on 'Lead Field' header 
+    if(noLeadFieldMappedToEmail || noLeadFieldMappedToLastName){
+        $j('th').each(function(i,o){
+            if($j(o).text() == 'Lead Field'){
+                $j(this).css('color','red');
+            }
+        });
+    }
+    
+    // show validation error on 'Contact Field' header  
+    if(noContactFieldMappedToLastName){
+        $j('th').each(function(i,o){
+            if($j(o).text() == 'Contact Field'){
+                $j(this).css('color','red');
+            }
+        });
+    }
+    
+    // show or hide input depending on saved setting
+    if($j('[id$=fieldMappingEnabled]').is(':checked')){
+        $j('[id$=fieldMappingInput]').show();   
+    }
+    else{
+        $j('[id$=fieldMappingInput]').hide();   
+    }
+    
+    //show or hide
+    $j('[id$=fieldMappingEnabled]').change(function(){
+        if($j('[id$=fieldMappingEnabled]').is(':checked')){
+            $j('[id$=fieldMappingInput]').show();   
+        }
+        else{
+            $j('[id$=fieldMappingInput]').hide();   
+        }
+    }); 
+    
+    if($j('[id$=enableMeetingAutoImport]').is(':checked')){
+        $j('[id$=meetingAutoImportInput]').show();  
+    }
+    else{
+        $j('[id$=meetingAutoImportInput]').hide();  
+    }
+
+    //show or hide
+    $j('[id$=enableMeetingAutoImport]').change(function(){
+        if($j('[id$=enableMeetingAutoImport]').is(':checked')){
+            $j('[id$=meetingAutoImportInput]').show();  
+        }
+        else{
+            $j('[id$=meetingAutoImportInput]').hide();  
+        }
+    }); 
+});
+
+
+</script>
+    <style>
+th {
+    text-align: center;
+}
+
+td.allow-updates {
+    text-align: center;
+}
+
+.select-red {
+    border-color: red;
+    color: red !important;
+}
+
+#field-mapping-table {
+    width: 50% !important;
+}
+</style>
+    <apex:form >
+        <!--  <apex:actionFunction name="updateFieldMappingSetting" action="{!updateFieldMappingSetting}"/> -->
+        <apex:pageMessages />
+        <apex:pageBlock title="Global Settings">
+            <apex:pageBlockSection columns="2">
+                <apex:pageBlockSectionItem helpText="Checking this field will set up a sync of all future scheduled meetings in the org on an hourly basis." >
+                    <apex:outputLabel for="enableMeetingAutoSync"
+                        value="Enable Meeting Auto Sync" />
+                    <apex:inputCheckbox id="enableMeetingAutoSync"
+                        value="{!settingsModel.EnableMeetingAutoSync}"
+                        styleClass="meetingAutoSyncCheckbox" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem helpText="Checking this field will set up a sync of all recordings in the org on an hourly basis.">
+                    <apex:outputLabel for="enableRecordingAutoSync"
+                        value="Enable Recording Auto Sync" />
+                    <apex:inputCheckbox id="enableRecordingAutoSync"
+                        value="{!settingsModel.EnableRecordingAutoSync}"
+                        styleClass="recordingAutoSyncCheckbox" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem helpText="Checking this field will allow registration information to be mapped from the meeting member to Lead or Contact record. Please set field mapping preferences below.">
+                    <apex:outputLabel for="fieldMappingEnabled"
+                        value="Enable Field Mapping" />
+                    <apex:inputCheckbox id="fieldMappingEnabled"
+                        value="{!settingsModel.FieldMappingEnabled}"
+                        styleClass="fieldmappingEnabledCheckbox" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem helpText="Chatter Enabled" rendered="{!chatterEnabled}">
+                    <apex:outputLabel for="enableChatterFeedTracking"
+                        value="Enable Chatter Feed Tracking" />
+                    <apex:inputCheckbox value="{!settingsModel.ChatterFeedTrackingEnabled}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem helpText="Checking this field will allow users to enable an import of all scheduled meetings on a nightly basis." >
+                    <apex:outputLabel for="enableMeetingAutoImport"
+                        value="Enable Meeting Auto Import" escape="false"/>
+                    <apex:inputCheckbox id="enableMeetingAutoImport"
+                        value="{!settingsModel.EnableMeetingAutoImport}"
+                        styleClass="meetingAutoSyncCheckbox" />
+                </apex:pageBlockSectionItem>              
+            </apex:pageBlockSection>
+
+            <apex:pageBlockSection title="Field Mappings" columns="1"
+                id="fieldMappingInput" collapsible="false">
+                <table id="field-mapping-table">
+                    <tr>
+                        <th>Meeting Member Field</th>
+                        <th>Lead Field</th>
+                        <th>Allow<br />Updates
+                        </th>
+                        <th>Contact Field</th>
+                        <th>Allow<br />Updates
+                        </th>
+                    </tr>
+                    <apex:repeat value="{!meetingFieldMappings}" var="mapping">
+                        <tr id="{!LOWER(SUBSTITUTE(mapping.Name,' ','-'))}">
+                            <td><apex:outputText value="{!Mapping.Name}" /></td>
+                            <td><input name="{!mapping.Name}" type="hidden"
+                                class="lead field-selection" value="{!mapping.RT1__LeadField__c}" />
+                                <apex:selectList value="{!mapping.RT1__LeadField__c}" size="1"
+                                    styleClass="lead-{!LOWER(SUBSTITUTE(mapping.Name,' ','-'))}-select">
+                                    <apex:selectOptions value="{!leadFieldsPickList}" />
+                                </apex:selectList></td>
+                            <td class="allow-updates"><apex:inputCheckbox value="{!mapping.RT1__LeadAllowUpdates__c}" styleClass="lead-{!LOWER(SUBSTITUTE(mapping.Name,' ','-'))}-checkbox"/></td>
+                            <td><input name="{!mapping.Name}" id="{!mapping.Name}"
+                                type="hidden" class="contact field-selection"
+                                value="{!mapping.RT1__ContactField__c}" /> <apex:selectList value="{!mapping.RT1__ContactField__c}" size="1"
+                                    styleClass="contact-{!LOWER(SUBSTITUTE(mapping.Name,' ','-'))}-select">
+                                    <apex:selectOptions value="{!contactFieldsPickList}" />
+                                </apex:selectList></td>
+                            <td class="allow-updates"><apex:inputCheckbox value="{!mapping.RT1__ContactAllowUpdates__c}" styleClass="contact-{!LOWER(SUBSTITUTE(mapping.Name,' ','-'))}-checkbox"/></td>
+                        </tr>
+                    </apex:repeat>
+                </table>    
+            </apex:pageBlockSection>
+            <div style="text-align: center">
+                <apex:commandButton value="Save" action="{!save}" />
+            </div>
+        </apex:pageBlock>
+    </apex:form>
+</apex:page>

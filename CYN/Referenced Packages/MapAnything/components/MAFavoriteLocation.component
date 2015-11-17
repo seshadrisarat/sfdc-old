@@ -1,0 +1,493 @@
+<apex:component controller="sma.MAComponentCon">
+	<!-- CSS -->
+	<style type='text/css'>
+		
+		#FavoriteCreateLocation {
+			font-size: 1em;
+		}
+		#FavoriteCreateLocation > h2 {
+			font-size: 115%;
+		}
+		#FavoriteCreateLocation .row-label {
+			font-weight: bold;
+		}
+		#FavoriteCreateLocation .fav-location-name {
+			width: 204px;
+			height: 25px;
+			border: 1px solid silver;
+			border-radius: 3px;
+			vertical-align: middle;
+		}
+		#FavoriteCreateLocation .fav-loc-textbox {
+			width: 200px;
+			height: 50px;
+			border: 1px solid silver;
+			border-radius: 3px;
+		}
+		#FavoriteCreateLocation .location-markertype-color, #FavoriteCreateLocation .location-markertype-image {
+			height: 25px;
+			text-align:center;
+			border: 1px solid silver;
+			border-radius: 3px;
+		}
+		#FavoriteCreateLocation .location-markertype-selector {
+			vertical-align: middle;
+		}
+		#FavoriteCreateLocation .location-markertype-selector-color, 
+		#FavoriteCreateLocation .location-markertype-selector-image {
+			cursor: pointer;
+		}
+		#SQTree li[nodetype="PersonalLocation"] > a > .jstree-icon {
+			background: url("{!URLFOR($Resource.MapAnything, 'images/ui-icons/favorite_tree_icon.png')}") !important;
+		}
+	</style>
+	
+	<!-- JS -->
+	<script type='text/javascript'>
+	
+		/*********************************
+		*	On Ready
+		*********************************/
+		$(function () {
+		
+			//handle selecting a different marker type
+			$('#FavoriteCreateLocation .location-markertype-selector').on('click', '.location-markertype-selector img', function () {
+					             
+				//only show the markertype selector that matches the selected type
+				if ($(this).is('.location-markertype-selector-color')) {
+					$(this).closest('.location-markertype-wrapper').find('.location-markertype-image').hide();
+					$(this).closest('.location-markertype-wrapper').find('.location-markertype-color').show();
+				}
+				else {
+					$(this).closest('.location-markertype-wrapper').find('.location-markertype-color').hide();
+					$(this).closest('.location-markertype-wrapper').find('.location-markertype-image').show();
+				}
+					                
+			});
+		
+		});
+		
+		function initFavLocationPopup() {
+			
+			//empty marker options on load for populate
+			$('#FavoriteCreateLocation').find('select.location-markertype-image').empty();
+			
+			//populate marker image options
+			$.ajax({
+				url: MA.resources.FavoriteLocations+"?securityToken="+securityToken+"&action=getImageOptions&core.apexpages.devmode.url=0",
+				type: 'POST',
+				dataType: 'JSON',
+				success: function (response)
+				{
+					var $markerImageFields = $('#FavoriteCreateLocation select.location-markertype-image');
+					$.each(response.data, function (index, option) {
+					    $('<option></option>').attr('value', option.itemValue).text(option.itemLabel).appendTo($markerImageFields);
+					});
+					$markerImageFields.removeAttr('disabled');
+				}
+			});
+		}
+		
+		//get info for territory edit
+		function getLocationInfo (options)
+        {
+        	//show Loading
+        	showLoading($('#FavoriteCreateLocation .loadmask-wrapper'), 'Loading...');
+
+            var locationId = options.locationId;
+            $.ajax({
+                url: MA.resources.FavoriteLocations+"?securityToken="+securityToken+"&action=getLocationInfo&core.apexpages.devmode.url=0",
+                type: 'POST',
+                dataType: 'JSON',
+                data:
+                {
+                    folderId: locationId
+                },
+                success: function (response) {
+                	var location = removeNamespace('{!namespace}', response.data.locations[0]);
+		        	$('#FavoriteCreateLocation .fav-location-name').val(location.Name);
+		        	$('#FavoriteCreateLocation .fav-location-address').val(location.Address__c);
+		        	$('#FavoriteCreateLocation .fav-location-description').val(location.Description__c);
+		        	$('#FavoriteCreateLocation .system-data').text('***Created By ' + location.CreatedBy.Name + ' on ' + moment(location.CreatedDate).format(formatUserLocaleDate({ moment: true })) + ', Modified By ' + location.LastModifiedBy.Name + ' on ' + moment(location.LastModifiedDate).format(formatUserLocaleDate({ moment: true })));
+		        	if (location.FavoriteMarker__c.indexOf('#') == 0)
+            		{
+			        	$('#FavoriteCreateLocation .location-markertype-wrapper .location-markertype-selector-color').click();
+			        	$('#FavoriteCreateLocation .location-markertype-color')[0].color.fromString(location.FavoriteMarker__c);
+                	}
+                	else
+                	{
+                		$('#FavoriteCreateLocation .location-markertype-wrapper .location-markertype-selector-image').click();
+                		$('#FavoriteCreateLocation .location-markertype-wrapper .location-markertype-image').val(location.FavoriteMarker__c.split('image:')[1])
+                	}
+                	hideMessage($('#FavoriteCreateLocation .loadmask-wrapper'));
+                }
+            });
+        }
+		
+		//Delete Favorite Location
+		function deleteLocation(obj)
+		{
+			$.ajax({
+	            url: MA.resources.Territory+"?securityToken="+securityToken+"&action=deleteFavoriteLocationMainTree&core.apexpages.devmode.url=0",
+	            type: 'POST',
+	            dataType: 'JSON',
+	            data: {folderId : $(obj).attr('id')},
+	            success: function (response)
+	            {
+	            	//do nothing 
+				}
+			});
+		}
+		
+		//Create Favorite Location
+        function CreateNewFavoriteLocation()
+        {
+        	//show Loading
+        	showLoading($('#FavoriteCreateLocation .loadmask-wrapper'), 'Saving Favorite...');
+        	
+        	//manage folderId and userId
+            var folderId;
+            var userId;
+            var locationId;
+            
+            //is this an update?
+            if ($('#FavoriteCreateLocation').data('location-id')) {
+				locationId = $('#FavoriteCreateLocation').data('location-id');
+			}
+			//no, create new
+			else {
+				if($('#FavoriteCreateLocation').data('folder-id') == 'PersonalRoot' || $('#FavoriteCreateLocation').data('folder-id') == 'RoleUserFolder') {
+					userId = '{!$User.Id}';
+				}
+				else if ($('#FavoriteCreateLocation').data('folder-id') == 'CorporateRoot') {
+					//send nothing for corporate root
+				}
+				else {
+					folderId = $('#FavoriteCreateLocation').data('folder-id');
+				}
+			}
+            
+            //store info
+            var marker = $('#FavoriteCreateLocation').find('.location-markertype-color').css('display') == 'none' ? 'image:' + $('#FavoriteCreateLocation').find('.location-markertype-image').val(): $('#FavoriteCreateLocation').find('.location-markertype-color').val();
+            
+            //geocode address
+            geocode({
+            	address: $('#FavoriteCreateLocation .fav-location-address').val(),
+            	complete: function(response) 
+                {
+                    if(response.success)
+                    {
+                        //build data
+                        var data = { 
+							serializedLocation : JSON.stringify(addNamespace(namespace, {
+								Name 					: $('#FavoriteCreateLocation .fav-location-name').val(),
+								User__c 				: userId,
+								MapAnythingFolder__c 	: folderId,
+								Id 						: locationId,
+								Latitude__c 			: response.results.Latitude,
+								Longitude__c			: response.results.Longitude,
+								Address__c				: $('#FavoriteCreateLocation .fav-location-address').val(),
+								Description__c			: $('#FavoriteCreateLocation .fav-location-description').val(),
+								FavoriteMarker__c		: marker
+							}))
+						};
+						
+						//save location
+                        $.ajax({
+                            url: MA.resources.FavoriteLocations+"?securityToken="+securityToken+"&action=createFavoriteLocationMainTree&core.apexpages.devmode.url=0",
+                            type: 'POST',
+                            dataType: 'JSON',
+                            data: data,
+                            success: function (response) {
+                            	removeNamespace(namespace, response.data);
+                            	
+                                //add to tree or update
+				            	if ($('#FavoriteCreateLocation').data('location-id'))
+				            	{
+				            		//update
+				            		var $node = $('#SQTree li[id="'+response.data.Id+'"]');
+				            		$node.attr('iconcolor', marker);
+				            		$("#SQTree").jstree('rename_node', '#' + locationId , response.data.Name);
+				            		updateIcon($node);
+				            	}
+				            	else
+				            	{
+				            		if ($('#FavoriteCreateLocation').data('folder-id') == 'RoleUserFolder') {
+				            			$("#SQTree").jstree("create","#" + $('#FavoriteCreateLocation').data('folder-id-actual'),"last",{attr : {id: response.data.Id, iconcolor: marker, NodeType: 'PersonalLocation', rel: 'SavedLocation', title: response.data.Name}, data: response.data.Name},null,true);
+				            		}
+				            		else {
+				            			$("#SQTree").jstree("create","#" + $('#FavoriteCreateLocation').data('folder-id'),"last",{attr : {id: response.data.Id, iconcolor: marker, NodeType: 'PersonalLocation', rel: 'SavedLocation', title: response.data.Name}, data: response.data.Name},null,true);
+				            		}
+								}
+								
+								//if successful, hide message
+								hideMessage($('#FavoriteCreateLocation .loadmask-wrapper'));
+		                        ClosePopupWindow();
+							}
+						});
+                    }
+                    else
+                    {
+                        //Failed to geocode, ask to correct address
+                        alert('Please enter a valid address.');
+                        hideMessage($('#FavoriteCreateLocation .loadmask-wrapper'));
+                    }
+                }
+            });
+        }
+        
+        var locationMarkers = [];
+        var locationIndex = 0;
+        function PlotFavoriteLocation(options)
+        {
+        	options = options || {};
+        	imgLoaderCounts['FavoriteLocations'] = 0;
+
+        	var $favLayer = $('#templates .FavoriteRowUnit').clone();
+        	
+            //send a request for the metadata for these locations and folders
+            $.ajax({
+                url: MA.resources.FavoriteLocations+"?securityToken="+securityToken+"&action=getLocationInfo&core.apexpages.devmode.url=0",
+                type: 'POST',
+                dataType: 'JSON',
+                data:
+                {
+                    folderId: options.id
+                },
+                success: function (response) {
+
+                	var location = removeNamespace('{!namespace}', response.data.locations[0]);
+                	var markerColor = location.FavoriteMarker__c;
+                    var latitude = location.Latitude__c;
+                    var longitude = location.Longitude__c;
+                    var name = location.Name;
+                    var MarkerCoordinate = new google.maps.LatLng(parseFloat(latitude), parseFloat(longitude));
+                   	var markerOptions = {
+	                    visibility: true,
+	                    brush: markerColor,
+	                    Ignore: false,
+	                    Lat: latitude,
+	                    Long: longitude,
+	                    description: location.Description__c,
+	                    title: location.Name,
+	                    record: {
+                           	record: location,
+                           	markerAddress: location.Address__c
+                        },
+                        removeIndex : location.Id+locationIndex
+                    };
+                    //hide watermark
+					$('#Slider-PlottedSavedQueries .plotted-watermark').hide();
+                    $favLayer.find('.basicinfo-name').text(location.Name);
+                    $favLayer.find('.fav-description').val(location.Description__c);
+                    $favLayer.find('.glyphicon-star-empty').css('color',markerColor);
+
+                    $favLayer.on('click','.btn-remove',function () {
+                    	removeFavLocaiton($favLayer);
+                    });
+
+                    $favLayer.on('click', '.showoptions', function () {
+                    	if ($favLayer.find('.link.showoptions .options-text').text() == "{!$Label.MA_Show_Options}") {
+		                    $favLayer.find('.link.showoptions .options-text').text("{!$Label.MA_Hide_Options}");
+		                    $favLayer.find('.extrainfo-wrapper').slideDown('300');
+		                	$favLayer.find('.link.showoptions .glyphicon').removeClass('glyphicon-triangle-bottom').addClass('glyphicon-triangle-top');
+		                }
+		                else {
+		                	$favLayer.find('.link.showoptions .options-text').text("{!$Label.MA_Show_Options}");
+		                	$favLayer.find('.link.showoptions .glyphicon').removeClass('glyphicon-triangle-top').addClass('glyphicon-triangle-bottom');
+		                	$favLayer.find('.extrainfo-wrapper').slideUp('300');
+		                }
+                    });
+
+                    $favLayer.attr('data-id',location.Id+locationIndex);
+                    $favLayer.on('click','.plotted-visibile-icon',function () {
+                    	$button = $(this);
+                    	var visible = $button.find('span').is('.glyphicon-eye-open');
+                    	if(visible) {
+                    		//hide
+                    		$button.find('span').removeClass('glyphicon-eye-open').addClass('glyphicon-eye-close');
+                    		$favLayer.data('marker').setMap(null);
+                    	}
+                    	else {
+                    		//show
+                    		$button.find('span').removeClass('glyphicon-eye-close').addClass('glyphicon-eye-open');
+                    		$favLayer.data('marker').setMap(MA.map);
+                    	}
+                    })
+
+                    var marker;
+                    if (!(window.ActiveXObject) && "ActiveXObject" in window && markerColor.indexOf('image:') != 0) {
+						marker = new RichMarker($.extend(markerOptions, {
+							map: MA.map,
+							position: MarkerCoordinate,
+			                anchor: RichMarkerPosition.BOTTOM,
+			                flat: true,
+			                content: MA.Marker.createSVG({ type: 'Marker', color: markerColor+':Favorite' }),
+			                layerType: 'favorite-marker'
+			            }));
+					}
+					else {
+	                    marker = new google.maps.Marker($.extend(markerOptions, {
+	                    	map: MA.map,
+	                    	position: MarkerCoordinate,
+	                    	icon: markerColor.indexOf('image:') == 0 ? MA.SitePrefix+'/servlet/servlet.FileDownload?file='+markerColor.split('image:')[1] : { url: 'data:image/svg+xml;base64,'+CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(MA.Marker.createSVG({ type: 'Marker', color: markerColor+':Favorite' }))), anchor: MA.Marker.shapes['Favorite'].anchor },
+	                    	layerType: 'favorite-marker'
+	                    }));
+	                }
+	                $favLayer.data('marker',marker);
+	                $favLayer.prependTo('#PlottedQueriesTable');
+
+	                //go to layer tab
+					if($('#sidebar-content #tabs-nav-plotted').hasClass('tab-open'))
+					{
+						//do nothing tab already selected
+					}
+					else
+					{
+						//click tab to show results
+	      				$('a[href="#tab-plotted"]').click();
+					}
+
+                    google.maps.event.addListener(marker, 'click', favLocation_Click);
+					google.maps.event.addListener(marker, 'rightclick', marker_Context);
+                    //locationMarkers.push(marker);
+
+                	hideMessage($('#FavoriteCreateLocation .loadmask-wrapper'));
+                }
+            });
+			locationIndex++;
+        }
+
+        function removeFavLocaiton($favLayer, options)
+		{
+		    //default options
+		    options = $.extend({
+		        complete: function () {}
+		    }, options || {});
+
+		    //unrender the fav layer
+		    $favLayer.data('marker').setMap(null);
+		    
+		    //remove the prox layer from the layers section
+		    $favLayer.slideUp(300, function () 
+		    { 
+		        $favLayer.remove(); 
+		        
+		        //Show water-mark
+		        if($('#PlottedQueriesTable').children().length == 0) {
+		            $('#PlottedQueriesWrapper .plotted-watermark').slideDown(200);
+		        }
+		        
+		        //done
+		        options.complete();
+		    });
+
+		    //find in array and remove, need to remove this later
+
+		}
+        
+        function ClearFavoriteLocation()
+        {
+        	$('#FavoriteCreateLocation').removeData();
+        	$('#FavoriteCreateLocation .fav-location-name').val('');
+        	$('#FavoriteCreateLocation .fav-location-address').val('');
+        	$('#FavoriteCreateLocation .fav-location-description').val('');
+        	$('#FavoriteCreateLocation .system-data').text('');
+        	$('#FavoriteCreateLocation .location-markertype-wrapper .location-markertype-selector-color').click();
+        	$('#FavoriteCreateLocation .location-markertype-color')[0].color.fromString('#00FF00');
+        }
+        
+        //Delete favorite folder
+        function DeleteFavLocation()
+        {
+           
+            $.ajax({
+                url: MA.resources.FavoriteLocations+"?securityToken="+securityToken+"&action=getDeleteMetadata&core.apexpages.devmode.url=0",
+                type: 'POST',
+                dataType: 'JSON',
+                data: 
+                {
+                    folders : JSON.stringify(folders),
+                    locations   : JSON.stringify(locations)
+                },
+                success: function (response)
+                {
+                    /*$('#FavTree').jstree('remove', $('#FavTree [data-id="'+checkedId+'"]'));
+                    $checkedRow.remove();*/
+                    //update only selected nodes
+                    var tree = jQuery.jstree._reference("#FavTree");
+                    var parentNode = $('#FavTree').jstree('get_selected');
+                    tree.refresh(parentNode);
+                    $('#FavTree').jstree('get_selected').closest('li').find('a ins').click()
+                    //manage extra options on success
+                    $('#FavoriteLocationsPopup .fav-extra-options').hide(400);
+                    $('#FavoriteLocationsPopup .allfav-check').prop('checked', false);
+                }
+            });
+        }
+		
+	</script>
+	
+	<!-- Favorite Location PopUP -->
+    <div id="FavoriteCreateLocation"  class="popup_block" style='z-index: 10000; max-height: 600px;'>
+    	<!-- Loading Wrapper -->
+    	<div class='loadmask-wrapper'>
+	    	<!-- Header -->
+	        <h2>{!$Label.MAFavoriteLocation_Create_Edit_Location}</h2>
+	        
+	        <!-- Spacer -->
+	        <div style='height: 15px;'>&nbsp;</div>
+	        
+	        <!-- Instructions -->
+	        <div class='update-location-instructions' style='display: none'>{!$Label.MAFavoriteLocation_Current_selection_to_be_updated}: <span style='color: #2265bb;' class='fav-folder-update'>::Folder::</span></div>
+	        <div>{!$Label.MAFavoriteLocation_Please_complete_all_information}:</div>
+	        
+	        <!-- Spacer -->
+	        <div style='height: 15px;'>&nbsp;</div>
+	        
+	        <!-- Location Info Table -->
+	        <table>
+	        	<tr>
+	        		<td class='row-label'>{!$Label.MA_Name}:</td>
+	        		<td><input maxlength='80' class='fav-location-name' type='text' /></td>
+	        	</tr>
+	        	<tr>
+	        		<td class='row-label'>{!$Label.MA_Address}:</td>
+	        		<td><textarea class='fav-location-address fav-loc-textbox'></textarea></td>
+	        	</tr>
+	        	<tr>
+	        		<td style='padding-right: 15px;' class='row-label'>{!$Label.MA_Description}:</td>
+	        		<td><textarea class='fav-location-description fav-loc-textbox'></textarea></td>
+	        	</tr>
+	        	<tr>
+	        		<td class='row-label'>{!$Label.MA_Marker}:</td>
+	        		<td> 
+			            <div class='location-markertype-wrapper' style='display: inline-block;'> 
+			                <input type='text' class='value color location-markertype-color' value='#00FF00' />
+			                <select class='location-markertype-image' style='display: none; width: 150px;' disabled='disabled'><option value=''>{!$Label.MA_Loading}...</option></select>
+			                
+			                <div class='location-markertype-selector' style='display: inline-block;'>
+			                    <img class='location-markertype-selector-color' src="{!URLFOR($Resource.QueryEditor, 'images/icons/color-16.png')}" />
+			                    <img class='location-markertype-selector-image' src="{!URLFOR($Resource.QueryEditor, 'images/icons/iconfolder-16.png')}" />
+			                </div>
+			            </div>
+			        </td>
+			    </tr>
+	        </table>
+	        
+	        <!-- Spacer -->
+	        <div style='height: 15px;'>&nbsp;</div>
+	        
+	        <!-- Buttons -->
+	        <div class='create-location-buttons' style='overflow: hidden;'>
+	            <a class='MAbutton button-blue' onclick="CreateNewFavoriteLocation();">{!$Label.MAFavoriteLocation_Create_Location}</a>
+	            <a class='MAbutton button-silver' onclick="ClosePopupWindow();">{!$Label.MA_Cancel}</a>
+	        </div>
+
+	        <!-- System Data -->
+	        <div class='system-data' style='font-size: 10px; color: #757575; clear: both; margin-top: 10px;'></div>
+
+		</div>
+    </div>
+
+</apex:component>

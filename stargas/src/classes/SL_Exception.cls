@@ -1,0 +1,1 @@
+public class SL_Exception extends Exception {}

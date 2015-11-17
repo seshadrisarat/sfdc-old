@@ -1,0 +1,367 @@
+<apex:page standardController="ts2__s_UserList__c" extensions="ts2.s_UserListController" action="{!LoadAction}" title="{!$ObjectType.ts2__s_UserList__c.Label+': '+ts2__s_UserList__c.Name}">
+	<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, 'jquery-1.8.2.min.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, '/ui/jquery-ui-1.8.24.custom.min.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__SSearch, 'res/js/s_popup_windows.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__stcode, 'res/js/ui-2.js')}" />
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__stcode, 'res/css/ui-2.css')}"/>
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__SSearch, 'res/css/s_style.css')}"/>
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__jsmenu, '/WebSourcingModal.css')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, 'bootstrap.min.js')}"/>
+<style>
+#selectable .ui-selecting { background: #33CCCC; cursor:pointer; color:#333; letter-spacing:-.75px;}
+#selectable .ui-selected { background: #339999; color: #333; cursor:pointer; letter-spacing:-.75px;}
+#selectable { list-style-type: none; margin: 0; padding: 0; width: 55%; }
+#selectable li { margin: 3px; padding: 0.4em; font-size: 14px; height: 16px; }
+
+	label{
+		font-family:Muli;
+		letter-spacing:-.75px;
+	}
+	#WebSourceDiv{
+	overflow:auto;
+	max-height: 300px;
+	font-family:Muli;
+	letter-spacing:-.75px;
+	}
+	#doSearchBtn{
+		background: #3CC;
+		color:#333333;
+		font-family:Muli;
+		font-weight:400;
+		border-color:#33CCCC;
+		cursor:pointer;
+		letter-spacing:-.75px;
+	}
+	#doSearchBtn:hover{
+		background: #339999;
+		color:#333333;
+		font-family:Muli;
+		font-weight:400;
+		border-color:#33CCCC;
+		cursor:pointer;
+		letter-spacing:-.75px;
+	}
+	body {
+		background:none transparent;
+	}
+	.modal-title {
+		position:absolute;
+		left:3%;
+		font-family: Muli;
+		letter-spacing:-.75px;
+	}
+	.modal-body {
+		padding-right:5px;
+		padding-left:5px;
+		padding-top:0px;
+		padding-bottom:0px;
+		background-color:#CCCCCC;
+	}
+	.modal-header{
+		background-color:#CCCCCC;
+		border-bottom:none;
+		padding-bottom:5px;
+	}
+	.modal-title{
+		background-color:#CCCCCC;
+		font-family:Muli;
+		font-weight:400;
+		color:#333333;
+		letter-spacing:-.75px;
+	}
+	.close {
+		background-color:#FFFFFF;
+		opacity:1;
+		color:#CCCCCC;
+		font-family:Muli;
+		letter-spacing:-.75px;
+	}
+	.modal-header .close {
+		margin-top: -5px;
+		margin-right: -5px;
+		border-radius: 10px;
+		font-size:14px;
+		background-color:#FFFFFF;
+	}
+	.modal-footer {
+		margin-top:0px;
+
+		background-color:#CCCCCC;
+		border-top:none;
+		padding-bottom:10px
+		font-family:Muli;
+	}
+	.modal-content {
+		background-color:#CCCCCC;
+	}
+</style>
+
+<script>
+	var sResultItemApiName = '{!$ObjectType.s_ResultItem__c.Name}';
+</script>
+<apex:form id="frm" onKeyPress="return(event.keyCode!=KEY_ENTER);" >
+	<apex:pageMessages id="pageMessages" />
+
+	<apex:sectionHeader title="{!$ObjectType.ts2__s_UserList__c.Label}" subtitle="{!ts2__s_UserList__c.Name}" />
+
+	<apex:pageBlock title="{!$Label.ShortList_LABEL_ShortListDetail}" mode="maindetail">
+		<apex:pageBlockButtons location="top">
+			<div id="ButtonContainer">
+			<apex:commandButton value="{!$Label.ShortList_BTN_Edit}" title="{!$Label.ShortList_BTN_Edit}" action="{!edit}" />
+			<apex:commandButton value="{!$Label.ShortList_BTN_Delete}" title="{!$Label.ShortList_BTN_Delete}" action="{!delete}" />
+			</div>
+		</apex:pageBlockButtons>
+		<apex:pageBlockSection columns="2">
+			<apex:outputField value="{!ts2__s_UserList__c.Name}" />
+			<apex:outputField value="{!ts2__s_UserList__c.ts2__description__c}" />
+			<apex:repeat value="{!$ObjectType.ts2__s_UserList__c.FieldSets.ts2__Shortlist}" var="f">
+				<apex:outputField value="{!ts2__s_UserList__c[f]}" />
+			</apex:repeat>
+		</apex:pageBlockSection>
+	</apex:pageBlock>
+
+<c:s_WrapperTaxonomySelector pager="{!pager}" id="FilterPanel" />
+
+	<apex:pageBlock id="ShortListPageBlock" title="{!$ObjectType.Contact.LabelPlural}">
+		<apex:pageBlockButtons location="top" >
+			<apex:commandButton value="{!$Label.ShortList_BTN_RemoveContacts}" title="{!$Label.ShortList_BTN_RemoveContacts}" action="{!removeSelectedContactsFromList}" onclick="if(!validateRemoveCandidates()){return(false)}else{jQuery('[id$=frm] input.btn').attr('disabled','disabled').addClass('btnDisabled');LoadingElementShow(jQuery('[id$=ShortListPageBlock]').find('div.pbBody').get(0), '{!$Label.Candidates_LABEL_Deleting}');}" rerender="ShortListPageBlock" oncomplete="jQuery('[id$=frm] input.btn').removeAttr('disabled').removeClass('btnDisabled');" />
+			<apex:commandButton value="{!$Label.ShortList_BTN_AddContact}" title="{!$Label.ShortList_BTN_AddContact}" onclick="openWindowJSAndPrepareSelection('openUListAddContactWindow',false,'{!$Page.ts2__s_UserListContactPopup}','{!ts2__s_UserList__c.Id}');return(false);" />
+			<apex:commandButton value="{!$Label.Update_Shortlist_Status}" title="{!$Label.Update_Shortlist_Status}" rendered="{!$Setup.Short_List__c.Enable_Shortlist_Statuses__c}" onclick="openWindowJSAndPrepareSelection('openUpdateStatusWindow',true,'{!$Page.ts2__UpdateUserListLinkStatus}','{!ts2__s_UserList__c.Id}');return(false);" />
+			<apex:commandButton value="{!$Label.ShortList_BTN_SendEmail}" title="{!$Label.ShortList_BTN_SendEmail}" onclick="openWindowJSAndPrepareSelection('openSendEmailWindow',true,'{!$Page.ts2__email_manager}', '{!ts2__s_UserList__c.Id}');return(false);" rendered="{!$Setup.Short_List__c.Enable_Send_Email__c || ISBLANK($Setup.Short_List__c.Id)}" />
+			<apex:commandButton value="{!$Label.ShortList_BTN_SendSMS}" title="{!$Label.ShortList_BTN_SendSMS}" onclick="openWindowJSAndPrepareSelection('openSendSMSWindow',true,'{!$Page.ts2__s_UserList_E}','{!ts2__s_UserList__c.Id}'); return(false);" rendered="{!isSMSPackageExists}" />
+			<apex:commandButton value="{!$Label.ShortList_BTN_ApplyToJobs}" title="{!$Label.ShortList_BTN_ApplyToJobs}" onclick="openWindowJSAndPrepareSelection('openApplyToWindow',true,'{!$Page.ts2__ApplyJobPage}');return(false);" rendered="{!$Setup.Short_List__c.Enable_Apply_to_Jobs__c || ISBLANK($Setup.Short_List__c.Id)}" />
+			<apex:commandButton value="{!$Label.ShortList_BTN_AddSkills}" title="{!$Label.ShortList_BTN_AddSkills}" onclick="openWindowJSAndPrepareSelection('openSkillsWindow',true,'{!$Page.ts2__add_skills_temp}');return(false);" rendered="{!$Setup.Short_List__c.Enable_Add_Skills__c || ISBLANK($Setup.Short_List__c.Id)}" />
+			<apex:commandButton value="{!$Label.ShortList_BTN_AddTags}" title="{!$Label.ShortList_BTN_AddTags}" onclick="openWindowJSAndPrepareSelection('openAddTagsWindow',true,'{!$Page.ts2__AddTagsCandidate}');return(false);" rendered="{!$Setup.Short_List__c.Enable_Add_Tags__c || ISBLANK($Setup.Short_List__c.Id)}" />
+			<apex:commandButton value="{!$Label.ShortList_BTN_AddToAnotherList}" title="{!$Label.ShortList_BTN_AddToAnotherList}" onclick="openWindowJSAndPrepareSelection('openAddToListWindow',true,'{!$Page.ts2__AddToList}');return(false);" rendered="{!$Setup.Short_List__c.Enable_Add_to_List__c || ISBLANK($Setup.Short_List__c.Id)}" />
+			<apex:commandButton value="{!$Label.ReviewEmailTitle}" title="{!$Label.ReviewEmailTitle}" onclick="openWindowJSAndPrepareSelection('openReviewWindow',true,'{!$Page.ts2__ReviewCandidates}','{!ts2__s_UserList__c.Id}');return(false);" rendered="{!$Setup.Short_List__c.Enable_Review_Email__c || ISBLANK($Setup.Short_List__c.Id)}" />
+			<apex:commandButton value="Speed Review" title="Speed Review" onclick="openWindowJSAndPrepareSelection('openSpeedReview',true,'{!$Page.ts2__presentationApp}');return(false);" rendered="{!$Setup.Short_List__c.Enable_Speed_Review__c || ISBLANK($Setup.Short_List__c.Id)}" />
+		</apex:pageBlockButtons>
+
+		<apex:outputPanel id="PagerItemsPanel">
+			<apex:pageBlockTable id="ContactList" value="{!pager.pageofitems}" var="pageItem" cellpadding="6" width="100%" border="0" >
+				<apex:column rendered="{!pager.ResultSize > 0}" width="23px" >
+					<apex:facet name="header">
+						<apex:inputCheckbox value="{!pager.IsWholePageSelected}" onclick="Paginator.SelectAll(this)" />
+					</apex:facet>
+					<apex:inputCheckbox value="{!pageItem.selected}" onclick="Paginator.SelectionChange(this)" />
+				</apex:column>
+				<apex:repeat value="{!pager.QueryFieldList}" var="fs">
+					<apex:column rendered="{!pager.ResultSize > 0}" >
+						<apex:facet name="header"><div id="{!$ObjectType.Contact.fields[fs].Name}" class="JS_SortDiv" onclick="selectedColumn(this.id);" style="cursor: pointer;">{!$ObjectType.Contact.fields[fs].Label}</div></apex:facet>
+						<apex:outputField value="{!pageItem.sobj[fs]}" rendered="{!NOT($ObjectType.Contact.Fields[fs].NameField) && NOT($ObjectType.Contact.Fields[fs].Calculated && $ObjectType.Contact.Fields[fs].Type='string')}" style="{!IF(CONTAINS(fs,'Skill_Codes__c') || CONTAINS(fs,'Experience_Summary__c'),'word-wrap:break-word;','')}" />
+						<apex:outputLink value="/{!pageItem.sobj.Id}" target="_blank" rendered="{!$ObjectType.Contact.Fields[fs].NameField}"><apex:outputField value="{!pageItem.sobj['Name']}" /></apex:outputLink>
+						<!-- SFDC Security Review: Unescaped output is necessary to render html content in vfp and does not constitute possible vulnerability -->
+						<apex:outputText value="{!pageItem.sobj[fs]}" rendered="{!$ObjectType.Contact.Fields[fs].Calculated && $ObjectType.Contact.Fields[fs].Type='string'}" escape="false" />
+					</apex:column>
+				</apex:repeat>
+				<apex:column rendered="{!$Setup.Short_List__c.Enable_Shortlist_Statuses__c}" >
+				<apex:facet name="header"><div id ="{!$ObjectType.s_UserListLink__c.fields.status__c.Name}" class="JS_SortDiv" onclick="selectedColumn(this.id);" style="cursor: pointer;">{!$ObjectType.s_UserListLink__c.fields.status__c.Label}</div></apex:facet>
+			<apex:outputField value="{!pageItem.sobjTwo['status__c']}" rendered="true"></apex:outputfield>
+				</apex:column>
+				<apex:outputField value="{!pageItem['status__c']}" rendered="true"></apex:outputfield>
+				<apex:column rendered="{!pager.ResultSize = 0}" headerValue="{!$Label.ShortList_LABEL_ShortListIsEmpty}" headerClass="noRowsHeader" />
+			</apex:pageBlockTable>
+			<div style="display:none;" class="waitingSearchDiv waitingSearchDivOpacity"></div>
+			<div style="display:none;" class="waitingSearchDiv"><span class="waitingSearchHolder" style="top:16px;"><img src="/img/loading.gif" class="waitingImage"/><span class="waitingDescription"></span></span></div>
+		</apex:outputPanel>
+
+	<c:s_WrapperColumnSelector pager="{!pager}" id="PaginationPanel" />
+
+	</apex:pageBlock>
+	<apex:actionFunction action="{!sortColumn}" rerender="PagerItemsPanel,PaginationPanel,pageMessages" name="refreshContactPanel" status="sortStatus">
+	<apex:param assignto="{!paramField}" name="sortParam" value=""></apex:param>
+	</apex:actionFunction>
+	<apex:actionFunction action="{!pager.PrepareResultItemSelectionAction}" name="PrepareResultItemSelection" rerender="PagerItemsPanel,PaginationPanel,pageMessages" oncomplete="jQuery('[id$=frm] input.btn').removeAttr('disabled').removeClass('btnDisabled');openWindowJS('{!JSENCODE(pager.ResultItemId)}','{!JSENCODE(pager.PageParamIn)}');">
+		<apex:param name="PageSizeIn" assignTo="{!pager.PageParamIn}" value="" />
+	</apex:actionFunction>
+	<apex:actionStatus id="sortStatus" onStart="sorting(true);" onStop="sorting(false);" />
+</apex:form>
+
+<!-- Modal -->
+<div class="modal fade" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+<div class="modal-dialog">
+	<div class="modal-content">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+		<h4 class="modal-title" id="myModalLabel">{!$Label.WS_WebSourcing}</h4>
+	</div>
+	<div class="modal-body">
+		<div id="WebSourceDiv" title="Web Sourcing">
+		<p>{!$Label.WS_Select_Site}</p>
+		<p>{!$Label.WS_Keywords}</p><input type="text" id="keywordsInput" class="WSinput" value="{!keyworld}"></input>
+		<Button onclick="ButtonClick();" id="doSearchBtn" data-dismiss="modal">{!$Label.WS_Search}</Button><br/>
+		<p>{!$Label.WS_Location}</p><input type="text" id="locationInput" class="WSinput" value="{!location}"></input><br/><br/>
+		</div>
+		<ol id="selectable" class="modal-footer">
+		</ol>
+	</div>
+	<div class="modal-footer">
+	<table id="WebSourceTable">
+		</table>
+	</div>
+	</div>
+</div>
+</div>
+
+<script>
+	var jj$ = jQuery.noConflict();
+	jj$(document).ready(function() {
+		if ({!isWebSourcingEnabled}) {
+			jj$("#WebSourceDiv").hide();
+			wsButton = document.createElement("button");
+			wsButton.type = "button";
+			wsButton.setAttribute('class', 'btn btn-primary btn-lg');
+			wsButton.setAttribute('data-toggle', 'modal');
+			wsButton.setAttribute('data-target', '#myModal');
+			wsButton.innerHTML = 'Web Sourcing';
+			wsButton.onclick = function opendialog() {
+				jj$( "#WebSourceDiv" ).show();
+			}
+			document.getElementById("ButtonContainer").appendChild(wsButton);
+		}
+
+		({!isZipRecruiterEnabled} ? CreateCheckbox('ZiprecruiterCheckbox', 'Zip Recruiter') : null);
+		({!isIndeedEnabled} ? CreateCheckbox('IndeedCheckbox', 'Indeed') : null);
+		({!isLinkedInEnabled} ? CreateCheckbox('LinkedInCheckbox', 'LinkedIn') : null);
+		({!isTwitterEnabled} ? CreateCheckbox('TwitterCheckbox', 'Twitter') : null);
+		({!isFacebookEnabled} ? CreateCheckbox('FacebookCheckbox', 'Facebook') : null);
+		({!isGoogleEnabled} ? CreateCheckbox('GoogleCheckbox', 'Google') : null);
+		({!isBingEnabled} ? CreateCheckbox('BingCheckbox', 'Bing') : null);
+		({!isYahooEnabled} ? CreateCheckbox('YahooCheckbox', 'Yahoo') : null);
+		jj$(function() {
+			jj$("#selectable").bind("mousedown", function(e) {
+			e.metaKey = true;
+			}).selectable();
+		});
+	});
+
+	function CreateCheckbox(id, passedLabel) {
+
+		var container = jj$('#selectable');
+		container.append('<li class="ui-widget-content ui-selected" id='+id+'>'+passedLabel+'</li>');
+	}
+
+	function ButtonClick() {
+		var k = document.getElementById("keywordsInput").value;
+		var l = document.getElementById("locationInput").value;
+
+		if ({!isLinkedInEnabled}) {
+			if (jj$('#LinkedInCheckbox').hasClass('ui-selected')) {
+				window.open('{!LinkedInBaseUrl}' + k + ' ' + l);
+			}
+		}
+		if ({!isIndeedEnabled}) {
+			if (jj$('#IndeedCheckbox').hasClass('ui-selected')) {
+				window.open('{!IndeedBaseUrl}' + k + '/in-' + l);
+			}
+		}
+		if ({!isZipRecruiterEnabled}) {
+			if (jj$('#ZiprecruiterCheckbox').hasClass('ui-selected')) {
+				window.open('{!ZipRecruiterBaseUrl}' + k + '&location=' + l);
+			}
+		}
+		if ({!isFacebookEnabled}) {
+			if (jj$('#FacebookCheckbox').hasClass('ui-selected')) {
+				window.open('{!FacebookBaseUrl}' + k + ' ' + l);
+			}
+		}
+		if ({!isTwitterEnabled}) {
+			if (jj$('#TwitterCheckbox').hasClass('ui-selected')) {
+				window.open('{!TwitterBaseUrl}' + k + ' ' + l + '&mode=users');
+			}
+		}
+		if ({!isGoogleEnabled}) {
+			if (jj$('#GoogleCheckbox').hasClass('ui-selected')) {
+				window.open('{!GoogleBaseUrl}' + k + ' Resume ' + l + ' filetype:doc OR filetype:pdf OR filetype:docx OR filetype:txt OR filetype:rtf');
+			}
+		}
+		if ({!isBingEnabled}) {
+			if (jj$('#BingCheckbox').hasClass('ui-selected')) {
+				window.open('{!BingBaseUrl}' + k + ' Resume ' + l + ' filetype:doc');
+			}
+		}
+		if ({!isYahooEnabled}) {
+			if (jj$('#YahooCheckbox').hasClass('ui-selected')) {
+				window.open('{!YahooBaseUrl}' + k + ' Resume ' + l + ' filetype:doc');
+			}
+		}
+
+	}
+
+	var columnClicked;
+	function whichColumn() {
+		return columnClicked;
+	}
+	function selectedColumn(columnId) {
+		columnClicked = columnId;
+		LoadingElementShow(jQuery('[id$=ShortListPageBlock]').find('div.pbBody').get(0));
+		refreshContactPanel(columnId);
+	}
+	function callbackHandler() {
+		refreshContactPanel();
+	}
+</script>
+
+<script>
+	jQuery.noConflict();
+	var Paginator = new PaginatorInstance("ContactList");
+	jQuery(document).ready(function() {
+		gfxInit();
+	});
+
+	function gfxInit() {
+		a1=new Image; a1.src="{!URLFOR($Resource.stcode, 'res/img/spinner.gif')}";
+		a2=new Image; a2.src="/img/loading.gif";
+	}
+
+	function validateRemoveCandidates() {
+		var selectionCount = Paginator.GetSelectionSize();
+		if (selectionCount == 0) {
+			alert('{!JSENCODE($Label.Candidates_LABEL_YouMustSelectAtLeastOne)}');
+			return false;
+		}
+		return confirm('{!JSENCODE($Label.ShortList_LABEL_DeleteContactsConfirmation)}'.replace('{0}',selectionCount));
+	}
+</script>
+
+<script>
+	function openWindowJSAndPrepareSelection(funcName, requireSelection, param1, param2) {
+		var pageParam = funcName + '~' + param1 + '~' + param2;
+		win = null;
+
+		if (requireSelection) {
+			if (Paginator.GetSelectionSize() > 0) {
+				jQuery('[id$=frm] input.btn').attr('disabled','disabled').addClass('btnDisabled');
+				LoadingElementShow(jQuery("[id$=ShortListPageBlock]").find("div.pbBody").get(0), '{!JSENCODE($Label.Candidates_LABEL_Loading)}');
+				PrepareResultItemSelection(pageParam);
+				if(funcName == 'openSpeedReview') {
+					win=window.open('/apex/presentationApp?isLoading=1','_blank');
+				}
+			}
+			else {
+				alert('{!JSENCODE($Label.Candidates_LABEL_YouMustSelectAtLeastOne)}');
+			}
+		}
+		else {
+			openWindowJS(undefined, pageParam);
+		}
+	}
+
+	function openWindowJS(ResultItemId, pageParam) {
+		var pageParams = pageParam.split('~');
+		var funcName = pageParams[0];
+		var param1 = pageParams[1];
+		var param2 = pageParams[2];
+		if (win) {
+			var resultId = ResultItemId ? ResultItemId : createNewSelectionObj();
+			pageURL = (typeof(param1)=='string') ? param1 : "/apex/ts2__presentationApp";
+			var url = pageURL+"?cId=" + resultId + '&src=resultitem' + '&from=shortlist';
+			win.location = url;
+			win = null;
+		}
+		else {
+			window[funcName](param1,param2,ResultItemId);
+		}
+	}
+</script>
+</apex:page>

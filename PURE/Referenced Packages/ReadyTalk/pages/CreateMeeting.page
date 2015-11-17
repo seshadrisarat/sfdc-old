@@ -1,0 +1,318 @@
+<apex:page standardController="RT1__ReadyTalkMeeting__c" recordSetVar="meetings"
+    extensions="RT1.CreateMeetingController" tabStyle="Readytalk__tab">
+
+    <apex:stylesheet value="{!URLFOR($Resource.RT1__meetingsr, 'datetimepicker/datetimepicker.min.css')}" />
+    <apex:styleSheet value="{!URLFOR($Resource.RT1__meetingsr, 'jquery.qtip.min.css')}" />
+    <apex:stylesheet value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/redmond/jquery-ui.css" />
+    <apex:stylesheet value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/redmond/jquery-ui.css" />
+
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" />
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js" />
+    <apex:includeScript value="{!URLFOR($Resource.RT1__meetingsr,'jquery.framedialog.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.RT1__meetingsr, 'jquery.qtip.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.RT1__meetingsr, 'js/moment.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.RT1__meetingsr, 'js/moment-timezone-with-data.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.RT1__meetingsr, 'datetimepicker/datetimepicker.min.js')}" />
+    <style type="text/css">
+.pointer {
+    cursor: pointer;
+}
+</style>
+
+    <script type="text/javascript">
+
+var email = '';
+$(document).ready(function(){
+
+    var timeZone = "{!meeting.RT1__TimeZoneDB__c}";
+    var baseTime = moment().add(10, "m");
+    var mod = baseTime.minute() % 30;
+    if (mod != 0) {
+        baseTime = baseTime.add(30 - mod, "m");
+    }
+
+    $('.null').val(baseTime.tz(timeZone).format("MM/DD/YYYY hh:mm A"));
+    $('.null').datetimepicker({step: 30, formatTime:'h:i A', format: 'm/d/Y h:i A'});
+
+    $("#changeAccessCode").click(function(e) {
+        e.preventDefault();
+        $("#credentialsDialog").dialog({
+            width: 300,
+            height: 180,
+            modal: true,
+            title: "Chairperson Login Credentials"
+        });
+        return false; 
+    });
+    $("#cancelCredentialsButton").click(function() {
+        $("#credentialsDialog").dialog("close");
+    });
+    /**
+     *  Updates the values in the hidden form before updating their refrences in the controller
+     **/
+    $("#saveCredentialsButton").click(function() {
+        $('#saveCredentialsLoader').show();
+        checkCredentials($("#tollFreeNumber").val(),$("#accessCode").val(),$("#passcode").val());
+    });
+    addClickHandlers();
+});
+
+/** 
+ *  addClickHandlers()
+ *  Some of these will need to be readded so attach them here.
+ **/
+function addClickHandlers(){
+        $('.addInviteeButton').click(function(e){
+            e.preventDefault();
+            dialog = $.FrameDialog.create({
+                url: '{!URLFOR($Page.RT1__addInvitee)}',
+                buttons: {
+                    "Done":function(){
+                        $(this).dialog("close");
+                    }
+                },
+                title: "",
+                height: $(window).height()-50,
+                minWidth: 835
+            });
+        });
+    }
+/**
+ *  checkCredentialsComplete
+ *  Invoke the refreshNewMeetingDetails, which will update the refreshes
+ *  to meeting details in the controller
+ **/
+function checkCredentialsComplete() {
+    $('#saveCredentialsLoader').hide();
+    var validatedForm = $('[id$=credentialsValid]').val(); 
+    if (validatedForm == "true") {
+        //copy the values through onto the page
+        $('[id$=accessCodeDetails]').text($('#accessCode').val());
+        $("#credentialsDialog").dialog("close");
+    }
+    else {
+        alert("The credentials entered are invalid. Please enter a valid toll free number, "
+            + " access code, and passcode.");
+    }
+}
+
+/** 
+ *  removeMeetingInvitee(..)    
+ *  Updated when resorting the column order, Jordan, 3/7/2012
+ **/
+function removeMeetingInvitee(inviteeRow){
+    email = $(inviteeRow).find('td:eq(2)').first().text(); //get the email address of the member to remove
+    $('#member_to_delete_email').text(email);
+    //attach the dialog
+    $( "#dialog-confirm" ).dialog({
+    resizable: false,
+    height:160,
+    buttons: {
+        "Remove": function() {
+            removeInvitee(email);
+            $( this ).dialog( "close" );
+        },
+        Cancel: function() {
+            $( this ).dialog( "close" );
+        }
+    }
+    });
+}
+
+/** 
+ *    showDeletetooltip(this);
+ **/
+function showDeletetooltip(row){
+        $(row).qtip({
+        content: {
+            text: 'Double click this row to remove the invitee' 
+        },
+        position: {
+            my: 'top left',
+            target: 'mouse',
+            viewport: $(window), // Keep it on-screen at all times if possible
+            adjust: {
+                x: 10,  y: 10
+            }
+        },
+        show: {
+            event: false, // Don't specify a show event...
+            ready: true // ... but show the tooltip when ready
+        },
+        style: {
+            classes: 'ui-tooltip-shadow ui-tooltip-blue'
+        }
+    });
+} 
+
+</script>
+    <apex:pageMessage rendered="{!AND(NOT($User.ReadyTalkUser__c), NOT($User.MeetingsCollaboratorUser__c))}"
+        summary="Your are not currently a ReadyTalk Meeting User, please contact your system administrator."
+        severity="error" strength="3" title="Create ReadyTalk Meeting Not Authorized." />
+    <apex:form rendered="{!OR($User.ReadyTalkUser__c, $User.MeetingsCollaboratorUser__c)}">
+        <!-- Validated credentials -->
+        <apex:inputHidden value="{!CredentialsAreValid}" id="credentialsValid" />
+        <apex:actionFunction name="addInviteeToList" action="{!addInvitee}"
+            rerender="inviteesList,pageMessages" onComplete="addClickHandlers();">
+            <apex:param name="InviteeId" assignTo="{!InviteeId}" value="" />
+            <apex:param name="TypeOfInvite" assignTo="{!TypeOfInvite}" value="" />
+            <apex:param name="FirstName" assignTo="{!InviteeFirstName}" value="" />
+            <apex:param name="LastName" assignTo="{!InviteeLastName}" value="" />
+        </apex:actionFunction>
+        <apex:actionFunction name="removeInvitee" action="{!removeInvitee}"
+            rerender="inviteesList" onComplete="addClickHandlers();">
+            <apex:param name="inviteeEmail" assignTo="{!inviteeEmail}" value="" />
+        </apex:actionFunction>
+        <!-- checkCredentials = check credentials from lightbox popup to change credentials -->
+        <apex:actionFunction name="checkCredentials"
+            action="{!checkCredentials}" rerender="credentialsValid"
+            oncomplete="checkCredentialsComplete();">
+            <apex:param name="TollFreeNumber" assignTo="{!TollFreeNumber}"
+                value="" />
+            <apex:param name="AccessCode" assignTo="{!AccessCode}" value="" />
+            <apex:param name="Passcode" assignTo="{!Passcode}" value="" />
+        </apex:actionFunction>
+        <!-- END ActionFunctions -->
+
+        <apex:sectionHeader title="ReadyTalk" subtitle="New ReadyTalk Meeting" />
+        <apex:pageMessages id="pageMessages" />
+        <apex:inputHidden id="hiddenTollFreeNumber" value="{!TollFreeNumber}" />
+        <apex:inputHidden id="hiddenAccessCode"
+            value="{!meeting.RT1__AccessCode__c}" />
+        <apex:inputHidden id="hiddenPasscode" value="{!meeting.RT1__Passcode__c}" />
+        <apex:outputPanel id="hiddenOutputPanel">
+            <apex:inputHidden id="credentialsAreValid"
+                value="{!CredentialsAreValid}" />
+        </apex:outputPanel>
+        <apex:pageBlock id="newMeetingDetails" title="New Meeting Details"
+            mode="edit" tabStyle="Readytalk__tab">
+
+            <apex:pageBlockButtons >
+                <apex:commandButton action="{!createMeetingAndSave}"
+                    value="Save & Invite" />
+                <apex:commandButton action="{!cancelCreateNewMeeting}"
+                    value="Cancel" />
+            </apex:pageBlockButtons>
+
+            <apex:pageBlockSection title="Information" collapsible="true"
+                columns="1">
+
+                <apex:inputField id="meetingName" value="{!meeting.Name}"
+                    required="true" />
+                <apex:pageBlockSectionItem helpText="The credentials used to schedule the new meeting.">
+                    <apex:outputLabel value="Access Code" />
+                    <apex:outputPanel >
+                        <apex:outputLabel id="accessCodeDetails" value="{!AccessCode}"></apex:outputLabel>
+                                &nbsp;<a id="changeAccessCode" href="#"
+                            style="color: #888888; font-size: 10px">change access code</a>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+
+                <apex:pageBlockSectionItem helpText="Start date and time of the new meeting."
+                    rendered="{!scheduleMeeting}">
+                    <apex:outputLabel value="Start Date/Time" for="startDateTime" />
+                    <apex:inputText id="startDateTime" html-class="null"
+                        value="{!meeting.RT1__MeetingDateTime__c}" required="true" />
+                </apex:pageBlockSectionItem>
+
+                <apex:pageBlockSectionItem helpText="Time zone for the start date and time of the new meeting."
+                    rendered="{!scheduleMeeting}">
+                    <apex:outputLabel value="Meeting Time Zone" for="meetingTimezone" />
+                    <apex:inputField id="meetingTimezone"
+                        value="{!meeting.RT1__TimeZoneDB__c}" />
+                </apex:pageBlockSectionItem>
+
+                <apex:pageBlockSectionItem rendered="{!scheduleMeeting}">
+                    <apex:outputLabel value="Duration" for="duration" />
+                    <apex:pageBlockSectionItem id="duration">
+                        <apex:pageBlockSectionItem >
+                            <apex:selectList value="{!durationHours}" size="1">
+                                <apex:selectOptions value="{!Hours}" />
+                            </apex:selectList>
+                                hours
+                                </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:selectList value="{!durationMinutes}" size="1">
+                                <apex:selectOptions value="{!Minutes}" />
+                            </apex:selectList>
+                                minutes
+                                </apex:pageBlockSectionItem>
+                    </apex:pageBlockSectionItem>
+                </apex:pageBlockSectionItem>
+
+                <apex:pageBlockSectionItem rendered="{!scheduleMeeting}">
+                    <apex:outputLabel value="Meeting Type" for="scheduledMeetingType" />
+                    <apex:selectRadio value="{!meetingType}">
+                        <apex:selectOptions id="scheduledMeetingType"
+                            value="{!meetingTypes}" />
+                    </apex:selectRadio>
+                </apex:pageBlockSectionItem>
+
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Log Activity" for="createInviteeEvent" />
+                    <apex:inputCheckbox id="createInviteeEvent"
+                        value="{!createInviteeEvent}" />
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+        <apex:outputPanel id="inviteesList">
+            <apex:pageBlock title="Invitees" tabStyle="Readytalk__tab">
+                <apex:pageBlockButtons >
+                    <button class="addInviteeButton">Add</button>
+                </apex:pageBlockButtons>
+                <apex:pageBlockTable value="{!meetingMembersToInvite}" var="member"
+                    onRowDblClick="removeMeetingInvitee(this);" rowClasses="pointer"
+                    onrowMouseOver="showDeletetooltip(this);">
+                    <apex:column headerValue="First Name" value="{!member.FirstName}" />
+                    <apex:column headerValue="Last Name" value="{!member.LastName}" />
+                    <apex:column headerValue="Email" value="{!member.email}" />
+                    <apex:column headerValue="Type of Record"
+                        value="{!member.typeOfRecord}" />
+                </apex:pageBlockTable>
+            </apex:pageBlock>
+        </apex:outputPanel>
+    </apex:form>
+    <!-- popup dialog that allows the user to change their login credentials on the page -->
+    <div id="credentialsDialog" style="display: none; font-size: 11px"
+        class="bPageBlock">
+        <apex:form >
+            <table class="detailList">
+                <tbody>
+                    <tr>
+                        <td class="labelCol"><label>Toll Free Number</label></td>
+                        <!-- Formatted -->
+                        <td class="dataCol"><input type="text" id="tollFreeNumber"
+                            value="{!TollFreeNumber}" /></td>
+                    </tr>
+                    <tr>
+                        <td class="labelCol">Access Code</td>
+                        <td class="dataCol"><input type="text" id="accessCode"
+                            value="{!AccessCode}" /></td>
+                    </tr>
+                    <tr>
+                        <td class="labelCol">Passcode</td>
+                        <td class="dataCol"><input type="password" id="passcode"
+                            value="{!Passcode}" /></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div style="text-align: center; padding: 5px;">
+                <img src="{!URLFOR($Resource.meetingsr,'ajaxloader_green.gif')}"
+                    id="saveCredentialsLoader" style="display: none;" /> <input
+                    type="button" id="saveCredentialsButton" class="btn" value=" Save " />
+                <input type="button" id="cancelCredentialsButton" class="btn"
+                    value=" Cancel " />
+            </div>
+        </apex:form>
+    </div>
+    <!-- /popup dialog -->
+
+    <div id="dialog-confirm" title="Remove Invitee?" style="display: none;">
+        <p>
+            <span class="ui-icon ui-icon-alert"
+                style="float: left; margin: 0 7px 20px 0;"></span>Are you sure you
+            want to remove <span id="member_to_delete_email"
+                style="font-weight: bold;">this person</span> from the invitee list?
+        </p>
+    </div>
+</apex:page>

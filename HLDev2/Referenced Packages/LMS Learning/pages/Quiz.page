@@ -1,0 +1,399 @@
+<!-- <apex:page standardController="Quiz__c" Extensions="QuizExt" tabStyle="My_Training__tab"> -->
+<apex:page controller="lmscons.QuizExt" tabStyle="My_Training__tab">
+    <apex:includeScript value="{!URLFOR($Resource.lmscons__LMSSource, 'js/jquery.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.lmscons__Uniform, '/pixelmatrix-uniform-2446d99/jquery.uniform.js')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.lmscons__quizz_res, '/css/quizz.css')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.lmscons__Uniform, '/pixelmatrix-uniform-2446d99/css/uniform.default.css')}"/>
+
+<style type="text/css">
+    pre {
+        font-family: Arial,Helvetica,sans-serif;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+    .b-header {background-position:5px 50%}
+    .b-header h1 {margin-top:4px}
+    .b-body .b-item {position:relative; margin:0 35px 15px 55px;}
+    .QuestionPage:last-child .b-item {border-bottom: 0 none;}
+    .b-body .b-item .b-num {position:absolute; left:-35px; top:0; font-size:18px}
+    .b-body .b-item .b-num img {position:absolute; left:-20px; top:3px;}
+</style>
+<!-- Enhanced Action Status -->
+    <apex:actionStatus id="loadStatus">
+    <apex:facet name="start">
+        <c:EnhancedActionStatus BackColor="#efefef" borderColor="#336699"
+                        borderSize="1" height="50px" width="120px" ImageUrl="/img/loading.gif"
+                        Message="{!$Label.Loading}" messageStyle="color:darkred;font-size:11pt;font-weight:bold;"/>
+    </apex:facet>
+    </apex:actionStatus>
+
+<apex:form >
+
+<apex:pageMessages id="pageMessages"/>
+        <apex:outputPanel id="Prerequisites" rendered="{!isPre}">
+            <apex:pageBlock title="You must complete following Learning Objects">
+                <apex:pageBlockTable value="{!Pre}" var="P">
+                <!-- <apex:dataTable value="{!Pre}" var="P" rowClasses="odd,even" styleClass="list"> -->
+                    <apex:column >
+                        <apex:facet name="header">{!$Label.Learning_Object}</apex:facet>
+
+                        <apex:outputLink value="/{!P.lmscons__Module_Child__c}" rendered="{!P.RecordType.DeveloperName == 'Module'}" target="__blank">
+                            {!P.Module_Child__r.lmscons__Title__c}
+                        </apex:outputLink>
+
+                        <apex:outputLink value="/{!P.lmscons__Quiz_Child__c}" rendered="{!P.RecordType.DeveloperName == 'Quiz'}" target="__blank">
+                            {!P.Quiz_Child__r.Name}
+                        </apex:outputLink>
+
+                        <apex:outputLink value="/{!P.lmscons__Course_Child__c}" rendered="{!P.RecordType.DeveloperName == 'Course'}" target="__blank">
+                            {!P.Course_Child__r.Name}
+                        </apex:outputLink>
+
+                        <apex:outputLink value="/{!P.lmscons__Learning_Path_Child__c}" rendered="{!P.RecordType.DeveloperName == 'Learning_Path'}" target="__blank">
+                            {!P.Learning_Path_Child__r.Name}
+                        </apex:outputLink>
+
+                        <apex:outputLink value="/{!P.lmscons__Curriculum_Child__c}" rendered="{!P.RecordType.DeveloperName == 'Curriculum'}" target="__blank">
+                            {!P.Curriculum_Child__r.Name}
+                        </apex:outputLink>
+
+                    </apex:column>
+                    <apex:column >
+                        <apex:facet name="header">{!$Label.SearchCatalog_Column_Type}</apex:facet>
+                        <apex:outputText value="{!P.RecordType.DeveloperName}"/>
+                    </apex:column>
+                </apex:pageBlockTable>
+                <!-- </apex:dataTable> -->
+            </apex:pageBlock>
+        </apex:outputPanel>
+
+<apex:outputPanel id="BigPanel">
+    <apex:outputPanel rendered="{!AND(NOT(isPre),OR(isReviewMode,NOT(isSubmit)))}">
+
+        <apex:outputPanel layout="block" styleClass="b-header">
+            <h1>{!Qn.Name}</h1>
+            <h2>{!Qn.lmscons__Description__c}</h2>
+        </apex:outputPanel>
+
+        <!-- <apex:outputPanel > -->
+            <apex:outputPanel layout="block" styleClass="b-body">
+            <!-- {!Questions} -->
+                <apex:variable var="pageCount" value="{!1}" />
+                <apex:variable var="CountQuestion" value="{!1}" />
+                <apex:repeat value="{!Questions}" var="page">
+                    <apex:variable var="pageCount" value="{!IF(page.Type=='Page Break',pageCount+1,pageCount)}"/>
+                    <apex:outputPanel layout="block" styleClass="QuestionPage hiddenItem" title="{!Round(pageCount,0)}" >
+                        <apex:repeat value="{!page}" var="q" rendered="{!page.Type!='Page Break'}">
+                            <apex:outputPanel layout="block" styleClass="b-item" >
+                                <apex:outputPanel layout="block" styleClass="b-num">
+                                    <apex:outputPanel rendered="{!IF(ISBLANK(q.Type),false,true)}">
+                                        <apex:image id="thePassImage" value="/img/msg_icons/confirm16.png" width="16" height="16" rendered="{!AND(q.Type!='Free Text',q.isPassed==true,isReviewMode==true)}"/>
+                                        <apex:image id="theFailImage" value="/img/msg_icons/error16.png" width="16" height="16" rendered="{!AND(q.Type!='Free Text',q.isPassed==false,isReviewMode==true)}"/>
+                                        {!Round(CountQuestion,0)}
+                                    </apex:outputPanel>
+                                </apex:outputPanel>
+                                <apex:outputPanel layout="block" styleClass="b-title"><pre><apex:outputText value="{!q.NameQ}" /></pre></apex:outputPanel>
+                                <apex:outputPanel layout="block" styleClass="b-form" rendered="{!q.Type == 'True/False'}">
+                                    <apex:outputPanel layout="block" styleClass="b-form-line">
+                                    <apex:selectRadio value="{!q.AnswerTrueFalse}" layout="pageDirection" disabled="{!isReviewMode}">
+                                        <apex:actionSupport event="onchange"  action="{!TemporarySave}" rerender="none">
+                                            <apex:param name="TrFval" value="{!q.Qid}" assignTo="{!CurrQuest}"/>
+                                        </apex:actionSupport>
+                                        <apex:selectOptions value="{!q.AnswerOptions}"/>
+                                    </apex:selectRadio>
+                                    </apex:outputPanel>
+                                </apex:outputPanel>
+                                
+                                <div class="Maintain_status_indicator" style="display: none;">
+                                    {!Qn.lmscons__Maintain_correct_answers__c}
+                                </div>
+                                
+                                <apex:outputPanel layout="block" styleClass="b-form" rendered="{!AND(q.Type == 'Free Text', q.TypeText != 'Long Text')}">
+                                    <apex:outputPanel layout="block" styleClass="b-form-line">
+                                        <apex:inputText styleClass="text_input_area" value="{!q.AnswerFreeText}" disabled="{!isReviewMode}" style="width:800px;">
+                                            <apex:actionSupport event="onblur"  action="{!TemporarySave}" rerender="none">
+                                                <apex:param name="FrTval" value="{!q.Qid}" assignTo="{!CurrQuest}"/>
+                                            </apex:actionSupport>
+                                        </apex:inputText>
+                                    </apex:outputPanel>
+                                </apex:outputPanel>
+                                <apex:outputPanel layout="block" styleClass="b-form" rendered="{!AND(q.Type == 'Free Text', q.TypeText == 'Long Text')}">
+                                    <apex:outputPanel layout="block" styleClass="b-form-line">
+                                        <apex:inputTextarea value="{!q.AnswerFreeText}" disabled="{!isReviewMode}" id="freeTextArea" style="width:800px; height:77px">
+                                            <apex:actionSupport event="onblur"  action="{!TemporarySave}" rerender="none">
+                                                <apex:param name="FrTval" value="{!q.Qid}" assignTo="{!CurrQuest}"/>
+                                            </apex:actionSupport>
+                                        </apex:inputTextarea>
+                                    </apex:outputPanel>
+                                </apex:outputPanel>
+                                <apex:outputPanel layout="block" styleClass="b-form" rendered="{!q.Type == 'Single Select'}">
+                                    <apex:outputPanel layout="block" styleClass="b-form-line">
+                                        <apex:selectRadio value="{!q.AnswerOneSelect}" layout="pageDirection" disabled="{!isReviewMode}">
+                                            <apex:actionSupport event="onchange"  action="{!TemporarySave}" rerender="none">
+                                                <apex:param name="SiSval" value="{!q.Qid}" assignTo="{!CurrQuest}"/>
+                                            </apex:actionSupport>
+                                            <apex:selectOptions value="{!q.AnswerOptions}"/>
+                                        </apex:selectRadio>
+                                    </apex:outputPanel>
+                                </apex:outputPanel>
+                                <apex:outputPanel layout="block" styleClass="b-form" rendered="{!q.Type == 'One Select'}">
+                                    <apex:outputPanel layout="block" styleClass="b-form-line">
+                                        <apex:selectRadio value="{!q.AnswerOneSelect}" layout="pageDirection" disabled="{!isReviewMode}">
+                                            <apex:actionSupport event="onchange"  action="{!TemporarySave}" rerender="none">
+                                                <apex:param name="OnSval" value="{!q.Qid}" assignTo="{!CurrQuest}"/>
+                                            </apex:actionSupport>
+                                            <apex:selectOptions value="{!q.AnswerOptions}"/>
+                                        </apex:selectRadio>
+                                    </apex:outputPanel>
+                                </apex:outputPanel>
+                                <apex:outputPanel layout="block" styleClass="b-form" rendered="{!q.Type == 'Multi Select'}">
+                                    <apex:outputPanel layout="block" styleClass="b-form-line">
+                                        <apex:selectCheckboxes value="{!q.AnswerMultiSelect}" layout="pageDirection" disabled="{!isReviewMode}">
+                                            <apex:actionSupport event="onchange"  action="{!TemporarySave}" rerender="none">
+                                                <apex:param name="MuSval" value="{!q.Qid}" assignTo="{!CurrQuest}"/>
+                                            </apex:actionSupport>
+                                            <apex:selectOptions value="{!q.AnswerOptions}"/>
+                                        </apex:selectCheckboxes>
+                                    </apex:outputPanel>
+                                </apex:outputPanel>
+                                <apex:outputPanel layout="block" styleClass="b-form" rendered="{!q.Type == 'Multiple Choice'}">
+                                    <apex:outputPanel layout="block" styleClass="b-form-line">
+                                        <apex:selectCheckboxes value="{!q.AnswerMultiSelect}" layout="pageDirection" disabled="{!isReviewMode}">
+                                            <apex:actionSupport event="onchange"  action="{!TemporarySave}" rerender="none">
+                                                <apex:param name="MuCval" value="{!q.Qid}" assignTo="{!CurrQuest}"/>
+                                            </apex:actionSupport>
+                                            <apex:selectOptions value="{!q.AnswerOptions}"/>
+                                        </apex:selectCheckboxes>
+                                    </apex:outputPanel>
+                                </apex:outputPanel>
+                            </apex:outputPanel>
+                            <apex:outputPanel rendered="{!IF(ISBLANK(q.Type),false,true)}">
+                                <apex:variable var="CountQuestion" value="{!CountQuestion+1}"/>
+                            </apex:outputPanel>
+                        </apex:repeat>
+                    </apex:outputPanel>
+                </apex:repeat>
+            </apex:outputPanel>
+        <!-- </apex:outputPanel> -->
+
+        <apex:outputpanel layout="block" styleClass="b-footer">
+            <table style="width: 100%;">
+                <tr>
+                    <td>
+                    </td>
+                    <td id="Pagination">
+                        <p class="b-links">
+                            <apex:commandLink value="{!$Label.Cancel}" action="{!ReturnToSource}" rendered="{!AND(returnToSource,NOT(isReviewMode))}" />
+                            <apex:commandLink value="{!$Label.Cancel}" action="{!ReturnToQuizDetail}" rendered="{!AND(NOT(returnToSource),NOT(isReviewMode))}" oncomplete="returnToPage();"/>
+                            <apex:outputPanel >
+                                <a class="hiddenItem" id="Prev" href="#" onclick="ShowPage(page-1); return false;">{!$Label.Previous_Page_Assign_Title}</a>
+                                <a class="hiddenItem" id="Next" href="#" onclick="ShowPage(page+1); return false;">{!$Label.Pagination_Next}</a>
+                                <apex:commandLink value="{!$Label.ConsumerDirector_value_Submit}" rerender="statusQuiz" action="{!checkAllFields}" rendered="{!AND(isNotTest,NOT(isReviewMode))}" oncomplete="checkStatus(1)" styleClass="hiddenItem" id="Submit"/>
+                                <apex:commandLink value="{!$Label.ConsumerDirector_value_Submit}" action="{!SaveResult}" rendered="{!AND(isNotTest,NOT(isReviewMode))}" style="display:none" id="Submit3"/>
+
+                                <apex:commandLink value="{!$Label.ConsumerDirector_value_Submit}" rerender="statusQuiz" action="{!checkAllFields}" oncomplete="checkStatus(2)" rendered="{!AND(NOT(isNotTest),NOT(isReviewMode))}" styleClass="hiddenItem" id="Submit2"/>
+                                <apex:commandLink value="{!$Label.ConsumerDirector_value_Submit}" action="{!SaveResultForTestQuiz}" rendered="{!AND(NOT(isNotTest),NOT(isReviewMode))}" styleClass="hiddenItem" id="Submit5"/>
+
+                                <apex:commandLink value="{!$Label.MyTraining_Ok}" id="OK1" action="{!ReturnToSource}" rendered="{!AND(NOT(isEnableButtonOkForQuizTest),isReviewMode)}" />
+                                <apex:commandLink value="{!$Label.MyTraining_Ok}" id="OK2" action="{!ReturnToQuizDetail}" rendered="{!AND(isEnableButtonOkForQuizTest,isReviewMode)}" oncomplete="returnToPage();"/>
+                            </apex:outputPanel>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </apex:outputpanel>
+    </apex:outputPanel>
+        <apex:outputPanel id="statusQuiz">
+            <script>
+
+                function checkStatus(type) {
+                    if ('false' == '{!isAllRequiredFieldsFilled}') {
+                        jQuery(document).ready(function(){
+                            //jQuery('[id*=Submit]').css('display','');
+                        });
+                        alert('{!$Label.Quiz_Please_fill_in_all_fields}');
+                    } else {
+                        if (type == 1) {
+                            jQuery('[id*=Submit3]').click();
+                        } else {
+                            jQuery('[id*=Submit5]').click();
+                        }
+                    }
+                }
+            </script>
+        </apex:outputPanel>
+    <apex:outputPanel rendered="{!AND(notPassed, NOT(isReviewMode))}">
+        <apex:outputPanel layout="block" styleClass="b-header">
+            <h1>{!Qn.Name}</h1>
+            <h2>{!Qn.lmscons__Description__c}</h2>
+        </apex:outputPanel>
+        <apex:outputPanel layout="block" styleClass="b-body">
+            <apex:outputPanel layout="block" styleClass="b-title">
+                <apex:outputtext >{!Message}</apex:outputtext>
+            </apex:outputPanel>
+        </apex:outputPanel>
+        <apex:outputPanel layout="block" styleClass="b-footer">
+            <table style="width: 100%;">
+                <tr>
+                    <td>
+                    </td>
+                    <td id="Pagination">
+                        <p class="b-links">
+                            <apex:commandLink value="{!$Label.Back}" action="{!Back}" rerender="BigPanel" oncomplete="Init();" status="loadStatus"/>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </apex:outputPanel>
+    </apex:outputPanel>
+
+    <apex:outputPanel id="PassPanel" rendered="{!AND(isPassed, NOT(isReviewMode))}">
+        <apex:outputPanel layout="block" styleClass="b-header">
+            <h1>{!Qn.Name}</h1>
+            <h2>{!Qn.lmscons__Description__c}</h2>
+        </apex:outputPanel>
+        <apex:outputPanel layout="block" styleClass="b-body">
+            <apex:outputPanel layout="block" styleClass="b-title">
+                <apex:outputtext >{!Message}</apex:outputtext>
+            </apex:outputPanel>
+        </apex:outputPanel>
+        <apex:outputPanel layout="block" styleClass="b-footer">
+            <table style="width: 100%;">
+                <tr>
+                    <td>
+                    </td>
+                    <td id="Pagination">
+                        <p class="b-links">
+                            <apex:outputPanel rendered="{!Qn.lmscons__review_answers__c}">
+                                <apex:commandLink value="{!$Label.Review}" id="Review_Quiz" action="{!DoReview}" rerender="BigPanel,pageMessages" oncomplete="ReviewInit();" status="loadStatus"/>
+                            </apex:outputPanel>
+                            <apex:commandLink value="{!$Label.MyTraining_Ok}" id="OK_default" action="{!ReturnToSource}" rendered="{!NOT(isEnableButtonOkForQuizTest)}" />
+                            <apex:commandLink value="{!$Label.MyTraining_Ok}" id="OK_for_TestQuiz" action="{!ReturnToQuizDetail}" rendered="{!isEnableButtonOkForQuizTest}" oncomplete="returnToPage();"/>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </apex:outputPanel>
+    </apex:outputPanel>
+</apex:outputPanel>
+
+<apex:actionFunction action="{!initForUpdateLastLaunchDateAssignment}" name="updateLastLaunchDateForAssignment" rerender="pageMessages"></apex:actionFunction>
+</apex:form>
+
+
+    <script type="text/javascript">
+        jQuery.noConflict();
+        var nameSp = new Object();
+        nameSp.interval = null;
+        nameSp.iterationThruTimeout = 0;
+        jQuery(document).ready(function(){
+            nameSp.interval = setInterval(function(){movebuttons();}, 1000);
+            //jQuery('[id*=Submit]').bind('click', function(){ jQuery(this).css('display','none'); } );
+            
+            // clearing inputs when "Maintain_indicator" is inactive
+            var Maintain_indicator;
+            Maintain_indicator = jQuery('.Maintain_status_indicator').html().trim();
+            if (Maintain_indicator == "false") {
+                jQuery('.text_input_field').attr({ value: "" });
+                jQuery('.text_input_area').attr({ value: "" });
+            }
+
+        });
+
+        function movebuttons(){
+            var available = jQuery('#presence_widget');
+            var boxHeight = jQuery('[id$=BigPanel]').height();
+            var docHeight = jQuery(window).height();
+
+            if(available.length > 0 && boxHeight > docHeight){
+                var div = document.createElement('div');
+                    div.style.position = 'relative';
+                    div.style.height = available.height() + 'px';
+                jQuery('.b-footer').append(div);
+                window.clearInterval(nameSp.interval);
+            }else if(nameSp.iterationThruTimeout > 5){
+                window.clearInterval(nameSp.interval);
+            }
+            nameSp.iterationThruTimeout++;
+        }
+
+        jQuery(function() {
+            Init();
+            updateLastLaunchDateForAssignment();
+
+            /*var WidthOfTextArea = jQuery(window).width()/2.5;
+            jQuery('textarea[id*=freeTextArea]').css("width", WidthOfTextArea );*/
+
+            //5000 - Limit of symbols for textArea. Max - 32 000
+            jQuery('textarea[id*=freeTextArea]').keyup(function() {
+                if (this.value.length > 5000)
+                this.value = this.value.substr(0, 5000);
+            });
+        });
+
+        //CYBCORLMSI-190 | overwrite standard salesforce values and  functions
+        beenfocused = true;
+
+        function setFocusOnLoad() {}
+        //CYBCORLMSI-190 | overwrite end
+
+        function Init(){
+            UseUniform();
+            ShowPage(1);
+        }
+
+        function ReviewInit(){
+            Init();
+        }
+
+        function returnToPage(){
+        top.location = '{!JSENCODE($Page.lmscons__QuizDetail)}?id={!JSENCODE(QuizForTest.id)}';
+        }
+
+        function UseUniform(){
+            try{
+                jQuery("select, input:text, input:checkbox, input:radio, input:file, textarea").uniform();
+            } catch (err) {}
+        }
+
+        var page = 0;
+        var pages = {!Pages};
+
+        function ShowPage(n){
+            page = n;
+
+            jQuery("div.QuestionPage").addClass("hiddenItem");
+            jQuery("#Pagination #Prev").addClass("hiddenItem")
+            jQuery("#Pagination #Next").addClass("hiddenItem")
+            jQuery("#Pagination [id$=Submit]").addClass("hiddenItem");
+            jQuery("#Pagination [id$=Submit2]").addClass("hiddenItem");
+
+            jQuery("div.QuestionPage[title='"+page+"']").removeClass("hiddenItem");
+            if (page > 1){
+                jQuery("#Pagination #Prev").removeClass("hiddenItem");
+            }
+            if (page < pages){
+                jQuery("#Pagination #Next").removeClass("hiddenItem");
+            }
+            if (page == pages){
+                jQuery("#Pagination [id$=Submit]").removeClass("hiddenItem");
+                jQuery("#Pagination [id$=Submit2]").removeClass("hiddenItem");
+            }
+
+            jQuery("#Pagination span#page").text(page);
+
+        }
+//Case 2719 http://jira.vrpinc.com/browse/CYBCORLMSI-323
+        A4J.AJAX.XMLHttpRequest.prototype._copyAttribute = function (src, dst, attr) {
+            var value = src.getAttribute(attr);
+            if (value) {
+                try {
+                    dst.setAttribute(attr, value);
+                } catch (err) {
+                    //alert('Error with Salesforce: ' + err.description + '\nattr: ' + attr + '\n');
+                }
+            }
+        };
+    </script>
+
+</apex:page>

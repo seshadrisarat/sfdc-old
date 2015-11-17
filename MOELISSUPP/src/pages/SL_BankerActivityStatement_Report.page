@@ -1,0 +1,717 @@
+<apex:page showHeader="false" controller="SL_BankerActivityStatement_Report" renderAs="pdf">
+<head>
+    <meta http-equiv="Content-Type" content="text/html;charset=UTF-8" />
+    <style>
+        
+@page {
+           /* margin: 1.8in 0.5in 0.5in 0.5in;*/
+            margin: 0.5in 0.5in 1.0in 0.5in;
+            mso-header-margin: 0.0in;
+            mso-footer-margin: 0.0in;
+            font-family:Arial,sans-serif;
+            size: A4 landscape; /* A4 landscape (297mm×210mm) */
+            @top-center { 
+                /* chapter title in the running head of the left page */
+                content: element(top);
+            }
+            @bottom-right {
+                font-family:Arial,sans-serif; 
+                font-size:8.0pt;
+                content: "Page " counter(page);
+            }
+      }
+
+
+@page :first { 
+    margin: 0.5in 0.5in 0.5in 0.5in;
+    @top-right { content: normal }
+    @top-left { content: normal }
+    @top-center { content: normal }
+}
+
+body {font-family:Arial,sans-serif;} 
+
+h1  {
+    font-size: 12.0pt;
+}
+h2  {
+    font-size: 10.0pt;
+}
+td  {
+    padding-left:5px;
+    padding-right:5px;
+}
+a   {
+    font-size:6.0pt;
+}
+.tabl {
+    background-color:white;
+    border:1px solid black;
+    font-size:8.0pt;
+    font-family:Arial,sans-serif;
+    vertical-align:top;
+    width: 100%;
+    /*page-break-inside: avoid;*/
+}
+.head {
+    background-color:rgb(68, 105, 125);
+    font-size:10.0pt;
+    color:white;
+    font-weight:bold;
+    vertical-align:center;
+    height:16pt;
+    border-top:.5pt dotted black;
+}
+.head2 {
+    background-color:rgb(198, 188, 137);
+    font-size:8.0pt;
+    height:16pt;
+    font-weight:bold;
+    text-align:left;
+    vertical-align:center;
+    border-top:.5pt dotted black;
+}
+
+.right{text-align:right;}
+
+.bord{
+    border-top:.5pt dotted black;
+    height:2pt;
+}
+.spacer{
+    height:8px;
+}
+div.top{                
+    display: block; 
+    padding: 5px;               
+    position: running(top);
+    font-size: 9pt;
+    font-style: italic;
+    font-weight: bold;
+    color: #808080;           
+} 
+.totalgray {background-color:#F0EEE3;}
+/* background-color:#44697D; RGB 68/105/125*/ 
+/*  background-color:#c6bc89; RGB 198/188/137 */ 
+/*#C6BF70;*/        
+    </style>
+</head>
+<body>
+<!--apex:outputText value="{!DebugInfo}"></apex:outputText-->
+ <div class="top"></div>
+ <apex:variable value="{!0}" var="rowNum"/>
+<apex:repeat value="{!listSBS_Reports}" var="report">
+
+<h1 style="{!IF(FLOOR(rowNum) == 0,'','page-break-before: always;')}">{!$Label.SL_ReportName} – Summary</h1>
+<apex:variable var="rowNum" value="{!rowNum + 1}"/>
+
+    <table cellpadding="0" cellspacing="0" border="0" class="tabl" align="center">
+        <tr><td class="spacer"></td></tr>
+        <tr>
+            <td><b>Name:</b></td>
+            <td>{!report.Last_Name}, {!report.First_Name}</td>
+            <td><b>Title:</b></td>
+            <td>{!report.Title}</td>
+            <td><b>Report Start Date:</b></td>
+            <td>
+                <apex:outputText value="{0,date,MM/dd/yyyy}">
+                    <apex:param value="{!curStartDate}" />
+               </apex:outputText>
+           </td>
+        </tr>
+        <tr><td colspan="6" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td><b>Group:</b></td>
+            <td>{!report.Groups}</td>
+            <td><b>Start Date:</b></td>
+            <td>
+                <apex:outputText value="{0,date,MM/dd/yyyy}">
+                    <apex:param value="{!report.Start_Date}" />
+               </apex:outputText>
+            </td>
+            <td><b>Report End Date:</b></td>
+            <td>
+                <apex:outputText value="{0,date,MM/dd/yyyy}">
+                    <apex:param value="{!curEndDate}" />
+               </apex:outputText>
+           </td>
+        </tr>
+        <tr><td colspan="6" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td><b>Office:</b></td>
+            <td>{!report.Office_Location}</td>
+            <td><b>MD Promotion Date:</b></td>
+            <td>
+                <apex:outputText value="{0,date,MM/dd/yyyy}">
+                    <apex:param value="{!report.MD_Promotion_Date}" />
+               </apex:outputText>
+            </td>
+            <td></td>
+            <td></td>
+        </tr>
+    </table>    
+    <br/>
+    
+    
+    <table cellpadding="0" cellspacing="0" border="0" class="tabl" align="center">
+        <tr><td colspan="6"  class="head"><b>Current Period</b></td></tr>
+        <tr>
+            <td class="head2">Category</td>
+            <td class="head2"></td>
+            <td class="head2 right">Banker - Current Period</td>
+            <td class="head2 right">Average</td>
+            <td class="head2 right">Variance</td>
+            <td class="head2"></td>
+        </tr>
+        <tr><td colspan="6" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td>New Business Meetings</td>
+            <td></td>
+            <td class="right">{!report.NBMC_Banker}</td>
+            <td class="right">
+                <apex:outputText value="{0, number, #,###,##0.0}" rendered="{!report.NBMC_Average >= 0}"><apex:param value="{!report.NBMC_Average}" /></apex:outputText>
+                <apex:outputText value="({0, number, #,###,##0.0})" rendered="{!report.NBMC_Average < 0}"><apex:param value="{! (-1)*report.NBMC_Average}" /></apex:outputText>
+            </td>
+            <td class="right">
+                <apex:outputText value="{0, number, #,###,##0.0}" rendered="{!report.NBMC_Variance >= 0}"><apex:param value="{!report.NBMC_Variance}" /></apex:outputText>
+                <apex:outputText value="({0, number, #,###,##0.0})" rendered="{!report.NBMC_Variance < 0}"><apex:param value="{! (-1)*report.NBMC_Variance}" /></apex:outputText>
+            </td>
+            <td></td>
+        </tr>
+        <tr><td colspan="6" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td>Pitches</td>
+            <td></td>
+            <td class="right">{!report.Pitches_Banker}</td>
+            <td class="right"><apex:outputText value="{0, number, #,###,##0.0}"><apex:param value="{!report.Pitches_Average}" /></apex:outputText></td>
+            <td class="right">
+                <apex:outputText value="{0, number, #,###,##0.0}" rendered="{!report.Pitches_Variance >=0}"><apex:param value="{!report.Pitches_Variance}" /></apex:outputText>
+                <apex:outputText value="({0, number, #,###,##0.0})" rendered="{!report.Pitches_Variance <0}"><apex:param value="{!(-1)*report.Pitches_Variance}" /></apex:outputText>
+            </td> 
+            <td></td>
+        </tr>
+        <tr><td colspan="6" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td>Resource Utilization (hrs)</td>
+            <td></td>
+            <td class="right"><apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!report.RU_Banker}" /></apex:outputText></td>
+            <td class="right"><apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!report.RU_Average}" /></apex:outputText></td>
+            <td class="right">
+                <apex:outputText value="{0, number, #,###,##0.00}" rendered="{!report.RU_Variance >= 0}"><apex:param value="{!report.RU_Variance}" /></apex:outputText>
+                <apex:outputText value="({0, number, #,###,##0.00})" rendered="{!report.RU_Variance < 0}"><apex:param value="{!(-1)*report.RU_Variance}" /></apex:outputText>   
+            </td>
+            <td></td>
+        </tr>
+        <tr><td colspan="6" class="bord">&nbsp;</td></tr>
+        <tr><td class="spacer"></td></tr>
+        <tr><td colspan="6" class="head"><b>Year to Date</b></td></tr>
+        <tr>
+            <td class="head2">Category</td>
+            <td class="head2"></td>
+            <td class="head2 right">Banker - YTD</td>
+            <td class="head2 right">Average YTD</td>
+            <td class="head2 right">Variance</td>
+            <td class="head2"></td>
+        </tr>
+        <tr><td colspan="6" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td>Live Mandates</td>
+            <td></td>
+            <td class="right">{!report.LiveMandates_Banker}</td>
+            <td class="right"><apex:outputText value="{0, number, #,###,##0.0}"><apex:param value="{!report.LiveMandates_Average}" /></apex:outputText></td>
+            <td class="right">
+            <apex:outputText value="{0, number, #,###,##0.0}" rendered="{!report.LiveMandates_Variance >= 0}"><apex:param value="{!report.LiveMandates_Variance}" /></apex:outputText>
+            <apex:outputText value="({0, number, #,###,##0.0})" rendered="{!report.LiveMandates_Variance < 0}"><apex:param value="{!(-1)*report.LiveMandates_Variance}" /></apex:outputText>
+            </td>
+            <td></td>
+        </tr>
+        <tr><td colspan="6" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td>Average Fee ($mm)</td>
+            <td></td>
+            <td class="right">
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!report.AverageFee_Banker>=0}"><apex:param value="{!report.AverageFee_Banker}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!report.AverageFee_Banker<0}"><apex:param value="{!(-1)*report.AverageFee_Banker}" /></apex:outputText>
+            </td>
+            <td class="right">
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!report.AverageFee_Average>=0}"><apex:param value="{!Round(report.AverageFee_Average,3)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!report.AverageFee_Average<0}"><apex:param value="{!Round((-1)*report.AverageFee_Average,3)}" /></apex:outputText>
+            </td>
+            <td class="right">
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!report.AverageFee_Variance>=0}"><apex:param value="{!Round(report.AverageFee_Variance,3)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!report.AverageFee_Variance<0}"><apex:param value="{!Round((-1)*report.AverageFee_Variance,3)}" /></apex:outputText>
+            </td>
+            <td></td>
+        </tr>
+        <tr><td colspan="6" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td>New Business Meetings</td>
+            <td></td>
+            <td class="right">{!report.YTD_NBMC_Banker}</td>
+            <td class="right"><apex:outputText value="{0, number, #,###,##0.0}"><apex:param value="{!report.YTD_NBMC_Average}" /></apex:outputText></td>
+            <td class="right">
+                <apex:outputText value="{0, number, #,###,##0.0}" rendered="{!report.YTD_NBMC_Variance >= 0}"><apex:param value="{!report.YTD_NBMC_Variance}" /></apex:outputText>
+                <apex:outputText value="({0, number, #,###,##0.0})" rendered="{!report.YTD_NBMC_Variance < 0}"><apex:param value="{!(-1)*report.YTD_NBMC_Variance}" /></apex:outputText>
+            </td>
+            <td></td>
+        </tr>
+        <tr><td colspan="6" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td>Pitches</td>
+            <td></td>
+            <td class="right">{!report.YTD_Pitches_Banker}</td>
+            <td class="right"><apex:outputText value="{0, number, #,###,##0.0}"><apex:param value="{!report.YTD_Pitches_Average}" /></apex:outputText></td>
+            <td class="right">
+                <apex:outputText value="{0, number, #,###,##0.0}" rendered="{!report.YTD_Pitches_Variance >=0 }"><apex:param value="{!report.YTD_Pitches_Variance}" /></apex:outputText>
+                <apex:outputText value="({0, number, #,###,##0.0})" rendered="{!report.YTD_Pitches_Variance <0 }"><apex:param value="{!(-1)*report.YTD_Pitches_Variance}" /></apex:outputText>
+            </td>
+            <td></td>
+        </tr>
+        <tr><td colspan="6" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td>Resource Utilization (hrs)</td>
+            <td></td>
+            <td class="right"><apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!report.YTD_RU_Banker}" /></apex:outputText></td>
+            <td class="right"><apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!report.YTD_RU_Average}" /></apex:outputText></td>
+            <td class="right">
+                <apex:outputText value="{0, number, #,###,##0.00}" rendered="{!report.YTD_RU_Variance >= 0}"><apex:param value="{!report.YTD_RU_Variance}" /></apex:outputText>
+                <apex:outputText value="({0, number, #,###,##0.00})" rendered="{!report.YTD_RU_Variance < 0}"><apex:param value="{!(-1)*report.YTD_RU_Variance}" /></apex:outputText>
+            </td>
+            <td></td>
+        </tr>
+    </table>    
+    
+    
+
+
+
+<h1 style="page-break-before: always;" >{!$Label.SL_ReportName} – Detailed</h1>
+<table cellpadding="0" cellspacing="0" border="0" class="tabl" align="center">
+        <tr><td class="spacer"></td></tr>
+        <tr>
+            <td><b>Name:</b></td>
+            <td>{!report.Last_Name}, {!report.First_Name}</td>
+            <td><b>Title:</b></td>
+            <td>{!report.Title}</td>
+            <td><b>Report Start Date:</b></td>
+            <td>
+                <apex:outputText value="{0,date,MM/dd/yyyy}">
+                    <apex:param value="{!curStartDate}" />
+               </apex:outputText>
+           </td>
+        </tr>
+        <tr><td colspan="6" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td><b>Group:</b></td>
+            <td>{!report.Groups}</td>
+            <td><b>Start Date:</b></td>
+            <td>
+                <apex:outputText value="{0,date,MM/dd/yyyy}">
+                    <apex:param value="{!report.Start_Date}" />
+               </apex:outputText>
+            </td>
+            <td><b>Report End Date:</b></td>
+            <td>
+                <apex:outputText value="{0,date,MM/dd/yyyy}">
+                    <apex:param value="{!curEndDate}" />
+               </apex:outputText>
+           </td>
+        </tr>
+        <tr><td colspan="6" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td><b>Office:</b></td>
+            <td>{!report.Office_Location}</td>
+            <td><b>MD Promotion Date:</b></td>
+            <td>
+                <apex:outputText value="{0,date,MM/dd/yyyy}">
+                    <apex:param value="{!report.MD_Promotion_Date}" />
+               </apex:outputText>
+            </td>
+            <td></td>
+            <td></td>
+        </tr>
+    </table>
+    <br/>
+    <table  cellpadding="0" cellspacing="0" border="0" class="tabl" align="center">
+        <tr><td colspan="10" class="head"><b>Pipeline &#38; Revenue Activity</b></td></tr>
+        <tr><td colspan="10" class="bord"><h2>Current Pipeline</h2></td></tr>
+        <tr>  
+            <td class="head2" style="width:180px">Company Name</td>
+            <td class="head2">Project Code</td>
+            <td class="head2">Role</td>
+            <td class="head2">Stage</td>
+            <td class="head2 right">Est. Fee Revenue ($mm)</td>
+            <td class="head2 right">Fees Invoiced YTD ($mm)</td>
+            <td class="head2 right">Expenses Invoiced YTD ($000s)</td>
+            <td class="head2">Expected Timing</td>
+            <td class="head2">Revenue Probability</td>
+            <td class="head2 right">Probability Adjusted Revenue ($mm)</td>
+        </tr>
+        <apex:variable var="CP_subTotal_revenueFees" value="{!0}" />
+        <apex:variable var="CP_subTotal_revenueExpenses" value="{!0}" />
+        <apex:repeat value="{!report.detailedCurrentPipeline}" var="deal">
+        <tr><td colspan="10" class="bord">&nbsp;</td></tr>
+        <tr> 
+            <td>{!deal.company}</td>
+            <td>{!deal.projectCode}</td>
+            <td>{!deal.role}</td>
+            <td>{!deal.stage}</td>
+            <td class="right">
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!deal.revenue >= 0}"><apex:param value="{!deal.revenue}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!deal.revenue < 0}"><apex:param value="{! (-1)*deal.revenue}" /></apex:outputText>
+            </td>
+            <td class="right">
+                <apex:outputText value="{0,number,#,###,##0.000}"  rendered="{!deal.revenueFees >= 0}">
+                	<apex:variable var="CP_subTotal_revenueFees" value="{!CP_subTotal_revenueFees + Round(deal.revenueFees/1000000,3)}" />
+                	<apex:param value="{!Round(deal.revenueFees/1000000,3)}" />
+                </apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})"  rendered="{!deal.revenueFees < 0}">
+                	<apex:variable var="CP_subTotal_revenueFees" value="{!CP_subTotal_revenueFees + Round((-1)*deal.revenueFees/1000000,3)}" />
+                	<apex:param value="{! Round((-1)*deal.revenueFees/1000000,3)}" />
+                </apex:outputText>
+            </td>
+            <td class="right">
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!deal.revenueExpenses >= 0}">
+                	<apex:variable var="CP_subTotal_revenueExpenses" value="{!CP_subTotal_revenueExpenses + Round(deal.revenueExpenses/1000,3)}" />
+                	<apex:param value="{!Round(deal.revenueExpenses/1000,3)}" />
+                </apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!deal.revenueExpenses < 0}">
+                	<apex:variable var="CP_subTotal_revenueExpenses" value="{!CP_subTotal_revenueExpenses + Round((-1)*deal.revenueExpenses/1000,3)}" />
+                	<apex:param value="{! Round((-1)*deal.revenueExpenses/1000,3)}" />
+                </apex:outputText>
+            </td>
+            <td>{!deal.timing}</td>
+            <td>{!deal.probability}</td>
+            <td class="right">
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!deal.PARevenu >= 0}"><apex:param value="{!Round(deal.PARevenu,3)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!deal.PARevenu < 0}"><apex:param value="{!Round((-1)*deal.PARevenu,3)}" /></apex:outputText> 
+            </td>
+        </tr>
+        </apex:repeat>
+        <tr><td colspan="10" class="bord">&nbsp;</td></tr>
+        <tr> 
+            <td><b>{!IF(report.subtotalFeeRevenue_CPS==0 && report.subtotalFeeYTD_CPS==0 && report.subtotalExpansesYTD_CPS==0 && report.subtotalPARevenue_CPS == 0,  'No data to report','Subtotal')}</b></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td class="right"><b>
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!report.subtotalFeeRevenue_CPS>=0}"><apex:param value="{!report.subtotalFeeRevenue_CPS}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!report.subtotalFeeRevenue_CPS<0}"><apex:param value="{!(-1)*report.subtotalFeeRevenue_CPS}" /></apex:outputText>
+            </b></td>
+            <td class="right"><b>
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!CP_subTotal_revenueFees>=0}"><apex:param value="{!Round(CP_subTotal_revenueFees,3)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!CP_subTotal_revenueFees<0}"><apex:param value="{!Round((-1)*CP_subTotal_revenueFees,3)}" /></apex:outputText>
+            <!--
+            {!report.subtotalFeeYTD_CPS} ---- 
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!report.subtotalFeeYTD_CPS>=0}"><apex:param value="{!Round(report.subtotalFeeYTD_CPS/1000000,3)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!report.subtotalFeeYTD_CPS<0}"><apex:param value="{!Round((-1)*report.subtotalFeeYTD_CPS/1000000,3)}" /></apex:outputText>
+            -->
+            </b></td>
+            <td class="right"><b>
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!CP_subTotal_revenueExpenses>=0}"><apex:param value="{!Round(CP_subTotal_revenueExpenses,3)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!CP_subTotal_revenueExpenses<0}"><apex:param value="{!Round((-1)*CP_subTotal_revenueExpenses,3)}" /></apex:outputText>
+            <!--
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!report.subtotalExpansesYTD_CPS>=0}"><apex:param value="{!Round(report.subtotalExpansesYTD_CPS/1000,3)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!report.subtotalExpansesYTD_CPS<0}"><apex:param value="{!Round((-1)*report.subtotalExpansesYTD_CPS/1000,3)}" /></apex:outputText>
+            -->
+            </b></td>
+            <td></td>
+            <td></td>
+            <td class="right"><b>
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!report.subtotalPARevenue_CPS>=0}"><apex:param value="{!report.subtotalPARevenue_CPS}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!report.subtotalPARevenue_CPS<0}"><apex:param value="{!(-1)*report.subtotalPARevenue_CPS}" /></apex:outputText>
+            </b></td>
+        </tr>
+        <tr><td colspan="10" class="bord">&nbsp;</td></tr>
+        <tr><td colspan="10"  class="bord"><h2>Other YTD Fees Invoiced</h2></td></tr>
+        <tr> 
+            <td class="head2" style="width:180px">Company Name</td>
+            <td class="head2">Project Code</td>
+            <td class="head2">Role</td>
+            <td class="head2">Stage</td>
+            <td class="head2 right">Est. Fee Revenue ($mm)</td>
+            <td class="head2 right">Fees Invoiced YTD ($mm)</td>
+            <td class="head2 right">Expenses Invoiced YTD ($000s)</td>
+            <td class="head2">Expected Timing</td>
+            <td class="head2"><!--Revenue Probability--></td>
+            <td class="head2"></td>
+        </tr>
+        <apex:variable var="OTHER_subTotal_revenueFees" value="{!0}" />
+        <apex:variable var="OTHER_subTotal_revenueExpenses" value="{!0}" />
+        <apex:repeat value="{!report.detailedOtherFeesInvoiced}" var="deal">
+        <tr><td colspan="10" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td>{!deal.company}</td>
+            <td>{!deal.projectCode}</td>
+            <td>{!deal.role}</td>
+            <td>{!deal.stage}</td>
+            <td class="right">
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!deal.revenue >= 0}"><apex:param value="{!deal.revenue}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!deal.revenue < 0}"><apex:param value="{!(-1)*deal.revenue}" /></apex:outputText>
+            </td>
+            <td class="right">
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!deal.revenueFees >= 0}">
+                	<apex:variable var="OTHER_subTotal_revenueFees" value="{!OTHER_subTotal_revenueFees + Round(deal.revenueFees/1000000,3)}" />
+                	<apex:param value="{!Round(deal.revenueFees/1000000,3)}" />
+                </apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!deal.revenueFees < 0}">
+                	<apex:variable var="OTHER_subTotal_revenueFees" value="{!OTHER_subTotal_revenueFees + Round((-1)*deal.revenueFees/1000000,3)}" />
+                	<apex:param value="{!Round((-1)*deal.revenueFees/1000000,3)}" />
+                </apex:outputText>
+            </td>
+            <td class="right">
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!deal.revenueExpenses >= 0}">
+                	<apex:variable var="OTHER_subTotal_revenueExpenses" value="{!OTHER_subTotal_revenueExpenses + Round(deal.revenueExpenses/1000,3)}" />
+                	<apex:param value="{!Round(deal.revenueExpenses/1000,3)}" />
+                </apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!deal.revenueExpenses < 0}">
+                	<apex:variable var="OTHER_subTotal_revenueExpenses" value="{!OTHER_subTotal_revenueExpenses + Round((-1)*deal.revenueExpenses/1000,3)}" />
+                	<apex:param value="{!Round((-1)*deal.revenueExpenses/1000,3)}" />
+                </apex:outputText>
+            </td>
+            <td>{!deal.timing}</td>
+            <td><!-- {!deal.probability}  --> </td>
+            <td></td>
+        </tr>
+        </apex:repeat>
+        <tr><td colspan="10" class="bord">&nbsp;</td></tr>
+        <tr> 
+            <td><b>{!IF(report.subtotalFeeRevenue_OFI==0 && report.subtotalFeeYTD_OFI==0 && report.subtotalExpansesYTD_OFI==0,  'No data to report','Subtotal')}</b></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td class="right"><b>
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!report.subtotalFeeRevenue_OFI>=0}"><apex:param value="{!report.subtotalFeeRevenue_OFI}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!report.subtotalFeeRevenue_OFI<0}"><apex:param value="{!(-1)*report.subtotalFeeRevenue_OFI}" /></apex:outputText>
+            </b></td>
+            <td class="right"><b>
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!OTHER_subTotal_revenueFees>=0}"><apex:param value="{!Round(OTHER_subTotal_revenueFees,3)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!OTHER_subTotal_revenueFees<0}"><apex:param value="{!Round((-1)*OTHER_subTotal_revenueFees,3)}" /></apex:outputText>
+            <!--
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!report.subtotalFeeYTD_OFI>=0}"><apex:param value="{!Round(report.subtotalFeeYTD_OFI/1000000,3)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!report.subtotalFeeYTD_OFI<0}"><apex:param value="{!Round((-1)*report.subtotalFeeYTD_OFI/1000000,3)}" /></apex:outputText>
+            -->
+            </b></td>
+            <td class="right"><b>
+             	<apex:outputText value="{0,number,#,###,##0.000}" rendered="{!OTHER_subTotal_revenueExpenses>=0}"><apex:param value="{!Round(OTHER_subTotal_revenueExpenses,3)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!OTHER_subTotal_revenueExpenses<0}"><apex:param value="{!Round((-1)*OTHER_subTotal_revenueExpenses,3)}" /></apex:outputText>
+            <!--
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!report.subtotalExpansesYTD_OFI>=0}"><apex:param value="{!Round(report.subtotalExpansesYTD_OFI/1000,3)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!report.subtotalExpansesYTD_OFI<0}"><apex:param value="{!Round((-1)*report.subtotalExpansesYTD_OFI/1000,3)}" /></apex:outputText>
+             -->
+            </b></td>
+            <td></td>
+            <td></td>
+            <td></td>
+        </tr> 
+        <tr><td colspan="10" class="totalgray bord ">&nbsp;</td></tr>
+        <tr class="totalgray"> 
+            <td><b>{!IF(report.subtotalFeeRevenue_CPS==0 && report.subtotalFeeYTD_CPS==0 && report.subtotalExpansesYTD_CPS==0 && report.subtotalFeeRevenue_OFI==0 && report.subtotalFeeYTD_OFI==0 && report.subtotalExpansesYTD_OFI==0,  '','Total')}</b></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td class="right"><b>
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!(report.subtotalFeeRevenue_CPS + report.subtotalFeeRevenue_OFI) >= 0}"><apex:param value="{! (report.subtotalFeeRevenue_CPS + report.subtotalFeeRevenue_OFI)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!(report.subtotalFeeRevenue_CPS + report.subtotalFeeRevenue_OFI) < 0}"><apex:param value="{! (-1)*(report.subtotalFeeRevenue_CPS + report.subtotalFeeRevenue_OFI)}" /></apex:outputText>
+            </b></td>
+            <td class="right"><b>
+            	<apex:outputText value="{0,number,#,###,##0.000}" rendered="{!(CP_subTotal_revenueFees + OTHER_subTotal_revenueFees) >= 0}"><apex:param value="{! ROUND((CP_subTotal_revenueFees + OTHER_subTotal_revenueFees),3)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!(CP_subTotal_revenueFees + OTHER_subTotal_revenueFees) < 0}"><apex:param value="{! Round((-1)*(CP_subTotal_revenueFees + OTHER_subTotal_revenueFees),3)}" /></apex:outputText>
+<!--
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!(report.subtotalFeeYTD_CPS + report.subtotalFeeYTD_OFI) >= 0}"><apex:param value="{! ROUND((report.subtotalFeeYTD_CPS + report.subtotalFeeYTD_OFI)/1000000,3)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!(report.subtotalFeeYTD_CPS + report.subtotalFeeYTD_OFI) < 0}"><apex:param value="{! Round((-1)*(report.subtotalFeeYTD_CPS + report.subtotalFeeYTD_OFI)/1000000,3)}" /></apex:outputText>
+			--></b></td>
+            <td class="right"><b>
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!(CP_subTotal_revenueExpenses + OTHER_subTotal_revenueExpenses) >= 0}"><apex:param value="{! ROUND((CP_subTotal_revenueExpenses + OTHER_subTotal_revenueExpenses),3)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!(CP_subTotal_revenueExpenses + OTHER_subTotal_revenueExpenses) < 0}"><apex:param value="{! Round((-1)*(CP_subTotal_revenueExpenses + OTHER_subTotal_revenueExpenses),3)}" /></apex:outputText>
+<!--
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!(report.subtotalExpansesYTD_CPS + report.subtotalExpansesYTD_OFI) >= 0}"><apex:param value="{! Round((report.subtotalExpansesYTD_CPS + report.subtotalExpansesYTD_OFI)/1000,3)}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})" rendered="{!(report.subtotalExpansesYTD_CPS + report.subtotalExpansesYTD_OFI) < 0 }"><apex:param value="{! Round((-1)*(report.subtotalExpansesYTD_CPS + report.subtotalExpansesYTD_OFI)/1000,3)}" /></apex:outputText>
+                --></b></td>
+            <td></td>
+            <td></td>
+            <td></td>
+        </tr>
+    </table>    
+    <br/>
+    
+    
+    
+    
+    <table cellpadding="0" cellspacing="0" border="0" class="tabl"  style="border-bottom:.1pt solid white;" align="center">
+        <tr><td colspan="10" class="head"><b>New Business Activity </b></td></tr>
+        <tr><td colspan="10" class="bord"><h2>Client Meetings – Current Period</h2></td></tr>
+        <tr> 
+            <td class="head2" style="width:180px">Company</td>
+            <td class="head2">Date</td>
+            <td class="head2">Activity Type</td>
+            <td class="head2">Client Contact</td>
+            <td class="head2" style="width:150px">Title</td>
+            <td class="head2">Subject</td>
+            <td class="head2">Moelis Attendees</td>
+            <td class="head2" colspan="2" style="width:150px">Description</td>
+        </tr>
+        <apex:repeat value="{!report.listClientMeetingsCurrentPeriod}" var="activity">
+        <tr><td colspan="10" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td>{!activity.company}</td>
+            <td>
+                <apex:outputText value="{0,date,MM/dd/yyyy}">
+                    <apex:param value="{!activity.mdate}" />
+               </apex:outputText>
+            </td>
+            <td>{!activity.activityType}</td>
+            <td>{!activity.clientContact}</td>
+            <td>{!activity.title}</td>
+            <td>{!activity.subject}</td>
+            <td>{!activity.attendees}</td>
+            <td colspan="2">{!activity.description}</td>
+        </tr>
+        </apex:repeat>
+        <tr><td colspan="10" class="bord">&nbsp;</td></tr>
+    </table>    
+    <table  cellpadding="0" cellspacing="0" border="0" class="tabl"  style="border-top:.5pt dotted black;border-bottom:.1pt solid white;" align="center">
+        <tr><td colspan="10"><h2>Near Term Transactions</h2></td></tr>
+        <tr>
+            <td class="head2" style="width:180px">Company Name</td>
+            <td class="head2">Target Year</td>
+            <td class="head2">Tier</td>
+            <td class="head2">Deal Type</td>
+            <td class="head2 right" style="width:100px">Current Period # of Meetings</td>
+            <td class="head2 right" style="width:100px">YTD # of Meetings</td>
+            <td class="head2"  colspan="4" style="width:150px">Description of Transaction</td>
+        </tr>
+        <apex:repeat value="{!report.listNearTermTransactions}" var="tr">
+        <tr><td colspan="10" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td>{!tr.Company}</td>
+            <td>
+                <apex:outputText value="{0,date,yyyy}">
+                    <apex:param value="{!tr.TargetYear}" />
+               </apex:outputText>
+            </td>
+            <td>{!tr.Tier}</td>
+            <td>{!tr.Type}</td>
+            <td class="right"><apex:outputText value="{0,number,#,###,###}" ><apex:param value="{!tr.Meetings}" /></apex:outputText></td>
+            <td class="right"><apex:outputText value="{0,number,#,###,###}" ><apex:param value="{!tr.MeetingsYTD}" /></apex:outputText></td>
+            <td colspan="3">{!tr.Description}</td>
+        </tr>
+        </apex:repeat>
+        <tr><td colspan="10"  class="bord">&nbsp;</td></tr>
+    </table>    
+    <table  cellpadding="0" cellspacing="0" border="0" class="tabl"  style="border-top:.5pt dotted black;border-bottom:.1pt solid white;" align="center">
+        <tr><td colspan="10"><h2>Pitches YTD </h2></td></tr>
+        <tr>
+            <td class="head2" style="width:180px">Company Name</td>
+            <td class="head2">Project Code</td>
+            <td class="head2">Role</td>
+            <td class="head2">Record Type</td>
+            <td class="head2" >Moelis Deal Team</td>
+            <td class="head2 right" style="width:100px">Est. Fee Revenue ($mm)</td>
+            <td class="head2" style="width:100px">Stage</td>
+            <td class="head2" colspan="3" style="width:150px">Reason (if&nbsp;Lost&nbsp;or&nbsp;Dead)</td>
+        </tr>
+        <apex:repeat value="{!report.listPitchesYTD}" var="deal">
+        <tr><td colspan="10" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td>{!deal.company}</td>
+            <td>{!deal.projectCode}</td>
+            <td>{!deal.role}</td>
+            <td>{!deal.recordType}</td>
+            <td>{!deal.team}</td>
+            <td class="right">
+                <apex:outputText value="{0,number,#,###,##0.000}" rendered="{!deal.revenue >= 0 }"><apex:param value="{!deal.revenue}" /></apex:outputText>
+                <apex:outputText value="({0,number,#,###,##0.000})"  rendered="{!deal.revenue < 0 }"><apex:param value="{!(-1)*deal.revenue}" /></apex:outputText>
+            </td>
+            <td>{!deal.stage}</td>
+            <td colspan="3">{!deal.reason}</td>
+        </tr>
+        </apex:repeat>
+        <tr><td colspan="10"  class="bord">&nbsp;</td></tr>
+    </table>    
+    <table  cellpadding="0" cellspacing="0" border="0" class="tabl" style="border-top:.5pt dotted black;" align="center">
+        <tr><td colspan="10"><h2>Forward Calendar – One Month</h2></td></tr>
+        <tr> 
+            <td class="head2" style="width:180px">Company</td>
+            <td class="head2">Date</td>
+            <td class="head2">Activity Type</td>
+            <td class="head2">Client Contact</td>
+            <td class="head2" style="width:100px">Title</td>
+            <td class="head2">Subject</td>
+            <td class="head2">Moelis Attendees</td>
+            <td class="head2" colspan="3"  style="width:150px">Description</td>
+        </tr>
+        <apex:repeat value="{!report.listForwardCalendarOneMonth}" var="activity">
+        <tr><td colspan="10" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td>{!activity.company}</td>
+            <td>
+                <apex:outputText value="{0,date,MM/dd/yyyy}">
+                    <apex:param value="{!activity.mdate}" />
+               </apex:outputText>
+            </td>
+            <td>{!activity.activityType}</td>
+            <td>{!activity.clientContact}</td>
+            <td>{!activity.title}</td>
+            <td>{!activity.subject}</td>
+            <td>{!activity.attendees}</td>
+            <td colspan="3">{!activity.description}</td>
+        </tr>
+        </apex:repeat>
+    </table>    
+    <br/>
+    
+    
+    <table cellpadding="0" cellspacing="0" border="0" class="tabl" align="center">
+        <tr><td colspan="6" class="head"><b>Resource Management </b></td></tr>
+        <tr><td colspan="6" class="bord"><h2>Resource Utilization – Current Period</h2></td></tr>
+        <tr> 
+            <td class="head2"></td>
+            <td class="head2 right" style="width:150px">Deal Hours</td>
+            <td class="head2 right" style="width:150px">Infra/Bus Dev Hours</td>
+            <td class="head2 right" style="width:150px">Total Hours</td>
+            <td class="head2 right" style="width:150px">Average Usage</td>
+            <td class="head2 right" style="width:150px">Variance</td>
+        </tr>
+        <apex:repeat value="{!report.listResourcesUtilizationCurrentPeriod}" var="hour">
+        <tr><td colspan="6" class="bord">&nbsp;</td></tr>
+        <tr>
+            <td>{!hour.title}</td>
+            <td class="right"><apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!hour.dealHours}" /></apex:outputText></td>
+            <td class="right"><apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!hour.devHours}" /></apex:outputText></td>
+            <td class="right"><apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!hour.totalHours}" /></apex:outputText></td>
+            <td class="right"><apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!hour.averageUsage}" /></apex:outputText></td>
+            <td class="right">
+                <apex:outputText value="{0, number, #,###,##0.00}"  rendered="{!hour.variance >= 0 }"><apex:param value="{!hour.variance}" /></apex:outputText>
+                <apex:outputText value="({0, number, #,###,##0.00})"  rendered="{!hour.variance < 0 }"><apex:param value="{!(-1)*hour.variance}" /></apex:outputText>
+            </td>
+        </tr>
+        </apex:repeat>
+        <tr><td colspan="6" class="totalgray bord">&nbsp;</td></tr>
+        <tr class="totalgray">
+            <td><b>Total</b></td>
+            <td class="right"><b><apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!report.totDealHours}" /></apex:outputText></b></td>
+            <td class="right"><b><apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!report.totDevHours}" /></apex:outputText></b></td>
+            <td class="right"><b><apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!report.totTotalHours}" /></apex:outputText></b></td>
+            <td class="right"><b><apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!report.totAverageUsage}" /></apex:outputText></b></td>
+            <td class="right">
+            <b>
+                <apex:outputText value="{0, number, #,###,##0.00}" rendered="{!report.totVariance>=0}"><apex:param value="{!report.totVariance}" /></apex:outputText>
+                <apex:outputText value="({0, number, #,###,##0.00})" rendered="{!report.totVariance<0}"><apex:param value="{!(-1)*report.totVariance}" /></apex:outputText>
+            </b></td>
+            <!-- <td><b>{!IF(report.totDealHours==0 && report.totDevHours==0 && report.totVariance==0,  'No data to report','Total')}</b></td>
+            <td class="right"><b><apex:outputText value="{0, number, #,###,##0.00}" rendered="{!report.totDealHours!=0}"><apex:param value="{!report.totDealHours}" /></apex:outputText></b></td>
+            <td class="right"><b><apex:outputText value="{0, number, #,###,##0.00}" rendered="{!report.totDevHours!=0}"><apex:param value="{!report.totDevHours}" /></apex:outputText></b></td>
+            <td class="right"><b><apex:outputText value="{0, number, #,###,##0.00}" rendered="{!report.totTotalHours!=0}"><apex:param value="{!report.totTotalHours}" /></apex:outputText></b></td>
+            <td class="right"><b><apex:outputText value="{0, number, #,###,##0.00}" rendered="{!report.totAverageUsage!=0}"><apex:param value="{!report.totAverageUsage}" /></apex:outputText></b></td>
+            <td class="right">
+            <b>
+            <apex:outputText value="{0, number, #,###,##0.00}" rendered="{!report.totVariance>=0}"><apex:param value="{!report.totVariance}" /></apex:outputText>
+            <apex:outputText value="({0, number, #,###,##0.00})" rendered="{!report.totVariance<0}"><apex:param value="{!(-1)*report.totVariance}" /></apex:outputText>
+            </b></td>
+            -->
+        </tr>
+    </table>
+</apex:repeat>
+</body>
+</apex:page>

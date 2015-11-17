@@ -1,0 +1,284 @@
+<apex:page id="page1" standardController="RT1__ReadyTalkMeetingMember__c"
+    tabStyle="Readytalk__tab" extensions="RT1.InviteMeetingMembersController"
+    recordSetVar="members">
+    <style type="text/css">
+/** 
+ *  Wanted to get SFDC VF Default theme to give me some spacing near the top of the page
+ **/
+.apexDefaultPageBlock {
+    margin-top: 4px !important;
+}
+
+.pointer {
+    cursor: pointer;
+}
+
+.select-checkbox {
+    
+}
+
+.select-checkbox:hover {
+    text-decoration: underline;
+}
+</style>
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" />
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js" />
+    <apex:includeScript value="{!URLFOR($Resource.RT1__meetingsr,'jquery.framedialog.js')}" />
+    <apex:stylesheet value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/redmond/jquery-ui.css" />
+    <apex:includeScript value="{!URLFOR($Resource.RT1__meetingsr, 'jquery.qtip.min.js')}" />
+    <apex:styleSheet value="{!URLFOR($Resource.RT1__meetingsr, 'jquery.qtip.min.css')}" />
+    <script type="text/javascript">
+$(function(){
+    addClickHandlers();
+});
+
+/** 
+ *  addClickHandlers()
+ *  Some of these will need to be readded so attach them here.
+ **/
+function addClickHandlers(){
+    $('.addInviteeButton').click(function(e){
+        e.preventDefault();
+        dialog = $.FrameDialog.create({
+            url: '{!URLFOR($Page.RT1__addInvitee)}',
+            buttons: {
+                "Done":function(){
+                    $(this).dialog("close");
+                }
+            },
+            title: "",
+            minHeight: $(window).height()-50,
+            minWidth: 835
+        });
+    });
+    
+    $('#select-all').on('click',function(){
+        $('.table-row').find('input:checkbox').attr('checked',true);
+    });
+    
+    $('#select-none').on('click',function(){
+        $('.table-row').find('input:checkbox').attr('checked',false);
+    });
+    
+    $('.selected-invitee-checkbox').change(function(){
+        updateCountOfInviteesSelected();
+    });
+}
+ 
+/**
+ *
+ **/
+ function setCheckedInController(checkbox,id,email){
+    if(!checkbox.is(':checked')) { 
+        if(id != '')    
+            uncheckInvitee(id); 
+        else
+            uncheckInvitee(email);
+    } else {
+        if(id != '')    
+            checkInvitee(id); 
+        else
+            checkInvitee(email);  
+    }
+ }
+
+/** 
+ *  removeMeetingInvitee(..)    
+ *  Updated when resorting the column order, Jordan, 3/7/2012
+ **/
+function removeMeetingInvitee(inviteeRow){
+    email = $(inviteeRow).find('td:eq(3)').first().text();  //get the email address of the member to remove
+    $('#member_to_delete_email').text(email);
+    //attach the dialog
+    $( "#dialog-confirm" ).dialog({
+        resizable: false,
+        height:160,
+        buttons: {
+            "Remove": function() {
+                removeInvitee(email);
+                $( this ).dialog( "close" );
+            },
+            Cancel: function() {
+                $( this ).dialog( "close" );
+            }
+        }
+    });
+}   
+    
+    
+/** 
+ *  removeTooltip(row)
+ **/
+function removeTooltip(row){
+    $(row).qtip({
+        content: {
+            text: 'Double click this row to remove the invitee' 
+        },
+        position: {
+            my: 'top left',
+            target: 'mouse',
+            viewport: $(window), // Keep it on-screen at all times if possible
+            adjust: {
+                x: 10,  y: 10
+            }
+        },
+        show: {
+            event: false, // Don't specify a show event...
+            ready: true // ... but show the tooltip when ready
+        },
+        style: {
+            classes: 'ui-tooltip-shadow ui-tooltip-blue'
+        }
+    });
+}     
+
+function updateCountOfInviteesSelected(){
+    var selectedCount = 0;
+    $('.selected-invitee-checkbox').each(function(i,o){
+        if($(this).is(':checked')){
+            selectedCount = selectedCount+1;
+        }
+    });
+    $('#selected-count').text(selectedCount+' out of '+$('.selected-invitee-checkbox').length+' selected');
+}
+
+</script>
+    <apex:form >
+        <apex:actionFunction name="addInviteeToList" action="{!addInvitee}"
+            rerender="inviteesList,pageMessages"
+            onComplete="addClickHandlers();updateCountOfInviteesSelected();">
+            <apex:param name="InviteeId" assignTo="{!InviteeId}" value="" />
+            <apex:param name="TypeOfInvite" assignTo="{!TypeOfInvite}" value="" />
+            <apex:param name="FirstName" assignTo="{!InviteeFirstName}" value="" />
+            <apex:param name="LastName" assignTo="{!InviteeLastName}" value="" />
+        </apex:actionFunction>
+
+        <apex:actionFunction name="removeInvitee" action="{!removeInvitee}"
+            rerender="inviteesList"
+            onComplete="addClickHandlers();updateCountOfInviteesSelected();">
+            <apex:param name="inviteeEmail" assignTo="{!inviteeEmail}" value="" />
+        </apex:actionFunction>
+
+        <apex:actionFunction name="uncheckInvitee" action="{!uncheckInvitee}"
+            rerender="">
+            <apex:param name="checkId" assignTo="{!checkid}" value="" />
+        </apex:actionFunction>
+
+        <apex:actionFunction name="checkInvitee" action="{!checkInvitee}"
+            rerender="">
+            <apex:param name="checkId" assignTo="{!checkid}" value="" />
+        </apex:actionFunction>
+    </apex:form>
+    <apex:form >
+
+    <apex:sectionHeader title="ReadyTalk Meeting"
+        subtitle="{!meeting.Name}" rendered="{!meetingId != null}" />
+    <apex:pageMessages />
+    <apex:pageBlock title="Meeting"
+        rendered="{!AND(displayMeetingSelection,NOT(noMeetings))}">
+        <apex:pageMessage rendered="{!NOT($User.ReadyTalkUser__c = TRUE)}"
+            summary="Your are not currently a ReadyTalk Meeting User, please contact your system administrator."
+            severity="error" strength="3"
+            title="Create ReadyTalk Meeting Not Authorized." />
+        <apex:pageBlockSection >
+            <apex:pageBlockSectionItem >
+                <apex:outputLabel for="meetingId" value="ReadyTalk Meeting" />
+                <apex:selectList id="meetingId" size="1"
+                    style="margin-bottom: 5px;" value="{!meetingId}">
+                    <apex:selectOptions value="{!currentMeetingsSelectList}" />
+                </apex:selectList>
+            </apex:pageBlockSectionItem>
+        </apex:pageBlockSection>
+    </apex:pageBlock>
+    <apex:pageBlock title="No Meetings Found" rendered="{!noMeetings}">
+        <apex:pageMessages />
+        <apex:pageBlockSection >
+            <apex:outputLink value="{!URLFOR($Page.RT1__ImportMeeting)}">Import a Meeting</apex:outputLink>
+        </apex:pageBlockSection>
+    </apex:pageBlock>
+
+    <apex:outputPanel id="inviteesList" rendered="{!NOT(noMeetings)}">
+        <apex:pageBlock title="Add to: {!meeting.Name}"
+            rendered="{!invitePage}">
+            <div style="float: right; margin-bottom: 5px;">
+                <apex:commandButton value="Search" styleClass="addInviteeButton" />
+                <apex:commandButton action="{!saveAndInvite}"
+                    value="Add and Invite to Meeting" />
+                <apex:commandButton action="{!addMeetingMembers}"
+                    value="Add to Meeting" />
+                <apex:commandButton action="{!cancel}" value="Cancel" />
+            </div>
+            <div>
+                <div id="selected-count">&nbsp;</div>
+                <div>
+                    <span id="select-all" class="select-checkbox pointer">select
+                        all</span>&nbsp;|&nbsp;<span id="select-none"
+                        class="select-checkbox pointer">select none</span>
+                </div>
+            </div>
+            <apex:pageBlockTable value="{!meetingInvitees}" var="invitee"
+                onRowDblClick="removeMeetingInvitee(this);"
+                rowClasses="pointer table-row"
+                onRowMouseOver="removeTooltip(this);">
+                <apex:column width="100px">
+                    <apex:facet name="header">Select</apex:facet>
+                    <apex:inputCheckbox styleClass="selected-invitee-checkbox"
+                        value="{!invitee.isSelected}"
+                        onClick="setCheckedInController($(this),'{!invitee.idOfRecord}','{!invitee.email}');" />
+                </apex:column>
+                <apex:column headerValue="First Name" value="{!invitee.FirstName}" />
+                <apex:column headerValue="Last Name" value="{!invitee.LastName}" />
+                <apex:column headerValue="Email" value="{!invitee.email}" />
+                <apex:column headerValue="Type of Record"
+                    value="{!invitee.typeOfRecord}" />
+            </apex:pageBlockTable>
+        </apex:pageBlock>
+
+        <apex:pageBlock title="Invite to: {!meeting.Name}"
+            rendered="{!NOT(invitePage)}">
+            <div style="float: right; margin-bottom: 5px;">
+                <apex:commandButton action="{!inviteToMeeting}"
+                    value="Invite to Meeting" />
+                <apex:commandButton action="{!redirectCSV}" value="Download CSV" />
+                <apex:commandButton action="{!updateToInvited}"
+                    value="Update to Invited" />
+                <apex:commandButton action="{!cancel}" value="Cancel" />
+            </div>
+            <div>
+                <div id="selected-count">&nbsp;</div>
+                <div>
+                    <span id="select-all" class="select-checkbox pointer">select
+                        all</span>&nbsp;|&nbsp;<span id="select-none"
+                        class="select-checkbox pointer">select none</span>
+                </div>
+            </div>
+            <apex:pageBlockTable value="{!meetingInvitees}" var="invitee"
+                onRowDblClick="removeMeetingInvitee(this);"
+                rowClasses="pointer table-row"
+                onRowMouseOver="removeTooltip(this);">
+                <apex:column width="100px">
+                    <apex:facet name="header">Select</apex:facet>
+                    <apex:inputCheckbox styleClass="selected-invitee-checkbox"
+                        value="{!invitee.isSelected}"
+                        onClick="setCheckedInController($(this),'{!invitee.idOfRecord}','{!invitee.email}');" />
+                </apex:column>
+                <apex:column headerValue="First Name" value="{!invitee.FirstName}" />
+                <apex:column headerValue="Last Name" value="{!invitee.LastName}" />
+                <apex:column headerValue="Email" value="{!invitee.email}" />
+                <apex:column headerValue="Type of Record"
+                    value="{!invitee.typeOfRecord}" />
+                <apex:column headerValue="Status" value="{!invitee.status}" />
+            </apex:pageBlockTable>
+        </apex:pageBlock>
+        </apex:outputPanel>
+    </apex:form>
+
+    <div id="dialog-confirm" title="Remove Invitee?" style="display: none;">
+        <p>
+            <span class="ui-icon ui-icon-alert"
+                style="float: left; margin: 0 7px 20px 0;"></span>Are you sure you
+            want to remove <span id="member_to_delete_email"
+                style="font-weight: bold;">this person</span> from the invitee list?
+        </p>
+    </div>
+</apex:page>

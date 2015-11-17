@@ -1,0 +1,146 @@
+<apex:page controller="ts2.ApplyJobController" action="{!SetSelectedRecords}" tabStyle="Contact" showHeader="false" sideBar="false" title="{!$Label.ATJ_ApplyTitle}">
+	<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, 'jquery-1.8.2.min.js')}" />
+
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__SSearch, 'res/css/s_style.css')}"/>
+
+<script language="javascript">
+	function closeWindow(refresh) {
+		if (refresh) {
+			parent.opener.top.location = refresh;
+			parent.window.close();
+		}
+		else {
+			parent.window.opener = self;
+			parent.window.close();
+		}
+	}
+</script>
+
+<style>
+.pbHeader td.pbTitle {width:40% !important;}
+.pbBottomButtons td.pbTitle {width:10% !important;}
+.pbBottomButtons td.pbButtons {width:90% !important;}
+.EnhancedOptionSelector label { vertical-align: middle; margin-right:8px; }
+</style>
+
+<body width="100%" style="margin:10px;">
+
+<apex:form id="frm">
+	<apex:pageMessages id="pageMessages" />
+
+	<apex:pageBlock id="applyPb" title="{!$Label.ATJ_ApplyTitle}" mode="details">
+
+		<apex:pageBlockButtons id="pbbsMainButtons" style="text-align: right;" location="bottom" styleClass="pbButtons">
+			<span id="pbsMainButtons_spinner" class="spinner_indicator">&nbsp;</span>
+			<apex:commandButton value="{!$Label.ATJ_ApplyToPosition}" title="{!$Label.ATJ_ApplyToPosition}" action="{!createApplication}" rendered="{!NOT(Completed) && NOT(IsEnhancedMode)}" onclick="jQuery('#pbsMainButtons_spinner').addClass('spinner_on');jQuery('[id*=pbbsMainButtons] input.btn').attr('disabled','disabled').addClass('btnDisabled');" rerender="frm" />
+			<apex:commandButton value="{!$Label.ATJ_Save}" title="{!$Label.ATJ_Save}" action="{!createApplication}" rendered="{!NOT(Completed) && IsEnhancedMode && Step>=1}" onclick="jQuery('#pbsMainButtons_spinner').addClass('spinner_on');jQuery('[id*=pbbsMainButtons] input.btn').attr('disabled','disabled').addClass('btnDisabled');" rerender="frm" />
+			<apex:commandButton value="{!$Label.ATJ_Next}" title="{!$Label.ATJ_Next}" action="{!NextAction}" rendered="{!NOT(Completed) && IsEnhancedMode && Step<1}" onclick="jQuery('#pbsMainButtons_spinner').addClass('spinner_on');jQuery('[id*=pbbsMainButtons] input.btn').attr('disabled','disabled').addClass('btnDisabled');" rerender="frm" />
+			<apex:commandButton value="{!$Label.ATJ_Previous}" title="{!$Label.ATJ_Previous}" action="{!PreviousAction}" rendered="{!NOT(Completed) && IsEnhancedMode && Step>0}" immediate="true" onclick="jQuery('#pbsMainButtons_spinner').addClass('spinner_on');jQuery('[id*=pbbsMainButtons] input.btn').attr('disabled','disabled').addClass('btnDisabled');" rerender="frm" />
+			<apex:commandButton value="{!$Label.ATJ_Cancel}" title="{!$Label.ATJ_Cancel}" rendered="{!NOT(Completed)}" onclick="closeWindow();return(false);" />
+			<apex:commandButton value="{!$Label.ATJ_AdditionalJob}" title="{!$Label.ATJ_AdditionalJob}" action="{!AdditionalJobAction}" rendered="{!Completed}" onclick="jQuery('#pbsMainButtons_spinner').addClass('spinner_on');jQuery('[id*=pbbsMainButtons] input.btn').attr('disabled','disabled').addClass('btnDisabled');" rerender="frm" />
+			<apex:commandButton value="{!$Label.ATJ_GoToJob}" title="{!$Label.ATJ_GoToJob}" rendered="{!Completed}" onclick="closeWindow('/{!JSENCODE(Job.Id)}');return(false);" />
+			<apex:commandButton value="{!$Label.ATJ_Close}" title="{!$Label.ATJ_Close}" rendered="{!Completed}" onclick="closeWindow();return(false);" />
+		</apex:pageBlockButtons>
+
+		<apex:pageBlockSection id="pbsMain" columns="1" rendered="{!NOT(Completed)}" >
+
+			<apex:pageBlockSectionItem dataStyle="width:40%" rendered="{!Step=0}">
+				<apex:outputLabel value="{!$ObjectType.ts2__Job__c.Fields.Name.Label}:" for="jobIf" />
+				<apex:inputField id="jobIf" value="{!JobAppTmp.ts2__Job__c}" label="{!$ObjectType.ts2__Job__c.Fields.Name.Label}" required="true" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem dataStyle="width:40%" rendered="{!Step>0}">
+				<apex:outputLabel value="{!$ObjectType.ts2__Job__c.Fields.Name.Label}:" for="jobIf" />
+				<apex:outputField value="{!Job.Name}" id="jobIf" style="font-weight:bold;" />
+			</apex:pageBlockSectionItem>
+
+			<apex:outputPanel id="EnhancedOptionSelector">
+				<apex:selectRadio value="{!SelectedEnhancedOption}" styleClass="EnhancedOptionSelector" style="float:left;" required="true" rendered="{!IsEnhancedMode && Step>0}" disabled="{!Step>1}">
+					<apex:selectOptions value="{!EnhancedOptionsList}" />
+					<apex:actionSupport event="onclick" onsubmit="jQuery('#pbsEOselector_spinner').addClass('spinner_on');jQuery('[id$=EnhancedOptionSelector] input').attr('disabled','disabled');setEnhancedOption(jQuery('[id$=EnhancedOptionSelector] input:checked').val());return(false);" />
+				</apex:selectRadio>
+				<span id="pbsEOselector_spinner" class="spinner_indicator">&nbsp;</span>
+			</apex:outputPanel>
+
+			<apex:pageBlockSectionItem />
+
+			<apex:pageBlockSectionItem rendered="{!Step>0 && SelectedEnhancedOptionInviteToApply && IsInviteToApplyCustomMessage}">
+				<apex:outputLabel value="Message" for="pbsi_CustomMessage" />
+				<apex:inputTextArea id="pbsi_CustomMessage" style="width:100%;height:110px;" value="{!CustomMessage}" />
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem dataStyle="width:40%" rendered="{!Step>0 && SelectedEnhancedOptionAgency}">
+				<apex:outputLabel value="{!$ObjectType.ts2__Application__c.Fields.ts2__Agency__c.Label}" for="jobAgency" />
+				<apex:inputField required="true" id="jobAgency" value="{!JobAppTmp.ts2__Agency__c}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem dataStyle="width:40%" rendered="{!Step>0 && SelectedEnhancedOptionAgency && NOT(Job.ts2__Disable_EEO__c)}">
+				<apex:outputLabel value="{!$ObjectType.ts2__Application__c.Fields.ts2__Request_EEO__c.Label}" for="r_eeo" />
+				<apex:inputField value="{!JobAppTmp.ts2__Request_EEO__c}" id="r_eeo" />
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem dataStyle="width:40%" rendered="{!Step>0 && SelectedEnhancedOptionException && !Job.ts2__Disable_EEO__c}">
+				<apex:outputLabel value="Reason" for="e_r" />
+				<apex:inputField value="{!JobAppTmp.ts2__Exception_Reason__c}" label="Reason" id="e_r" style="width:100%" required="true" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem dataStyle="width:40%" rendered="{!Step>0 && SelectedEnhancedOptionException && !Job.ts2__Disable_EEO__c}">
+				<apex:outputLabel value="Reason Other" for="e_rO" />
+				<apex:inputField value="{!JobAppTmp.ts2__Exception_Reason_Other__c}" label="Reason Other" id="e_rO" style="width:100%;height:110px;" />
+			</apex:pageBlockSectionItem>
+
+		</apex:pageBlockSection>
+
+		<apex:pageBlockSection id="pbsCompleted" columns="1" collapsible="false" title="{!$ObjectType.ts2__Job__c.Fields.Name.Label}: {!Job.Name}" rendered="{!Completed}" >
+			<apex:pageBlockSectionItem labelStyle="width:50%">
+				<apex:outputLabel value="{!$Label.ATJ_ContactsSelected}" for="appsCr" />
+				<apex:outputText id="appsCr" value="{!ContactsSelectedCount}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem labelStyle="width:50%">
+				<apex:outputLabel value="{!$Label.ATJ_ApplicationsCreated}" for="appsCr" />
+				<apex:outputText id="appsCr" value="{!ApplicationsCreatedCount}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem labelStyle="width:50%">
+				<apex:outputLabel value="{!$Label.ATJ_ApplicationsAlreadyFound}" for="appsAl" />
+				<apex:outputText id="appsAl" value="{!ApplicationsAlreadyCount}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem labelStyle="width:50%">
+				<apex:outputLabel value="{!$Label.ATJ_ApplicationsTotal}" for="appsTotal" />
+				<apex:outputText id="appsTotal" value="{!ApplicationsCreatedCount+ApplicationsAlreadyCount}" />
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+		<apex:pageBlockSection id="pbsCompleted_Applications" columns="1" collapsible="false" title="{!$Label.ATJ_ApplicationsCreated} {!IF(ApplicationsCreatedCount>100,'('+$Label.ATJ_ApplicationsCreatedLimited+')','')}" rendered="{!Completed && ApplicationsCreatedList.SIZE > 0}" >
+			<apex:outputPanel layout="block" style="overflow-y:auto; height:162px; border:0px solid #bbb;" >
+			<apex:pageBlockTable value="{!ApplicationsCreatedList}" var="app">
+				<apex:column >
+					<apex:facet name="header"><apex:outputText value="{!$ObjectType.ts2__Application__c.Label}" /></apex:facet>
+					<apex:outputLabel value="{!app.Name}" for="app_listL" />
+				</apex:column>
+				<apex:column >
+					<apex:facet name="header"><apex:outputText value="{!$ObjectType.ts2__Application__c.Fields.ts2__Candidate_Contact__c.Label}" /></apex:facet>
+					<apex:outputText value="{!app.Candidate_Contact__r.Name}" id="app_listL" />
+				</apex:column>
+			</apex:pageBlockTable>
+			</apex:outputPanel>
+		</apex:pageBlockSection>
+	</apex:pageBlock>
+
+	<apex:actionFunction name="setEnhancedOption" immediate="true" rerender="frm" >
+		<apex:param name="a" value="" assignTo="{!SelectedEnhancedOption}" />
+	</apex:actionFunction>
+	<apex:actionFunction name="lookupWorkaround" immediate="true" rerender="" >
+	</apex:actionFunction>
+
+</apex:form>
+
+</body>
+
+<script type="text/javascript">
+	jQuery.noConflict();
+	jQuery(document).ready(function() {
+		gfxInit();
+		lookupWorkaround();
+	});
+	function gfxInit() {
+		a1=new Image; a1.src="{!URLFOR($Resource.SSearch, 'res/img/spinner.gif')}";
+	}
+</script>
+
+</apex:page>

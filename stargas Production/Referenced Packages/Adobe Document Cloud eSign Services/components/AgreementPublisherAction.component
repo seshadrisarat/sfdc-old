@@ -1,0 +1,1372 @@
+<apex:component id="publisherComponent" controller="echosign_dev1.AgreementPublisherActionController" allowDML="true">
+    <apex:attribute name="masterValue" description="Master object instance" type="SObject" assignTo="{!master}"/>
+    
+    <apex:stylesheet value="{!URLFOR($Resource.Mobile_Design_Templates, 
+                'Mobile-Design-Templates-master/common/css/app.min.css')}"/>
+    <apex:includeScript value="{!$Resource.echosign_dev1__jquery211}"/>
+    
+    <apex:stylesheet value="{!URLFOR($Resource.echosign_dev1__OneStarter,'icons.css')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.echosign_dev1__OneStarter,'styles.css')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.echosign_dev1__OneStarter,'OneStarter.css')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.echosign_dev1__OneStarter,'jquery.onestarter.js')}"/>
+    
+    <style type="text/css">
+        .overlay {
+            /*background-color: rgba(0, 0, 0, 0.8);*/
+            background-color: #222222;
+            opacity: 0.9;
+            filter: alpha(opacity=5);
+            z-index: 998;
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 110%;
+            display: none;
+        }
+
+        .buttons-overlay {
+            display: none;
+            /*width: 90%; margin-left: 5%;*/ 
+            z-index: 999; 
+            position: absolute; 
+            padding-left: 10%; 
+            padding-right: 10%;
+            padding-top: 30%;
+        }
+        
+        .icon--pdf {
+            background-image: url("{!URLFOR($Resource.s1doctype,'s1doctypes/pdf_120.png')}");
+            background-size: cover;
+            height: 37px;
+        }
+        
+        .icon--word {
+            background-image: url("{!URLFOR($Resource.s1doctype,'s1doctypes/word_120.png')}");
+            background-size: cover;
+            height: 37px;
+        }
+        
+        .icon--ppt {
+            background-image: url("{!URLFOR($Resource.s1doctype,'s1doctypes/ppt_120.png')}");
+            background-size: cover;
+            height: 37px;
+        }
+        
+        .icon--excel {
+            background-image: url("{!URLFOR($Resource.s1doctype,'s1doctypes/excel_120.png')}");
+            background-size: cover;
+            height: 37px;
+        }
+        
+        .icon--image {
+            background-image: url("{!URLFOR($Resource.s1doctype,'s1doctypes/image_120.png')}");
+            background-size: cover;
+            height: 37px;
+        }
+        
+        .icon--template {
+            background-image: url("{!$Resource.LibraryDocumentTemplate}");
+            height: 18px;
+        }
+        
+        .icon--layer {
+            background-image: url("{!$Resource.LibraryFieldsTemplate}");
+        }
+        
+        .es-input-value {
+            padding-top: 10px;
+        }
+        
+        .es-input-label {
+            padding-left: 0px;
+            width: 100%;
+        }
+        
+        #hor-zebra
+        {
+            font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;
+            font-size: 12px;
+            margin: 45px;
+            width: 480px;
+            text-align: left;
+            border-collapse: collapse;
+        }
+        
+        #hor-zebra th
+        {
+            font-size: 14px;
+            font-weight: normal;
+            padding: 10px 8px;
+            color: #039;
+        }
+
+        #hor-zebra td
+        {
+            padding: 8px;
+            color: #669;
+        }
+        
+        #hor-zebra .odd
+        {
+            background: #e8edff; 
+        }
+        
+                    
+        .es-subbutton-label {
+            font-size: 16px;
+            color: rgb(68, 89, 108);
+            text-shadow: none;
+            font-weight: bold;
+        }
+                
+        .es-subbutton {
+            border-top-right-radius: 5px;
+            border-bottom-right-radius: 5px;
+            border-right-width: 1px;
+            border-top-left-radius: 5px;
+            border-bottom-left-radius: 5px;
+            padding: 4px 14px;
+            height: 35px;
+            font-size: 16px;
+            font-weight: normal;
+            border: 1px solid rgb(187, 192, 196);
+            background: linear-gradient(rgb(255, 255, 255),rgb(241, 241, 241));
+            box-shadow: none;
+            text-decoration: none;
+            text-align: center;
+        }
+    </style>
+    
+        <!-- iOS 8 issue workaround, delete once fixed - https://success.salesforce.com/issues_view?id=a1p30000000T5hOAAS -->    
+<script> 
+var ua=navigator.userAgent; 
+if((ua.indexOf('iPhone')!=-1||ua.indexOf('iPad')!=-1)&&(ua.indexOf('OS/8')!=-1||ua.indexOf('OS 8')!=-1)){ 
+function IOS_SCROLL_BOOTSTRAP() { 
+var children = Array.prototype.slice.call(document.body.children), 
+placeholder = document.createElement('section'), 
+fragment = document.createDocumentFragment(), 
+styles, 
+width, 
+height; 
+children.forEach(function(c){fragment.appendChild(c);}); 
+placeholder.appendChild(fragment); 
+styles = [ 
+'width:100%;', 
+'height:', (window.screen.height - 42), 'px;', 
+'position: absolute; overflow: auto; -webkit-overflow-scrolling: touch' 
+].join(''); 
+placeholder.style.cssText = styles; 
+document.body.appendChild(placeholder); 
+} 
+window.addEventListener('load', function (e) { 
+IOS_SCROLL_BOOTSTRAP(); 
+}); 
+} 
+</script>
+
+    <div>
+        <apex:outputPanel id="topPanel">
+        
+        <apex:form >
+            <script type='text/javascript' src='/canvas/sdk/js/publisher.js'/>
+            
+            <apex:outputpanel id="scriptSection">
+            
+            <apex:variable var="agreementId" value="{!agreement.Id}"/>
+
+            <apex:actionFunction action="{!init}" name="init" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,agreementRecipientsPanelItems,agreementDocumentsPanelItems" oncomplete="initPage();"/>
+            <apex:actionFunction action="{!onSend}" name="onSubmit" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel" oncomplete="onCompleteSubmit(); return false;"/>
+            <apex:actionFunction action="{!onShowSearchAccounts}" name="showSearchAccounts" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,accountSearchPanel"/>
+            <apex:actionFunction action="{!onUnsetAccount}" name="unsetAccount" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel" oncomplete="setAccountLookup(); setAccountLookupHooks(); setOpportunityLookup(); setOpportunityLookupHooks();"/>
+            <apex:actionFunction action="{!onShowSearchOpps}" name="showSearchOpps" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,oppSearchPanel"/>
+            <apex:actionFunction action="{!onUnsetOpp}" name="unsetOpp" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel" oncomplete="setAccountLookup(); setAccountLookupHooks(); setOpportunityLookup(); setOpportunityLookupHooks();"/>
+            <apex:actionFunction action="{!onShowSearchContacts}" name="showSearchContacts" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,recipientEditPanel,contactSearchPanel"/>
+            <apex:actionFunction action="{!onShowSearchLeads}" name="showSearchLeads" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,recipientEditPanel,leadSearchPanel"/>
+            <apex:actionFunction action="{!onShowSearchUsers}" name="showSearchUsers" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,recipientEditPanel,userSearchPanel"/>
+            <apex:actionFunction action="{!onUnsetContact}" name="unsetContact" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,recipientEditPanel" oncomplete="setContactLookup(); setContactLookupHooks();"/>
+            <apex:actionFunction action="{!onUnsetLead}" name="unsetLead" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,recipientEditPanel" oncomplete="setLeadLookup(); setLeadLookupHooks();"/>
+            <apex:actionFunction action="{!onUnsetUser}" name="unsetUser" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,recipientEditPanel" oncomplete="setUserLookup(); setUserLookupHooks();"/>
+            <apex:actionFunction action="{!onQueryAccounts}" name="queryAccounts" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,accountSearchPanel">
+                <apex:param name="nameQuery" assignTo="{!nameQuery}" value="name" />
+            </apex:actionFunction>
+            <apex:actionFunction action="{!onQueryOpps}" name="queryOpps" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,oppSearchPanel">
+                <apex:param name="nameQuery" assignTo="{!nameQuery}" value="name" />
+            </apex:actionFunction>
+            <apex:actionFunction action="{!onQueryContacts}" name="queryContacts" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,recipientEditPanel,contactSearchPanel">
+                <apex:param name="nameQuery" assignTo="{!nameQuery}" value="name" />
+            </apex:actionFunction>
+            <apex:actionFunction action="{!onQueryLeads}" name="queryLeads" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,recipientEditPanel,leadSearchPanel">
+                <apex:param name="nameQuery" assignTo="{!nameQuery}" value="name" />
+            </apex:actionFunction>
+            <apex:actionFunction action="{!onQueryUsers}" name="queryUsers" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,recipientEditPanel,userSearchPanel">
+                <apex:param name="nameQuery" assignTo="{!nameQuery}" value="name" />
+            </apex:actionFunction>
+            <apex:actionFunction action="{!onSetSearchAccount}" name="setSearchAccount" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,accountSearchPanel" oncomplete="completeAccountSet(); completeOppSet();">
+                <apex:param name="searchObjectId" assignTo="{!searchObjectId}" value="accountId" />
+            </apex:actionFunction>
+            <apex:actionFunction action="{!onSetSearchOpp}" name="setSearchOpp" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,oppSearchPanel" oncomplete="completeAccountSet(); completeOppSet();">
+                <apex:param name="searchObjectId" assignTo="{!searchObjectId}" value="oppId" />
+            </apex:actionFunction>
+            <apex:actionFunction action="{!onSetSearchContact}" name="setSearchContact" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,recipientEditPanel,contactSearchPanel" oncomplete="completeContactSet();">
+                <apex:param name="searchObjectId" assignTo="{!searchObjectId}" value="contactId" />
+                <apex:param name="searchObjectName" assignTo="{!searchObjectName}" value="contactName" />
+            </apex:actionFunction>
+            <apex:actionFunction action="{!onSetSearchLead}" name="setSearchLead" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,recipientEditPanel,leadSearchPanel" oncomplete="completeLeadSet();">
+                <apex:param name="searchObjectId" assignTo="{!searchObjectId}" value="leadId" />
+                <apex:param name="searchObjectName" assignTo="{!searchObjectName}" value="leadName" />
+            </apex:actionFunction>
+            <apex:actionFunction action="{!onSetSearchUser}" name="setSearchUser" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,recipientEditPanel,userSearchPanel" oncomplete="completeUserSet();">
+                <apex:param name="searchObjectId" assignTo="{!searchObjectId}" value="userId" />
+                <apex:param name="searchObjectName" assignTo="{!searchObjectName}" value="userName" />
+            </apex:actionFunction>
+            <apex:actionFunction action="{!onCancelSearchAccount}" name="cancelSearchAccount" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,accountSearchPanel" oncomplete="completeAccountSet(); completeOppSet();"/>
+            <apex:actionFunction action="{!onCancelSearchOpp}" name="cancelSearchOpp" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,oppSearchPanel" oncomplete="completeAccountSet(); completeOppSet();"/>        
+            <apex:actionFunction action="{!onCancelSearchContact}" name="cancelSearchContact" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,recipientEditPanel,contactSearchPanel" oncomplete="completeContactSet();"/>   
+            <apex:actionFunction action="{!onCancelSearchLead}" name="cancelSearchLead" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,recipientEditPanel,leadSearchPanel" oncomplete="completeLeadSet();"/>   
+            <apex:actionFunction action="{!onCancelSearchUser}" name="cancelSearchUser" rerender="topPanel,bottomPanel,messagePanel,messages,agreementPanel,recipientEditPanel,userSearchPanel" oncomplete="completeUserSet();"/>           
+            <apex:actionFunction oncomplete="completeAccountSet(); completeOppSet(); return false;" action="{!onDeleteRecipient}" name="deleteRecipient" rerender="agreementRecipientsPanelItems">
+                <apex:param name="selectedRecipientIndex" assignTo="{!selectedRecipientIndex}" value="recipientIndex" />
+            </apex:actionFunction>
+            <apex:actionFunction action="{!onDeleteAttachment}" name="deleteAttachment" rerender="agreementDocumentsPanelItems">
+                <apex:param name="selectedAttachmentIndex" assignTo="{!selectedAttachmentIndex}" value="attachmentIndex" />
+            </apex:actionFunction>
+            <apex:actionFunction oncomplete="setPicklistSpan(); showRecipientButtons(); setRecipientLookups();" action="{!onEditRecipient}" name="editRecipient" rerender="topPanel,bottomPanel,messages,agreementPanel,agreementDocumentsPanelItems,recipientEditPanel">
+                <apex:param name="selectedRecipientIndex" assignTo="{!selectedRecipientIndex}" value="recipientIndex" />
+            </apex:actionFunction>
+            <apex:actionFunction oncomplete="completeAccountSet(); completeOppSet(); return false;" action="{!onSaveRecipient}" name="saveRecipient" rerender="topPanel,bottomPanel,messages,agreementPanel,agreementRecipientsPanelItems,recipientEditPanel">
+                <apex:param name="selectedRecipientIndex" assignTo="{!selectedRecipientIndex}" value="recipientIndex" />
+                <apex:param name="selectedRecipientEmailAddress" assignTo="{!selectedRecipientEmailAddress}" value="emailAddress" />
+            </apex:actionFunction>
+            <apex:actionFunction oncomplete="completeAccountSet(); completeOppSet(); return false;" action="{!onDeleteRecipient}" name="deleteRecipient" rerender="topPanel,bottomPanel,messages,agreementPanel,agreementRecipientsPanelItems,recipientEditPanel">
+                <apex:param name="selectedRecipientIndex" assignTo="{!selectedRecipientIndex}" value="recipientIndex" />
+            </apex:actionFunction>
+            <apex:actionFunction oncomplete="completeAccountSet(); completeOppSet(); return false;" action="{!onCancelRecipient}" name="cancelRecipient" rerender="topPanel,bottomPanel,messages,agreementPanel,recipientEditPanel"/>       
+            <apex:actionFunction oncomplete="completeAccountSet(); completeOppSet(); return false;" action="{!onStoreTemplateDocument}" name="storeTemplateDocument" rerender="topPanel,bottomPanel,messages,agreementPanel,agreementDocumentsPanelItems,documentsEchoSignPanel">
+                <apex:param name="selectedDocumentId" assignTo="{!selectedDocumentId}" value="documentId" />
+            </apex:actionFunction>
+            <apex:actionFunction oncomplete="completeAccountSet(); completeOppSet(); return false;" action="{!onCancelTemplateDocument}" name="cancelTemplateDocument" rerender="topPanel,bottomPanel,messages,documentsEchoSignPanel,agreementPanel"/>
+            <apex:actionFunction oncomplete="completeAccountSet(); completeOppSet(); return false;" action="{!onStoreLibraryDocument}" name="storeLibraryDocument" rerender="topPanel,bottomPanel,messages,agreementPanel,agreementDocumentsPanelItems,documentsSfdcPanel">
+                <apex:param name="selectedDocumentId" assignTo="{!selectedDocumentId}" value="documentId" />
+                <apex:param name="selectedDocumentName" assignTo="{!selectedDocumentName}" value="documentName" />
+            </apex:actionFunction>
+            <apex:actionFunction oncomplete="completeAccountSet(); completeOppSet(); return false;" action="{!onCancelLibraryDocument}" name="cancelLibraryDocument" rerender="topPanel,bottomPanel,messages,documentsSfdcPanel,agreementPanel"/>
+            <apex:actionFunction oncomplete="completeAccountSet(); completeOppSet(); return false;" action="{!onStoreContentDocument}" name="storeContentDocument" rerender="topPanel,bottomPanel,messages,agreementPanel,agreementDocumentsPanelItems,contentsSfdcPanel">
+                <apex:param name="selectedDocumentId" assignTo="{!selectedDocumentId}" value="documentId" />
+                <apex:param name="selectedDocumentName" assignTo="{!selectedDocumentName}" value="documentName" />
+            </apex:actionFunction>
+            <apex:actionFunction oncomplete="completeAccountSet(); completeOppSet(); return false;" action="{!onCancelContentDocument}" name="cancelContentDocument" rerender="topPanel,bottomPanel,messages,contentsSfdcPanel,agreementPanel"/>
+            <apex:actionFunction oncomplete="hideSpinner(); setAccountLookup(); setOpportunityLookup(); setPicklistSpan(); return false;" action="{!onTemplateChange}" name="templateChange" rerender="scriptSection,agreementPanel,agreementDocumentsPanelItems,agreementRecipientsPanelItems,messages" />
+            
+            <apex:actionFunction oncomplete="hideAddDocument();" action="{!onAddLibraryDocument}" name="addLibraryDocument" rerender="topPanel,documentsEchoSignPanel,messages" />
+            <apex:actionFunction oncomplete="hideAddDocument();" action="{!onAddDocument}" name="addDocument" rerender="topPanel,documentsSfdcPanel,messages" />
+            <apex:actionFunction oncomplete="hideAddDocument();" action="{!onAddContentDocument}" name="addContentDocument" rerender="topPanel,contentsSfdcPanel,messages" />
+            
+            <script>
+                var isSforceOne = ( (typeof sforce != 'undefined') && (sforce != null) );
+                var isiPhone = navigator.userAgent.match(/\(iPhone\)/i) != null;
+                
+                function getSelectorFromSalesforceId(salesforceId) {
+                    return '#' + salesforceId.replace(/([#;&,.+*~':"!^$\[\]()=>|/])/g, '\\\\$1');
+                }
+                
+                $(window).load(function() {
+                    if( !{!isLoaded} ) {
+                        init();
+                    }
+                });
+                
+                function initPage() {
+                    setAccountLookup();
+                    setAccountLookupHooks();
+                    setOpportunityLookup();
+                    setOpportunityLookupHooks();
+                    setPicklistSpan();
+                    
+                    if( isSforceOne ) {     
+                        Sfdc.canvas.publisher.publish({name: 'publisher.setValidForSubmit', payload: 'true'});
+                    }
+                }
+                                
+                Sfdc.canvas.publisher.subscribe({name: "publisher.post",
+                    onData:function(e) {
+                        //Sfdc.canvas.publisher.publish({name: "publisher.close", payload:{ refresh:"true"}});
+                        showSpinner();
+                        onSubmit();
+                    }
+                });
+                
+                function validateEmail(email) { 
+                    var re = /^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+                    return re.test(email);
+                } 
+                
+                function setPicklistSpan() {
+                    var isIe = navigator.userAgent.match(/MSIE/i) != null;
+                    var isChrome = navigator.userAgent.match(/Chrome/i) != null;
+                    var isSafari = navigator.userAgent.match(/Safari/i) != null;
+                    var isFirefox = navigator.userAgent.match(/Firefox/i) != null;
+                    var isS1 = navigator.userAgent.match(/Salesforce1/i) != null;
+        
+                    if( ( isFirefox || isIe ) || ( !isChrome && !isSafari ) && !isS1 ) {
+                        $('#agreementTemplateSpan').hide('fast', function() {});
+                        $('#recipientRoleSpan').hide('fast', function() {});
+                        $('#recipientTypeSpan').hide('fast', function() {});
+                    }
+                }
+                
+                function setRecipientLookups() {            
+                    setContactLookup();
+                    setContactLookupHooks();            
+                    setLeadLookup();
+                    setLeadLookupHooks();           
+                    setUserLookup();
+                    setUserLookupHooks();
+                }
+                
+                function navToEditRecipient(recipientIndex) {
+                    editRecipient(recipientIndex);
+                }
+                
+                function onCompleteSubmit() {
+                    if( {!isError} ) {
+                        return;
+                    }
+                    
+                    hideSpinner();
+                    
+                    if( {!agreement.Enable_Hosted_Signing__c} || 
+                        {!agreement.Authoring__c} || 
+                        ( {!agreement.SenderSigns__c} && '{!agreement.SignatureOrder__c}' == 'I sign, then the Recipient signs' ) ) {
+                        if( isSforceOne ) {
+                            sforce.one.navigateToURL('/apex/{!namespace}__AgreementMobile?id={!agreementId}&onloadAction=Send'); 
+                        } else {
+                            window.parent.location.href = '/{! agreement.Id }?onloadAction=Send';
+                        }
+                    } else {  
+                        if( isSforceOne ) {
+                            sforce.one.navigateToURL('/apex/{!namespace}__AgreementMobile?id={!agreementId}');
+                        } else {
+                            window.parent.location.href = '/{! agreement.Id }';
+                        }
+                    }
+                }
+                
+                function showRecipientButtons() {
+                    if( isiPhone ) {
+                        $('#recipient-buttons-phone').show('fast', function() {});
+                    } else {
+                        $('#recipient-buttons').show('fast', function() {});
+                    }
+                }
+                                
+                function completeAccountSet() {
+                    setAccountLookup();
+                    setAccountLookupHooks();
+                }
+                
+                function completeOppSet() {
+                    setOpportunityLookup();
+                    setOpportunityLookupHooks();
+                }
+                        
+                function completeContactSet() {
+                    setContactLookup();
+                    setContactLookupHooks();
+                    setPicklistSpan();
+                    showRecipientButtons();
+                }
+                        
+                function completeLeadSet() {
+                    setLeadLookup();
+                    setLeadLookupHooks();
+                    setPicklistSpan();
+                    showRecipientButtons();
+                }
+                        
+                function completeUserSet() {
+                    setUserLookup();
+                    setUserLookupHooks();
+                    setPicklistSpan();
+                    showRecipientButtons();
+                }
+                                
+                function searchAccounts() {
+                    var name = $('#objects-search-input').val();
+                    $('ul#objects-search-list li:not(:first)').remove();        
+                    queryAccounts(name);
+                }
+                
+                function searchOpps() {
+                    var name = $('#objects-search-input').val();
+                    $('ul#objects-search-list li:not(:first)').remove();        
+                    queryOpps(name);
+                }
+                
+                function searchContacts() {
+                    var name = $('#objects-search-input').val();
+                    $('ul#objects-search-list li:not(:first)').remove();        
+                    queryContacts(name);
+                }
+                
+                function searchLeads() {
+                    var name = $('#objects-search-input').val();
+                    $('ul#objects-search-list li:not(:first)').remove();        
+                    queryLeads(name);
+                }
+                
+                function searchUsers() {
+                    var name = $('#objects-search-input').val();
+                    $('ul#objects-search-list li:not(:first)').remove();        
+                    queryUsers(name);
+                }       
+                
+                function setAccountLookupHooks() {
+                    $('#agreement-account-input').attr('readonly','readonly');
+                    
+                    $( "#agreement-account-input" ).click(function() {
+                        showSearchAccounts();
+                    });
+                
+                    $( "#agreement-account-label" ).click(function() {
+                        if( '{!agreement.Account__c}' ) {
+                            unsetAccount();
+                            $('#agreement-account-label').removeClass('icon-utility-close');
+                            $('#agreement-account-label').addClass('icon-utility-search');
+                            $('#agreement-account-input').attr('placeholder', '{!$Label.Action_Select_Account_Label}');
+                            $('#agreement-account-input').val('{!$Label.Action_Select_Account_Label}');
+                        } else {
+                            showSearchAccounts();
+                        }
+                    });
+                }   
+                
+                function setAccountLookup() {
+                    $('#agreement-account-label').removeClass('icon-utility-close');
+                    $('#agreement-account-label').removeClass('icon-utility-search');
+                    
+                    if( '{!agreement.Account__c}' ) {
+                        $('#agreement-account-input').attr('placeholder', '{! JSENCODE(accountName) }');
+                        $('#agreement-account-input').val('{! JSENCODE(accountName) }');
+                        $('#agreement-account-label').addClass('icon-utility-close');
+                    } else {
+                        $('#agreement-account-label').addClass('icon-utility-search');
+                        $('#agreement-account-input').attr('placeholder', '{!$Label.Action_Select_Account_Label}');
+                        $('#agreement-account-input').val('{!$Label.Action_Select_Account_Label}');
+                    }
+                }
+                
+                function setOpportunityLookupHooks() {
+                    $('#agreement-opp-input').attr('readonly','readonly');
+                    
+                    $( "#agreement-opp-input" ).click(function() {
+                        showSearchOpps();
+                    });
+                
+                    $( "#agreement-opp-label" ).click(function() {
+                        if( '{!agreement.Opportunity__c}' ) {
+                            unsetOpp();
+                            $('#agreement-opp-label').removeClass('icon-utility-close');
+                            $('#agreement-opp-label').addClass('icon-utility-search');
+                            $('#agreement-opp-input').attr('placeholder', '{!$Label.Action_Select_Opportunity_Label}');
+                            $('#agreement-opp-input').val('{!$Label.Action_Select_Opportunity_Label}');
+                        } else {
+                            showSearchOpps();
+                        }
+                    });
+                }
+                
+                function setOpportunityLookup() {
+                    $('#agreement-opp-label').removeClass('icon-utility-close');
+                    $('#agreement-opp-label').removeClass('icon-utility-search');
+                    
+                    if( '{!agreement.Opportunity__c}' ) { 
+                        $('#agreement-opp-input').attr('placeholder', '{! JSENCODE(oppName) }');
+                        $('#agreement-opp-input').val('{! JSENCODE(oppName) }');
+                        $('#agreement-opp-label').addClass('icon-utility-close');
+                    } else {
+                        $('#agreement-opp-label').addClass('icon-utility-search');
+                        $('#agreement-opp-input').attr('placeholder', '{!$Label.Action_Select_Opportunity_Label}');
+                        $('#agreement-opp-input').val('{!$Label.Action_Select_Opportunity_Label}');
+                    }
+                }
+                
+                function setContactLookupHooks() {
+                    $('#recipient-contact-input').attr('readonly','readonly');
+                    
+                    $( "#recipient-contact-input" ).click(function() {
+                        showSearchContacts();
+                    });
+                    
+                    $('#recipient-contact-input').on({ 'touchstart' : function() { showSearchContacts(); } });
+                
+                    $( "#recipient-contact-label" ).click(function() {
+                        if( '{!selectedRecipient.recipient.Contact__c}' ) {
+                            unsetContact();
+                            $('#recipient-contact-label').removeClass('icon-utility-close');
+                            $('#recipient-contact-label').addClass('icon-utility-search');
+                            $('#recipient-contact-input').attr('placeholder', '{!$Label.Action_Select_Contact_Label}');
+                            $('#recipient-contact-input').val('{!$Label.Action_Select_Contact_Label}');
+                        } else {
+                            showSearchContacts();
+                        }
+                    });
+                }
+                
+                function setContactLookup() {
+                    $('#recipient-contact-label').removeClass('icon-utility-close');
+                    $('#recipient-contact-label').removeClass('icon-utility-search');
+                    if( '{!selectedRecipient.recipient.Contact__c}' ) {
+                        $('#recipient-contact-input').attr('placeholder', '{!selectedRecipient.label}');
+                        $('#recipient-contact-input').val('{!JSENCODE(selectedRecipient.label)}');
+                        $('#recipient-contact-label').addClass('icon-utility-close');
+                    } else {
+                        $('#recipient-contact-label').addClass('icon-utility-search');
+                        $('#recipient-contact-input').attr('placeholder', '{!$Label.Action_Select_Contact_Label}');
+                        $('#recipient-contact-input').val('{!$Label.Action_Select_Contact_Label}');
+                    }
+                }   
+                
+                function setLeadLookupHooks() {
+                    $('#recipient-lead-input').attr('readonly','readonly');
+                    
+                    $( "#recipient-lead-input" ).click(function() {
+                        showSearchLeads();
+                    });
+                    
+                    $('#recipient-lead-input').on({ 'touchstart' : function() { showSearchLeads(); } });
+                
+                    $( "#recipient-lead-label" ).click(function() {
+                        if( '{!selectedRecipient.recipient.Lead__c}' ) {
+                            unsetLead();
+                            $('#recipient-lead-label').removeClass('icon-utility-close');
+                            $('#recipient-lead-label').addClass('icon-utility-search');
+                            $('#recipient-lead-input').attr('placeholder', '{!$Label.Action_Select_Lead_Label}');
+                            $('#recipient-lead-input').val('{!$Label.Action_Select_Lead_Label}');
+                        } else {
+                            showSearchLeads();
+                        }
+                    });
+                }   
+                
+                function setLeadLookup() {
+                    $('#recipient-lead-label').removeClass('icon-utility-close');
+                    $('#recipient-lead-label').removeClass('icon-utility-search');
+                    if( '{!selectedRecipient.recipient.Lead__c}' ) { 
+                        $('#recipient-lead-input').attr('placeholder', '{!selectedRecipient.label}');
+                        $('#recipient-lead-input').val('{!selectedRecipient.label}');
+                        $('#recipient-lead-label').addClass('icon-utility-close');
+                    } else {
+                        $('#recipient-lead-label').addClass('icon-utility-search');
+                        $('#recipient-lead-input').attr('placeholder', '{!$Label.Action_Select_Lead_Label}');
+                        $('#recipient-lead-input').val('{!$Label.Action_Select_Lead_Label}');
+                    }
+                }  
+                
+                function setUserLookupHooks() {     
+                    $('#recipient-user-input').attr('readonly','readonly');
+                    
+                    $( "#recipient-user-input" ).click(function() {
+                        showSearchUsers();
+                    });
+                    
+                    $('#recipient-user-input').on({ 'touchstart' : function() { showSearchUsers(); } });
+                
+                    $( "#recipient-user-label" ).click(function() {
+                        if( '{!selectedRecipient.recipient.User__c}' ) {
+                            unsetUser();
+                            $('#recipient-user-label').removeClass('icon-utility-close');
+                            $('#recipient-user-label').addClass('icon-utility-search');
+                            $('#recipient-user-input').attr('placeholder', '{!$Label.Action_Select_User_Label}');
+                            $('#recipient-user-input').val('{!$Label.Action_Select_User_Label}');
+                        } else {
+                            showSearchUsers();
+                        }
+                    });
+                }   
+                
+                function setUserLookup() {
+                    $('#recipient-user-label').removeClass('icon-utility-close');
+                    $('#recipient-user-label').removeClass('icon-utility-search');
+                    if( '{!selectedRecipient.recipient.User__c}' ) { 
+                        $('#recipient-user-input').attr('placeholder', '{!selectedRecipient.label}');
+                        $('#recipient-user-input').val('{!selectedRecipient.label}');
+                        $('#recipient-user-label').addClass('icon-utility-close');
+                    } else {
+                        $('#recipient-user-label').addClass('icon-utility-search');
+                        $('#recipient-user-input').attr('placeholder', '{!$Label.Action_Select_User_Label}');
+                        $('#recipient-user-input').val('{!$Label.Action_Select_User_Label}');
+                    }
+                }               
+                                
+                function refreshFeed() {
+                    Sfdc.canvas.publisher.publish({name : 'publisher.refresh', payload : {feed: true}}); 
+                }
+    
+                function showSpinner() {
+                    document.getElementById('{!$Component.agreementPanel}').style.display = 'none';
+                    document.getElementById('{!$Component.loadingSpinnerSection}').style.display = 'block';
+                }
+        
+                function hideSpinner() {
+                    document.getElementById('{!$Component.loadingSpinnerSection}').style.display = 'none';
+                    document.getElementById('{!$Component.agreementPanel}').style.display = 'block';
+                }
+                
+                function navToAddDocument() {
+                    $('#overlay-documents').show('fast', function() {});
+                    $('#documents-dialog').show('fast', function() {});
+                }
+                
+                function hideAddDocument() {
+                    $('#documents-dialog').hide('fast', function() {});
+                    $('#overlay-documents').hide('fast', function() {});
+                }
+            </script>
+            
+            </apex:outputpanel>
+            
+            <apex:outputpanel id="loadingSpinnerSection" style="display: none; height: 300px; padding-left: 50%; padding-top: 50%;">
+                <div class="waitingSearchDiv" style="width: 100%; height: 100%; display: ; opacity:.5;"></div>
+                <img src="{!$Resource.LoadingSpinner}" style="width: 40px; height: 40px;" />
+            </apex:outputpanel>
+
+            <apex:outputPanel id="agreementPanel" rendered="{!isPanelShown}">
+                <apex:pageMessages id="messages" />
+        
+                <apex:outputPanel rendered="{! templateOptions.size > 1 }">
+                    <label class="es-input-label">
+                        <span>{!$Label.Publisher_Action_Template_Label}</span>
+                    </label>
+                    <div style="margin-top: 10px;" class="mbm pos-rel">
+                        <span id="agreementTemplateSpan" style="display: block;" class="label--icon-r icon-utility-down size-full"></span>
+                        
+                        <apex:selectList id="agreementTemplateInput" value="{!selectedAgreementTemplateId}" size="1" style="-webkit-appearance: none; height: 100%;" styleClass="size-full plm prx pvm bg-secondary-btn input input--picklist">
+                            <apex:selectOptions value="{!templateOptions}"/>
+                            <apex:actionSupport event="onchange" action="{!onTemplateChange}" onsubmit="showSpinner(); templateChange(); return false;"/>
+                        </apex:selectList>
+                    </div>
+                </apex:outputPanel>
+                
+                <apex:outputPanel id="agreementRecipientsPanel" layout="block">
+                    <label class="es-input-label">
+                        <span>{!$Label.Recipients_Section_Header}</span>
+                        <div class="es-input-value">
+                            <apex:outputPanel style="height: 70px;" styleClass="mbm size-full phm pvm input input--default input--ph-1 input--focus-1" layout="inline">
+                                <apex:repeat value="{!recipientWrappers}" var="recipientWrapper">
+                                    <a href="javascript:navToEditRecipient('{!recipientWrapper.recipient.echosign_dev1__Order_Number__c}');" style="padding-top: 4px;">
+                                        <span class="fl f5">{!recipientWrapper.label}</span>
+                                    </a>
+                                    <apex:outputpanel style="float: left;" rendered="{! recipientWrapper.recipient.Order_Number__c != recipientWrappers.size }">,&nbsp;</apex:outputpanel>
+                                </apex:repeat>
+                                <a href="javascript:navToEditRecipient(0);" title="{!$Label.Add_Recipient_Label}">
+                                    <apex:outputPanel layout="inline" style="float: right; padding-top: 10px;">
+                                        <img src="{!$Resource.echosign_dev1__AddRecipientIcon}"/>
+                                    </apex:outputPanel>
+                                </a>
+                            </apex:outputPanel>
+                        </div>
+                    </label>
+                </apex:outputPanel>
+                
+                <apex:outputPanel id="agreementNamePanel" layout="block">
+                    <label class="es-input-label">
+                        <span>{!$ObjectType.echosign_dev1__SIGN_Agreement__c.fields.Name.label}</span>
+                        <div class="es-input-value">
+                            <apex:inputField id="agreementNameInput" value="{!agreement.Name}" style="height: inherit;" styleClass="mbm size-full phm pvm input input--default input--ph-1 input--focus-1">
+                                <apex:actionSupport event="onchange" rerender="bottomPanel" />
+                            </apex:inputField>
+                        </div>
+                    </label>
+                </apex:outputPanel>
+            
+                <apex:outputPanel id="agreementMessagePanel" layout="block">
+                    <label class="es-input-label">
+                        <span>{!$ObjectType.echosign_dev1__SIGN_Agreement__c.fields.echosign_dev1__Message__c.label}</span>
+                        <div class="es-input-value">
+                            <apex:inputField id="agreementMessageInput" value="{!agreement.echosign_dev1__Message__c}" styleClass="size-full phm pvm textarea textarea--default textarea--ph-1 textarea--focus-1">
+                                <apex:actionSupport event="onchange" rerender="bottomPanel" />
+                            </apex:inputField>
+                        </div>
+                    </label>
+                </apex:outputPanel>
+                
+                <apex:outputPanel id="agreementAccountPanel" rendered="{! masterObjectName <> 'Lead' }" layout="block" style="padding-top: 10px;">
+                    <div style="padding-bottom: 10px;">
+                        <label style="padding-left: 0px;" class="label inputLabel uiLabel-left uiLabel">
+                            <span>{!$ObjectType.SIGN_Agreement__c.fields.Account__c.label}</span>
+                        </label>
+                    </div>
+                    <apex:outputPanel layout="block" styleClass="mbm pos-rel">  
+                        <label id="agreement-account-label" class="size-full pos-abs label--lookup">
+                            <span class="dn">{!$ObjectType.SIGN_Agreement__c.fields.Account__c.label}</span>
+                        </label>
+                        <input id="agreement-account-input" type="text" name="default" placeholder="{!$Label.Action_Select_Account_Label}" style="height: inherit;" class="size-full plm prx pvm input input--default input--ph-1 input--focus-1"/>
+                    </apex:outputPanel>
+                </apex:outputPanel>
+                
+                <apex:outputPanel id="agreementOpportunityPanel" rendered="{! masterObjectName <> 'Contact' && masterObjectName <> 'Lead' }" layout="block">
+                    <div style="padding-bottom: 10px;">
+                        <label style="padding-left: 0px;" class="label inputLabel uiLabel-left uiLabel">
+                            <span>{!$ObjectType.SIGN_Agreement__c.fields.Opportunity__c.label}</span>
+                        </label>
+                    </div>
+                    <div class="mbm pos-rel">   
+                        <label id="agreement-opp-label" class="size-full pos-abs label--lookup">
+                            <span class="dn">{!$ObjectType.SIGN_Agreement__c.fields.Opportunity__c.label}</span>
+                        </label>
+                        <input id="agreement-opp-input" type="text" name="default" placeholder="{!$Label.Action_Select_Opportunity_Label}" style="height: inherit;" class="size-full plm prx pvm input input--default input--ph-1 input--focus-1"/>
+                    </div>
+                </apex:outputPanel> 
+
+                <apex:outputPanel id="agreementDocumentsPanel" layout="block">
+                    <label class="es-input-label">
+                        <span>{!$Label.Attach_Document_Section_Header}</span>
+                        <div class="es-input-value">
+                            <apex:outputPanel style="height: 70px;" styleClass="mbm size-full phm pvm input input--default input--ph-1 input--focus-1" layout="inline">
+                                <apex:repeat value="{!attachmentWrappers}" var="attachmentWrapper">
+                                        <span class="fl f5">{!attachmentWrapper.title}</span>
+                                    <apex:outputpanel style="float: left;" rendered="{! ( attachmentWrapper.index + 1 ) != attachmentWrappers.size }">,&nbsp;</apex:outputpanel>
+                                </apex:repeat>          
+                                <a href="javascript:navToAddDocument();" title="{!$Label.Import_From_Folder_Label}">
+                                    <apex:outputPanel layout="inline" style="float: right; padding-top: 10px;">
+                                        <img src="{!$Resource.echosign_dev1__AddRecipientIcon}"/>
+                                    </apex:outputPanel>
+                                </a>
+                            </apex:outputPanel>
+                        </div>
+                    </label>
+                </apex:outputPanel>             
+
+                <apex:outputPanel id="bottomPanel">
+                    <apex:outputPanel id="actionsPanelBlock" rendered="{!NOT(isSOne)}">
+                        <apex:outputPanel id="agreementActionsPanel" layout="block" style="padding-top: 10px;">
+                            <!-- <apex:commandButton rerender="topPanel,bottomPanel,messages,messagePanel,agreementPanel" value="{!$Label.Publisher_Action_Send_Label}" action="{!onSend}" oncomplete="if( {!isError} ) { hideSpinner(); return false; } hideSpinner(); refreshFeed(); if( !{!isSendConfirmationShown} ) { window.parent.location.href = '/{! agreement.Id }?onloadAction=Send'; }" onclick="showSpinner();" style="width: 110px; border: 1px solid rgb(108, 128, 73); color: #fff; background-color: #8ab529; background-image: -webkit-linear-gradient(top,#8AB529 0,#87AC31 100%); background-image: -moz-linear-gradient(top,#8AB529 0,#87AC31 100%); background-image: -ms-linear-gradient(top,#8AB529 0,#87AC31 100%); filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#8AB529', endColorstr='#87AC31',GradientType=0 ); bottom: 0px; right: 2px; padding: 7px 12px 7px 12px; font-size: 15px;" id="sendAgreementButton"/>  -->
+                            <apex:commandButton rerender="topPanel,bottomPanel,messages,messagePanel,agreementPanel" value="{!$Label.Publisher_Action_Send_Label}" onclick="showSpinner(); onSubmit(); return false;" style="width: 110px; border: 1px solid rgb(108, 128, 73); color: #fff; background-color: #8ab529; background-image: -webkit-linear-gradient(top,#8AB529 0,#87AC31 100%); background-image: -moz-linear-gradient(top,#8AB529 0,#87AC31 100%); background-image: -ms-linear-gradient(top,#8AB529 0,#87AC31 100%); filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#8AB529', endColorstr='#87AC31',GradientType=0 ); bottom: 0px; right: 2px; padding: 7px 12px 7px 12px; font-size: 15px;" id="sendAgreementButton"/>
+                            <apex:commandLink oncomplete="window.parent.location.href = '/{! agreement.Id }';" rerender="topPanel,bottomPanel,messagePanel" style="color: rgb(0, 112, 255); padding-bottom: 10px; text-decoration: none; font-size: 14px; bottom: 0px; margin-left: 10px; left: 2px;" onclick="showSpinner();" value="{!$Label.Publisher_Action_Save_Label}" action="{!onSave}" id="saveAgreementButton" />
+                        </apex:outputpanel>
+                    </apex:outputPanel>
+                    <apex:outputPanel id="mobileActionsPanelBlock" rendered="{!isSOne}">
+                        <apex:outputPanel id="agreementMobileActionsPanel" layout="block" style="padding-top: 10px; padding-bottom: 20px;">
+                            <apex:commandLink oncomplete="sforce.one.navigateToURL('/apex/{!namespace}__AgreementMobile?id={! agreement.Id }');" rerender="topPanel,bottomPanel,messagePanel" style="color: rgb(0, 112, 255); padding-bottom: 10px; text-decoration: none; font-size: 14px; bottom: 0px; left: 2px;" onclick="showSpinner();" value="{!$Label.Publisher_Action_Save_Label}" action="{!onSave}" id="saveAgreementButtonMobile" />
+                        </apex:outputpanel>
+                    </apex:outputPanel>
+                </apex:outputPanel>
+                
+            </apex:outputPanel>
+            
+            
+        </apex:form><br />
+        
+        </apex:outputpanel>
+    </div>
+    
+    <div id="overlay-documents" class="overlay">
+        <div id="documents-dialog" class="buttons-overlay">
+            <a href="javascript:hideAddDocument();" name="close" title="{!$Label.Close_Button_Label}" class="db tr size-full pbm">
+              <span class="db icon-utility-close f2 wht"></span>
+            </a>
+            <div id="pass-device-dialog-content" class="bg-1 brm pam pos-rel tc">
+                <span class="text-color-4 f3 fw-semibold">{!$Label.Select_Document_Repository_Label}</span>
+                <button style="margin-top: 10px; height: 45px;" id="pass-confirm-ok-button" autofocus="autofocus" onclick="addLibraryDocument();" class="btn bg-secondary-btn btn--secondary pvs size-full brm border border--2 mbm">
+                    <span class="text-color-4 f3 fw-semibold">{!$Label.Publisher_Add_Document_EchoSign_Library_Label}</span>
+                </button>
+                <button style="margin-top: 5px; height: 45px;" id="pass-confirm-ok-button" autofocus="autofocus" onclick="addContentDocument();" class="btn bg-secondary-btn btn--secondary pvs size-full brm border border--2 mbm">
+                    <span class="text-color-4 f3 fw-semibold">{!$Label.Publisher_Add_Document_Salesforce_Content_Label}</span>
+                </button>
+                <button style="margin-top: 5px; height: 45px;" id="pass-confirm-ok-button" autofocus="autofocus" onclick="addDocument();" class="btn bg-secondary-btn btn--secondary pvs size-full brm border border--2 mbm">
+                    <span class="text-color-4 f3 fw-semibold">{!$Label.Publisher_Add_Document_Salesforce_Library_Label}</span>
+                </button>
+            </div>
+        </div>
+    </div> 
+    
+    <apex:outputPanel id="contentsSfdcPanel">
+        <apex:form >
+            <apex:outputPanel rendered="{!isContentsSfdcShown}">
+                <div class="app-wrapper">
+                    <div class="es-agreement-header-panel">
+                        <header class="es-agreement-header">
+                            <h1>{!$Label.Salesforce_Content_Documents_Label}</h1>
+                        </header>
+                    </div>
+                    <div class="app-content" style="padding-top: 10px;" id="documentsContentsContent">
+                        <section class="data-capture-buttons one-buttons">
+                            <div style="display: block;">
+                                <ul style="display: block; text-align: center; list-style-type: disc;">
+                                    <li style="display: inline; padding-right: 18px; list-style-type: none;">
+                                        <button onclick="cancelContentDocument(); return false;" class="es-subbutton"><span class="es-subbutton-label">{!$Label.Cancel_Button_Label}</span></button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </section>
+                        <section style="border-bottom-width: 0px;" class="border-bottom">
+                            <div style="margin-top: 10px;" class="content">
+                                <div class="form-control-group">
+                                    <div class="form-control form-control-select">
+                                        <apex:selectList styleClass="es-section-header" value="{!selectFolderId}" size="1" >
+                                            <apex:selectOptions value="{!sfdcContentLibraries}"/>
+                                            <apex:actionSupport event="onchange" action="{!onContentLibraryChange}" rerender="contentsSfdcPanel" />
+                                        </apex:selectList>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                        <ul class="list-view right-one-icons large-padding" style="padding-left: 0px; padding-right: 20px;">
+                            <apex:repeat value="{!folderContentDocuments}" var="folderContentDocument">
+                                <li>
+                                    <a href="javascript:storeContentDocument('{!folderContentDocument['Id']}', '{!folderContentDocument['Title']}');" style="position: absolute;" class="content">
+                                        <div class="detail-view-table">
+                                                <div class="detail-view-table-row last-child">
+                                                    <div class="detail-view-table-left-column">
+                                                        <apex:outputPanel rendered="{! folderContentDocument['FileType'] == 'PDF' }">
+                                                            <img style="margin-top: -10%;" width="30px" height="35px" src="{!URLFOR($Resource.s1doctype,'s1doctypes/pdf_60.png')}"/>
+                                                        </apex:outputPanel>
+                                                        <apex:outputPanel rendered="{! folderContentDocument['FileType'] == 'WORD' || folderContentDocument['FileType'] == 'WORD_X' }">
+                                                            <img style="margin-top: -10%;" width="30px" height="35px" src="{!URLFOR($Resource.s1doctype,'s1doctypes/word_60.png')}"/>
+                                                        </apex:outputPanel>
+                                                        <apex:outputPanel rendered="{! folderContentDocument['FileType'] == 'POWER_POINT' || folderContentDocument['FileType'] == 'POWER_POINT_X' }">
+                                                            <img style="margin-top: -10%;" width="30px" height="35px" src="{!URLFOR($Resource.s1doctype,'s1doctypes/ppt_60.png')}"/>
+                                                        </apex:outputPanel>
+                                                        <apex:outputPanel rendered="{! folderContentDocument['FileType'] == 'EXCEL' || folderContentDocument['FileType'] == 'EXCEL_X' }">
+                                                            <img style="margin-top: -10%;" width="30px" height="35px" src="{!URLFOR($Resource.s1doctype,'s1doctypes/excel_60.png')}"/>
+                                                        </apex:outputPanel>
+                                                        <apex:outputPanel rendered="{! folderContentDocument['FileType'] == 'JPEG' || folderContentDocument['FileType'] == 'JPG' || folderContentDocument['FileType'] == 'PNG' || folderContentDocument['FileType'] == 'GIF' }">
+                                                            <img style="margin-top: -10%;" width="30px" height="35px" src="{!URLFOR($Resource.s1doctype,'s1doctypes/image_60.png')}"/>
+                                                        </apex:outputPanel>
+                                                        <apex:outputPanel rendered="{! folderContentDocument['FileType'] == 'TEXT' }">
+                                                            <img style="margin-top: -10%;" width="30px" height="35px" src="{!URLFOR($Resource.s1doctype,'s1doctypes/txt_60.png')}"/>
+                                                        </apex:outputPanel>
+                                                        <apex:outputPanel rendered="{! folderContentDocument['FileType'] == 'RTF' }">
+                                                            <img style="margin-top: -10%;" width="30px" height="35px" src="{!URLFOR($Resource.s1doctype,'s1doctypes/rtf_60.png')}"/>
+                                                        </apex:outputPanel>
+                                                    </div>
+                                                    <div class="detail-view-table-right-column" style="padding-top: 10px; padding-left: 35px;">
+                                                        <span class="es-section-header">{!folderContentDocument['Title']}</span>
+                                                    </div>
+                                                </div>
+                                        </div>
+                                        <div class="list-view-icons">
+                                            <span class="icon-right-arrow">&nbsp;</span>
+                                        </div>
+                                    </a>
+                                </li>
+                            </apex:repeat>
+                        </ul>
+                        <section class="data-capture-buttons one-buttons">
+                            <div style="display: block; padding-top: 15px;">
+                                <ul style="display: block; text-align: center; list-style-type: disc;">
+                                    <li style="display: inline; padding-right: 18px; list-style-type: none;">
+                                        <button onclick="cancelContentDocument(); return false;" class="es-subbutton"><span class="es-subbutton-label">{!$Label.Cancel_Button_Label}</span></button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </section>
+                    </div>
+                </div> 
+            </apex:outputPanel>
+        </apex:form>
+    </apex:outputPanel> 
+    
+    <apex:outputPanel id="documentsSfdcPanel">
+        <apex:form >
+            <apex:outputPanel rendered="{!isDocumentsSfdcShown}">
+                <div class="app-wrapper">
+                    <div class="es-agreement-header-panel">
+                        <header class="es-agreement-header">
+                            <h1>{!$Label.Salesforce_Library_Documents_Label}</h1>
+                        </header>
+                    </div>
+                    <div class="app-content" style="padding-top: 10px;" id="documentsLibrariesContent">
+                        <section class="data-capture-buttons one-buttons">
+                            <div style="display: block;">
+                                <ul style="display: block; text-align: center; list-style-type: disc;">
+                                    <li style="display: inline; padding-right: 18px; list-style-type: none;">
+                                        <button onclick="cancelLibraryDocument(); return false;" class="es-subbutton"><span class="es-subbutton-label">{!$Label.Cancel_Button_Label}</span></button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </section>
+                        <section style="border-bottom-width: 0px;" class="border-bottom">
+                            <div style="margin-top: 10px;" class="content">
+                                <div class="form-control-group">
+                                    <div class="form-control form-control-select">
+                                        <apex:selectList styleClass="es-section-header" value="{!selectFolderId}" size="1" >
+                                            <apex:selectOptions value="{!sfdcDocumentFolders}"/>
+                                            <apex:actionSupport event="onchange" action="{!onDocumentFolderChange}" rerender="documentsSfdcPanel" />
+                                        </apex:selectList>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                        <ul class="list-view right-one-icons large-padding" style="padding-left: 0px; padding-right: 20px;">
+                            <apex:repeat value="{!folderLibraryDocuments}" var="folderLibraryDocument">
+                                <li>
+                                    <a href="javascript:storeLibraryDocument('{!folderLibraryDocument.Id}', '{!folderLibraryDocument.Name}');" style="position: absolute;" class="content">
+                                        <div class="detail-view-table">
+                                            <div class="detail-view-table-row last-child">
+                                                <div class="detail-view-table-left-column">
+                                                    <apex:outputPanel rendered="{! folderLibraryDocument.Type == 'pdf' }">
+                                                        <img width="30px" height="35px" src="{!URLFOR($Resource.s1doctype,'s1doctypes/pdf_60.png')}" onclick="window.open('/servlet/servlet.FileDownload?file={! folderLibraryDocument.Id }','viewlibrary'); return false;"/>
+                                                    </apex:outputPanel>
+                                                    <apex:outputPanel rendered="{! folderLibraryDocument.Type == 'doc' || folderLibraryDocument.Type == 'docx' }">
+                                                        <img width="30px" height="35px" src="{!URLFOR($Resource.s1doctype,'s1doctypes/word_60.png')}" onclick="window.open('/servlet/servlet.FileDownload?file={! folderLibraryDocument.Id }','viewlibrary'); return false;"/>
+                                                    </apex:outputPanel>
+                                                    <apex:outputPanel rendered="{! folderLibraryDocument.Type == 'ppt' || folderLibraryDocument.Type == 'pptx' }">
+                                                        <img width="30px" height="35px" src="{!URLFOR($Resource.s1doctype,'s1doctypes/ppt_60.png')}" onclick="window.open('/servlet/servlet.FileDownload?file={! folderLibraryDocument.Id }','viewlibrary'); return false;"/>
+                                                    </apex:outputPanel>
+                                                    <apex:outputPanel rendered="{! folderLibraryDocument.Type == 'xls' || folderLibraryDocument.Type == 'xlsx' }">
+                                                        <img width="30px" height="35px" src="{!URLFOR($Resource.s1doctype,'s1doctypes/excel_60.png')}" onclick="window.open('/servlet/servlet.FileDownload?file={! folderLibraryDocument.Id }','viewlibrary'); return false;"/>
+                                                    </apex:outputPanel>
+                                                    <apex:outputPanel rendered="{! folderLibraryDocument.Type == 'jpg' || folderLibraryDocument.Type == 'png' || folderLibraryDocument.Type == 'gif' }">
+                                                        <img width="30px" height="35px" src="{!URLFOR($Resource.s1doctype,'s1doctypes/image_60.png')}" onclick="window.open('/servlet/servlet.FileDownload?file={! folderLibraryDocument.Id }','viewlibrary'); return false;"/>
+                                                    </apex:outputPanel>
+                                                    <apex:outputPanel rendered="{! folderLibraryDocument.Type == 'txt' }">
+                                                        <img width="30px" height="35px" src="{!URLFOR($Resource.s1doctype,'s1doctypes/txt_60.png')}" onclick="window.open('/servlet/servlet.FileDownload?file={! folderLibraryDocument.Id }','viewlibrary'); return false;"/>
+                                                    </apex:outputPanel>
+                                                    <apex:outputPanel rendered="{! folderLibraryDocument.Type == 'rtf' }">
+                                                        <img width="30px" height="35px" src="{!URLFOR($Resource.s1doctype,'s1doctypes/rtf_60.png')}" onclick="window.open('/servlet/servlet.FileDownload?file={! folderLibraryDocument.Id }','viewlibrary'); return false;"/>
+                                                    </apex:outputPanel>
+                                                </div>
+                                                <div style="padding-top: 15px; padding-left: 35px;" class="detail-view-table-right-column">
+                                                        <span>{!folderLibraryDocument.Name}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="list-view-icons">
+                                            <span class="icon-right-arrow">&nbsp;</span>
+                                        </div>
+                                    </a>
+                                </li>
+                            </apex:repeat>
+                        </ul>
+                        <section class="data-capture-buttons one-buttons">
+                            <div style="display: block; padding-top: 15px;">
+                                <ul style="display: block; text-align: center; list-style-type: disc;">
+                                    <li style="display: inline; padding-right: 18px; list-style-type: none;">
+                                        <button onclick="cancelLibraryDocument(); return false;" class="es-subbutton"><span class="es-subbutton-label">{!$Label.Cancel_Button_Label}</span></button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </section>
+                    </div>
+                </div> 
+            </apex:outputPanel>
+        </apex:form>
+    </apex:outputPanel> 
+    
+    <apex:outputPanel id="documentsEchoSignPanel">
+        <apex:form >
+            <apex:outputPanel rendered="{!isDocumentsEchoSignShown}">
+                <div class="app-wrapper">
+                    <div class="es-agreement-header-panel">
+                        <header class="es-agreement-header">
+                            <h1>{!$Label.EchoSign_Library_Documents_Label}</h1>
+                        </header>
+                    </div>
+                    <div class="app-content" style="padding-top: 10px;" id="documentsTemplatesContent">
+                        <section class="data-capture-buttons one-buttons">
+                            <div style="display: block;">
+                            <ul style="display: block; text-align: center; list-style-type: disc;">
+                                <li style="display: inline; padding-right: 18px; list-style-type: none;">
+                                    <button onclick="cancelTemplateDocument(); return false;" class="es-subbutton"><span class="es-subbutton-label">{!$Label.Cancel_Button_Label}</span></button>
+                                </li>
+                            </ul>
+                            </div>
+                        </section>
+                        <ul class="list-view right-one-icons large-padding" style="padding-left: 0px; padding-right: 20px;">
+                            <apex:repeat value="{!libraryController.libraryTemplateWrappers}" var="libraryTemplateWrapper">
+                                <li>
+                                    <a href="javascript:storeTemplateDocument('{!libraryTemplateWrapper.documentLibrary.documentKey}');" style="position: absolute;" class="content">
+                                        <div class="detail-view-table">
+                                                <div class="detail-view-table-row last-child">
+                                                    <div class="detail-view-table-left-column">
+                                                        <apex:outputPanel rendered="{! libraryTemplateWrapper.documentLibrary.isDocument }">
+                                                            <img src="{!$Resource.echosign_dev1__LibraryDocumentTemplate}" style="height: 18px;"/>
+                                                        </apex:outputPanel>
+                                                        <apex:outputPanel rendered="{! libraryTemplateWrapper.documentLibrary.isDocument && libraryTemplateWrapper.documentLibrary.isFormFieldLayer }">
+                                                            <img src="{!$Resource.echosign_dev1__LibraryFieldsTemplate}"/>
+                                                        </apex:outputPanel>
+                                                    </div>
+                                                    <div class="detail-view-table-right-column" style="padding-left: 25px; padding-top: 8px;">
+                                                            {!libraryTemplateWrapper.documentLibrary.name}
+                                                    </div>
+                                                </div>
+                                        </div>
+                                        <div class="list-view-icons">
+                                            <span class="icon-right-arrow">&nbsp;</span>
+                                        </div>
+                                    </a>
+                                </li>
+                            </apex:repeat>
+                        </ul>
+                        <section class="data-capture-buttons one-buttons">
+                            <div style="display: block; padding-top: 15px;">
+                                <ul style="display: block; text-align: center; list-style-type: disc;">
+                                    <li style="display: inline; padding-right: 18px; list-style-type: none;">
+                                        <button onclick="cancelTemplateDocument(); return false;" class="es-subbutton"><span class="es-subbutton-label">{!$Label.Cancel_Button_Label}</span></button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </apex:outputPanel>
+        </apex:form>
+    </apex:outputPanel>
+    
+    <apex:outputPanel id="accountSearchPanel">
+        <apex:outputPanel rendered="{!isAccountSearchShown}">
+            <div id="objects-search-content" style="padding-top: 0px; padding-bottom: 60px;" class="app-content">
+                <div class="content">
+                    <div style="margin-top: 7px; margin-left: 7px; margin-right: 7px; padding-bottom: 10px; border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: rgb(207, 212, 217);" class="searchBox">
+                        <div class="searchBoxInner">
+                            <apex:outputPanel onclick="searchAccounts();">
+                                <label style="position: relative; padding-bottom: 2px;" class="size-full icon-utility-search pos-abs label--lookup" onclick="searchAccounts();">
+                                    <span class="dn">{!$Label.Search_Account_Label}</span>
+                                </label>
+                            </apex:outputPanel>
+                            <input id="objects-search-input" style="padding-top: 7px; border-radius: 5px;" class="text uiInput uiInputText" placeholder="{!$Label.Search_Account_Label}" type="text"/>
+                            <apex:outputPanel onclick="searchAccounts();">
+                                <a class="searchOrClear">
+                                    <div data-key="search" class="oneIcon">
+                                    </div>
+                                </a>
+                            </apex:outputPanel>
+                        </div>
+                    </div>
+                </div>
+                <ul id="objects-search-list" class="list-view right-one-icons">
+                    <li style="margin-left: 0px; padding-left: 0px;">
+                        <img height="45px" src="{!URLFOR($Resource.s1standard,'s1standard/account_60.png')}"/>
+                        <span style="font-weight: bold; font-size: larger; color: rgb(0, 0, 0); vertical-align: top; margin-top: 15px; position: absolute;">{!$ObjectType.SIGN_Agreement__c.fields.Account__c.label}</span>        
+                    </li>
+                    <apex:repeat value="{!queryAccounts}" var="account">
+                        <li style="margin-left: 0px; padding-left: 0px;">
+                            <a href="javascript:setSearchAccount('{!account.Id}');" 
+                                style="text-decoration: none; color: rgb(60, 61, 62); display: block; font-size: 14px; padding: 14px; word-break: break-all;">
+                                {!account.Name}
+                            </a>
+                        </li>
+                    </apex:repeat>
+                </ul>
+                <section class="data-capture-buttons one-buttons">
+                    <div style="display: block; padding-top: 15px;">
+                        <ul style="display: block; text-align: center; list-style-type: disc;">
+                            <li style="display: inline; padding-right: 18px; list-style-type: none;">
+                                <button onclick="javascript:cancelSearchAccount();" class="es-subbutton"><span class="es-subbutton-label">{!$Label.Cancel_Button_Label}</span></button>
+                            </li>
+                        </ul>
+                    </div>
+                </section>
+            </div>
+        </apex:outputpanel>
+    </apex:outputPanel> 
+    
+    <apex:outputPanel id="oppSearchPanel">
+        <apex:outputPanel rendered="{!isOppSearchShown}">
+            <div id="objects-search-content" style="padding-top: 0px; padding-bottom: 60px;" class="app-content">
+                <div class="content">
+                    <div style="margin-top: 7px; margin-left: 7px; margin-right: 7px; padding-bottom: 10px; border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: rgb(207, 212, 217);" class="searchBox">
+                        <div class="searchBoxInner">
+                            <apex:outputPanel onclick="searchOpps();">
+                                <label style="position: relative; padding-bottom: 2px;" class="size-full icon-utility-search pos-abs label--lookup" onclick="searchOpps();">
+                                    <span class="dn">{!$Label.Search_Opportunity_Label}</span>
+                                </label>
+                            </apex:outputPanel>
+                            <input id="objects-search-input" style="padding-top: 7px; border-radius: 5px;" class="text uiInput uiInputText" placeholder="{!$Label.Search_Opportunity_Label}" type="text"/>
+                            <apex:outputPanel onclick="searchOpps();">
+                                <a class="searchOrClear">
+                                    <div data-key="search" class="oneIcon">
+                                    </div>
+                                </a>
+                            </apex:outputPanel>
+                        </div>
+                    </div>
+                </div>
+                <ul id="objects-search-list" class="list-view right-one-icons">
+                    <li style="margin-left: 0px; padding-left: 0px;">
+                        <img height="45px" src="{!URLFOR($Resource.s1standard,'s1standard/opportunity_60.png')}"/>
+                        <span style="font-weight: bold; font-size: larger; color: rgb(0, 0, 0); vertical-align: top; margin-top: 15px; position: absolute;">{!$ObjectType.SIGN_Agreement__c.fields.Opportunity__c.label}</span>        
+                    </li>
+                    <apex:repeat value="{!queryOpps}" var="opp">
+                        <li style="margin-left: 0px; padding-left: 0px;">
+                            <a href="javascript:setSearchOpp('{!opp.Id}');" 
+                                style="text-decoration: none; color: rgb(60, 61, 62); display: block; font-size: 14px; padding: 14px; word-break: break-all;">
+                                {!opp.Name}
+                            </a>
+                        </li>
+                    </apex:repeat>
+                </ul>
+                <section class="data-capture-buttons one-buttons">
+                    <div style="display: block; padding-top: 15px;">
+                        <ul style="display: block; text-align: center; list-style-type: disc;">
+                            <li style="display: inline; padding-right: 18px; list-style-type: none;">
+                                <button onclick="javascript:cancelSearchOpp();" class="es-subbutton"><span class="es-subbutton-label">{!$Label.Cancel_Button_Label}</span></button>
+                            </li>
+                        </ul>
+                    </div>
+                </section>
+            </div>
+        </apex:outputpanel>
+    </apex:outputPanel>
+    
+    <apex:outputPanel id="contactSearchPanel">
+        <apex:outputPanel rendered="{!isContactSearchShown}">
+            <div id="objects-search-content" style="padding-top: 0px; padding-bottom: 60px;" class="app-content">
+                <div class="content">
+                    <div style="margin-top: 7px; margin-left: 7px; margin-right: 7px; padding-bottom: 10px; border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: rgb(207, 212, 217);" class="searchBox">
+                        <div class="searchBoxInner">
+                            <apex:outputPanel onclick="searchContacts();">
+                                <label style="position: relative; padding-bottom: 2px;" class="size-full icon-utility-search pos-abs label--lookup" onclick="searchContacts();">
+                                    <span class="dn">{!$Label.Search_Contact_Label}</span>
+                                </label>
+                            </apex:outputPanel>
+                            <input id="objects-search-input" style="padding-top: 7px; border-radius: 5px;" class="text uiInput uiInputText" placeholder="{!$Label.Search_Contact_Label}" type="text"/>
+                            <apex:outputPanel onclick="searchContacts();">
+                                <a class="searchOrClear">
+                                    <div data-key="search" class="oneIcon">
+                                    </div>
+                                </a>
+                            </apex:outputPanel>
+                        </div>
+                    </div>
+                </div>
+                <ul id="objects-search-list" class="list-view right-one-icons">
+                    <li style="margin-left: 0px; padding-left: 0px;">
+                        <img style="background-color: #2A94D6; height: 36px; border-radius: 5px; margin-right: 10px;" src="{!URLFOR($Resource.s1standard,'s1standard/contact_60.png')}"/>
+                        <span style="font-weight: bold; font-size: larger; color: rgb(0, 0, 0); vertical-align: top; margin-top: 15px; position: absolute;">{!$ObjectType.Contact.label}</span>        
+                    </li>
+                    <apex:repeat value="{!queryContacts}" var="contact">
+                        <li style="margin-left: 0px; padding-left: 0px;">
+                            <a href="javascript:setSearchContact('{!contact.Id}', '{! JSENCODE(contact.Name) }');" 
+                                style="text-decoration: none; color: rgb(60, 61, 62); display: block; font-size: 14px; padding: 14px; word-break: break-all;">
+                                {!contact.Name}
+                            </a>
+                        </li>
+                    </apex:repeat>
+                </ul>
+                <section class="data-capture-buttons one-buttons">
+                    <div style="display: block; padding-top: 15px;">
+                        <ul style="display: block; text-align: center; list-style-type: disc;">
+                            <li style="display: inline; padding-right: 18px; list-style-type: none;">
+                                <button onclick="javascript:cancelSearchContact();" class="es-subbutton"><span class="es-subbutton-label">{!$Label.Cancel_Button_Label}</span></button>
+                            </li>
+                        </ul>
+                    </div>
+                </section>
+            </div>
+        </apex:outputpanel>
+    </apex:outputPanel>
+    
+    <apex:outputPanel id="leadSearchPanel">
+        <apex:outputPanel rendered="{!isLeadSearchShown}">
+            <div id="objects-search-content" style="padding-top: 0px; padding-bottom: 60px;" class="app-content">
+                <div class="content">
+                    <div style="margin-top: 7px; margin-left: 7px; margin-right: 7px; padding-bottom: 10px; border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: rgb(207, 212, 217);" class="searchBox">
+                        <div class="searchBoxInner">
+                            <apex:outputPanel onclick="searchLeads();">
+                                <label style="position: relative; padding-bottom: 2px;" class="size-full icon-utility-search pos-abs label--lookup" onclick="searchLeads();">
+                                    <span class="dn">{!$Label.Search_Lead_Label}</span>
+                                </label>
+                            </apex:outputPanel>
+                            <input id="objects-search-input" style="padding-top: 7px; border-radius: 5px;" class="text uiInput uiInputText" placeholder="{!$Label.Search_Lead_Label}" type="text"/>
+                            <apex:outputPanel onclick="searchLeads();">
+                                <a class="searchOrClear">
+                                    <div data-key="search" class="oneIcon">
+                                    </div>
+                                </a>
+                            </apex:outputPanel>
+                        </div>
+                    </div>
+                </div>
+                <ul id="objects-search-list" class="list-view right-one-icons">
+                    <li style="margin-left: 0px; padding-left: 0px;">
+                        <img style="background-color: #F3AE4E; height: 36px; border-radius: 5px; margin-right: 10px;" src="{!URLFOR($Resource.s1standard,'s1standard/lead_60.png')}"/>
+                        <span style="font-weight: bold; font-size: larger; color: rgb(0, 0, 0); vertical-align: top; margin-top: 15px; position: absolute;">{!$ObjectType.Lead.label}</span>        
+                    </li>
+                    <apex:repeat value="{!queryLeads}" var="lead">
+                        <li style="margin-left: 0px; padding-left: 0px;">
+                            <a href="javascript:setSearchLead('{!lead.Id}', '{! JSENCODE(lead.Name) }');" 
+                                style="text-decoration: none; color: rgb(60, 61, 62); display: block; font-size: 14px; padding: 14px; word-break: break-all;">
+                                {!lead.Name}
+                            </a>
+                        </li>
+                    </apex:repeat>
+                </ul>
+                <section class="data-capture-buttons one-buttons">
+                    <div style="display: block; padding-top: 15px;">
+                        <ul style="display: block; text-align: center; list-style-type: disc;">
+                            <li style="display: inline; padding-right: 18px; list-style-type: none;">
+                                <button onclick="javascript:cancelSearchLead();" class="es-subbutton"><span class="es-subbutton-label">{!$Label.Cancel_Button_Label}</span></button>
+                            </li>
+                        </ul>
+                    </div>
+                </section>
+            </div>
+        </apex:outputpanel>
+    </apex:outputPanel>
+    
+    <apex:outputPanel id="userSearchPanel">
+        <apex:outputPanel rendered="{!isUserSearchShown}">
+            <div id="objects-search-content" style="padding-top: 0px; padding-bottom: 60px;" class="app-content">
+                <div class="content">
+                    <div style="margin-top: 7px; margin-left: 7px; margin-right: 7px; padding-bottom: 10px; border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: rgb(207, 212, 217);" class="searchBox">
+                        <div class="searchBoxInner">
+                            <apex:outputPanel onclick="searchUsers();">
+                                <label style="position: relative; padding-bottom: 2px;" class="size-full icon-utility-search pos-abs label--lookup" onclick="searchUsers();">
+                                    <span class="dn">{!$Label.Search_User_Label}</span>
+                                </label>
+                            </apex:outputPanel>
+                            <input id="objects-search-input" style="padding-top: 7px; border-radius: 5px;" class="text uiInput uiInputText" placeholder="{!$Label.Search_User_Label}" type="text"/>             
+                            <apex:outputPanel onclick="searchUsers();">
+                                <a class="searchOrClear">
+                                    <div data-key="search" class="oneIcon">
+                                    </div>
+                                </a>
+                            </apex:outputPanel>
+                        </div>
+                    </div>
+                </div>
+                <ul id="objects-search-list" class="list-view right-one-icons">
+                    <li style="margin-left: 0px; padding-left: 0px;">
+                        <img style="background-color: #4EB1CB; height: 36px; border-radius: 5px; margin-right: 10px;" src="{!URLFOR($Resource.s1standard,'s1standard/people_60.png')}"/>
+                        <span style="font-weight: bold; font-size: larger; color: rgb(0, 0, 0); vertical-align: top; margin-top: 15px; position: absolute;">{!$ObjectType.User.label}</span>        
+                    </li>
+                    <apex:repeat value="{!queryUsers}" var="user">
+                        <li style="margin-left: 0px; padding-left: 0px;">
+                            <a href="javascript:setSearchUser('{!user.Id}', '{! JSENCODE(user.Name) }');" 
+                                style="text-decoration: none; color: rgb(60, 61, 62); display: block; font-size: 14px; padding: 14px; word-break: break-all;">
+                                {!user.Name}
+                            </a>
+                        </li>
+                    </apex:repeat>
+                </ul>
+                <section class="data-capture-buttons one-buttons">
+                    <div style="display: block; padding-top: 15px;">
+                        <ul style="display: block; text-align: center; list-style-type: disc;">
+                            <li style="display: inline; padding-right: 18px; list-style-type: none;">
+                                <button onclick="javascript:cancelSearchUser();" class="es-subbutton"><span class="es-subbutton-label">{!$Label.Cancel_Button_Label}</span></button>
+                            </li>
+                        </ul>
+                    </div>
+                </section>
+            </div>
+        </apex:outputpanel>
+    </apex:outputPanel>
+            
+    <apex:outputPanel id="recipientEditPanel">
+        <apex:form >
+            <apex:outputPanel rendered="{!isRecipientEditShown}">
+                <div class="es-agreement-header-panel">
+                    <header class="es-agreement-header">
+                        <h1>{!$Label.Recipient_Publisher_Action_Header}</h1>
+                    </header>
+                </div>
+                <div class="app-content" style="padding-top: 15px;" id="editRecipientsContent">
+                    <section style="border-bottom-width: 0px;" class="border-bottom">
+                        <div class="content">
+                            <div class="form-control-group">
+                                <label class="es-input-label">
+                                    <span>{!$Label.Recipients_Role_Column_Label}</span>
+                                </label>
+                                <div style="margin-top: 10px;" class="mbm pos-rel">
+                                    <span id="recipientRoleSpan" class="label--icon-r icon-utility-down size-full"></span>
+                                    <apex:inputField id="recipientRole" value="{!selectedRecipient.recipient.echosign_dev1__Recipient_Role__c}" style="-webkit-appearance: none; height: 100%;" styleClass="size-full plm prx pvm bg-secondary-btn input input--picklist"/>
+                                </div>
+                            </div>
+                            <div class="form-control-group">
+                                <label class="es-input-label">
+                                    <span>{!$Label.Recipients_Type_Column_Label}</span>
+                                </label>
+                                <div style="margin-top: 10px;" class="mbm pos-rel">
+                                    <span id="recipientTypeSpan" class="label--icon-r icon-utility-down size-full"></span>
+                                    <apex:inputField id="recipientTypeSelect" value="{!selectedRecipient.recipient.echosign_dev1__Recipient_Type__c}" style="-webkit-appearance: none; height: 100%;" styleClass="size-full plm prx pvm bg-secondary-btn input input--picklist">
+                                        <apex:actionSupport event="onchange" oncomplete="setRecipientLookups();" rerender="recipientsValueSection"/>
+                                    </apex:inputField>                              
+                                </div>
+                            </div>
+                            <apex:outputPanel id="recipientsValueSection">
+                                <apex:outputPanel id="recipientContactSection" layout="block" rendered="{! selectedRecipient.recipient.Recipient_Type__c = 'Contact' }">
+                                    <label style="padding-left: 0px; padding-bottom: 10px;" class="label inputLabel uiLabel-left uiLabel">
+                                        <span>{!$Label.Publisher_Recipient_Contact_Name_Label}</span>
+                                    </label>
+                                    <div id="recipient-contact-input-panel" class="mbm pos-rel"> 
+                                        <img style="background-color: #2A94D6; height: 43px; border-radius: 5px; position: absolute;" height="45px" src="{!URLFOR($Resource.s1standard,'s1standard/contact_60.png')}"/>
+                                        <label id="recipient-contact-label" class="size-full pos-abs label--lookup">
+                                            <span class="dn">{!$Label.Publisher_Recipient_Select_Contact_Label}</span>
+                                        </label>
+                                        <input id="recipient-contact-input" style="height: inherit; margin-left: 15%; width: 85%;" type="text" name="default" placeholder="{!$Label.Action_Select_Contact_Label}" class="size-full plm prx pvm input input--default input--ph-1 input--focus-1"/>
+                                    </div>
+                                </apex:outputPanel>
+                                <apex:outputPanel id="recipientLeadSection" layout="block" rendered="{! selectedRecipient.recipient.Recipient_Type__c = 'Lead' }">
+                                    <label style="padding-left: 0px; padding-bottom: 10px;" class="label inputLabel uiLabel-left uiLabel">
+                                        <span>{!$Label.Publisher_Recipient_Lead_Name_Label}</span>
+                                    </label>
+                                    <div id="recipient-lead-input-panel" class="mbm pos-rel"> 
+                                        <img style="background-color: #F3AE4E; height: 43px; border-radius: 5px; position: absolute;" height="45px" src="{!URLFOR($Resource.s1standard,'s1standard/lead_60.png')}"/>
+                                        <label id="recipient-lead-label" class="size-full pos-abs label--lookup">
+                                            <span class="dn">{!$Label.Publisher_Recipient_Select_Lead_Label}</span>
+                                        </label>
+                                        <input id="recipient-lead-input" style="height: inherit; margin-left: 15%; width: 85%;" type="text" name="default" placeholder="{!$Label.Action_Select_Lead_Label}" class="size-full plm prx pvm input input--default input--ph-1 input--focus-1"/>
+                                    </div>
+                                </apex:outputPanel>
+                                <apex:outputPanel id="recipientUserSection" layout="block" rendered="{! selectedRecipient.recipient.Recipient_Type__c = 'User' }">
+                                    <label style="padding-left: 0px; padding-bottom: 10px;" class="label inputLabel uiLabel-left uiLabel">
+                                        <span>{!$Label.Publisher_Recipient_User_Name_Label}</span>
+                                    </label>
+                                    <div id="recipient-user-input-panel" class="mbm pos-rel"> 
+                                        <img style="background-color: #4EB1CB; height: 43px; border-radius: 5px; position: absolute;" height="45px" src="{!URLFOR($Resource.s1standard,'s1standard/people_60.png')}"/>
+                                        <label id="recipient-user-label" class="size-full pos-abs label--lookup">
+                                            <span class="dn">{!$Label.Publisher_Recipient_Select_User_Label}</span>
+                                        </label>
+                                        <input id="recipient-user-input" style="height: inherit; margin-left: 15%; width: 85%;" type="text" name="default" placeholder="{!$Label.Action_Select_User_Label}" class="size-full plm prx pvm input input--default input--ph-1 input--focus-1"/>
+                                    </div>
+                                </apex:outputPanel>
+                                <apex:outputPanel id="recipientEmailSection" layout="block" rendered="{! selectedRecipient.recipient.Recipient_Type__c = 'Email' }">
+                                    <div class="form-control-group">
+                                        <label class="es-input-label">
+                                            <span>{!$Label.Publisher_Recipient_Email_Label}</span>
+                                        </label>
+                                        <apex:inputField id="recipientEmailValue" value="{! selectedRecipient.recipient.Email_Address__c }" style="height: inherit; margin-top: 10px;" styleClass="size-full plm prx pvm input input--default input--ph-1 input--focus-1">
+                                            <apex:actionSupport event="onchange" rerender="recipientsValueSection"/>
+                                            <apex:actionSupport event="onblur" rerender="recipientsValueSection"/>
+                                        </apex:inputField>
+                                    </div>
+                                </apex:outputPanel>
+                            </apex:outputPanel>
+                        </div>
+                    </section>
+                    <section class="data-capture-buttons one-buttons">
+                        <div id="recipient-buttons" style="display: none; padding-top: 15px;">
+                            <ul style="display: block; text-align: center; list-style-type: disc;">
+                                <li style="display: inline; padding-right: 18px; list-style-type: none;">
+                                    <button onclick="var emailValue = $( getSelectorFromSalesforceId('{!$Component.recipientEmailValue}') ).val(); if( emailValue != null && emailValue != '' && !validateEmail(emailValue) ) { return false; } saveRecipient({! selectedRecipient.recipient.Order_Number__c }, emailValue); return false;" class="es-subbutton"><span class="es-subbutton-label">{!$Label.Save_Button_Label}</span></button>
+                                </li>
+                                <li style="display: {! IF( NOT(isRecipientAdd), 'inline', 'none' ) }; padding-right: 18px; list-style-type: none;">
+                                    <button onclick="deleteRecipient({! selectedRecipient.recipient.Order_Number__c }); return false;" class="es-subbutton"><span class="es-subbutton-label">{!$Label.Delete_Button_Label}</span></button>
+                                </li>
+                                <li style="display: inline; padding-right: 18px; list-style-type: none;">
+                                    <button onclick="cancelRecipient(); return false;" class="es-subbutton"><span class="es-subbutton-label">{!$Label.Cancel_Button_Label}</span></button>
+                                </li>
+                            </ul>
+                        </div>
+                        <div id="recipient-buttons-phone" style="display: none; padding-top: 15px;">
+                            <div style="background-color: inherit;" class="bg-1 brm pam pos-rel tc">
+                              <button onclick="var emailValue = $( getSelectorFromSalesforceId('{!$Component.recipientEmailValue}') ).val(); if( emailValue != null && emailValue != '' && !validateEmail(emailValue) ) { return false; } saveRecipient({! selectedRecipient.recipient.Order_Number__c }, emailValue); return false;" style="height: 45px; margin-bottom: 10px;" class="btn bg-secondary-btn btn--secondary pvs size-full brm border border--2 mbm">
+                                <span class="text-color-4 f3 fw-semibold">{!$Label.Save_Button_Label}</span>
+                              </button>
+                              <button onclick="deleteRecipient({! selectedRecipient.recipient.Order_Number__c }); return false;" style="height: 45px; margin-bottom: 10px;" class="btn bg-secondary-btn btn--secondary pvs size-full brm border border--2 mbm">
+                                <span class="text-color-4 f3 fw-semibold">{!$Label.Delete_Button_Label}</span>
+                              </button>
+                              <button onclick="cancelRecipient(); return false;" style="height: 45px;" class="btn bg-secondary-btn btn--secondary pvs size-full brm border border--2 mbm">
+                                <span class="text-color-4 f3 fw-semibold">{!$Label.Cancel_Button_Label}</span>
+                              </button>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+           </apex:outputPanel>
+        </apex:form>
+    </apex:outputPanel> 
+</apex:component>

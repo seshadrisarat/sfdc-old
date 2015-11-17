@@ -1,0 +1,788 @@
+<apex:component controller="SLSI.SL_IntranetChatterFeedsController" allowDML="true">
+
+<!-- 	<link type="text/css" rel="stylesheet" href="{!URLFOR($Resource.SLSI__SL_IntranetHub,'/IntranetHub/widgetCSS/SL_IntranetChatterFeeds.css')}" /> -->
+    
+	<apex:attribute assignTo="{!compImpl}" name="aComponentImpl" type="SLSI.WidgetAbstract" description="component implementation object" required="true"/>
+	
+	<script src="/jslibrary/1367256616000/sfdc/JiffyStubs.js"></script>
+	<script src="/static/101812/js/functions.js" type="text/javascript"></script>
+	<script src="/jslibrary/1372112290000/sfdc/main.js" type="text/javascript"></script>
+	<script src="/jslibrary/labels/1372112290000/en_US.js" type="text/javascript"></script>
+	<script src="/static/101812/desktop/desktopAjax.js" type="text/javascript"></script>
+	<script src="/static/101812/js/picklist.js" type="text/javascript"></script> 
+	<script src="/EXT/ext-3.2.2/ext.js" type="text/javascript"></script>
+	<script src="/jslibrary/1371165276000/sfdc/Chatter.js" type="text/javascript"></script>
+	<script src="/jslibrary/1370440572000/sfdc/ChatterDefer.js" type="text/javascript"></script>
+	<script src="/jslibrary/1367256616000/sfdc/Zen.js" type="text/javascript"></script>
+	
+	<span id="detailwidget{!id}">
+		<script>
+			/************ Methods for file attachment and for opening the new window ********/
+			var showPostSection = true;	
+			
+			var curPopupWindow;
+			function setSelectedCompanyDetails()
+			{
+				if(curPopupWindow != '' && curPopupWindow != null)
+					curPopupWindow.close();
+				
+				location.reload();
+			} 
+			
+			function openWind(URL)
+			{
+			    curPopupWindow  = window.open(URL, "_blank","width=500, height=200,dependent=no,toolbar=no,status=no,directories=no,menubar=no,scrollbars=0,resizable=0", true);               
+			}
+			
+			function linkAttachment()
+			{
+				document.getElementById('content1').style.display = '';
+				
+				if(curPopupWindow != '' && curPopupWindow != null)
+					curPopupWindow.close();
+			}
+			
+			/*********** End of Methods for file attachment ***********/
+			
+			
+			/***********  Methods for subject line *******************/
+			function decodeEntities(input) 
+			{
+			   var y = document.createElement('textarea');
+			   $(y).html(input);
+			   return y.value;
+			}
+			
+			function setSubjectTag(divId)
+			{
+				var postBodyId = divId;
+				var postBody = '';
+				postBody = $('#' + postBodyId).find('span').html();
+				var subtagCount = 0;
+				
+				/* Only for Ie , because multiline post with Subject tag had an issue with IE, so encoding <BR> */
+				if($.browser.msie) 
+				{
+					postBody = postBody.replace('/</gi', "[--]");
+					postBody = postBody.replace('/>/gi', "[---]");
+				}	
+				
+				var decodedPost = (decodeEntities(postBody));
+				
+				while(decodedPost.toLowerCase().indexOf('<s>') > -1)
+				{
+				    subtagCount++;
+				    if((subtagCount%2) == 0)
+				    	postBody = decodedPost =  decodedPost.replace(/<s>/i, '</font>');
+				    else
+				        postBody = decodedPost =  decodedPost.replace(/<s>/i, '<font style="font-weight : bold;">');
+				}
+				
+				if((subtagCount%2) != 0) 
+				    postBody = postBody.substring(0, postBody.lastIndexOf('<font style="font-weight : bold;">')) + postBody.substring(postBody.lastIndexOf('<font style="font-weight : bold;">')+34, postBody.length);
+				
+				/*Only for Ie , because multiline post with Subject tag had an issue with IE, so decoding it [--] */ 
+				if($.browser.msie)
+				{
+				 	while(postBody.indexOf('[--]') != -1) 
+				 		postBody = postBody.replace('[--]', "<");
+				 	while(postBody.indexOf('[---]') != -1) 
+				 		postBody = postBody.replace('[---]', ">");
+				} 
+				
+				$('#' + postBodyId).find('span').html(postBody);
+			}
+			/****************** End of Methods for subject line ********************/
+			
+			/****** To clear all input boxes and textareas after operation *********/ 	
+			function clearAllValues()
+			{
+				document.getElementById('publishFeedPost').value = '';
+				document.getElementById('linkTxt').value = '';
+				document.getElementById('linkName').value = '';
+				document.getElementById('content1').style.display = 'none';
+				if(curPopupWindow != '' && curPopupWindow != null)
+					curPopupWindow.close();
+					
+				reRenderCss();	
+			}
+			/********* End  **********/	
+		</script>
+		
+		<div class="wc-widget SL_IntranetChatterFeeds" id="widget{!id}" > 
+			<apex:outputpanel id="chatterOpId"> 
+				
+				<apex:form styleClass="feed-form">
+					<apex:actionFunction name="widget{!id}.showChatterActivity" action="{!reloadItems}" rerender="mainBodySection, headerOpId, Posts" status="loader" onComplete="reRenderCss();">
+						<apex:param name="GroupId" assignTo="{!MyImpl.feedParentId}" value=""/>
+					</apex:actionFunction> 
+					
+					<apex:actionFunction name="widget{!id}.insertFeed" action="{!insertFeedPost}" immediate="true" rerender="mainBodySection, headerOpId, Posts" status="loader" oncomplete="clearAllValues();">
+						<apex:param name="p1" value="" assignTo="{!MyImpl.strPostBody}" />
+						<apex:param name="p2" value="" assignTo="{!MyImpl.strLinkPost}" />
+						<apex:param name="p3" value="" assignTo="{!MyImpl.strLinkName}"/>
+					</apex:actionFunction>
+						
+					<apex:actionFunction name="widget{!id}.feedLikeUnlike" action="{!feedLikeUnlike}" rerender="Posts" status="loader" onComplete="reRenderCss();">
+						<apex:param name="LikeOrUnlike" value=""/> 
+						<apex:param name="feedLikeOrUnlikeId" value=""/>
+					</apex:actionFunction>
+					
+					<apex:actionFunction name="widget{!id}.postComment" action="{!insertFeedComment}" rerender="mainBodySection, headerOpId, Posts" status="loader" onComplete="reRenderCss();">
+						<apex:param name="feedPostId" value=""/>
+						<apex:param name="feedCommentBody" value=""/> 
+					</apex:actionFunction>
+					
+					<apex:actionFunction name="widget{!id}.getMoreRecords" action="{!getMoreRecords}" rerender="Posts" status="loader" onComplete="reRenderCss();"/> 
+					
+		 			<apex:actionFunction name="widget{!id}.SortFeeds" action="{!getFeedItems}" rerender="Posts" status="loader" onComplete="reRenderCss();">
+						<apex:param name="sortBy" assignTo="{!MyImpl.feedItemOrderBy}" value=""/>
+					</apex:actionFunction>
+						
+					<apex:actionFunction name="widget{!id}.deleteFeedPostAF" action="{!deleteFeedPost}" rerender="mainBodySection, headerOpId, Posts" status="loader" onComplete="reRenderCss();">
+						<apex:param name="deletedPost" assignTo="{!MyImpl.deletedPostId}" value=""/>
+					</apex:actionFunction> 
+					
+					<apex:actionFunction name="widget{!id}.deleteFeedPostCommentAF" action="{!deleteFeedPostComment}" rerender="Posts" status="loader" onComplete="reRenderCss();">
+						<apex:param name="deletedComment" assignTo="{!MyImpl.deletedCommentId}" value=""/>
+						<apex:param name="deletedCommentsPost" assignTo="{!MyImpl.deletedPostId}" value=""/>
+					</apex:actionFunction>
+				</apex:form>		
+				
+				<legend class="hidden">feed-form</legend>
+		<!-- 				updated on 11/10/2013 the width -->		
+				<div class="message-block" id="chatterFeedPost" style="padding: 9px;width:445px;">
+					<div class="row">
+						<div class="avatar">
+							<apex:image value="{!MyImpl.userImage}" alt="" title=""  width="35" height="35" />
+						</div>
+						<!---------------- Feed post container ------------------>
+						<label for="publishFeedPost" class="hidden">&nbsp;</label>
+						<textarea id="publishFeedPost" cols="30" rows="5" onKeyUp="widget{!id}.checkPostlength(this)">{!JSENCODE($Label.Sl_FeedPostDefaultText)}</textarea>   
+						<!----------------- End of feed post container  -------->
+						
+					</div>
+					
+					<div style="color: red;font-weight: bold; padding-left:62px" id="postErr"></div>
+					
+					<div class="tools">
+						<ul class="tools-list">
+		<!-- 				updated on 11/10/2013 the margin on both li -->
+							<li style="cursor: pointer;margin-left:0px;">
+								<a onclick="widget{!id}.openCompanyPopup('{!JSENCODE($Label.Sl_FeedPostDefaultText)}', '{!$User.Id}', 'feedPost');">
+									<img src="{!URLFOR($Resource.SL_IntranetHUB,'/IntranetHub/images/icon2.png')}" alt="image description" width="22" height="16" />
+								</a>
+							</li>
+							<li style="cursor: pointer;margin-left:0px;">
+								<a onclick="linkAttachment();">
+									<img src="{!URLFOR($Resource.SL_IntranetHUB,'/IntranetHub/images/icon3.png')}" alt="image description" width="17" height="16" />
+								</a>
+							</li>
+						</ul>
+		<!-- 				updated font-weight on 11/10/2013 -->
+						<a style="" onclick="widget{!id}.feedPost1('{!JSENCODE($Label.Sl_FeedPostDefaultText)}');"  class="btn send"><strong>+</strong> Post</a>
+					</div>
+					
+					<div id="linkAttachment">
+						<label id="browsefile"><input style="display:none" type="file" /></label>
+						<div id="content1" style="display:none" class="content1">
+		<!-- 				updated on 11/10/2013 style tag -->
+			             	<div class="linkContainer" style="border: 1px dotted #999;padding:20px 10px 15px 10px;margin:2% 2% 0px 0%;">
+			                 	<div style="float:left;">
+			                     	<p class="urlLink" style="color: #7c7f83;margin: 0px;padding: 0px;float: left;padding-right: 25px;line-height: 30px;">Link URL<font color="red">*</font>&nbsp;&nbsp;</p>
+			                         <span class="floatL">
+		<!-- 				updated on 11/10/2013 style  -->	                         
+			                         	<input type="text" id="linkTxt" class="text1 linkContainerText" style="line-height:30px\9;margin:0 0 0 0;width: 320px;border: 1px solid #e4e4e4;height: 29px;background: #f9f9f9;" onKeyUp="widget{!id}.checkLinklength(this)"/>
+			                         	<div id="linkId" style="visibility:hidden; font-size: 10px;color:red;margin-left: 88px;">Link URL is required field</div>
+			                         </span><br clear="all" />
+			                         <p class="linkName" style="color: #7c7f83;margin: 0px;padding: 0px;float: left;padding-right: 25px;line-height: 30px;color: #7c7f83;">Link Name&nbsp;	</p>
+		<!-- 				updated on 11/10/2013 style  -->	
+			                         <span class="floatL"><input type="text" id="linkName" class="text1 linkContainerText" style="line-height:30px\9;margin:0 0 0 0;width: 320px;border: 1px solid #e4e4e4;height: 29px;background: #f9f9f9;" /></span><br clear="all" />
+			                     </div><br clear="all" />
+			                </div><br clear="all" />
+			            </div>
+					</div>
+				</div>
+				
+				<script>
+					if(showPostSection)
+						$('#chatterFeedPost').show();
+					else
+						$('#chatterFeedPost').hide();   
+				</script>
+				
+				<!-- Start : headline -->
+				<div class="headline" >
+					<apex:outputpanel rendered="{!MyImpl.lstFeedItemsSearchResults.size > 0}">
+						<dl class="sort">
+							<dt style="font-weight:100">Sort by:</dt>
+							<dd><a id="anchorId1" style="cursor:pointer" onclick="$('#anchorId2').removeClass('active');$(this).addClass('active');widget{!id}.SortFeeds('CreatedDate');">Date</a> &nbsp;</dd>
+							<dd>| &nbsp;<a id="anchorId2" style="cursor:pointer" onclick="$('#anchorId1').removeClass('active');$(this).addClass('active');widget{!id}.SortFeeds('CommentCount');">Popular</a></dd>
+						</dl>
+						<script>
+							if('{!JSENCODE(MyImpl.feedItemOrderBy)}' == 'CreatedDate')
+							{
+								$('#anchorId2').removeClass('active');
+								$('#anchorId1').addClass('active');
+							}
+							else if('{!JSENCODE(MyImpl.feedItemOrderBy)}' == 'CommentCount')
+							{
+								$('#anchorId1').removeClass('active');
+								$('#anchorId2').addClass('active');
+							}   
+						</script>
+					</apex:outputpanel>
+					
+					<h2>{!MyImpl.selectedGroupName}</h2>
+					
+				</div> 
+				<!-- End : headline -->
+					 
+				<apex:outputPanel id="Posts">
+					<apex:outputPanel id="postPanel">
+						<apex:repeat value="{!MyImpl.lstFeedItemsSearchResults}" var="post" rows="{!MyImpl.numOfRecordeToBedisplayed_Desktop}" rendered="{!MyImpl.lstFeedItemsSearchResults.size > 0}">
+		<!-- 				updated on 11/10/2013 style					 -->
+							<div id="postLI{!post.Id}" class="feed {!IF(MyImpl.mapFeedItemIdToGroupName[post.Id] != 'NG' && CONTAINS(MyImpl.strFeaturedPostsIDs, post.Id), 'feature', '')}" style="margin-top:8px;">
+								
+								<div class="avatar">
+									<a href="SL_Intranet?page=Employee Profile&tab=Employee Profile&id={!post.CreatedById}"><img src="{!MyImpl.mapFeedIdToUser[post.Id].SmallPhotoUrl}" alt="image description" width="45" height="45" /></a>
+								</div>
+								
+								<div class="info">
+									<h3>
+										<!-- Notification -->
+		                            	<apex:outputPanel rendered="{!IF(MyImpl.strKeyPrefixNotifications != '', true, false)}" >
+					                        <apex:outputPanel rendered="{!IF(BEGINS(post.parentId , MyImpl.strKeyPrefixNotifications) , true, false)}" >
+			                                	<a style="font-size: 0.85em; cursor: pointer;" href="SL_Intranet?page=Home&selNotif={!post.parentId}">
+			                                		{!Myimpl.mapNotificationIdToName[post.parentId]}  
+			                                	</a>
+			                                	-
+			                                </apex:outputPanel>
+		                               </apex:outputPanel>
+		                            	 
+		                            	<!-- Content Chatter -->
+		                            	<apex:outputPanel rendered="{!IF(MyImpl.strKeyPrefixContentChatter != '', true, false)}" >
+					                        <apex:outputPanel rendered="{!IF(BEGINS(post.parentId , MyImpl.strKeyPrefixContentChatter) , true, false)}" >
+			                                	<a style="font-size: 0.85em;" href="/sfc/servlet.shepherd/version/download/{!Myimpl.mapContentChatterIdToContentId[post.parentId]}">
+			                                		{!Myimpl.mapContentChatterIdToContentTitle[post.parentId]}  
+			                                	</a>
+			                                	-
+			                                </apex:outputPanel>
+			                            </apex:outputPanel>
+		                            	
+		                            	<!-- Group -->
+		                            	<apex:outputPanel rendered="{!IF(BEGINS(post.parentId , '0F9') , true, false)}" >
+		                                	<a style="font-size: 0.85em;cursor:pointer;" href="SL_Intranet?page=Home&selGroup={!post.parentId}">
+		                                		{!Myimpl.mapGroupIdToName[post.parentId]} 
+		                                	</a>
+		                                	- 
+		                                </apex:outputPanel>
+		                                                                
+		                                                                
+										 <a style="font-size:{!IF(BEGINS(post.parentId, '005') && post.parentId != post.CreatedById , '0.85em', IF(post.parentId == post.CreatedById , '0.85em' , '0.75em'  ))} ;" href="SL_Intranet?page=Employee Profile&id={!post.CreatedById}" >
+		                                 	{!Myimpl.mapFeedIdToUser[post.Id].Name}
+		                                 </a>
+		                                 
+		                                 <apex:outputPanel rendered="{!IF(BEGINS(post.parentId, '005') && post.parentId != post.CreatedById , true, false)}" >
+		                                 	<span style="font-size: 0.75em;"> to </span>
+		                                 	<a style="font-size: 0.75em;" href="SL_Intranet?Page=Employee Profile&id={!post.parentId}">
+		                                 		{!Myimpl.mapUserIdToUserName[post.parentId]}
+		                                 	</a>
+		                                 </apex:outputPanel>
+										
+										
+										<span id="deleteBtn{!post.id}" style="float:right; display:none;" >
+											<apex:outputPanel rendered="{!IF(MyImpl.hasDeleteAccess || post.CreatedById == $User.Id , true, false)}">
+												<a href="javascript:void(0);" id="deleteBtnLink{!post.id}" title="Delete this post">x</a>
+											</apex:outputPanel>
+										</span>
+									</h3>
+									<div id="divShort{!post.id}" style="margin-top:5px;">
+										<div style="word-wrap:break-word;"><apex:outputfield value="{!post.body}"/> </div>
+									</div>
+									<div id="divFull{!post.id}" style="display:none;">   
+										<div  style="word-wrap:break-word;"><apex:outputfield value="{!post.body}"/></div>
+									</div>
+									<div id="togglingSec{!post.id}" style="color: #005595;cursor: pointer;" onclick="document.getElementById('divShort{!post.id}').style.display = 'none'; document.getElementById('divFull{!post.id}').style.display = ''; document.getElementById('togglingSec{!post.id}').style.display = 'none';"></div>
+											
+									<!-- Link post -->
+									<apex:outputPanel id="LinkPost" rendered="{!post.type == 'LinkPost'}"><br />
+										<div class="linkPostLinkContainer linkPostLinkTitle">
+											<a target="_blank" class="linkPostLink" href="{!post.LinkUrl}">
+												<img title="{!post.Title}" alt="{!post.Title}" src="{!URLFOR($Resource.SL_IntranetHUB,'/IntranetHub/images/icon3.png')}"/>
+												<span title="{!post.LinkUrl}">{!post.Title}</span>
+											</a>
+											<div class="feeditemlinkpost">{!post.LinkUrl}</div>
+										</div>
+									</apex:outputPanel>
+									<!-- End of link post -->
+											
+									<!-- File post -->
+									<apex:outputPanel id="FileAttachment" rendered="{!IF(post.Type == 'ContentPost' && myImpl.mapFeedItemIdToContent[post.Id].title != 'Content deleted'  , true, false)}" >
+										<br />
+										<table>
+											<tr>
+												<td style="min-height:50px;min-width:65px;">
+													<div style="cursor: pointer; height:60px;" onclick="javascript:document.getElementById('overlay{!post.Id}').style.display = 'block'; document.documentElement.style.overflow = 'hidden';" onmouseover="javascript:document.getElementById('ext{!post.Id}').style.display = 'block';" onmouseout="javascript:document.getElementById('ext{!post.Id}').style.display = 'none';" >                                                                         
+														<img style="float:left;" id="previewImg{!post.id}" class="contentThumbnail" alt="Click to preview" 
+															src="/sfc/servlet.shepherd/version/renditionDownload?rendition=THUMB120BY90&versionId={!post.RelatedRecordId}&operationContext=CHATTER"/>
+														<div title="Click to preview" class="previewHover" id="ext{!post.Id}" style="width: 65px; margin: 0px auto; height: 50px; position: relative; left: 0px; top: 25%; display: none; padding-top: ($('#previewImg{!post.id}').height()-50)/2;"/>
+													</div>
+												</td>
+												<td style="vertical-align:top;width: 80%;">
+													<table class="contentdetails">
+														<tbody>
+															<tr>
+																<td nowrap="nowrap" style="table-layout: fixed !important;width: 100% !important;">
+																	<div class="contentFileTitle">{!post.ContentFileName}</div> 
+																</td>
+															</tr>
+															<tr>
+																<td nowrap="nowrap" style="width : 100%;">
+																	<a class="contentActionLink" href="/sfc/servlet.shepherd/version/download/{!post.RelatedRecordId}?asPdf=false&amp;operationContext=CHATTER">
+																		<img alt="" src="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/images/Download.png')}"/>
+																		<span >Download</span>
+																		<span class="fileSize" style="color: #B2B2B2;">
+																			({!ROUND(myImpl.mapFeedItemIdToContent[post.Id].contentSize/1024, 0)} &nbsp;KB)
+																		</span>
+																	</a>
+																	<span class="feeditemseparatingdot">·</span> 
+																</td>
+															</tr>       
+														</tbody>
+													</table>
+												</td>   
+											</tr>
+										</table>
+												
+										<div id="overlay{!post.Id}" class="docViewerPanel" style="display: none; z-index: 9998;">
+											
+											<div  role="dialog" aria-live="assetive" aria-describedby="docViewerOverlayTitle" class="overlayDialog docViewerOverlay" style="width: 730px; height: 650px; display: block; visibility: visible; left: 318px; top: 29px;position: fixed !important; z-index:9999;">
+												
+												<div class="topRight">
+													<a title="Start of Dialog" style="width:2px;height:2px;position:absolute;border:0;margin:0;padding:0;background:none;outline:none;z-index:-1;cursor:none;" onclick="return false;" href="javascript:void(0)">Start of Dialog</a>
+													<div class="topLeft">
+														<a class="dialogClose" href="javascript:void(0)" onclick="javascript:document.getElementById('overlay{!post.Id}').style.display = 'none'; document.documentElement.style.overflow = 'auto';" onmouseout="this.className = 'dialogClose'" onmouseover="this.className = 'dialogCloseOn'" tabindex="0" title="Close" >Close</a>
+													</div>
+												</div>
+												
+												<div class="middle">
+													<div  class="innerContent" >
+														<div  class="docViewerContainerParent" style="height: 500px;">
+															<div class="docViewerContainer">
+																<embed id="actualFilePreview{!post.Id}" width="100%" height="480px;" align="middle" type="application/x-shockwave-flash" wmode="opaque" pluginspage="http://www.adobe.com/go/getflashplayer" allowfullscreen="true" allowscriptaccess="sameDomain" name="renditionLarge" bgcolor="#f3f3f3" quality="high" flashvars="shepherd_prefix=/sfc/servlet.shepherd&v={!post.RelatedRecordId}&mode=chatter_bubble&in_tests=false" src="/_swf/121310/sfc/flex/DocViewer.swf"/>
+																<noembed>&lt;p&gt;Flash file preview&lt;/p&gt;</noembed>
+																
+																<!-- Section added to display the replacement content when flash player is not available -->
+																<div id="dummyFilePreview{!post.Id}" style="display:none;">
+																	File preview is not available in this device because of absence of Flash player.<br />
+																	Download the file via clicking this link : 
+																	<a class="contentActionLink" href="/sfc/servlet.shepherd/version/download/{!post.RelatedRecordId}?asPdf=false&amp;operationContext=CHATTER">
+																		<img alt="" src="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/images/Download.png')}"/>
+																		<span >Download</span>
+																		<span class="fileSize" style="color: #B2B2B2;">
+																			({!ROUND(myImpl.mapFeedItemIdToContent[post.Id].ContentSize/1024, 0)} &nbsp;KB)
+																		</span>
+																	</a> 
+																</div>
+																		
+																<script>
+																	if(!isFilePreviewDisplay)
+																	{
+																		$('#actualFilePreview{!post.Id}').hide();
+																		$('#dummyFilePreview{!post.Id}').show();
+																	}
+																</script>
+																<!-- End -->
+															</div>
+														</div>
+													</div>
+												</div>
+												<div class="bottomRight">
+													<input type="text" style="width:2px;height:0px;position:absolute;border:0;margin:0;padding:0;background:none;outline:none;z-index:-1;cursor:none;" />
+													<div class="bottomLeft"/>
+												</div>
+											</div>
+										</div>
+									</apex:outputPanel>
+									<!-- End of File post -->
+											
+									<div class="bottom">
+										<span class="date">
+											<apex:outputtext value="{0, date, 'Today' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[post.Id]) = TODAY()}">
+												<apex:param value="{!MyImpl.mapFeedIdToCreatedDate[post.Id]}"/>                                                                    
+											</apex:outputtext>
+											<apex:outputText value="{0, date, 'Yesterday' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[post.Id]) = TODAY()-1}">
+												<apex:param value="{!MyImpl.mapFeedIdToCreatedDate[post.Id]}"/>
+											</apex:outputText> 
+											<apex:outputText value="{0, date, 'Two days ago' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[post.Id]) = TODAY()-2}">
+												<apex:param value="{!MyImpl.mapFeedIdToCreatedDate[post.Id]}"/>
+											</apex:outputText> 
+											<apex:outputText value="{0, date, MMMMM dd, yyyy 'at' hh:mm a}" escape="false" rendered="{!(DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[post.Id]) != TODAY()) && (DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[post.Id]) != TODAY()-1) && (DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[post.Id]) != TODAY()-2)}">
+												<apex:param value="{!MyImpl.mapFeedIdToCreatedDate[post.Id]}"/>
+											</apex:outputText> 
+											<apex:outputPanel rendered="{!IF(MyImpl.mapFeedItemIdToGroupName[post.Id] != 'NG' && MyImpl.feedParentId == $User.Id && !CONTAINS(MyImpl.strFeaturedPostsIDs, post.Id), true, false)}">
+												 &nbsp;<em>in</em>&nbsp; {!MyImpl.mapFeedItemIdToGroupName[post.Id]}
+											</apex:outputPanel> 
+										</span> 
+										
+										<apex:outputPanel rendered="{!IF(MyImpl.mapFeedIdToFeedLikeId[post.Id] == 'No', false, true)}">  
+											<a class="like" href="javascript:widget{!id}.feedLikeUnlike('unlike', '{!MyImpl.mapFeedIdToFeedLikeId[post.Id]}');">Unlike ({!MyImpl.mapFeedIdToNumOfLikes[post.Id]})</a> &nbsp;&nbsp;
+										</apex:outputPanel>
+										<apex:outputPanel rendered="{!IF(MyImpl.mapFeedIdToFeedLikeId[post.Id] == 'No', true, false)}">
+											<a class="like" href="javascript:widget{!id}.feedLikeUnlike('like', '{!post.Id}');">Like ({!MyImpl.mapFeedIdToNumOfLikes[post.Id]})</a> &nbsp;&nbsp;  
+										</apex:outputPanel>
+										
+										<a class="comment" href="javascript:showHideComments('{!post.Id}');">Comment <span id="count{!post.Id}">(8)</span></a>
+									</div>
+										
+									<div class="add-feed" style="float:left;">   
+										<div id="{!post.Id}" style="display: block;">
+											<ul class="feeds">
+												<apex:repeat value="{!MyImpl.mapFeedItemIdToRelatedlstComments[post.Id]}" var="fc">
+		<!-- 										updated on 11/10/2013 style -->
+													<li id="commentLI{!fc.id}" onmouseover="document.getElementById('deleteCommentBtn{!fc .id}').style.display = '';" onmouseout="document.getElementById('deleteCommentBtn{!fc .id}').style.display = 'none';" style="margin-left:-1px;">
+														<a href="SL_Intranet?page=Employee Profile&tab=Employee Profile&id={!fc.CreatedById}">
+															<img src="{!MyImpl.mapFeedIdToUser[fc.Id].SmallPhotoUrl}" alt="image description" width="35" height="35" />
+														</a>
+														<div class="info">
+																<span id="deleteCommentBtn{!fc.id}" style="float:right; display:none;" >
+																	<apex:outputPanel rendered="{!IF(MyImpl.hasDeleteAccess || fc.CreatedById == $User.Id , true, false)}">
+																		<a href="javascript:void(0);" id="deleteCommentBtnLink{!fc.id}" onclick="widget{!id}.deleteComment('{!fc.Id}', '{!post.Id}');" title="Delete this comment">x</a>
+																	</apex:outputPanel>
+																</span>
+																<div style="padding-right: 8px;">
+																	<div id="Shortcomment{!fc.Id}">  
+																		<div  style="word-wrap:break-word; ">
+																			<h3 style="font-size:0.9em;"><a href="SL_Intranet?page=Employee Profile&tab=Employee Profile&id={!fc.CreatedById}">{!MyImpl.mapFeedIdToUser[fc.Id].Name}</a>&nbsp;</h3>
+																			<apex:outputField value="{!fc.CommentBody}"/>
+																			<br />
+																		</div>
+																	</div>
+																	<div style="display:none;" id="Fullcomment{!fc.Id}">     
+																		<div  style="word-wrap:break-word;">
+																			<h3 style="font-size:0.9em;"><a href="SL_Intranet?page=Employee Profile&tab=Employee Profile&id={!fc.CreatedById}">{!MyImpl.mapFeedIdToUser[fc.Id].Name}</a>&nbsp;</h3>
+																			<apex:outputField value="{!fc.CommentBody}"/><br />
+																		</div>
+																	</div> 
+																	
+																	
+																	<!-- File post for Comment -->
+																		<apex:outputPanel id="FileAttachment" rendered="{!fc.CommentType == 'ContentComment'}" >
+																			<br />
+																			<table>
+																				<tr>
+																					<td style="min-height:50px;min-width:65px;">
+																						<div style="cursor: pointer; height:60px;" onclick="javascript:document.getElementById('overlay{!fc.Id}').style.display = 'block'; document.documentElement.style.overflow = 'hidden';" onmouseover="javascript:document.getElementById('ext{!fc.Id}').style.display = 'block';" onmouseout="javascript:document.getElementById('ext{!fc.Id}').style.display = 'none';" >                                                                         
+																							<img style="float:left;" id="previewImg{fc.id}" class="contentThumbnail" alt="Click to preview" 
+																								src="/sfc/servlet.shepherd/version/renditionDownload?rendition=THUMB120BY90&versionId={!fc.RelatedRecordId}&operationContext=CHATTER"/>
+																							<div title="Click to preview" class="previewHover" id="ext{!fc.Id}" style="width: 65px; margin: 0px auto; height: 50px; position: relative; left: 0px; top: 25%; display: none; padding-top: ($('#previewImg{!fc.id}').height()-50)/2;"/>
+																						</div>
+																					</td>
+																					<td style="vertical-align:top;width: 80%;">
+																						<table class="contentdetails">
+																							<tbody>
+																								<tr>
+																									<td nowrap="nowrap" style="table-layout: fixed !important;width: 100% !important;">
+																										<div class="contentFileTitle">{!myImpl.mapFeedItemIdToContent[fc.Id].Title}</div> 
+																									</td>
+																								</tr>
+																								<tr>
+																									<td nowrap="nowrap" style="width : 100%;">
+																										<a class="contentActionLink" href="/sfc/servlet.shepherd/version/download/{!fc.RelatedRecordId}?asPdf=false&amp;operationContext=CHATTER">
+																											<img alt="" src="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/images/Download.png')}"/>
+																											<span >Download</span>
+																											<span class="fileSize" style="color: #B2B2B2;">
+																												({!ROUND(myImpl.mapFeedItemIdToContent[fc.Id].ContentSize/1024, 0)} &nbsp;KB)
+																											</span>
+																										</a>
+																										<span class="feeditemseparatingdot">·</span> 
+																									</td>
+																								</tr>       
+																							</tbody>
+																						</table>
+																					</td>   
+																				</tr>
+																			</table>
+																					
+																			<div id="overlay{!fc.Id}" class="docViewerPanel" style="display: none; z-index: 9998;">
+																				
+																				<div  role="dialog" aria-live="assetive" aria-describedby="docViewerOverlayTitle" class="overlayDialog docViewerOverlay" style="width: 730px; height: 650px; display: block; visibility: visible; left: 318px; top: 29px;position: fixed !important; z-index:9999;">
+																					
+																					<div class="topRight">
+																						<a title="Start of Dialog" style="width:2px;height:2px;position:absolute;border:0;margin:0;padding:0;background:none;outline:none;z-index:-1;cursor:none;" onclick="return false;" href="javascript:void(0)">Start of Dialog</a>
+																						<div class="topLeft">
+																							<a class="dialogClose" href="javascript:void(0)" onclick="javascript:document.getElementById('overlay{!fc.Id}').style.display = 'none'; document.documentElement.style.overflow = 'auto';" onmouseout="this.className = 'dialogClose'" onmouseover="this.className = 'dialogCloseOn'" tabindex="0" title="Close" >Close</a>
+																						</div>
+																					</div>
+																					
+																					<div class="middle">
+																						<div  class="innerContent" >
+																							<div  class="docViewerContainerParent" style="height: 500px;">
+																								<div class="docViewerContainer">
+																									<embed id="actualFilePreview{!fc.Id}" width="100%" height="480px;" align="middle" type="application/x-shockwave-flash" wmode="opaque" pluginspage="http://www.adobe.com/go/getflashplayer" allowfullscreen="true" allowscriptaccess="sameDomain" name="renditionLarge" bgcolor="#f3f3f3" quality="high" flashvars="shepherd_prefix=/sfc/servlet.shepherd&v={!fc.RelatedRecordId}&mode=chatter_bubble&in_tests=false" src="/_swf/121310/sfc/flex/DocViewer.swf"/>
+																									<noembed>&lt;p&gt;Flash file preview&lt;/p&gt;</noembed>
+																									
+																									<!-- Section added to display the replacement content when flash player is not available -->
+																									<div id="dummyFilePreview{!fc.Id}" style="display:none;">
+																										File preview is not available in this device because of absence of Flash player.<br />
+																										Download the file via clicking this link : 
+																										<a class="contentActionLink" href="/sfc/servlet.shepherd/version/download/{!fc.RelatedRecordId}?asPdf=false&amp;operationContext=CHATTER">
+																											<img alt="" src="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/images/Download.png')}"/>
+																											<span >Download</span>
+																											<span class="fileSize" style="color: #B2B2B2;">
+																											<b> Related Record Id : {!fc.Id} <br/> Comment Type: {!fc.CommentType}</b>
+																												({!ROUND(myImpl.mapFeedItemIdToContent[fc.Id].ContentSize/1024, 0)} &nbsp;KB)
+																											</span>
+																										</a> 
+																									</div>
+																											
+																									<script>
+																										if(!isFilePreviewDisplay)
+																										{
+																											$('#actualFilePreview{!fc.Id}').hide();
+																											$('#dummyFilePreview{!fc.Id}').show();
+																										}
+																									</script>
+																									<!-- End -->
+																								</div>
+																							</div>
+																						</div>
+																					</div>
+																					<div class="bottomRight">
+																						<input type="text" style="width:2px;height:0px;position:absolute;border:0;margin:0;padding:0;background:none;outline:none;z-index:-1;cursor:none;" />
+																						<div class="bottomLeft"/>
+																					</div>
+																				</div>
+																			</div>
+																		</apex:outputPanel>
+																		<!-- End of File post for Comment -->
+																																	
+																	
+																	
+																	<div id="togglingSec{!fc.id}" style="color: #005595;cursor: pointer;" onclick="document.getElementById('Shortcomment{!fc.Id}').style.display = 'none'; document.getElementById('Fullcomment{!fc.Id}').style.display = ''; document.getElementById('togglingSec{!fc.Id}').style.display = 'none';"></div>
+																	<apex:outputtext styleClass="date" value="{0, date, 'Today' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[fc.Id]) = TODAY()}">
+																		<apex:param value="{!MyImpl.mapFeedIdToCreatedDate[fc.Id]}"/>                                                                  
+																	</apex:outputtext>
+																			
+																	<apex:outputText styleClass="date" value="{0, date, 'Yesterday' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[fc.Id]) = TODAY()-1}">
+																		<apex:param value="{!MyImpl.mapFeedIdToCreatedDate[fc.Id]}"/>
+																	</apex:outputText> 
+																	<apex:outputText styleClass="date" value="{0, date, 'Two days ago' 'at' hh:mm a}" escape="false" rendered="{!DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[fc.Id]) = TODAY()-2}">
+																		<apex:param value="{!MyImpl.mapFeedIdToCreatedDate[fc.Id]}"/>
+																	</apex:outputText> 
+																	<apex:outputText styleClass="date" value="{0, date, MMMMM dd, yyyy 'at' hh:mm a}" escape="false" rendered="{!(DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[fc.Id]) != TODAY()) && (DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[fc.Id]) != TODAY()-1) && (DATEVALUE(MyImpl.mapFeedIdToCreatedDateGMT[fc.Id]) != TODAY()-2)}">
+																		<apex:param value="{!MyImpl.mapFeedIdToCreatedDate[fc.Id]}"/>
+																	</apex:outputText>
+																</div> 
+														</div>
+														<script> 
+															/* To show more section for Comment*/ 
+															
+															if($(document.getElementById('Shortcomment{!fc.id}')).height() > 91 && !$.browser.chrome) 
+															{    
+																document.getElementById('Shortcomment{!fc.id}').style.height = 91 + 'px' ;  
+																document.getElementById('Shortcomment{!fc.id}').style.overflow = 'hidden'; 
+															
+																if(document.getElementById('Shortcomment{!fc.id}').style.height != document.getElementById('Shortcomment{!fc.id}').scrollHeight) 
+																	document.getElementById('togglingSec{!fc.id}').innerHTML += '...More'; 
+															} 
+															else if(document.getElementById('Shortcomment{!fc.id}').clientHeight > 89 && $.browser.chrome) 
+															{    
+																document.getElementById('Shortcomment{!fc.id}').style.height = 89 + 'px' ;  
+																document.getElementById('Shortcomment{!fc.id}').style.overflow = 'hidden'; 
+																if(document.getElementById('Shortcomment{!fc.id}').style.height != document.getElementById('Shortcomment{!fc.id}').scrollHeight) 
+																	document.getElementById('togglingSec{!fc.id}').innerHTML += '...More'; 
+															} 
+															else 
+															{ 
+																document.getElementById('togglingSec{!fc.id}').onclick = ''; 
+																document.getElementById('togglingSec{!fc.id}').style.display = 'none'; 
+															}    
+															
+															/* End of Show more section for Comment*/ 
+														</script>   
+													</li>   
+												</apex:repeat>
+											</ul>
+										</div>
+												
+										<!-------------- Insert comments container  ------------------------->  
+										<div class="holder">
+											<label for="comment2" class="hidden">&nbsp;</label>
+											<textarea id="commentBlock{!post.id}" onblur="alert('blur');if(this.value.trim() == '') this.value = 'Comment...';$('#attachFileDiv{!post.Id}').css('display', 'none'); " 
+											                                      onfocus="if(this.value=='Comment...') this.value = ''; " 
+											                                      onkeyup="checkLength(this.value, '{!post.id}');" 
+											                                      onmouseup = "$('#attachFileDiv{!post.Id}').css('display', 'block'); " 
+											                                      cols="30" rows="5" >Comment...
+											</textarea>
+											
+											<a href="" style="cursor: pointer !important;" class="send" id="postBtn{!post.id}" 
+												onclick="if($('#commentBlock{!post.id}').val() == 'Comment...'){$('#commentBlock{!post.id}').focus();}else if($('#commentBlock{!post.id}').val().trim() == ''){$('#commentBlock{!post.id}').val('Comment...');}else if($('#commentBlock{!post.id}').val().trim() != '' && $('#commentBlock{!post.id}').val() != 'Comment...' && $('#commentBlock{!post.id}').val().length <= 1000){widget{!id}.postComment('{!post.Id}', $('#commentBlock{!post.id}').val());}">
+											<strong>+</strong> Post</a>
+										</div>
+										
+										 <div class="tools" id="attachFileDiv{!post.Id}" style="display: none;"> 
+											<ul class="tools-list" style="margin-top: 10px;margin-right: 10px;">
+												<li style="cursor: pointer;margin-left: 0px;">
+													<a onclick="return widget{!id}.openCompanyPopup('{!post.Id}', $('#commentBlock{!post.id}').val(), 'feedComment');">
+														<img src="{!URLFOR($Resource.SL_IntranetHub,'/IntranetHub/images/icon2.png')}" alt="image description" width="22" height="16" /> 
+														Attach File 
+													</a>
+												</li>
+											</ul>
+										</div>
+										<!----------------------------------- End   -------------------------->
+										
+										<!-------------------  View all link for Feed comments ------------------->
+										<a id="viewAll{!post.id}" onclick="$('#{!post.Id} > ul > li').show();$(this).hide();" style="display:none;cursor:pointer;margin-top: 10px;">View all 8 Comments</a>
+										<!--  End -->
+												
+										<script>
+											var commentSize = $('#{!post.Id} > ul > li').length;  
+											
+											if(commentSize == 0)  
+												document.getElementById('{!post.Id}').innerHTML = '';  
+											
+											document.getElementById('count{!post.Id}').innerHTML = '(' + commentSize + ')';  
+											
+											if(commentSize > 3)  
+											{  
+												document.getElementById('viewAll{!post.id}').style.display = 'block';  
+												document.getElementById('viewAll{!post.id}').innerHTML = 'View all ' + commentSize + ' comments';  
+												$('#{!post.Id} > ul > li').each(function (i) {  
+													if(i > 2) $(this).hide();  
+												});   
+											}  
+											
+											/********************** For setting the subject line  **************************/  
+											
+											setSubjectTag('divShort{!post.id}');  
+											setSubjectTag('divFull{!post.id}');  
+											
+											/* To show more section for Post*/  
+											if(document.getElementById('divShort{!post.id}').clientHeight > 106 && !$.browser.chrome)  
+											{     
+												document.getElementById('divShort{!post.id}').style.height = 106 + 'px' ;   
+												document.getElementById('divShort{!post.id}').style.overflow = 'hidden';  
+												if(document.getElementById('divShort{!post.id}').style.height != document.getElementById('divShort{!post.id}').scrollHeight)  
+													document.getElementById('togglingSec{!post.id}').innerHTML += '...More';  
+											}  
+											else if(document.getElementById('divShort{!post.id}').clientHeight > 102 && $.browser.chrome)  
+											{     
+												document.getElementById('divShort{!post.id}').style.height = 102 + 'px' ;   
+												document.getElementById('divShort{!post.id}').style.overflow = 'hidden';  
+												if(document.getElementById('divShort{!post.id}').style.height != document.getElementById('divShort{!post.id}').scrollHeight)  
+													document.getElementById('togglingSec{!post.id}').innerHTML += '...More';  
+											}  
+											else  
+											{  
+												document.getElementById('togglingSec{!post.id}').onclick = '';  
+												document.getElementById('togglingSec{!post.id}').style.display = 'none';  
+											}     
+											/* End of Show more section for Post*/  
+										</script> 
+												
+									</div>
+									<div id="commentErr{!post.id}" style="color: red;font-weight: bold;"></div>
+								</div>
+								
+								<span class="notice" style="{!IF(MyImpl.mapFeedItemIdToGroupName[post.Id] != 'NG' && CONTAINS(MyImpl.strFeaturedPostsIDs, post.Id), '', 'display:none;')}">{!MyImpl.mapFeedItemIdToGroupName[post.Id]}</span>
+								
+							</div>
+							<script> 
+								$('#postLI{!post.Id}').mouseover(function()   
+								{  
+									document.getElementById('deleteBtn{!post.id}').style.display = '';  
+								});  
+								$('#postLI{!post.Id}').mouseout(function()   
+								{  
+									document.getElementById('deleteBtn{!post.id}').style.display = 'none';  
+								});  
+								$('#deleteBtnLink{!post.Id}').click(function()   
+								{  
+									widget{!id}.deletePost('{!post.id}');  
+								});  
+							</script>  
+						</apex:repeat>
+						<apex:outputPanel rendered="{!MyImpl.lstFeedItemsSearchResults.size == 0}">There are no updates.</apex:outputPanel>
+						
+						<apex:outputPanel rendered="{!IF((MyImpl.intTotalNumberOfFeeds - MyImpl.numOfRecordeToBedisplayed_Desktop) > 0 && MyImpl.numOfRecordeToBedisplayed_Desktop <= (MyImpl.intMaxNumberOfFeedPostsToBeDisplayed - MyImpl.numOfFeedPostPerPage), true, false )}"> 
+							<a href="javascript:widget{!id}.getMoreRecords();" class="see-more">{!$Label.SL_Pagination_SeeMore}</a> 
+						</apex:outputPanel> 
+					</apex:outputPanel>
+					<script>
+						function showHideComments(feedCommentsContainerId)  
+						{ 
+							var commentCounts = $('#' + feedCommentsContainerId + ' > ul > li').length;
+							
+							var feedCommentsContainer = document.getElementById(feedCommentsContainerId); 
+							
+							if(feedCommentsContainer.style.display == 'block')
+							{ 
+								feedCommentsContainer.style.display = 'none';
+								
+								/* Newly added */
+								
+								if(commentCounts > 3 && document.getElementById('viewAll' + feedCommentsContainerId).style.display == 'block')
+									document.getElementById('viewAll' + feedCommentsContainerId).style.display = 'none';
+								
+								/* End */
+							}    
+							else
+							{ 
+								feedCommentsContainer.style.display = 'block';
+								
+								/* Newly added */
+								
+								if(commentCounts > 3 && document.getElementById('viewAll' + feedCommentsContainerId).style.display == 'none')
+									document.getElementById('viewAll' + feedCommentsContainerId).style.display = 'block';
+								
+								/* End */
+							}        
+						} 
+						function checkLength(blockValue, errBlockId) 
+						{ 
+							if(blockValue.length > 1000) 
+							{ 
+								document.getElementById('commentErr' + errBlockId).innerHTML = "Error: Your comment can't have more than 1000 characters.";
+								document.getElementById('commentBlock' + errBlockId).focus(); 
+							}    
+							else 
+								document.getElementById('commentErr' + errBlockId).innerHTML = "";   
+						} 
+						
+					</script> 
+				</apex:outputPanel>
+			</apex:outputpanel>
+			
+			<br/><br/><br/>
+			
+			<script>
+				function getParam( name )
+				{
+					 name = name.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
+					 var regexS = "[\\?&]"+name+"=([^&#]*)";
+					 var regex = new RegExp( regexS );
+					 var results = regex.exec( window.location.href );
+					 if( results == null )
+					 return "";
+				else
+				 	return results[1];
+				}
+						
+				var selGroup_param = getParam( 'selGroup' );
+		   		var selNotification = getParam('selNotif');
+		   		if(selGroup_param.length >= 15)
+		   		{
+		   			widget{!id}.toggleChatterGroup(selGroup_param);
+		   		}
+		   		
+		   		if(selNotification.length >= 15)
+		   		{
+		   			widget{!id}.toggleNotification(selNotification);
+		   		}
+			</script>
+		 </div>
+	 </span>
+</apex:component>

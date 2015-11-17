@@ -1,0 +1,101 @@
+<apex:component controller="RKExportToExcel.GenericExportToExcelComponentController" access="global">
+	<apex:attribute name="genericExportController" description="This is the value for the apex page component's standardController attribute" 
+		type="RKExportToExcel.GenericExportToExcelController" required="true" access="global" assignTo="{!genE2eCon}" />
+
+	<style>
+		/* Excel Borders */
+		table, td, th{ 
+			border-color: #CCC; 
+			border-style: solid; 
+			border-collapse:collapse;
+			font-family: arial, helvetica, san-serif; 
+			font-size:10pt; 
+		}
+		td, th{ 
+			mso-style-parent:style0;
+			border-width: thin;
+			padding:2px; 
+		}
+		table{ 
+			border-width: 0; 
+		}
+		body {
+			font-family: arial, helvetica, san-serif;
+			font-size:10pt;
+		}
+		.table-heading{
+			font-weight:bold;
+			background-color:#BA0000;
+			color:white;
+		}
+		.odd-row{
+		}
+		.even-row{
+			background-color:#DBE5F1;
+		}
+	</style>
+	
+	
+	<!--  currently the support for dynamic field sets is a bit funky.  had to put in all this odd code to make it work. will revisit in api 25.0 -->
+	<!--  Currently the sort order is strange and behaves randomly.  if you don't use the field set dynamically, the sort is always by first name -->
+	<!--   which may be tied to the first field of the fieldset -->
+	<!-- --> 
+	<apex:dataTable value="{!genE2eCon.allRecords}" var="rec" headerClass="table-heading" rowClasses="odd-row,even-row">
+		<apex:repeat value="{!genE2eCon.fieldSetList}" var="fld">
+			<apex:column style="{!if(or(fld.Type=='picklist',fld.Type=='textarea',fld.Type=='phone',fld.Type=='url'),'vnd.ms-excel.numberformat:@',
+				if(fld.Type=='currency','vnd.ms-excel.numberformat:$#,##0.00_);[Red]($#,##0.00)',
+				if(fld.Type=='percent','vnd.ms-excel.numberformat:0\\%',
+				if(fld.Type=='date','vnd.ms-excel.numberformat:mmm d, yyyy',
+				if(fld.Type=='datetime','vnd.ms-excel.numberformat:mmm d, yyyy h:mm AM/PM',
+				'')))))}" >
+				<apex:facet name="header">
+					{!if( and( contains(fld.FieldPath,"."), fld.Label!="Account Name" ), 
+						substitute(
+							if ( contains(fld.FieldPath, "__r."),
+								if ( contains( left ( fld.FieldPath, find( "__r.", fld.FieldPath)  ) , "__"),
+									right( left ( fld.FieldPath, find( "__r.", fld.FieldPath) - 1 ), Len( left ( fld.FieldPath, find( "__r.", fld.FieldPath) - 1 ) ) - find( "__", left ( fld.FieldPath, find( "__r.", fld.FieldPath) - 1 ) ) - 1 ),
+									left ( fld.FieldPath, find( "__r.", fld.FieldPath) - 1 ) ),
+								if ( Begins(fld.FieldPath, "Product2"), "Product", left ( fld.FieldPath, find( ".", fld.FieldPath) - 1 ))),
+							"_", " ") & " " & fld.Label,
+						if ( and(genE2eCon.objectName=="Case", or(fld.FieldPath=="SuppliedName", fld.FieldPath=="SuppliedCompany", 
+							fld.FieldPath=="SuppliedPhone", fld.FieldPath=="SuppliedEmail")), 
+							
+							'Web '&fld.Label,
+							fld.Label))}
+				</apex:facet>
+				<apex:outputText value="{!if(fld.type=='date', '{0,date,medium}',if(fld.type=='datetime','{0,date,medium} {0,time,short}','{0}' ))}" >
+					<apex:param value="{!rec[fld]}" />
+				</apex:outputText>
+			</apex:column>
+		</apex:repeat>
+	</apex:dataTable>
+	<!--  -->
+	
+	<!--  the following is a standard implementation.  we've put this in here for debug purposes -->
+	<!--
+	<apex:dataTable value="{!allRecords}" var="rec">
+		<apex:repeat value="{!$ObjectType.Contact.FieldSets.Export_To_Excel}" var="fld">
+			<apex:column style="{!if(fld.Type=='Text','vnd.ms-excel.numberformat:@',
+				if(fld.Type=='Currency','vnd.ms-excel.numberformat:$#,##0.00_);[Red]($#,##0.00)',
+				if(fld.Type=='Percent','vnd.ms-excel.numberformat:0%',
+				'')))}" >
+				<apex:facet name="header">{!fld.Label}</apex:facet>
+				{!rec[fld]}
+			</apex:column>
+		</apex:repeat>
+	</apex:dataTable>
+	<!--  -->
+	
+	<!--  this next section, although never rendered, does some magic to add the fields into the records -->
+	<!--  right now this only works for explicitly declared field sets.  we will revisit when summer '12 is GA -->
+	<!--  	
+	<apex:outputPanel rendered="false" >
+		<apex:dataTable value="{!selected}" var="rec">
+			<apex:repeat value="{!$ObjectType.Contact.FieldSets.Export_To_Excel}" var="fld">
+				<apex:column value="{!rec[fld]}" />
+			</apex:repeat>
+		</apex:dataTable>
+	</apex:outputPanel>
+	<!--  -->
+
+</apex:component>

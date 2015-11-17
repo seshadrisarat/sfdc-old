@@ -1,0 +1,394 @@
+<apex:page controller="Loop.emailExt" tabStyle="Task" id="emailPage" title="Task - Send an Email">
+    <apex:stylesheet value="https://apps.drawloop.com/css/jquery.ui/jquery-ui-themeroller.css" />
+    <style type="text/css">
+        .cke_skin_sfdc, .cke_contents {
+            width: 604px;
+            min-height: 395px;
+        }
+    </style>
+    <apex:includeScript value="/support/console/31.0/integration.js"/>
+    <script type="text/javascript" src="{!$Resource.JQuery}"></script>
+    <script type="text/javascript" src="{!$Resource.JQuery_UI}"></script>
+    <script type="text/javascript" src="{!URLFOR($Resource.Scripts, 'jquery.drawloop.js')}"></script>
+    <script>
+        jQuery.noConflict();
+        jQuery(document).ready(function() {
+            jQuery('div#attachFile').dialog({
+                modal: true,
+                width: 600,
+                height: 500,
+                autoOpen: false,
+                overlay: {
+                    opacity: 0.3,
+                    background: "black"
+                }
+            });
+            /*jQuery('.lookupInput :text').change(function() {
+                return handleLookupChange(jQuery(this).closest('div').hasClass('whatId') ? 'whatId' : 'whoId', this);
+            });*/
+            enableButtons($getSendBtn());
+            jQuery.notifie({
+                allowCompatibilityView: false,
+                requiredVersion: 7,
+                containerSelector: '#ieMsgs',
+                compatibilityViewMessage: '{!JSENCODE($Label.IE_Compatibility_View_Warning)}',
+                versionMessage: '{!JSENCODE($Label.IE_Higher_Version_Required)}'
+            });
+            setInConsole(sforce && sforce.console && sforce.console.isInConsole());
+        });
+        (function($) {
+            $.fn.closestDescendant = function(selector) {
+                var $found = $(),
+                    $items = this;
+                while ($items.length && !($found = $items.filter(selector)).length) {
+                    $items = $items.children();
+                }
+                return $found;
+            };
+        })(jQuery);
+        
+        var delim = ";";
+        function pickupValue(additionalToValue, ccValue, bccValue)
+        {
+            var addto = document.getElementById('emailPage:emailForm:emailBlock:editPage:addTo:p24');
+            if(additionalToValue != '') {
+                if (addto.value != '') {
+                    addto.value += delim;
+                }
+                addto.value += additionalToValue;
+            }
+            var cc = document.getElementById('emailPage:emailForm:emailBlock:editPage:cc:p4');
+            if(ccValue != '') {
+                if (cc.value != '') {
+                    cc.value += delim;
+                }
+                cc.value += ccValue;
+            }
+            var bcc = document.getElementById('emailPage:emailForm:emailBlock:editPage:bcc:p5');
+            if(bccValue != '') {
+                if (bcc.value != '') {
+                    bcc.value += delim;
+                }
+                bcc.value += bccValue;
+            }
+            closePopup();
+        }
+        function pop(location, title, w, h)
+        {
+            openPopup(location, title, w, h, 'width='+w+',height='+h+',scrollbars=yes,toolbar=no,status=no,directories=no,menubar=no,resizable=yes', true);
+        }
+        function $getRichTextFrame() {
+            return jQuery('[id$=":richTextArea_frame"]');
+        }
+        function getRichTextDocument() {
+            return $getRichTextFrame().get(0).contentDocument;
+        }
+        function $getRichTextAreaElement() {
+            return jQuery('[id$=":richTextArea"]');
+        }
+        function formatRichText() {
+            var doc = getRichTextDocument();
+            var accentSelector = '[data-label^="accent"]',
+                $table = jQuery('body', doc).closestDescendant('table');
+
+            // remove any content from the accent content separators in the editor frame
+            jQuery(accentSelector, doc).html('');
+            
+            // fix left-align for IE
+            $table.css('text-align', 'left');
+                
+            // try to remove empty p elements injected into html by editor
+            /*jQuery('p', doc).filter(function() {
+                    var $elem = jQuery(this);
+                    return !(jQuery.trim($elem.text()) || $elem.find('br').length);
+                }).remove();*/
+            
+            // remove any content from the accent content separators in the related textarea element
+            var $textarea = $getRichTextAreaElement();
+            $textarea.val(
+                jQuery('<div />').append($textarea.val())
+                    .find(accentSelector).html('').end()
+                    .html()
+            );
+            
+            // As long as we found the main table, resize frame
+            if ($table.length) {
+                var $frame = $getRichTextFrame(),
+                    $content = $frame.closest('.cke_skin_sfdc');
+                var newWidth = $table.width() + 30 + 22,
+                    newHeight = $table.height() + 50;
+                if (newWidth > $content.width())
+                    $content.width(newWidth);
+                if (newHeight > $frame.height())
+                   $frame.height(newHeight);
+            }
+        }
+        
+        function log(msg) {
+            window.debug && window.console && window.console.log && window.console.log(msg);
+        }
+        function getLookupField(referenceId) {
+            var $elem = jQuery('.' + referenceId);
+            if ($elem.length == 0) return null;
+            
+            // if elem is an input, we have a single lookup,
+            // if it is a div, we have a multi type lookup w/ select element for type + input for record name
+            return $elem.is(':input')
+                ? $elem
+                : $elem.find(':text');
+        }
+        function updateData(referenceId, elem) {
+            log('update data for: ' + referenceId);
+            if (elem === undefined) {
+                elem = jQuery(getLookupField(referenceId)).parent();
+            }
+            addProcessingIcon(elem);
+            disableButtons($getSendBtn());
+            populateData();
+        }
+        function $getSendBtn() {
+            return jQuery('.btnSend');
+        }
+        function handleLookupChange(referenceId, sender) {
+            if (sender && sender.name.indexOf('_mlktp') === sender.name.length - 6) {
+                return false;
+            }
+            setTimeout(function() {
+                var $lookup = getLookupField(referenceId);
+                if ($lookup.size() && hasValidId($lookup)) {
+                    updateData(referenceId, $lookup.parent());
+                }
+            }, 1);
+        }
+        function hasValidId($lookup) {
+            if ($lookup.val()) {
+                var $recordIdElement = 
+                    $lookup.attr('id').substring($lookup.attr('id').length - 5) == '_lkid'
+                        ? $lookup
+                        : jQuery('[id="' + $lookup.attr('id') + '_lkid' + '"]');
+                return ($recordIdElement.length 
+                    && ($recordIdElement.val().length == 15 || $recordIdElement.val().length == 18));
+            }
+            return false;
+        }
+        function addProcessingIcon(elem) {
+            jQuery(elem).append('<span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>');
+        }
+        function enableButtons($btns) {
+            $btns.addClass('btn').removeClass('btnDisabled').each(function(i, e) {
+                this.disabled = false;
+                var origText = jQuery(this).data('origText');
+                if (origText) {
+                    this.value = origText;
+                }
+            });
+        };
+        function disableButtons($btns, replacementText) {
+            $btns.addClass('btnDisabled').removeClass('btn').each(function(i, e) {
+                this.disabled = true;
+                if (replacementText !== undefined) {
+                    jQuery(this).data('origText', this.value).val(replacementText);
+                }
+            });
+        };
+        // Email template pop-up selector - from LM
+        function emailSelect()
+        {
+            var eSelUrl = '{!JSENCODE($Page.selectemailtemplate)}?lm=true&showHeader=false';
+            var eSelWin = window.open(eSelUrl, "SelectEmailTemplate", "directories=no,height=300,location=no,scrollbars=yes,menubar=no,toolbar=no,width=800");
+        }
+        
+        function setEmailTemplate(id)
+        {
+            log('Setting email template: ' + id);
+            jQuery('[id$=":requestedTemplateId"]').val(id);
+            disableButtons($getSendBtn());
+            populateData();
+        }
+        
+        function closeTab(hasSent) {
+            if (window.sforce && sforce.console && sforce.console.isInConsole()) {
+                sforce.console.getEnclosingTabId(function (result) {
+                    if (hasSent && '{!JSENCODE($Request.previousTabId)}') {
+                        sforce.console.refreshSubtabById('{!JSENCODE($Request.previousTabId)}', false, function (result2) {
+                            sforce.console.closeTab(result.id);
+                        });
+                    }
+                    else {
+                        sforce.console.closeTab(result.id);
+                    }
+                });
+                return false;
+            }
+            return true;
+        }
+    </script>
+    <apex:sectionHeader title="Task" subtitle="Send an Email" />
+    <div id="ieMsgs" />
+    <apex:form id="emailForm">
+        <apex:pageMessages id="msgs" />
+        <apex:pageblock id="emailBlock" mode="edit">
+            <apex:inputHidden id="requestedTemplateId" value="{!requestedTemplateId}" />
+            <apex:actionFunction action="{!populateData}" name="populateData">
+                <apex:param name="requestedTemplateId" assignTo="{!requestedTemplateId}" value="" />
+            </apex:actionFunction>
+            <apex:actionFunction name="setInConsole" rerender="">
+                <apex:param name="inConsole" assignto="{!isInConsole}" value="" />
+            </apex:actionFunction>
+            <apex:pageBlockButtons location="{!IF(customTemplate, 'top', 'both')}">
+                <apex:commandButton title="Send" alt="Send" value="Send" action="{!sendEmail}" rerender="msgs" styleClass="btnSend" oncomplete="if ({!closeTab}) { closeTab(true); }" />
+                <apex:commandButton title="Select Template" alt="Select Template" value="Select Template" onclick="emailSelect(); return false;" />
+                <!--apex:commandButton title="Select Template" rendered="false" alt="Select Template" value="Select Template" onclick="pop('/email/author/templateselector.jsp', 'template', 600, 300);" /-->
+                <apex:commandButton title="Attach File" alt="Attach File" value="Attach File" onclick="jQuery('div#attachFile').dialog('open');" reRender="attachments" />
+                <!--apex:commandButton title="Check Spelling" rendered="false" alt="Check Spelling" value="Check Spelling" action="" /-->
+                <apex:commandButton title="Cancel" alt="Cancel" value="Cancel" action="{!cancel}" immediate="true" onclick="return closeTab();" />
+            </apex:pageBlockButtons>
+            <apex:pageBlockSection title="Edit Email" collapsible="false" columns="1" id="editPage">
+                <!--apex:pageBlockSectionItem rendered="false" id="editSection">
+                    <apex:outputLabel for="format" value="Email Format" />
+                    <apex:outputText id="format">
+                        {!editMode} [<apex:commandLink value="Switch to {!nonEditMode}" action="{!toggleMode}"  onclick="return confirm('This will remove your email template. Continue?');" /> ]
+                    </apex:outputText>
+                </apex:pageBlockSectionItem-->
+                <apex:pageBlockSectionItem rendered="{!showSenderEmailOptions}">
+                    <apex:outputLabel for="p26" value="From" />
+                    <apex:outputPanel >
+                        <apex:selectList id="p26" required="true" value="{!senderEmailId}" size="1">
+                            <apex:selectOptions value="{!senderEmailOptions}" />
+                        </apex:selectList>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel for="p2" value="To" />
+                    <apex:outputPanel >
+                        <apex:inputField value="{!taskRecord.WhoId}" id="p2" styleClass="lkfld whoId" />
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel for="p3" value="Related To" />
+                    <apex:inputfield value="{!taskRecord.WhatId}" id="p3" styleClass="lkfld whatId" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem id="addTo">
+                    <apex:outputLabel style="cursor: pointer;" for="p24" value="Additional To:" />
+                    <apex:inputTextarea id="p24" cols="65" value="{!addto}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem id="cc">
+                    <apex:outputLabel style="cursor: pointer;" for="p4" value="CC:" />
+                    <apex:inputTextarea id="p4" cols="65" value="{!cc}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem id="bcc">
+                    <apex:outputLabel style="cursor: pointer;" for="p5" value="BCC:" />
+                    <apex:inputTextarea id="p5" cols="65" value="{!bcc}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem id="sectionSubject">
+                    <apex:outputLabel for="p6" value="Subject" />
+                    <apex:outputPanel layout="block" styleClass="requiredInput">
+                        <apex:outputPanel layout="block" styleClass="requiredBlock"></apex:outputPanel>
+                        <apex:inputText id="p6" size="70" value="{!subject}" />
+                        <!-- <apex:dynamicComponent componentValue="{!dynamicSubject}" />-->
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!richText && NOT(customTemplate)}" id="richText">
+                    <apex:outputLabel for="p7" value="Body" />
+                    <apex:outputPanel >
+                        <!--<apex:dynamicComponent componentValue="{!dynamicRichText}" />-->
+                        <apex:inputTextarea cols="80" rows="15" richText="true" value="{!htmlBody}" id="richTextArea" />
+                        <script>
+                            var intvl = setInterval(function() {
+                                if ($getRichTextFrame().length)
+                                {
+                                    formatRichText();
+                                    clearInterval(intvl);
+                                }
+                            }, 200);
+                        </script>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!NOT(richText)}" id="sectionBody">
+                    <apex:outputLabel for="text" value="Body" />
+                    <apex:inputTextarea cols="93" rows="15" richText="false" value="{!plainTextBody}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!NOT(richText)}" id="signature">
+                    <apex:outputLabel value="" />
+                    <apex:outputPanel >
+                        <apex:inputCheckbox id="includeSignature" value="{!includeSignature}" />
+                        <apex:outputLabel for="includeSignature" value="Include Signature" />
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+        <apex:iframe frameborder="0" height="1200" id="contentFrame" scrolling="no" src="{!templateRendererUrl}" title="" width="800" rendered="{!richText && customTemplate}"/>
+        <apex:pageBlock rendered="{!richText && customTemplate}" >
+            <apex:pageBlockButtons location="bottom">
+                <apex:commandButton title="Send" alt="Send" value="Send" action="{!sendEmail}" rerender="msgs" styleClass="btnSend" oncomplete="if ({!closeTab}) { closeTab(true); }" />
+                <apex:commandButton title="Select Template" alt="Select Template" value="Select Template" onclick="emailSelect(); return false;" />
+                <!--apex:commandButton title="Select Template" rendered="false" alt="Select Template" value="Select Template" onclick="pop('/email/author/templateselector.jsp', 'template', 600, 300);" /-->
+                <apex:commandButton title="Attach File" alt="Attach File" value="Attach File" onclick="jQuery('div#attachFile').dialog('open');" reRender="attachments" />
+                <!--apex:commandButton title="Check Spelling" rendered="false" alt="Check Spelling" value="Check Spelling" action="" /-->
+                <apex:commandButton title="Cancel" alt="Cancel" value="Cancel" action="{!cancel}" immediate="true" onclick="return closeTab();" />
+            </apex:pageBlockButtons>
+        </apex:pageblock>
+        <apex:pageBlock title="Attachments" id="attachmentspb">
+            <apex:pageBlockButtons location="top">
+                <apex:commandButton title="Attach File" alt="Attach File" value="Attach File" onclick="jQuery('div#attachFile').dialog('open');" reRender="attachmentspb" />
+            </apex:pageBlockButtons>
+            <apex:pageBlockTable value="{!attachments}" var="attachment" id="attachmentspbt">
+                <apex:column width="40px">
+                    <apex:facet name="header">Action</apex:facet>
+                    <apex:commandLink action="{!del}" value="Del">
+                        <apex:param name="delId" value="{!attachment.id}" />
+                    </apex:commandLink>
+                </apex:column>
+                <apex:column >
+                    <apex:facet name="header">File</apex:facet>
+                    <apex:outputLink value="/servlet/servlet.FileDownload?file={!attachment.id}">{!attachment.name}</apex:outputLink>
+                </apex:column>
+                <apex:column >
+                    <apex:facet name="header">Size</apex:facet>
+                    {!ROUND(attachment.bodylength/1000,0)} KB
+                </apex:column>
+            </apex:pageBlockTable>
+        </apex:pageBlock>
+    </apex:form>
+    <div style="display: none;">
+        <div id="attachFile" title="Attach File">
+            <apex:form >
+                <apex:actionRegion >
+                    <apex:pageBlock id="filesPB">
+                        <apex:pageBlockButtons location="top">
+                            <apex:outputLabel for="folder" value="File Location " />&nbsp;
+                            <apex:selectList id="folder" size="1" value="{!folderId}">
+                                <apex:selectOption itemLabel="My Personal Documents" itemValue="{!$User.Id}" />
+                                <!--apex:selectOption itemLabel="My Computer" itemValue="bob" /-->
+                                <apex:selectOptions value="{!folders}" />
+                                <apex:actionSupport event="onchange" rerender="files" action="{!changeFolder}" />
+                            </apex:selectList>&nbsp;
+                        </apex:pageBlockButtons>
+                        <div style="overflow-y: auto; max-height: 400px;">
+                            <apex:pageBlockTable value="{!files}" var="file" id="files">
+                                <apex:column >
+                                    <apex:facet name="header">Name</apex:facet>
+                                    <apex:commandLink action="{!addDocId}" value="{!file.name}">
+                                        <apex:param name="fileId" value="{!file.id}" />
+                                    </apex:commandLink>
+                                </apex:column>
+                                <apex:column >
+                                    <apex:facet name="header">Author</apex:facet>
+                                    {!file.CreatedBy.Alias}
+                                </apex:column>
+                                <apex:column >
+                                    <apex:facet name="header">Size</apex:facet>
+                                    {!ROUND(file.bodylength/1000,0)} KB
+                                </apex:column>
+                                <apex:column >
+                                    <apex:facet name="header">Internal Use Only</apex:facet>
+                                    <apex:inputCheckbox value="{!file.isinternaluseonly}" disabled="true" />
+                                </apex:column>
+                            </apex:pageBlockTable>
+                        </div>
+                    </apex:pageBlock>
+                </apex:actionRegion>
+            </apex:form>
+        </div>
+    </div>
+</apex:page>

@@ -1,0 +1,364 @@
+<apex:page controller="pw_cc.CountryDetectionController" title="ProvenWorks CountryDetection">
+    <apex:includeScript value="{!URLFOR($Resource.pw_cc__BaseScripts, '/BaseScripts/jQuery.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.pw_cc__BaseScripts, '/BaseScripts/jQuery.blockUI.js')}"/>    
+    <style type="text/css">
+        .cc_red { color: red; }
+        .cc_green  { color: green; }
+        .cc_black  {  }
+    </style>
+    <apex:sectionHeader title="CountryComplete" subtitle="Find and correct country fields" />   
+    <apex:form id="actionForm">
+        <script type="text/javascript">
+            var pw_cc_bs_jQuery = $.noConflict();
+            var canSave = false; 
+            
+            function blockUI(id) {
+                var dlg = pw_cc_bs_jQuery('#' + id);
+                pw_cc_bs_jQuery.blockUI({
+                    message: dlg,
+                    fadeIn: 0,
+                    fadeOut: 0,
+                    css: {
+                        borderWidth: 2,
+                        borderColor: '#7F383A',
+                        backgroundColor: '#F3F3EC',
+                        cursor: 'default',
+                        padding: '9px',
+                        width: '354px'
+                    }                       
+                });
+            }
+            
+            function unblockUI() {
+                pw_cc_bs_jQuery.unblockUI({
+                    fadeIn: 0,
+                    fadeOut: 0
+                });
+            }
+            
+            function updateToggleAllBox(col) {
+                var least = leastChecked(col);
+                var toggle_disabled = !notAllDisabled(col);
+                var toggle_check = null;
+                if (col == 0) {
+                    toggle_check = document.getElementById('detectCheckBox');
+                    disableButton(document.getElementById('btnDetect'), !least);
+                } else if (col == 1) {
+                    toggle_check = document.getElementById('saveCheckBox');
+                    if (canSave)
+                        disableButton(document.getElementById('{!$Component.pbResult.pbResultButtons.btnSave}'), !least);
+                }                               
+                if (toggle_check) {
+                    disableCheckBox(toggle_check, toggle_disabled);                 
+                    toggle_check.checked = !notAllChecked(col) && !toggle_disabled;
+                }
+            }
+        
+            function eachRow(col, _method) {
+                var table = document.getElementById('{!$Component.pbResult.tblResult}');
+                if (table == null)
+                    return false;
+                for (var i = 1; i < table.rows.length; i++) {
+                    if (_method(table.rows[i].cells[col].getElementsByTagName('input')[0]))
+                        return true;
+                }
+                return false;
+            }
+            
+            function leastChecked(col) {
+                return eachRow(col, function(check) {
+                    if (check.checked)
+                        return true;
+                });
+            }
+            
+            function notAllChecked(col) {
+                return eachRow(col, function(check) {
+                    var disabled = check.getAttribute('disabled');
+                    if ((disabled == undefined || disabled == null || disabled == "") && !check.checked)
+                        return true;
+                });
+            }
+        
+            function notAllDisabled(col) {
+                return eachRow(col, function(check) {
+                    var disabled = check.getAttribute('disabled');
+                    if (disabled == undefined || disabled == null || disabled == "")
+                        return true;
+                });
+            }
+            
+            function SelectChecked(col, value)
+            {
+                eachRow(col, function(check) {
+                    var disabled = check.getAttribute('disabled');
+                    if (disabled == undefined || disabled == null || disabled == "")
+                        check.checked = value;
+                    return false;
+                });
+            }
+            
+            function SelectAllOrNoneByCheckbox(col, control)
+            {
+                SelectChecked(col, control.checked);
+                if (col == 0) {
+                    disableButton(document.getElementById('btnDetect'), !control.checked);
+                } else if (col == 1 && canSave) {
+                    disableButton(document.getElementById('{!$Component.pbResult.pbResultButtons.btnSave}'), !control.checked);
+                }
+            }
+    
+            function disableButton(btn, disable) {
+                if (btn == null)
+                    return;
+                if (disable) {
+                    btn.setAttribute('disabled', 'true');
+                    btn.className = 'btnDisabled';
+                } else {
+                    btn.removeAttribute('disabled');
+                    btn.className = 'btn';
+                }
+            }
+            
+            function disableCheckBox(chk, disable) {
+                if (chk == null)
+                    return;
+                if (disable) {
+                    chk.setAttribute('disabled', 'true');
+                } else {
+                    chk.removeAttribute('disabled');
+                }
+            }
+            
+            function slctSize_OnChange(select) {
+                if (document.getElementById('hdnIsResult').value == 'true') {                   
+                    refreshPage(select.options[select.selectedIndex].value);
+                }
+            }
+            
+            function txtNumber_OnChange(input) {
+                if (document.getElementById('hdnIsResult').value == 'true') {                   
+                    goToPage(input.value);
+                }
+            }
+            
+            function btnDetect_OnClick() {
+                canSave = true;
+                actionDetect('{!$Api.Session_ID}','{!$Api.Partner_Server_URL_170}');
+            }
+            
+            function updateCheckBoxes() {
+                updateToggleAllBox(0);
+                updateToggleAllBox(1);
+                if (!canSave)
+                    disableButton(document.getElementById('{!$Component.pbResult.pbResultButtons.btnSave}'), true);
+            }
+            pw_cc_bs_jQuery(document).ready(updateCheckBoxes);
+        </script>       
+        <div>
+            Country Detection searches country fields for invalid and empty values.
+            <ol style="padding:0; margin-left:0pt;">  
+                <li>To find all invalid values please select an object type and click "Find Invalid Values" button.</li>    
+                <li>You should then select which rows you would like corrected and click the "Detect Countries for selected" button.</li>    
+                <li>Rows where the detection has been successful will now appear in green.</li>  
+                <li>Once you are happy with the results of the detection select which rows you would like saved and click the "Save selected New Values" button.</li>   
+                <li>If multiple pages of results were returned you should detect and save each page individually.</li>  
+            </ol>
+        </div>
+        <apex:outputPanel id="message_out">
+            <input id="hdnIsResult" type="hidden" value="{!IsResult}" />
+            <apex:pageMessages />
+        </apex:outputPanel>
+        <div id="dlgWait" style="display:none;">
+            <div>Please wait...</div>
+        </div>
+        <apex:actionFunction name="nextPage" action="{!NextClick}" reRender="tblResult, message_out, pageNavigator" status="waitingStatus" oncomplete="updateCheckBoxes();" />
+        <apex:actionFunction name="prevPage" action="{!PreviousClick}" reRender="tblResult, message_out, pageNavigator" status="waitingStatus" oncomplete="updateCheckBoxes();" />
+        <apex:actionFunction name="actionDetect" action="{!Detect}" reRender="tblResult, message_out" status="waitingStatus" oncomplete="updateCheckBoxes();">
+            <apex:param name="sid" assignTo="{!SessionId}" value="{!$Api.Session_ID}" />
+            <apex:param name="surl" assignTo="{!ServerUrl}" value="{!$Api.Partner_Server_URL_170}" />
+        </apex:actionFunction> 
+        <apex:actionFunction name="actionSave" action="{!Save}" reRender="tblResult, message_out" status="waitingStatus" oncomplete="updateCheckBoxes();" />
+        <apex:actionFunction name="actionSort" action="{!SortTable}" reRender="tblResult, message_out" status="waitingStatus" oncomplete="updateCheckBoxes();">
+            <apex:param name="column" assignTo="{!ColumnToSort}" value="0" />
+        </apex:actionFunction>          
+        <apex:actionFunction name="refreshPage" action="{!RefreshPage}" reRender="tblResult, message_out, pageNavigator" status="waitingStatus" oncomplete="updateCheckBoxes();">
+            <apex:param name="pageSize" assignTo="{!pageSize}" value="20" />
+        </apex:actionFunction>     
+        <apex:actionFunction name="goToPage" action="{!GoToPage}" reRender="tblResult, message_out, pageNavigator" status="waitingStatus" oncomplete="updateCheckBoxes();">
+            <apex:param name="pageNumber" assignTo="{!PageNumberString}" value="1" />
+        </apex:actionFunction>
+        <apex:actionStatus id="waitingStatus" onstart="blockUI('dlgWait')" onstop="unblockUI()" />
+        <apex:pageBlock title="Filters">
+            <apex:pageBlockButtons location="bottom">
+                <apex:commandButton value="Find Invalid Values" action="{!Find}" />
+            </apex:pageBlockButtons>    
+            <table>
+                <tr>
+                    <td>
+                        <span>Object type:&nbsp;</span>
+                        <apex:selectList value="{!objectType}" size="0">
+                            <apex:selectOptions value="{!ObjectTypes}" />
+                            <apex:actionSupport event="onchange" rerender="slctFieldList" status="waitingStatus" />           
+                        </apex:selectList>
+                        &nbsp;
+                        <span>Fields:&nbsp;</span>
+                        <apex:selectList id="slctFieldList" value="{!selectField}" size="0">
+                            <apex:selectOptions value="{!SelectFields}" />
+                        </apex:selectList>
+                        &nbsp;
+                        <span>Issues:&nbsp;</span>
+                        <apex:selectList value="{!findIssue}" size="0">
+                            <apex:selectOptions value="{!FindIssues}" />
+                        </apex:selectList>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <apex:inputCheckbox id="chkIgnore" value="{!IgnoreUndetectableRecords}" />
+                        <apex:outputLabel for="chkIgnore" value="Skip records which are unlikely to be detected" />
+                    </td>
+                </tr>
+            </table>
+        </apex:pageBlock> 
+        <apex:pageBlock id="pbResult" rendered="{!findIssue != null}">
+            <apex:pageBlockButtons id="pbResultButtons" location="bottom">
+               <input type="button" class="btn" id="btnDetect" value="Detect Countries for selected" onclick="btnDetect_OnClick();return false;" />
+               <apex:commandButton id="btnSave" value="Save selected New Values" onclick="actionSave();return false;" />
+            </apex:pageBlockButtons>
+            <div style="text-align:center;width:100%;"><h2>{!pluralObjectType} with unknown country fields</h2></div>
+            <div>
+                <table style="width:100%;">
+                    <tr>
+                        <td align="left">
+                            <table>
+                                <tr style="display: {!IF(findIssue != 'Empty Values', 'block', 'none')};">
+                                    <td>
+                                        <apex:outputLabel value="{!selectField} on {!objectType} with Invalid Values"/>
+                                    </td>
+                                    <td>-</td>
+                                    <td>
+                                        <b><apex:outputLabel value="{!totalInvalid}" /></b>
+                                    </td>
+                                </tr>
+                                <tr style="display: {!IF(findIssue != 'Invalid Values', 'block', 'none')};">
+                                    <td>
+                                        <apex:outputLabel value="{!selectField} on {!objectType} with Empty Values" />
+                                    </td>
+                                    <td>-</td>
+                                    <td>
+                                        <b><apex:outputLabel value="{!totalEmpty}" /></b>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </div>          
+            <apex:pageBlockTable id="tblResult" value="{!invalidFields}" var="field" rendered="{!IsResult}">
+                <apex:column style="text-align:center;">
+                    <apex:facet name="header">
+                        <div style="font-weight:normal;font-size:10px;text-align:center;">
+                            Detect<br />                        
+                            <input type="checkbox" title="Toggle All Rows" onclick="SelectAllOrNoneByCheckbox(0, this);" name="detectCheckBox" id="detectCheckBox"/>
+                        </div>
+                    </apex:facet>
+                    <apex:inputCheckbox selected="{!field.IsDetectChecked}" onclick="updateToggleAllBox(0);" disabled="{!OR(field.NewValue != '', OR(field.IsFailed, field.IsSaved))}" />
+                </apex:column>
+                <apex:column style="text-align:center;">
+                    <apex:facet name="header">
+                        <div style="font-weight:normal;font-size:10px;text-align:center;">
+                            Save<br />
+                            <input type="checkbox" title="Toggle All Rows" onclick="SelectAllOrNoneByCheckbox(1, this);" name="saveCheckBox" id="saveCheckBox"/>
+                        </div>
+                    </apex:facet>
+                    <apex:inputCheckbox selected="{!field.IsSaveChecked}" onclick="updateToggleAllBox(1);" disabled="{!OR(field.NewValue == '', field.IsSaved)}" />
+                </apex:column>
+                <apex:column >
+                    <apex:facet name="header">
+                        <apex:commandLink value="Name" onclick="actionSort(2);return false;">
+                            <apex:image rendered="{!AND(sortOrder, columnToSort == 2)}" title="Sorted Ascending" styleClass="sortAsc" alt="Sorted Ascending" url="/s.gif" />
+                            <apex:image rendered="{!AND(NOT(sortOrder), columnToSort == 2)}" title="Sorted Descending" styleClass="sortDesc" alt="Sorted Descending" url="/s.gif" />
+                        </apex:commandLink>
+                    </apex:facet>
+                    <apex:outputLink value="{!field.Reference}">{!field.Name}</apex:outputLink>
+                </apex:column>
+                <apex:column >
+                    <apex:facet name="header">
+                        <apex:commandLink value="Owner" onclick="actionSort(3);return false;">
+                            <apex:image rendered="{!AND(sortOrder, columnToSort == 3)}" title="Sorted Ascending" styleClass="sortAsc" alt="Sorted Ascending" url="/s.gif" />
+                            <apex:image rendered="{!AND(NOT(sortOrder), columnToSort == 3)}" title="Sorted Descending" styleClass="sortDesc" alt="Sorted Descending" url="/s.gif" />                           
+                        </apex:commandLink>
+                    </apex:facet>
+                    <apex:outputText value="{!field.UserName}" />
+                </apex:column>
+                <apex:column >
+                    <apex:facet name="header">
+                        <apex:commandLink value="Full Address" onclick="actionSort(4);return false;">
+                            <apex:image rendered="{!AND(sortOrder, columnToSort == 4)}" title="Sorted Ascending" styleClass="sortAsc" alt="Sorted Ascending" url="/s.gif" />
+                            <apex:image rendered="{!AND(NOT(sortOrder), columnToSort == 4)}" title="Sorted Descending" styleClass="sortDesc" alt="Sorted Descending" url="/s.gif" />                            
+                        </apex:commandLink>
+                    </apex:facet>
+                    <apex:outputText value="{!field.Address}" />
+                </apex:column>
+                <apex:column >
+                    <apex:facet name="header">
+                        <apex:commandLink value="Field Name" onclick="actionSort(5);return false;">
+                            <apex:image rendered="{!AND(sortOrder, columnToSort == 5)}" title="Sorted Ascending" styleClass="sortAsc" alt="Sorted Ascending" url="/s.gif" />
+                            <apex:image rendered="{!AND(NOT(sortOrder), columnToSort == 5)}" title="Sorted Descending" styleClass="sortDesc" alt="Sorted Descending" url="/s.gif" />                            
+                        </apex:commandLink>
+                    </apex:facet>
+                    <apex:outputText value="{!field.FieldName}" />
+                </apex:column>
+                <apex:column >
+                    <apex:facet name="header">
+                        <apex:commandLink value="Current Value" onclick="actionSort(6);return false;">
+                            <apex:image rendered="{!AND(sortOrder, columnToSort == 6)}" title="Sorted Ascending" styleClass="sortAsc" alt="Sorted Ascending" url="/s.gif" />
+                            <apex:image rendered="{!AND(NOT(sortOrder), columnToSort == 6)}" title="Sorted Descending" styleClass="sortDesc" alt="Sorted Descending" url="/s.gif" />                           
+                        </apex:commandLink>
+                    </apex:facet>
+                    <apex:outputText value="{!field.CurrentValue}" styleClass="cc_red"/>
+                </apex:column>
+                <apex:column >
+                    <apex:facet name="header">
+                        <apex:commandLink value="New Value" onclick="actionSort(7);return false;">
+                            <apex:image rendered="{!AND(sortOrder, columnToSort == 7)}" title="Sorted Ascending" styleClass="sortAsc" alt="Sorted Ascending" url="/s.gif" />
+                            <apex:image rendered="{!AND(NOT(sortOrder), columnToSort == 7)}" title="Sorted Descending" styleClass="sortDesc" alt="Sorted Descending" url="/s.gif" /> 
+                        </apex:commandLink>
+                    </apex:facet>
+                    <apex:outputText value="{!field.NewValue}" styleClass="cc_green"/>
+                </apex:column>
+                <apex:column >
+                    <apex:facet name="header">
+                        <apex:commandLink value="Note" onclick="actionSort(8);return false;">
+                            <apex:image rendered="{!AND(sortOrder, columnToSort == 8)}" title="Sorted Ascending" styleClass="sortAsc" alt="Sorted Ascending" url="/s.gif" />
+                            <apex:image rendered="{!AND(NOT(sortOrder), columnToSort == 8)}" title="Sorted Descending" styleClass="sortDesc" alt="Sorted Descending" url="/s.gif" />                            
+                        </apex:commandLink>
+                    </apex:facet>
+                    <apex:outputText value="{!field.Note}" />
+                </apex:column>
+            </apex:pageBlockTable>      
+        </apex:pageBlock>
+        <table style="width:100%;">
+            <tr>
+                <td align="left" style="font-size:12px;">
+                    <span>Display&nbsp;</span>
+                    <apex:selectList value="{!pageSize}" size="0" onchange="slctSize_OnChange(this)">
+                        <apex:selectOptions value="{!PageSizes}" />
+                    </apex:selectList>
+                    <span>&nbsp;records per page</span>
+                </td>
+                <td align="right" style="font-size:12px;">          
+                    <apex:outputPanel id="pageNavigator" styleClass="next" rendered="{!AND(IsResult, totalPages > 1)}">
+                        Page&nbsp;<apex:inputText value="{!PageNumberString}" onkeypress="if(event.keyCode == 13) txtNumber_OnChange(this);" style="width:20px;"/>&nbsp;of&nbsp;<apex:outputLabel value="{!totalPages}"/>&nbsp;&nbsp;&nbsp;&nbsp;
+                        <apex:commandLink value="<Previous Page" onclick="prevPage();return false;" rendered="{!NOT(previousLinkDisabled)}"></apex:commandLink>
+                        <apex:outputText value="<Previous Page" styleClass="greyedLink" rendered="{!previousLinkDisabled}"/>
+                        <span>&nbsp;|&nbsp;&nbsp;</span> 
+                        <apex:commandLink value="Next Page>" onclick="nextPage();return false;" rendered="{!NOT(nextLinkDisabled)}" ></apex:commandLink>
+                        <apex:outputText value="Next Page>" styleClass="greyedLink" rendered="{!nextLinkDisabled}"/>
+                    </apex:outputPanel> 
+                </td>
+            </tr>
+        </table>
+    </apex:form>
+</apex:page>

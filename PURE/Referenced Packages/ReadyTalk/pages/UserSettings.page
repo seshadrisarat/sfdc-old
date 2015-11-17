@@ -1,0 +1,461 @@
+<apex:page id="settingsPage" controller="RT1.UserSettingsController"
+    showHeader="false" sidebar="false">
+    <apex:includeScript value="{!URLFOR($Resource.RT1__meetingsr, 'jquery.qtip.min.js')}" />
+    <apex:styleSheet value="{!URLFOR($Resource.RT1__meetingsr, 'jquery.qtip.min.css')}" />
+    <style type="text/css">
+.qtip-min-width {
+    min-width: 185px;
+}
+
+.qtip-min-width-1 {
+    min-width: 250px;
+}
+
+th {
+    text-align: center;
+}
+
+td.allow-updates {
+    text-align: center;
+}
+
+.select-red {
+    border-color: red;
+    color: red !important;
+}
+
+#field-mapping-table { /** width: 50% !important; **/
+    
+}
+</style>
+    <script type="text/javascript">
+var leadBehaviorWidget;
+var loadingWheelUrl = '{!URLFOR($Resource.RT1__meetingsr,'ajaxloader_green.gif')}';
+
+var invalidLeadFields = [<apex:repeat value="{!invalidLeadFieldNames}" var="fieldName">'{!fieldName}',</apex:repeat>];
+var invalidContactFields = [<apex:repeat value="{!invalidContactFieldNames}" var="fieldName">'{!fieldName}',</apex:repeat>];
+var duplicateLeadFieldValues = [<apex:repeat value="{!duplicateLeadFieldValues}" var="fieldValue">'{!fieldValue}',</apex:repeat>];
+var duplicateContactFieldValues = [<apex:repeat value="{!duplicateContactFieldValues}" var="fieldValue">'{!fieldValue}',</apex:repeat>];
+var noLeadFieldMappedToEmail = {!noLeadFieldMappedToEmail};
+var noLeadFieldMappedToLastName = {!noLeadFieldMappedToLastName};
+var noContactFieldMappedToLastName = {!noContactFieldMappedToLastName};
+
+$j(function() { 
+    
+    $j('#fieldMappingDialog').find('select').css('width','200px');
+    
+    // field mapping checks
+    $j('.lead').each(function(i,o){
+        var selection = $j(o).next();
+        if(invalidLeadFields.indexOf($j(o).attr('Name')) > -1
+            || duplicateLeadFieldValues.indexOf($j(selection).val()) > -1){
+            selection.addClass('select-red');
+            
+            selection.change(function(){
+                $j(this).removeClass('select-red');
+            });
+        }
+    });
+    
+    $j('.contact').each(function(i,o){
+        var selection = $j(o).next();
+        if(invalidContactFields.indexOf($j(o).attr('Name')) > -1
+            || duplicateContactFieldValues.indexOf($j(selection).val()) > -1){
+            selection.addClass('select-red');
+            
+            selection.change(function(){
+                $j(this).removeClass('select-red');
+            });
+        }
+    });
+    
+        // show validation error on 'Lead Field' header 
+    if(noLeadFieldMappedToEmail || noLeadFieldMappedToLastName){
+        $j('th').each(function(i,o){
+            if($j(o).text() == 'Lead Field'){
+                $j(this).css('color','red');
+            }
+        });
+    }
+    
+    // show validation error on 'Contact Field' header  
+    if(noContactFieldMappedToLastName){
+        $j('th').each(function(i,o){
+            if($j(o).text() == 'Contact Field'){
+                $j(this).css('color','red');
+            }
+        });
+    }
+    
+    leadBehaviorWidget = $j("[id$='leadAssignmentBehavior']").get(0);
+    var leadOwnerDiv = $j("[id$='leadAssignmentUser_top']");
+    var userId = "{!$User.Id}";
+    var userFirstAndLastName = "{!$User.FirstName} {!$User.LastName}";
+    setLeadAssignmentWidgetVisibility();
+    $j(leadBehaviorWidget).change(function() { 
+        setLeadAssignmentWidgetVisibility();
+    });
+    $j("#settingsPage\\:theForm").submit(function() { 
+        if ($j(leadBehaviorWidget).val() != "Assign to another user") {
+            $j("[id$='leadAssignmentUser_lkid']").val(userId);
+            $j("[id$='leadAssignmentUser_mod']").val("1");
+            $j("[id$='leadAssignmentUser_mlktp']").val("005");
+            $j("[id$='leadAssignmentUser']").val(userFirstAndLastName);
+        }
+    });
+    
+     /**
+      * Helptext:
+      * Using jQuery qTip plugin, because we can't have 'helpText' due to 'showHeader=false', 
+      * Also, attach the 'qtip' to both items in the column and display next to a single item - Jordan, 3/7/2012
+      **/
+    
+      $j("[id$='defaultMeetingName']").qtip({
+          content: 'Sets the default meeting title used when creating a new meeting.',
+          position: { my:'left center', at: 'center right'},
+          style: { classes: 'qtip-min-width ui-tooltip-shadow' }
+      });
+      
+      $j("label:contains('New Meeting Title')").parent().qtip({
+          content: 'Sets the default meeting title used when creating a new meeting.',
+          position: { my:'left center', at: 'center right', target: $j("[id$='defaultMeetingName']")},
+          style: { classes: 'qtip-min-width ui-tooltip-shadow' }
+      });
+      
+      $j("[id$='defaultTimezone']").qtip({
+          content: 'Sets the default time zone used when creating a new meeting.',
+          position: { my:'left center', at: 'center right'},
+          style: { classes: 'qtip-min-width ui-tooltip-shadow' }
+      }); 
+
+      $j("label:contains('New Meeting Time Zone')").parent().qtip({
+          content: 'Sets the default time zone used when creating a new meeting.',
+          position: { my:'left center', at: 'center right', target: $j("[id$='defaultTimezone']")},
+          style: { classes: 'qtip-min-width ui-tooltip-shadow' }
+      }); 
+      
+      $j("[id$='logActivitiesCheckbox']").qtip({
+          content: 'Sets the default for creating activities when creating a new meeting.',
+          position: { my:'left center', at: 'center right'},
+          style: { classes: 'qtip-min-width ui-tooltip-shadow' }
+      }); 
+      
+      $j('.mainTitle').append('<img id="ajaxloader_green" src="'+loadingWheelUrl+'" style="margin-left:10px; display:none;"/>');
+});
+
+function setLeadAssignmentWidgetVisibility() {
+    var leadBehaviorVal = $j(leadBehaviorWidget).val();
+    if (leadBehaviorVal == "Assign to self") {
+        $j("#ownerDiv, #assignmentRuleDiv").hide();
+    }
+    else if (leadBehaviorVal == "Assign to another user") {
+        $j("#ownerDiv").show();
+        $j("#assignmentRuleDiv").hide();
+    }
+    else if (leadBehaviorVal == "Use lead assignment rule") {
+        $j("#ownerDiv").hide();
+        $j("#assignmentRuleDiv").show();        
+    }
+}
+
+</script>
+    <apex:form id="theForm">
+        <apex:actionFunction name="refreshDefaultQuestions"
+            action="{!loadDefaultQuestions}"
+            oncomplete="$j('#ajaxloader_green-questions').hide();"
+            rerender="defaultQuestions" />
+        <apex:pageBlock id="pageBlock" title="ReadyTalk User Settings"
+            mode="edit" rendered="{!OR($User.ReadyTalkUser__c, $User.MeetingsCollaboratorUser__c)}">
+            <apex:pageBlockButtons >
+                <apex:commandButton value="Save" action="{!save}"
+                    onclick="$j('#ajaxloader_green').show();" />
+                <apex:commandButton value="Cancel" action="{!cancel}" />
+            </apex:pageBlockButtons>
+            <apex:pageMessages />
+            <apex:pageBlockSection id="theSection" columns="1">
+                    <apex:facet name="header">Chairperson Login Credentials</apex:facet>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Toll Free Number" for="tollFreeNumber" />
+                    <apex:outputPanel styleClass="requiredInput" layout="block">
+                        <apex:outputPanel styleClass="requiredBlock" layout="block" />
+                        <apex:inputText id="tollFreeNumber"
+                            value="{!settingsModel.TollFreeNumber}" />
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Access Code" for="accessCode" />
+                    <apex:outputPanel styleClass="requiredInput" layout="block">
+                        <apex:outputPanel styleClass="requiredBlock" layout="block" />
+                        <apex:inputText id="accessCode"
+                            value="{!settingsModel.AccessCode}" />
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Passcode" for="passCode" />
+                    <apex:outputPanel styleClass="requiredInput" layout="block">
+                        <apex:outputPanel styleClass="requiredBlock" layout="block" />
+                        <apex:inputSecret redisplay="true" id="passCode"
+                            value="{!settingsModel.Passcode}" />
+                        <apex:commandButton action="{!saveCredentials}"
+                            value="Save Credentials" />
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+                     
+            <apex:pageBlockSection id="marketingSection">
+                <apex:facet name="header">
+                    <span id="default_new_meetings_help-_help" class="helpButton">Default
+                    New Meeting Settings&nbsp;<img src="/s.gif" class="helpOrb"
+                        style="width: 20px; height: 15px;" /></span>
+                <script type="text/javascript">sfdcPage.setHelp('default_new_meetings_help', 'Complete the following options to indicate default settings for new meetings started or scheduled directly from a Lead or Contact record.');</script>
+                
+                </apex:facet>
+                
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="New Meeting Title" />
+                    <apex:outputPanel styleClass="requiredInput" layout="block">
+                        <apex:outputPanel styleClass="requiredBlock" layout="block" />
+                        <apex:inputField value="{!meetingForTimezones.Name}"
+                            id="defaultMeetingName" />
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+
+                <!-- Added 2/9/2012 -->
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="New Meeting Time Zone" />
+                    <apex:outputPanel styleClass="requiredInput" layout="block">
+                        <apex:outputPanel styleClass="requiredBlock" layout="block" />
+                        <apex:inputField value="{!meetingForTimezones.RT1__TimeZoneDB__c}"
+                            id="defaultTimezone" />
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <!-- Added 2/20/2012 -->
+
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Log Activity Default" />
+                    <apex:inputCheckbox value="{!settingsModel.LogActivities}"
+                        id="logActivitiesCheckbox" />
+                </apex:pageBlockSectionItem>
+
+            </apex:pageBlockSection>
+
+            <apex:pageBlockSection >
+                <apex:facet name="header">
+                    <span id="default_import_meetings_help-_help" class="helpButton">Default Imported Meeting Settings&nbsp;<img src="/s.gif" class="helpOrb"
+                        style="width: 20px; height: 15px;" /></span>
+                    <script type="text/javascript">sfdcPage.setHelp('default_import_meetings_help', 'Complete the following options to indicate default settings for meetings imported from Conference Center.');</script>
+                </apex:facet>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Default Lead Source" />
+                    <apex:outputPanel styleClass="requiredInput" layout="block">
+                        <apex:outputPanel styleClass="requiredBlock" layout="block" />
+                        <apex:selectList size="1"
+                            value="{!settingsModel.DefaultLeadSource}">
+                            <apex:selectOptions value="{!LeadSourceSelectOptions}" />
+                        </apex:selectList>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel for="createNewLeads"
+                        value="Automatically Create New Leads"
+                        title="Automatically create new lead when registrant not found in Salesforce.com" />
+                    <apex:inputCheckbox id="createNewLeads"
+                        value="{!settingsModel.CreateNewLeads}"
+                        title="Automatically create new lead when registrant not found in Salesforce.com" />
+                </apex:pageBlockSectionItem>
+
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Default Meeting Type" />
+                    <apex:outputPanel styleClass="requiredInput" layout="block">
+                        <apex:outputPanel styleClass="requiredBlock" layout="block" />
+                        <apex:selectList size="1"
+                            value="{!settingsModel.DefaultMeetingType}">
+                            <apex:selectOptions value="{!DefaultMeetingTypeSelectOptions}" />
+                        </apex:selectList>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!meetingAutoImportEnabled}" helpText="Meetings scheduled from Outlook and Conference Center will be automatically imported nightly">
+                    <apex:outputLabel value="Automatically Import Meetings" />
+                    <apex:inputCheckbox value="{!settingsModel.MeetingAutoImport}"
+                        id="autoMeetingImport" />
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem id="leadAssignmentSection">
+                    <apex:outputLabel value="Lead Assignment"
+                        for="leadAssignmentBehavior" />
+                    <apex:outputPanel id="leadAssignmentOutputPanel"
+                        styleClass="requiredInput" layout="block">
+                        <apex:outputPanel styleClass="requiredBlock" layout="block" />
+                        <apex:selectList size="1" id="leadAssignmentBehavior"
+                            value="{!settingsModel.LeadAssignmentBehavior}">
+                            <apex:selectOption itemValue="Assign to self"
+                                itemLabel="Assign to self" />
+                            <apex:selectOption itemValue="Assign to another user"
+                                itemLabel="Assign to another user" />
+                            <apex:selectOption itemValue="Use lead assignment rule"
+                                itemLabel="Use lead assignment rule" />
+                        </apex:selectList>
+                        <div id="ownerDiv"><apex:inputField id="leadAssignmentUser"
+                            value="{!DummyLead.OwnerId}" required="false" /></div>
+                        <div id="assignmentRuleDiv"><apex:selectList id="leadAssignmentRule" size="1"
+                            value="{!settingsModel.LeadAssignmentRuleId}">
+                            <apex:selectOptions value="{!assignmentRuleSelectOptions}" />
+                        </apex:selectList></div>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            
+            <apex:pageBlockSection id="chatterFeedOptions" rendered="{!globalsettings.RT1__ChatterFeedTrackingEnabled__c}" columns="2">
+                <apex:facet name="header">
+                    <span class="helpButton">Chatter Update Settings&nbsp;<img src="/s.gif" class="helpOrb"
+                        style="width: 20px; height: 15px;" /></span>
+                    <script type="text/javascript">sfdcPage.setHelp('default_poll_questions_help', '.');</script>
+                </apex:facet>           
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel for="answerPollQuestion"
+                            value="When a Lead/Contact answers a poll question"
+                            title="" />
+                    <apex:inputCheckbox value="{!settingsModel.LeadContactAnswersPollQuestion}" id="answerPollQuestion" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel for="attendsMeeting"
+                            value="When a Lead/Contact attends a meeting"
+                            title="" />
+                    <apex:inputCheckbox value="{!settingsModel.LeadContactAttends}" id="attendsMeeting" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel for="registersForMeeting"
+                            value="When a Lead/Contact registers for a meeting"
+                            title="" />             
+                    <apex:inputCheckbox value="{!settingsModel.LeadContactRegisters}" id="registersForMeeting" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >    
+                    <apex:outputLabel for="viewRecording"
+                            value="When a Lead/Contact views a recording"
+                            title="" />     
+                    <apex:inputCheckbox value="{!settingsModel.LeadContactViewRecording}" id="viewRecording"/>
+                </apex:pageBlockSectionItem>    
+            </apex:pageBlockSection>
+
+            <apex:pageBlockSection id="defaultQuestions" rendered="{!AND($User.ReadyTalkUser__c, credentialsSet)}">
+                <apex:facet name="header">
+                    <span id="default_poll_questions_help-_help" class="helpButton">Default Poll Question Mappings&nbsp;<img src="/s.gif" class="helpOrb"
+                        style="width: 20px; height: 15px;" /></span>
+                    <script type="text/javascript">sfdcPage.setHelp('default_poll_questions_help', 'Choose up to 5 poll questions to map by default to the meeting member record. This mapping can be updated on a per-meeting basis.');</script>
+                </apex:facet>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Show Deleted Questions"
+                        for="showDeletedQuestionsInput" />
+                    <apex:outputPanel >
+                        <apex:inputCheckbox value="{!displayDeletedQuestions}"
+                            id="showDeletedQuestionsInput"
+                            onChange="$j('#ajaxloader_green-questions').show();refreshDefaultQuestions();" />
+                        <img id="ajaxloader_green-questions"
+                            src="{!URLFOR($Resource.meetingsr,'ajaxloader_green.gif')}"
+                            style="margin-left: 10px; display: none;" />
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                &nbsp; &nbsp;
+            </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Poll Question 1" for="question1" />
+                    <apex:selectList value="{!question1}" id="question1" size="1">
+                        <apex:selectOptions value="{!availablePollQuestions}" />
+                    </apex:selectList>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                &nbsp; &nbsp;
+            </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Poll Question 2" for="question2" />
+                    <apex:selectList value="{!question2}" id="question2" size="1">
+                        <apex:selectOptions value="{!availablePollQuestions}" />
+                    </apex:selectList>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                &nbsp; &nbsp;
+            </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Poll Question 3" for="question3" />
+                    <apex:selectList value="{!question3}" id="question3" size="1">
+                        <apex:selectOptions value="{!availablePollQuestions}" />
+                    </apex:selectList>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                &nbsp; &nbsp;
+            </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Poll Question 4" for="question4" />
+                    <apex:selectList value="{!question4}" id="question4" size="1">
+                        <apex:selectOptions value="{!availablePollQuestions}" />
+                    </apex:selectList>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                &nbsp; &nbsp;
+            </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Poll Question 5" for="question5" />
+                    <apex:selectList value="{!question5}" id="question5" size="1">
+                        <apex:selectOptions value="{!availablePollQuestions}" />
+                    </apex:selectList>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+
+            <apex:pageBlockSection columns="1" id="fieldMappingInput" rendered="{!AND($User.ReadyTalkUser__c, fieldMappingEnabled)}">
+                <apex:facet name="header">Default Meeting Member Field Mappings</apex:facet>
+                <table id="field-mapping-table">
+                    <tr>
+                        <th>Meeting Member Field</th>
+                        <th>Lead Field</th>
+                        <th>Contact Field</th>
+                    </tr>
+                    <apex:repeat value="{!fieldMappings}" var="mapping">
+                        <tr>
+                            <td>
+                            <apex:outputText value="{!Mapping.Name}" /></td>
+                            <td>
+                                <input name="{!mapping.Name}" type="hidden"
+                                    class="lead field-selection" value="{!mapping.RT1__LeadField__c}" />
+                                <apex:selectList value="{!mapping.RT1__LeadField__c}" size="1"
+                                    styleClass="lead-{!LOWER(SUBSTITUTE(mapping.Name,' ','-'))}-select"
+                                    disabled="true" rendered="{!NOT(mapping.RT1__LeadAllowUpdates__c)}">
+                                    <apex:selectOptions value="{!leadFieldsPickList}" />
+                                </apex:selectList> 
+                                <apex:selectList value="{!mapping.RT1__LeadField__c}" size="1"
+                                    styleClass="lead-{!LOWER(SUBSTITUTE(mapping.Name,' ','-'))}-select"
+                                    rendered="{!mapping.RT1__LeadAllowUpdates__c}">
+                                    <apex:selectOptions value="{!leadFieldsPickList}" />
+                                </apex:selectList></td>
+                            <td>
+                                <input name="{!mapping.Name}" id="{!mapping.Name}"
+                                    type="hidden" class="contact field-selection"
+                                    value="{!mapping.RT1__ContactField__c}" /> 
+                            <apex:selectList value="{!mapping.RT1__ContactField__c}" size="1"
+                                styleClass="contact-{!LOWER(SUBSTITUTE(mapping.Name,' ','-'))}-select"
+                                disabled="true" rendered="{!NOT(mapping.RT1__ContactAllowUpdates__c)}">
+                                <apex:selectOptions value="{!contactFieldsPickList}" />
+                            </apex:selectList> 
+                            <apex:selectList value="{!mapping.RT1__ContactField__c}" size="1"
+                                styleClass="contact-{!LOWER(SUBSTITUTE(mapping.Name,' ','-'))}-select"
+                                rendered="{!mapping.RT1__ContactAllowUpdates__c}">
+                                <apex:selectOptions value="{!contactFieldsPickList}" />
+                            </apex:selectList>
+                            </td>
+                        </tr>
+                    </apex:repeat>
+                </table>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+
+        <apex:pageBlock title="ReadyTalk User Settings" mode="detail"
+            rendered="{!AND(NOT($User.ReadyTalkUser__c), NOT($User.MeetingsCollaboratorUser__c))}">
+            <p>Your user account is not enabled for ReadyTalk application.
+            Please contact your system administrator for more information.</p>
+            <apex:commandButton value="Continue" />
+        </apex:pageBlock>
+
+    </apex:form>
+</apex:page>

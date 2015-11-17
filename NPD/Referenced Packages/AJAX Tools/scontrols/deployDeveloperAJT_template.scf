@@ -1,0 +1,258 @@
+var templateState = null;
+
+function showNew() {
+    refreshTemplateList();
+    templateDlg.show();
+}
+
+function newObject(id, type) {
+    templateState = {};
+    templateState.type = type;
+
+    dojo.io.bind({
+        url: "/servlet/servlet.FileDownload?file=" + id + "&rand=" + new Date().getTime(),
+        load: fileLoaded,
+        mimetype: "text/plain"});
+
+    templateDlg.hide();
+}
+
+function refreshTemplateList() {
+    var doc = document.getElementById("template-list");
+    var result = sforce.connection.query("select name,id from document where Folder.name='ajaxtemplates'");
+    var it = new sforce.QueryResultIterator(result);
+
+    var scontrols = new sforce.StringBuffer();
+    scontrols.append("<b>SControl Templates</b>:<br>");
+    var apex = new sforce.StringBuffer();
+    apex.append("<p><b>Apex Templates</b>:<br>");
+
+    while(it.hasNext()) {
+        var item = it.next();
+        if (item.Name.indexOf(".apex") != -1) {
+            apex.append("<a href=\"javascript:newObject(\'");
+            apex.append(item.Id);
+            apex.append("\', \'apex\'); void 0;\">")
+            apex.append(item.Name.substring(0, item.Name.indexOf(".")));
+            apex.append("</a><br>");
+        } else if (item.Name.indexOf(".scon") != -1) {
+            scontrols.append("<a href=\"javascript:newObject(\'");
+            scontrols.append(item.Id);
+            scontrols.append("\', \'scontrol\'); void 0;\">")
+            scontrols.append(item.Name.substring(0, item.Name.indexOf(".")));
+            scontrols.append("</a><br>");
+        }
+    }
+    doc.innerHTML = scontrols.toString() + apex.toString();
+}
+
+function fileLoaded(type, data, event) {
+    var items = data.split("$$");
+
+    var script = [];
+    script.push("var out = [];");
+    var options = [];
+    for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        if (item.length > 2 && item.charAt(0) === "(" && item.charAt(item.length - 1) === ")") { //options
+            options.push(item.substring(1, item.length-1));
+        }else if (item.length > 2 && item.charAt(0) === ":" && item.charAt(item.length - 1) === ":") { //code
+            var strs = splitNewLine(item.substring(1, item.length - 1));
+            for (var j=0; j<strs.length; j++) {
+                script.push(strs[j]);
+            }
+        } else if (item.length > 2 && item.charAt(0) === "=" && item.charAt(item.length - 1) === "=") { //expression
+            script.push("out.push(" + item.substring(1, item.length-1) + ");");
+        } else { //text
+            var strs2 = splitNewLine(item);
+            for (var k=0; k<strs2.length; k++) {
+                var line = "out.push('" + clean(strs2[k]);
+                if (k<strs2.length-1) {
+                    line +=  "\\n');";
+                } else {
+                    if (item.charAt(item.length-1) === "\n") {
+                        line +=  "\\n');";
+                    } else {
+                        line +=  "');";
+                    }
+                }
+                script.push(line);
+            }
+        }
+    }
+    script.push("out;")
+    var js = script.join("\n");
+    templateState.script = js;
+    templateState.optionScripts = options;
+    templateState.optionCount = 0;
+    templateState.context = {};
+    templateState.context.current = {};
+    templateState.form = document.getElementById("template-option-form");
+    document.getElementById("template-option-question").innerHTML =  "";
+    document.getElementById("template-option-answer").innerHTML = "";
+    showOptionWizard();
+}
+
+function showOptionWizard() {
+
+    if (templateState.optionCount < templateState.optionScripts.length) {
+        var optionScript = templateState.optionScripts[templateState.optionCount];
+        try {
+            with(templateState) {
+                eval(optionScript);
+            }
+        } catch(error) {
+            alert("Failed to exec option script: " + optionScript);
+            throw error;
+        }
+       var current = templateState.context.current;
+        document.getElementById("template-option-question").innerHTML =  current.question;
+
+        var ans = document.getElementById("template-option-answer");
+        if (current.type == "text") {
+            ans.innerHTML = "<input name=\"" + current.name + "\" type=" + current.type + " />";
+        } else if (current.type == "select") {
+            var sb = new sforce.StringBuffer();
+            for (var a in current.options) {
+                sb.append("<option>").append(current.options[a]).append("</option>\n");
+            }
+            ans.innerHTML = "<select name=\"" + current.name + "\" >" + sb.toString() +
+                            "</select>";
+        } else if (current.type == "choice") {
+            var sb = new sforce.StringBuffer();
+            sb.append("<input type=\"hidden\" value=\"choice\" name=\"");
+            sb.append(current.name).append("\" />")
+            sb.append("<div align=\"left\"");
+            for (var a in current.options) {
+                sb.append("<input type=\"checkbox\" name=\"");
+                sb.append("choice-" + current.options[a]).append("\" />");
+                sb.append(current.options[a]).append("<br>");
+            }
+            sb.append("</div>");
+            ans.innerHTML = sb.toString();
+        } else {
+            throw "unknown option: " + current.type;
+        }
+
+        templateOptionDlg.show();
+    } else {
+        templateOptionDlg.hide();
+        generateObject();
+    }
+}
+
+function validateOption() {
+    var optionScript = templateState.optionScripts[templateState.optionCount];
+        try {
+            with(templateState) {
+                eval(optionScript);
+            }
+        } catch(error) {
+            alert(error);
+            return;
+        }
+   if (templateState.context.current.validated) {
+       try {
+           if (templateState.form[templateState.context.current.name]) {
+               templateState.form[templateState.context.current.name] = null;
+           }
+       } catch(error) {
+           setStatus("warning: unable to reset field");
+       }
+       templateState.optionCount++;
+       templateState.context.current = {};
+   }
+   showOptionWizard();
+}
+
+function generateObject() {
+    var js = templateState.script;
+
+     try {
+         with(templateState) {
+           var output = eval(js);
+         }
+    } catch(error) {
+         alert(error);
+         return;
+        //output = [];
+        //output.push(error);
+        //output.push("script :");
+        //output.push(escapeHtml(js));
+    }
+    createNew(output.join(""), templateState.context.scontrolName);
+}
+
+function splitNewLine(item) {
+    var results = [];
+    while(item.length > 0) {
+        var index = item.indexOf("\n");
+        var sub;
+        if (index == -1) {
+            sub = item;
+            item = "";
+        } else {
+            sub = item.substring(0, index);
+            item = item.substring(index+1, item.length);
+        }
+        results.push(sub);
+    }
+    return results;
+}
+
+function escapeHtml(str) {
+    str = str.replace(/</g, "&lt;");
+    str = str.replace(/>/g, "&gt;");
+    return str;
+}
+
+function clean(str) {
+    str = str.replace(/"/g, '\\"');
+    str = str.replace(/'/g, "\\'");
+    str = str.replace(/\n/g, "");
+    str = str.replace(/\r/g, "");
+    return str;
+}
+
+
+function createNew(text, name) {
+
+    if (templateState.type == "apex") {
+        createNewApexCode(text);
+        return;
+    }
+
+    if (name == null || name == "" || name == "Enter name") {
+        failed("Create new failed for " + name);
+        return false;
+    }
+
+    try {
+        var scontrol = new sforce.SObject("SControl");
+        scontrol.Name = name;
+        scontrol.DeveloperName = name + "Developer";
+        scontrol.HtmlWrapper = text;
+        var result = sforce.connection.create([scontrol]);
+
+        if (result[0].getBoolean("success")) {
+            setStatus("Created new SControl " + result[0]);
+            setup(result[0].id, "html");
+        } else {
+            failed("Create new failed " + result[0]);
+        }
+    } catch(error) {
+        failed(error);
+    }
+
+    return false;
+}
+
+function createNewApexCode(text) {
+    var result = sforce.apex.compileClasses([text]);
+    if (result[0].getBoolean("success")) {
+        setup(result[0].id, "apex");
+        setStatus("Created new apex class: " + result[0]);
+    } else {
+        failed("Create new apex class failed " + result[0]);
+    }
+}

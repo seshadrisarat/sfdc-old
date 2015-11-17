@@ -1,0 +1,449 @@
+<apex:page controller="mkto_si.BestBetsViewEdit_Controller" title="Best Bets 2.0" tabstyle="Marketo_Sales_Insight__tab">
+<c:CssAndJavascript2 />
+<!--<link rel="Stylesheet" type="text/css" href="{!$Resource.jqueryUI}/jquery-ui-latest/css/cupertino/jquery-ui.css" />-->
+<!--<script type="text/javascript" src="{!$Resource.jqueryUI}/jquery-ui-latest/js/jquery.ui.core.min.js"></script>-->
+<!--<script type="text/javascript" src="{!$Resource.jqueryUI}/jquery-ui-latest/js/jquery.ui.widget.min.js"></script>-->
+<!--<script type="text/javascript" src="{!$Resource.jqueryUI}/jquery-ui-latest/js/jquery.ui.mouse.min.js"></script>-->
+<!--<script type="text/javascript" src="{!$Resource.jqueryUI}/jquery-ui-latest/js/jquery.ui.position.min.js"></script>-->
+<!--<script type="text/javascript" src="{!$Resource.jqueryUI}/jquery-ui-latest/js/jquery.ui.autocomplete.min.js"></script>-->
+
+<apex:sectionHeader title="{!appName} - {!$Label.Best_Bets}" subtitle="{!IF(isEdit, $Label.Edit_View, $Label.Create_New_View)}" help="{!helpLink}"/>
+	<apex:form id="theForm">
+		<apex:pageBlock id="thePage" mode="edit">
+      <apex:pageMessages id="formMessages" showDetail="{!debug}"/>
+      
+			<apex:pageBlockButtons location="both">
+				<apex:outputPanel id="redirect-panel">
+					<script>
+						if('{!redirectUrl}') {
+							window.top.location = '{!redirectUrl}';
+						}
+						else {
+							Marketo.actionStop();
+							Marketo.unsetWaiting('{!$Component.theForm}');
+						}
+					</script>
+				</apex:outputPanel>
+				
+				<apex:actionStatus id="edit-status" onStart="Marketo.setWaiting('{!$Component.theForm}')" />
+				
+				<apex:commandButton value="{!$Label.Save}" action="{!save}" rerender="viewName, formMessages, redirect-panel" status="edit-status"/>
+				<apex:commandButton value="{!$Label.Delete}" action="{!deleteView}" rerender="redirect-panel" status="edit-status" onclick="if (!confirm('Are you sure you want to delete this view? (This cannot be undone)')) return false;" rendered="{!isEdit}" immediate="true"/>
+				<apex:commandButton value="{!$Label.Cancel}" action="{!cancel}" rerender="redirect-panel" status="edit-status" immediate="true"/>
+			</apex:pageBlockButtons>
+			<apex:pageBlockSection id="step1" title="{!$Label.Step_1_Enter_View_Information}" collapsible="false">
+				
+		        <apex:pageBlockSectionItem >
+		          <apex:outputLabel value="{!$Label.View_Name}"/>
+		          <apex:outputPanel id="viewName">
+		            <div class="requiredInput">
+		              <div class="requiredBlock"></div>
+		              <apex:inputText value="{!bView.Name}" required="true" />
+		            </div>
+		          </apex:outputPanel>
+		        </apex:pageBlockSectionItem>   
+		        
+                <apex:pageBlockSectionItem >
+		          <apex:outputPanel >
+		            <apex:outputlabel />
+		            <apex:inputCheckbox value="{!bView.mkto_si__ShowRecordsWithNegativeScores__c}" required="true" styleClass="mkt-checkbox" />
+		            <apex:outputLabel value="{!$Label.Show_records_with_negative_score}"/>
+		          </apex:outputPanel>
+		        </apex:pageBlockSectionItem> 
+		        
+		        <apex:pageBlockSectionItem >
+		          <apex:outputLabel value="{!$Label.Show_Only}"/>
+		          <apex:outputPanel >
+		          	<apex:actionRegion >
+			            <apex:selectList id="typeList" size="1" value="{!selectedViewType}">
+			              <apex:selectOptions value="{!viewType}"/>
+			              <apex:actionSupport event="onchange" action="{!switchType}" rerender="ownerFilter, fieldsFilter, fieldListsInit"/>
+			            </apex:selectList>
+			          </apex:actionRegion>
+		          </apex:outputPanel>
+		        </apex:pageBlockSectionItem>
+		        
+   		        <apex:pageBlockSectionItem >
+		        </apex:pageBlockSectionItem>
+		        
+		        <apex:pageBlockSectionItem >
+		          <apex:outputLabel value="{!$Label.Max_Pages}"/>
+		          <apex:outputPanel >
+		          	<apex:selectList value="{!maxPages}" required="true" size="1">
+		          		<apex:selectOption itemValue="1"/>
+		          		<apex:selectOption itemValue="2"/>
+		          		<apex:selectOption itemValue="3"/>
+		          		<apex:selectOption itemValue="4"/>
+		          		<apex:selectOption itemValue="5"/>
+		          		<apex:selectOption itemValue="6"/>
+		          		<apex:selectOption itemValue="7"/>
+		          		<apex:selectOption itemValue="8"/>
+		          		<apex:selectOption itemValue="9"/>
+		          		<apex:selectOption itemValue="10"/>
+		          		<apex:selectOption itemValue="11"/>
+		          		<apex:selectOption itemValue="12"/>
+		          		<apex:selectOption itemValue="13"/>
+		          		<apex:selectOption itemValue="14"/>
+		          		<apex:selectOption itemValue="15"/>
+		          		<apex:selectOption itemValue="16"/>
+		          		<apex:selectOption itemValue="17"/>
+		          		<apex:selectOption itemValue="18"/>
+		          		<apex:selectOption itemValue="19"/>
+		          		<apex:selectOption itemValue="20"/>
+		          	</apex:selectList>
+		          </apex:outputPanel>
+		        </apex:pageBlockSectionItem>  
+		        
+		        <apex:pageBlockSectionItem > 
+		        </apex:pageBlockSectionItem> 
+		        
+		        <apex:pageBlockSectionItem >
+		          <apex:outputLabel value="{!$Label.Filter_by_Owner}"/>
+		          <apex:outputPanel id="ownerFilter">
+					<apex:selectRadio id="oradio" value="{!bView.mkto_si__OwnerFilter__c}" layout="pageDirection">
+						<apex:selectOptions value="{!ownerFilter}"/>
+					</apex:selectRadio>
+		          </apex:outputPanel>
+		        </apex:pageBlockSectionItem>
+	        </apex:pageBlockSection>
+			
+			<!-- STEP 4 -->
+			<apex:actionRegion >
+			<apex:pageBlockSection id="step2" title="{!$Label.Step_2_Filter_by_Additional_Fields}" columns="1" collapsible="false">
+		        <apex:pageBlockSectionItem >
+					<apex:outputPanel id="fieldsFilter">
+						<div id="filter-list">
+					<apex:pageBlockTable id="filterList" value="{!filterList}" var="item">
+						<apex:column headerValue="{!$Label.Field}">
+		          <apex:actionRegion >
+			        	<apex:selectList value="{!item.b.mkto_si__FieldName__c}" styleClass="filter-list-fields" size="1">
+								  <apex:selectOptions value="{!item.cfo}"/>
+								  <apex:actionSupport event="onchange" action="{!item.reloadOp}" rerender="op, field-name, field-type, value-type, values, raw-value"/>
+							  </apex:selectList>
+		          </apex:actionRegion>
+						</apex:column>
+						<apex:column headerValue="{!$Label.Field_Name}" rendered="{!debug}">
+			      	<apex:outputText id="field-name" value="{!IF(NOT(ISNULL(item.objectName)), item.objectName&'.'&item.fieldName, '')}"/>
+						</apex:column>
+						<apex:column headerValue="{!$Label.Field_Type}" rendered="{!debug}">
+			      	<apex:outputText id="field-type" value="{!item.fieldTypes}"/>
+						</apex:column>
+						<apex:column headerValue="{!$Label.Operator}">
+							<apex:actionRegion >
+								<apex:selectList id="op" value="{!item.b.mkto_si__Operator__c}" size="1">
+									<apex:selectOptions value="{!item.op}"/>
+									<apex:actionSupport event="onchange" action="{!item.reloadOp}" rerender="field-name, value-type, values"/>
+								</apex:selectList>
+							</apex:actionRegion>
+						</apex:column>
+						<apex:column headerValue="{!$Label.Value_Type}" rendered="{!debug}">
+			      	<apex:outputText id="value-type" value="{!item.valueType}"/>
+						</apex:column>
+						<apex:column headerValue="{!$Label.Value}">
+							<apex:outputPanel id="values" layout="block" style="white-space: nowrap">
+							    <apex:variable var="fieldName" value="{!item.fieldName}" />
+							    <apex:variable var="value" value="{!item.value}" />
+								<apex:inputField value="{!item.value[item.fieldName]}"
+								     	rendered="{!NOT(ISNULL(item.value) || ISNULL(item.fieldName))}"
+										styleClass="filter-list-value mkt-show-inline-{!NOT(item.isLookup)}"
+										required="false"/>
+								
+								<apex:inputField value="{!item.b.mkto_si__LookupValue__c}" rendered="{!item.isLookup}" onfocus="Marketo.setupAutoSuggest(this)" onkeyup="Marketo.autoSuggest(this, '{!item.fieldTypes}')"/>
+							</apex:outputPanel>
+						</apex:column>
+						<apex:column headerValue="{!$Label.Raw_Value}" rendered="{!debug}">
+			      	<apex:outputText id="raw-value" value="{!item.b.mkto_si__Value__c}"/>
+						</apex:column>
+						<apex:column >
+							<apex:outputText value="{!$Label.AND}" />
+						</apex:column>
+					</apex:pageBlockTable>				
+					</div>
+					</apex:outputPanel>
+					
+						<div id="mkt-auto-suggest-list" class="mkt-auto-suggest-list"></div>
+						
+		        </apex:pageBlockSectionItem>
+					
+		        <apex:pageBlockSectionItem >
+					<apex:outputPanel >
+						<apex:commandButton value="{!$Label.Add}" action="{!addFilterRow}" rerender="filterList, fieldListsInit"/>
+						<apex:commandButton value="{!$Label.Remove}" action="{!removeFilterRow}" rerender="filterList, fieldListsInit"/>
+					</apex:outputPanel>
+		        </apex:pageBlockSectionItem>
+			</apex:pageBlockSection>
+			</apex:actionRegion>
+			
+			<!-- STEP 4 -->
+			<apex:pageBlockSection id="step4" title="{!$Label.Step_4_Select_Additional_Fields_to_Display}" collapsible="false" rendered="false">
+		        
+		        <apex:pageBlockSectionItem rendered="{!(selectedViewType == 'Contact')}">
+		        	<apex:outputPanel >
+						<table border="0">
+							<tr>
+								<th>{!$Label.Available_Contact_Fields}</th>
+								<th></th>
+								<th>{!$Label.Selected}</th>
+								<th></th>
+							</tr>
+							<tr>
+						    	<td><apex:selectList id="conflds" value="{!selectedAContactField}" size="11"><apex:selectOptions value="{!availableContactFieldOptions}"/></apex:selectList></td>
+						    	<td>
+						    		<table border="0">
+						    			<tr><td>&nbsp;</td></tr>
+						    			<tr><td>&nbsp;</td></tr>
+						    			<tr><td>&nbsp;</td></tr>
+						    			<tr><td align="center">&nbsp;&nbsp;<apex:commandButton value="►" action="{!addContactField}" rerender="conflds, conselflds"/>&nbsp;&nbsp;</td></tr>
+						    			<tr><td align="center">&nbsp;&nbsp;<apex:commandButton value="◄" action="{!removeContactField}" rerender="conflds, conselflds"/>&nbsp;&nbsp;</td></tr>
+						    		</table>
+						    	</td>
+								<td><apex:selectList id="conselflds" value="{!selectedSContactField}" size="11"><apex:selectOptions value="{!selectedContactFieldOptions}"/></apex:selectList></td>
+								<td>
+						    		<table border="0">
+						    		<tbody valign="middle">
+						    			<tr><td>&nbsp;</td></tr>
+						    			<tr><td>&nbsp;</td></tr>
+						    			<tr><td>&nbsp;</td></tr>
+						    			<tr><td align="center">&nbsp;&nbsp;<apex:commandButton value="▲" action="{!up}" rerender="conflds, conselflds"/>&nbsp;&nbsp;</td></tr>
+						    			<tr><td align="center">&nbsp;&nbsp;<apex:commandButton value="▼" action="{!down}" rerender="conflds, conselflds"/>&nbsp;&nbsp;</td></tr>
+						    		</tbody>
+						    		</table>
+								</td>
+							</tr>
+								<tr>
+									<td align="left"></td>
+							    	<td></td>
+		 							<td align="left"></td>
+							    	<td></td>
+								</tr>
+						</table>
+		            </apex:outputPanel>
+				</apex:pageBlockSectionItem>
+
+		        <apex:pageBlockSectionItem rendered="{!(selectedViewType == 'Lead')}">
+		        	<apex:outputPanel >
+						<table border="0">
+							<tr>
+								<th>{!$Label.Available_Lead_Fields}</th>
+								<th></th>
+								<th>{!$Label.Selected}</th>
+								<th></th>
+							</tr>
+							<tr>
+						    	<td><apex:selectList id="ledflds" value="{!selectedALeadField}" size="11"><apex:selectOptions value="{!availableLeadFieldOptions}"/></apex:selectList></td>
+						    	<td>
+						    		<table border="0">
+						    			<tr><td>&nbsp;</td></tr>
+						    			<tr><td>&nbsp;</td></tr>
+						    			<tr><td>&nbsp;</td></tr>
+						    			<tr><td align="center">&nbsp;&nbsp;<apex:commandButton value="►" action="{!addLeadField}" rerender="ledflds, ledselflds"/>&nbsp;&nbsp;</td></tr>
+						    			<tr><td align="center">&nbsp;&nbsp;<apex:commandButton value="◄" action="{!removeLeadField}" rerender="ledflds, ledselflds"/>&nbsp;&nbsp;</td></tr>
+						    		</table>
+						    	</td>
+								<td><apex:selectList id="ledselflds" value="{!selectedSLeadField}" size="11"><apex:selectOptions value="{!selectedLeadFieldOptions}"/></apex:selectList></td>
+								<td>
+						    		<table border="0">
+						    		<tbody valign="middle">
+						    			<tr><td>&nbsp;</td></tr>
+						    			<tr><td>&nbsp;</td></tr>
+						    			<tr><td>&nbsp;</td></tr>
+						    			<tr><td align="center">&nbsp;&nbsp;<apex:commandButton value="▲" action="{!up}" rerender="ledflds, ledselflds"/>&nbsp;&nbsp;</td></tr>
+						    			<tr><td align="center">&nbsp;&nbsp;<apex:commandButton value="▼" action="{!down}" rerender="ledflds, ledselflds"/>&nbsp;&nbsp;</td></tr>
+						    		</tbody>
+						    		</table>
+								</td>
+							</tr>
+								<tr>
+									<td align="left"></td>
+							    	<td></td>
+		 							<td align="left"></td>
+							    	<td></td>
+								</tr>
+						</table>
+		            </apex:outputPanel>
+				</apex:pageBlockSectionItem>
+			</apex:pageBlockSection>
+      
+		</apex:pageBlock>
+      
+	</apex:form>
+	
+	<script type="text/javascript">
+		(function() {
+			var $list = $j('#mkt-auto-suggest-list'),
+					$valueField = null,
+					$lookupField = null,
+					values = [],
+					lookupValues = [],
+					suggestIndex = 0,
+					lastLookupValues = [],
+					lastLookupValue = '';
+			
+			Marketo.setupAutoSuggest = function(field)
+			{
+				$lookupField = $j(field);
+				$valueField = $lookupField.siblings('.filter-list-value').eq(0);
+				lastLookupValues = $lookupField.val().split(',');
+				lastLookupValue = $lookupField.val();
+				values = $valueField.val().split(',');
+			};
+			
+			Marketo.autoSuggest = function(field, fieldType)
+			{
+				if(field.value == lastLookupValue) return;
+				
+				// determine string for suggest
+				var suggestString = '';
+				
+				lookupValues = field.value.split(',');
+				for(var i = 0, l = Math.max(lookupValues.length, lastLookupValues.length); i < l; i++) {
+					lookupValues[i] = $j.trim(lookupValues[i]);
+					
+					if(lookupValues[i] != lastLookupValues[i]) {
+						if(!suggestString.length) {
+							suggestIndex = i;
+							suggestString = lookupValues[i];
+						}
+						
+						// clear values
+						if(i < values.length) {
+							values.splice(i, 1);
+						}
+					}
+				}
+
+				lastLookupValue = field.value;
+				lastLookupValues = lookupValues;
+
+				// update values
+				$valueField.val(values.join(','));
+				
+				if(!suggestString) {
+					$list.hide();
+					return;
+				}
+				
+				var params = {
+					types: fieldType,
+					name: suggestString,
+					limit: 10
+				};
+				
+				Marketo.ajax('find', params, function(data) {
+					var itemsHtml = '';
+					
+					if(data) {
+						var results = [];
+						
+						// combine all results
+						if(data.users) results = results.concat(data.users);
+						if(data.accounts) results = results.concat(data.accounts);
+						if(data.contacts) results = results.concat(data.contacts);
+						if(data.leads) results = results.concat(data.leads);
+						
+						// automatically assign when only one result present
+						if(results.length == 1) {
+							values[suggestIndex] = results[0].id;
+							lookupValues[suggestIndex] = results[0].name;
+							
+							$valueField.val(values.join(','));
+							$lookupField.val(lookupValues.join(', '));
+						}
+						// prepare list otherwise
+						else {
+							for(var i = 0, l = results.length; i < l; i++) {
+								itemsHtml += '<a href="#" data-id="' + results[i].id + '">' + results[i].name + '</a>';
+							}
+						}
+					}
+					
+					$list.html(itemsHtml);
+					
+					if(itemsHtml) {
+						$list.css({
+							minWidth: $lookupField.width(),
+							left: $lookupField.position().left,
+							top: $lookupField.position().top + $lookupField.outerHeight()
+						});
+						$list.show();
+					}
+					else {
+						$list.hide();
+						$lookupField.focus();
+					}
+				});
+			};
+			
+			$list.delegate('a', 'click', function() {
+				var $link = $j(this);
+				
+				lookupValues[suggestIndex] = $link.text();
+				values[suggestIndex] = $link.data('id');
+
+				// set last value to selection to avoid unneccessary search
+				lastLookupValue = values.join(',');
+				lastLookupValues = lookupValues;
+				
+				$lookupField.val(lookupValues.join(', '));
+				$valueField.val(values.join(','));
+				
+				$list.hide();
+				$lookupField.focus();
+				
+				return false;
+			});
+				
+			Marketo.prepareFieldLists = function()
+			{
+				// make field groups in select box
+				$j('.filter-list-fields').each(function() {
+					var $fieldsList = $j(this),
+							$fieldsListGroup = null,
+							fieldOptions = $fieldsList[0].options;
+					
+					for(var i = 0, l = fieldOptions.length; i < l; i++) {
+						// separator
+						if(fieldOptions[i].disabled && fieldOptions[i].value === '') {
+							var groupLabel = fieldOptions[i].text.replace(/(^[\s\-]+|[\s\-]+$)/ig, '');
+							
+							// add optgroup element
+							if(groupLabel) {
+								$fieldsListGroup = $j('<optgroup label="' + groupLabel + '"></optgroup>');
+								$fieldsListGroup.insertBefore(fieldOptions[i]);
+							}
+							else {
+								$fieldsListGroup = null;
+							}
+			
+							// remove separator
+							$j(fieldOptions[i]).remove();
+							
+							// decrease loop increment and length because of removed element
+							i--;
+							l--;
+							
+							continue;
+						}
+			
+						if($fieldsListGroup != null) {
+							var isSelected = ($fieldsList[0].selectedIndex == i);
+							
+							$fieldsListGroup.append(fieldOptions[i]);
+							
+							// preserve selection
+							if(isSelected) {
+								$fieldsList[0].selectedIndex = i;
+							}
+						}
+					}
+				});
+			};
+		})();
+	</script>
+	
+	<apex:outputPanel id="fieldListsInit">
+		<script type="text/javascript">
+			Marketo.prepareFieldLists();
+		</script>
+	</apex:outputPanel>
+</apex:page>

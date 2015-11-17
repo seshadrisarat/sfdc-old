@@ -1,0 +1,761 @@
+//-- UI: simple
+    <html>
+      <script src="/soap/ajax/10.0/connection.js"></script>
+      <script type="text/javascript">
+        function setup() {
+            var callback = {onSuccess: display, onFailure: failed};
+            var userInfo = sforce.connection.getUserInfo(callback);
+        }
+
+        function display(userInfo) {
+            var doc = document.getElementById("name-span");
+            doc.innerHTML = userInfo.userName;
+        }
+
+        function failed(error) {
+            document.getElementById("name-span").innerHTML =
+               error.toString();
+        }
+      </script>
+      <body onload="setup()">
+      Hi there! <span id="name-span"></span>
+      </body>
+    </html>
+
+//-- UI: Getting Started
+<html>
+  <head>
+  <script src="/soap/ajax/10.0/connection.js"
+          type="text/javascript"></script>
+
+  <script>
+    function setupPage() {
+      // function contains all code to execute after page is rendered
+
+      var state = { // state that you need when the callback is called
+          output : document.getElementById("output"),
+          startTime : new Date().getTime()};
+
+      var callback = {
+          // call layoutResult if the request is successful
+          onSuccess: layoutResults,
+
+          // call queryFailed if the api request fails
+          onFailure: queryFailed,
+          source: state};
+
+      sforce.connection.query(
+          "Select Id, Name, Industry From Account limit 30",
+           callback);
+  }
+
+  function queryFailed(error, source) {
+    source.output.innerHTML = "An error has occurred: " + error;
+  }
+
+  /**
+  * This method will be called when the
+  * toolkit receives a successful
+  * response from the server.
+  * @queryResult - result that server returned
+  * @source - state passed into the query method call.
+  */
+  function layoutResults(queryResult, source) {
+    if (queryResult.size > 0) {
+      var output = "";
+
+      // get the records array
+      var records = queryResult.getArray('records');
+
+      // loop through the records and construct html string
+      for (var i = 0; i < records.length; i++) {
+        var account = records[i];
+
+        output += account.Id + " " + account.Name +
+            " [Industry - " + account.Industry + "]<br>";
+      }
+
+    // render the generated html string
+    source.output.innerHTML = output;
+    }
+  }
+  </script>
+  </head>
+
+  <body onload="setupPage()">
+    <div id="output"> </div>
+  </body>
+</html>
+
+//-- UI: Submit Form
+<html>
+<head>
+<script src="/soap/ajax/10.0/connection.js" type="text/javascript">
+</script>
+
+<script>
+
+function setupPage() {
+    sforce.connection.query("Select Id, Name From Account limit 10",
+    {onSuccess : layoutResults,
+        onFailure : queryFailed,
+        source : {
+            output : document.getElementById("output"),
+            startTime : new Date().getTime()
+        }
+    });
+}
+
+function queryFailed(error, source) {
+    source.output.innerHTML =
+      "<font color=red>Oops something went wrong:</font> <p>" + error;
+}
+
+function layoutResults(queryResult, source) {
+    var textNode;
+    var timeTaken = new Date().getTime() - source.startTime;
+
+    if (queryResult.size > 0) {
+        var output = "";
+        var records = queryResult.getArray('records');
+
+        for (var i = 0; i < records.length; i++) {
+            var account = records[i];
+            output += editLink(account.Name, account.Id);
+        }
+
+        source.output.innerHTML = "<ul>" + output + "</ul>";
+    } else {
+        source.output.innerHTML = "No records matched.";
+    }
+
+    document.getElementById("status").innerHTML =
+        "Request completed in " + timeTaken + " ms";
+}
+
+function editLink(name, id) {
+    return "<li><a href='javascript: editForm(\"" + id + "\")'>" +
+           name + "</a></li>";
+}
+
+function editForm(id) {
+    sforce.connection.retrieve("Name, Id, AccountNumber, AnnualRevenue, " +
+         "BillingCity, BillingCountry, Fax, Industry", "Account", [id],
+    {onSuccess : displayForm,
+        onFailure : queryFailed,
+        source : {
+            output : document.getElementById("editpane"),
+            startTime : new Date().getTime()
+        }
+    });
+}
+
+function displayForm(accounts, source) {
+    if (accounts.length == 0) {
+        source.output.innerHTML = "unable to find account";
+        return;
+    }
+    var sb = new sforce.StringBuffer();
+    sb.append("<form name='accountForm' id='accountForm'><table>");
+    formInput(sb, accounts[0], "Name");
+    formInput(sb, accounts[0], "AccountNumber");
+    formInput(sb, accounts[0], "AnnualRevenue");
+    formInput(sb, accounts[0], "BillingCity");
+    formInput(sb, accounts[0], "BillingCountry");
+    formInput(sb, accounts[0], "Fax");
+    formInput(sb, accounts[0], "Industry");
+    sb.append("<input type='hidden' name='Id' value='" +
+        accounts[0].Id + "' />");
+    sb.append("<tr><td><input type='button' " +
+        "value='Submit' onclick='update()' /></td></tr>");
+    sb.append("</table></form>");
+    source.output.innerHTML = sb.toString();
+}
+
+function update() {
+    var account = new sforce.SObject("Account");
+    var form = document.forms["accountForm"];
+    for (var f in form) {
+        if (form[f] && form[f].value) {
+            account[f] = form[f].value;
+        }
+    }
+
+    sforce.connection.update([account],
+    {onSuccess : updateSuccess,
+        onFailure : queryFailed,
+        source : {
+            output : document.getElementById("status")
+        }
+    });
+}
+
+function updateSuccess(result, source) {
+    if (result.length == 1 &&
+       result[0].getBoolean("success") == true) {
+        source.output.innerHTML = "Successfully updated";
+        alert("Success! Fields updated.");
+    } else {
+        queryFailed("Failed to update ", source);
+    }
+}
+
+function formInput(sb, account, field) {
+    sb.append("<tr><td>").append(field).append("</td><td>");
+    var value = account.get(field);
+    if (!value) {
+        value = "";
+    }
+    sb.append("<input type='text' name='" +
+       field + "' value='" + value + "' />");
+    sb.append("</td></tr>");
+}
+
+</script>
+</head>
+</html>
+
+<body onload="setupPage()">
+
+<table border=1>
+    <tr>
+        <td>
+            <div id="output"></div>
+        </td>
+        <td>
+            <div id="editpane"></div>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            Status
+        </td>
+        <td>
+            <div id="status"></div>
+        </td>
+    </tr>
+</table>
+</body>
+</html>
+
+//-- UI: Search
+<html>
+<head>
+
+    <style type="text/css">
+        body {
+            font-family: Tahoma, Verdana;
+            font-size: 11px;
+        }
+    </style>
+
+    <script language="JavaScript" src="/soap/ajax/10.0/connection.js"></script>
+
+    <script language="JavaScript">
+        <!--
+        var req = null;
+
+        function loadXMLDoc(typed) {
+            sforce.connection.query("select Name,Id from Account where Name like '" + typed + "%' limit 10", onSuccess);
+        }
+
+        function onSuccess(result) {
+            var sb = "";
+            var records = result.getArray("records");
+            for (var i = 0; i < records.length && i < 10; i++) {
+                sb += records[i].Name + "<br>";
+            }
+            getObject("searchResult").innerHTML = sb;
+        }
+
+        function createAccount(value) {
+            try {
+                var account = new sforce.SObject("Account");
+                account.Name = value;
+                result = sforce.connection.create(new Array(account));
+                loadXMLDoc(value);
+            } catch (fault) {
+                sforce.debug.display(fault);
+            }
+            return false;
+        }
+
+        function getObject(name) {
+            var ns4 = (document.layers) ? true : false;
+            var w3c = (document.getElementById) ? true : false;
+            var ie4 = (document.all) ? true : false;
+
+            if (ns4) return eval('document.' + name);
+            if (w3c) return document.getElementById(name);
+            if (ie4) return eval('document.all.' + name);
+            return false;
+        }
+
+
+        window.onload = function() {
+            getObject("q").focus();
+        }
+        // -->
+    </script>
+</head>
+
+<body>
+
+<div align="center">
+
+    <h1 align="center">Search</h1>
+
+    <div align="center">Type in part of a word to have it defined.</div>
+
+    <form onSubmit="return createAccount(this.q.value)">
+        <input autocomplete="off" type="text" name="q" id="q" size="20" onkeyup="loadXMLDoc(this.value)"
+               style="width:300px;">
+
+        <INPUT TYPE="submit" NAME="button" Value="Create"/><br>
+
+        <div align="left" id="searchResult" name="searchResult"
+             style="font-family:Arial; font-size:12px; width:350px; border:#000000 solid 1px; padding:3px; "></div>
+    </form>
+
+</div>
+
+</body>
+</html>
+
+//-- UI: Find or Create
+<html>
+<head>
+    <script src="/soap/ajax/10.0/connection.js"></script>
+
+    <script language="JavaScript">
+        var req = null;
+
+        function findAccount(name) {
+            result = sforce.connection.query("Select Id from Account where Name like '" + name + "' limit 1");
+            return result.size != 0;
+        }
+
+        function createAccount(form) {
+            var account = new sforce.SObject("Account");
+            account.name = form.inputbox.value;
+            result = sforce.connection.create(new Array(account));
+            status = result[0].success == "true" ? "Account created" : "Failed to create account.";
+            form.status.value = status;
+        }
+
+        function findOrCreateAccount(form) {
+            try {
+                if (findAccount(form.inputbox.value)) {
+                    form.status.value = "Account already exist. Not creating new ones.";
+                } else {
+                    createAccount(form);
+                }
+                return false;
+            } catch (fault) {
+                form.status.value = fault;
+                sforce.debug.display(fault);
+            }
+        }
+    </script>
+</head>
+
+<body>
+
+<div>
+
+    <h1 align="center">Quick Create</h1>
+
+    <FORM NAME="myform" onSubmit="return findOrCreateAccount(this)">
+        Enter Account name in the box: <BR>
+        <INPUT TYPE="text" NAME="inputbox" size=30 VALUE=""/>
+        <INPUT TYPE="SUBMIT" NAME="button" Value="Create if not available"/><br>
+        <INPUT TYPE="text" NAME="status" size=30 readonly="true" VALUE=""/>
+    </FORM>
+
+</div>
+
+</body>
+</html>
+
+//-- UI: List
+<html>
+
+<head>
+    <script src="/soap/ajax/10.0/connection.js"></script>
+
+    <script>
+
+        function initPage() {
+            var result = sforce.connection.query("Select Id, Name, Industry, Type, Phone, AnnualRevenue From Account limit 10");
+            var sb = new sforce.StringBuffer();
+            sb.append("<table><tr><td>No</td><td>Name</td><td>Industry</td><td>Phone</td><td>Type</td><td>Annual Revenue</td></tr>");
+
+            while (true) {
+                if (result.size > 0) {
+                    for (i = 0; i < result.records.length; i++) {
+                        var account = result.records[i];
+                        sb.append("<tr><td>").append(i).append("</td>");
+                        sb.append("</td><td> ").append(editLink(account, "Name"));
+                        sb.append("</td><td> ").append(editLink(account, "Industry"));
+                        sb.append("</td><td> ").append(editLink(account, "Phone"));
+                        sb.append("</td><td> ").append(editLink(account, "Type"));
+                        sb.append("</td><td> ").append(editLink(account, "AnnualRevenue"));
+                        sb.append("</td></tr>");
+                    }
+                }
+                if (result.done == "true") {
+                    break;
+                } else {
+                    result = sforce.connection.queryMore(result.queryLocator);
+                }
+            }
+            sb.append("</table>");
+            document.body.innerHTML = sb.toString();
+        }
+
+        function editLink(account, field) {
+            var value = account[field];
+            value = value ? value : "Click to change";
+            return "<a href='javascript: editCell(\"" + account.Id +
+                   "\",\"" + field + "\",\"" + value + "\")'>" +
+                   value + "</a>";
+        }
+
+        function editCell(id, field, value) {
+            var newVal = prompt("Enter new text", value);
+            if (newVal === null || newVal === value) {
+              alert("Field not changed");
+              return;
+            } else {
+              value = newVal;
+            }
+            var account = new sforce.SObject("Account");
+            account.Id = id;
+            account[field] = value;
+
+            try {
+                result = sforce.connection.update([account]);
+                if (result[0].getBoolean("success") == false) {
+                    alert("update failed");
+                } else {
+                    initPage();
+                }
+            } catch (e) {
+                alert("update failed");
+                sforce.debug.display(e);
+            }
+        }
+    </script>
+</head>
+
+<body onload="initPage();">
+</body>
+
+</html>
+
+//-- UI: Quick view
+<html>
+
+<head>
+    <style type="text/css">
+        body {
+            font-family: Arial, Tahoma, Verdana;
+            font-size: 12px;
+        }
+
+        TABLE {
+            border-collapse: collapse;
+            border: 5px solid yellow;
+            font-size: 12px;
+        }
+
+        *#col1 {
+            border: 3px solid black;
+        }
+
+        TD {
+            border: 1px dotted red;
+            padding: 0em;
+        }
+
+        TD.solid-blue {
+            border: 5px dashed blue;
+        }
+
+        TD.solid-green {
+            border: 5px solid green;
+        }
+    </style>
+
+    <script src="/soap/ajax/10.0/connection.js"></script>
+
+    <script>
+        var describe = new Array();
+        function initView() {
+            var result = sforce.connection.describeTabs();
+            var sb = new sforce.StringBuffer();
+            var tabs = result[0].tabs;
+            for (var tab in tabs) {
+                sb.append(link(tabs[tab])).append(" | ");
+            }
+            document.getElementById("tabs").innerHTML = sb.toString();
+        }
+
+        function displayListView(type) {
+            if (describe[type] == null) {
+                document.getElementById("listview").innerHTML = "Nothing to display";
+                return;
+            }
+
+            var start = new Date().getTime();
+            document.getElementById("statuspane").innerHTML = "Loading data, please wait ...";
+
+            var result = sforce.connection.query("Select " + describe[type].join(",") + " From " +
+                                          type + " Limit 200");
+
+            document.getElementById("statuspane").innerHTML = "Query completed in " +
+                            ((new Date().getTime() - start)/1000.0) + " sec."
+
+            var sb = new sforce.StringBuffer();
+            sb.append("<table x:str border=0 cellpadding=0 cellspacing=0><th>");
+
+            var des = describe[type];
+            for (field in des) {
+                sb.append("<td>").append(des[field]).append("</td>");
+            }
+            sb.append("</th>");
+
+            while (true) {
+                if (result.size > 0) {
+                    for (i = 0; i < result.records.length; i++) {
+                        var account = result.records[i];
+                        sb.append("<tr>");
+                        sb.append("<td>").append(i).append("</td>");
+                        for (var field in des) {
+                            sb.append("<td>");
+                            sb.append(cut(account[des[field]]));
+                            sb.append("</td>");
+                        }
+                        sb.append("</tr>");
+                    }
+                }
+                if (result.done == "true") {
+                    break;
+                } else {
+                    result = sforce.connection.queryMore(result.queryLocator);
+                }
+            }
+            sb.append("</table>");
+            document.getElementById("listview").innerHTML = sb.toString();
+        }
+
+        function cut(str) {
+            if (!str) return "..";
+            if (str.join) str = str.join(",");
+            if (str.length > 20) {
+                str = str.substring(0, 18) + "..";
+            }
+            return str;
+        }
+
+        function link(tab) {
+            if (tab.sobjectName != null && tab.sobjectName != "") {
+                result = sforce.connection.describeSObject(tab.sobjectName);
+                if (result.fields) {
+                    var fields = new Array();
+                    for (var i = 0; i < result.fields.length; i++) {
+                        fields.push(result.fields[i].name);
+                    }
+                    describe[tab.sobjectName] = fields;
+                }
+            }
+
+            var sobject = tab.sobjectName;
+            if ("true" == tab.custom) {
+                sobject += "__c";
+            }
+
+            return "<a href='javascript: displayListView(\"" + sobject + "\")'>" +
+                   tab.label + "</a>";
+        }
+    </script>
+</head>
+
+<body onload="initView();">
+
+<div align="left" id="tabs" name="tabs"
+     style="font-family:Arial; font-size:16px; border:#000000 solid 1px; padding:3px; "></div>
+
+<p>
+<div id="statuspane" style="background:#dcdcdc; color:#191970;">...</div>
+<p></p>
+
+<div align="left" id="listview" name="tabs" ></div>
+</body>
+</html>
+
+//-- UI: Debug
+<html>
+<head>
+    <script src="/soap/ajax/10.0/connection.js" type="text/javascript"></script>
+
+    <script>
+
+        function setupPage() {
+            sforce.debug.trace = true;
+
+            sforce.debug.log("Starting query");
+
+            sforce.connection.query("Select Id, Name, Industry From Account limit 3",
+            {onSuccess : layoutResults,
+                onFailure : queryFailed,
+                source : {
+                    output : document.getElementById("output"),
+                    startTime : new Date().getTime()
+                }
+            });
+
+            sforce.debug.log("Completed send, waiting for response");
+        }
+
+        function queryFailed(error, source) {
+            source.output.innerHTML = "<font color=red>Oops something went wrong:</font> <p>" +
+                               sforce.debug.toString(error);
+        }
+
+        function layoutResults(queryResult, source) {
+            var textNode;
+
+            var timeTaken = new Date().getTime() - source.startTime;
+
+            if (queryResult.size > 0) {
+                var output = "";
+                var records = queryResult.getArray('records');
+
+                for (var i = 0; i < records.length; i++) {
+                    var account = records[i];
+                    sforce.debug.log(account);
+
+                    output += account.Id + " " + account.Name + " [Industry - " + account.Industry + "]<BR>";
+                }
+
+                source.output.innerHTML = output + "<BR> query complexted in: " + timeTaken + " ms.";
+            } else {
+                sforce.debug.log("No accounts found");
+                source.output.innerHTML = "No records matched.";
+            }
+        }
+
+    </script>
+</head>
+
+<body onload="setupPage()">
+<div id="output"></div>
+</body>
+</html>
+
+
+//-- DOJO: bind
+<html>
+<head>
+<script type="text/javascript" src="/js/dojo/0.4.1/dojo.js"></script>
+<script src="/soap/ajax/10.0/connection.js"></script>
+
+<script>
+function setup() {
+  var document_ta = document.getElementById("document-ta");
+
+  sforce.connection.query("select name,id from document limit 1",
+    {onSuccess : querySuccess,
+     onFailure : function(error, doc_ta) {
+        doc_ta.value = "Oops something went wrong: " + error;
+     },
+     source: document_ta});
+}
+
+function querySuccess(result, doc_ta) {
+  var records = result.getArray("records");
+
+  if (records.length == 1) {
+    dojo.io.bind({
+      url: "/servlet/servlet.FileDownload?file=" + records[0].Id,
+      load: loadDocument});
+  } else {
+    doc_ta.value = "no records found";
+  }
+}
+
+function loadDocument(type, data, event) {
+  var document_ta = document.getElementById("document-ta");
+  document_ta.value = data;
+}
+
+</script>
+</head>
+
+<body onload="setup()">
+<textarea id="document-ta" cols="80" rows="20">
+</textarea>
+</body>
+</html>
+
+//-- DOJO: tree
+<html>
+<head>
+    <title>Account tree view</title>
+
+    <script type="text/javascript">
+    </script>
+    <script type="text/javascript" src="/js/functions.js"></script>
+    <script src="/soap/ajax/10.0/connection.js"></script>
+    <script type="text/javascript" src="/js/dojo/0.4.1/dojo.js"></script>
+    <script type="text/javascript">
+
+        dojo.require("dojo.lang.*");
+        dojo.require("dojo.widget.*");
+        dojo.require("dojo.widget.Tree");
+
+    </script>
+    <script type="text/javascript">
+
+        dojo.addOnLoad(function() {
+            var tree = dojo.widget.createWidget("Tree", {});
+            document.body.appendChild(tree.domNode);
+
+            var rootNode = dojo.widget.createWidget("TreeNode",
+                {title: "Accounts"});
+
+            tree.addChild(rootNode);
+
+            var result = sforce.connection.query(
+               "Select Id, Name, Industry, LastModifiedDate, " +
+               "Phone From Account limit 20");
+
+            if (result.size > 0) {
+                for (i = 0; i < result.records.length; i++) {
+                    var account = result.records[i];
+                    var node1 = dojo.widget.createWidget(
+                        "TreeNode", {title: account.Name});
+                    rootNode.addChild(node1);
+                    var phone = dojo.widget.createWidget(
+                        "TreeNode", {title: account.Phone});
+                    node1.addChild(phone);
+                    var industry = dojo.widget.createWidget(
+                        "TreeNode", {title: account.Industry});
+                    node1.addChild(industry);
+                    var last = dojo.widget.createWidget(
+                        "TreeNode", {title: account.LastModifiedDate});
+                    node1.addChild(last);
+               }
+            }
+        });
+
+    </script>
+</head>
+
+<body>
+
+<h4>Accounts tree view</h4>
+
+</body>
+</html>

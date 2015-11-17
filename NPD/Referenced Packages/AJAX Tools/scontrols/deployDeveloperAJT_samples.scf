@@ -1,0 +1,552 @@
+<html>
+<head>
+
+<LINK REL="SHORTCUT ICON" HREF="/img/tools.gif">
+<title>Samples</title>
+
+<script type="text/javascript" src="/soap/ajax/14.0/connection.js"></script>
+<script src="/soap/ajax/14.0/apex.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+    //var djConfig = {isDebug: true };
+</script>
+
+<script src="/js/functions.js"></script>
+<script type="text/javascript" src="/js/dojo/0.4.1/dojo.js"></script>
+
+<script type="text/javascript" id="script-id">
+
+var accordion;
+//dojo.require("dijit.layout.AccordionContainer");
+//dojo.require("dijit.layout.ContentPane");
+
+dojo.require("dojo.widget.*");
+dojo.require("dojo.widget.AccordionContainer");
+dojo.require("dojo.widget.ContentPane");
+dojo.require("dojo.widget.Tree");
+dojo.require("dojo.widget.TreeSelector");
+dojo.require("dojo.event.*");
+dojo.require("dojo.lang.*");
+dojo.require("dojo.widget.Select");
+
+
+var textExamples;
+var uiExamples;
+
+var lastSelectedLink;
+var example_ta;
+var clearStatusCount = 0;
+var uiSample = false;
+var apexCode = false;
+var count = 1;
+var runSample = false;
+
+function init() {
+    if (!sforce.connection.sessionId) {
+        var sid = getCookie("sid");
+        if (sid) {
+            sforce.connection.sessionId = sid;
+        } else {
+            window.location = "/?startURL=" + window.location;
+            return;
+        }
+    }
+    
+    
+          dojo.event.topic.subscribe("nodeSelected",
+			 function(message) {
+			     if (message.node.sampleData) {
+			       var sd = message.node.sampleData;
+			       display(sd.section, sd.item, sd.count, sd.isUi);
+			     }
+              }
+		  );
+
+    example_ta = document.getElementById("example-ta");
+
+    accordion = dojo.widget.createWidget("Tree", {selector: "treeSelector"},
+            dojo.byId("accordionShell"));
+
+
+  //  accordion = dojo.widget.createWidget("AccordionContainer", null,
+    //        dojo.byId("accordionShell"));
+
+    //accordion = dojo.widget.createWidget("ContentPane", null,
+      //      dojo.byId("accordionShell"));
+
+
+    accordion.labelNodeClass = "label";
+    accordion.containerNodeClass = "accBody";
+
+    dojo.io.bind({
+        url: "/servlet/servlet.Integration?lid=01N500000008re4&enc=UTF-8",
+        load: initTextSamples});
+}
+
+function initTextSamples(type, data, event) {
+    textExamples = parseScript(data);
+    addLinks(textExamples, false, count);
+
+    dojo.io.bind({
+        url: "/servlet/servlet.Integration?lid=01N500000008re5&enc=UTF-8",
+        load: initUiSamples});
+}
+
+function initUiSamples(type, data, event) {
+
+    uiExamples = parseScript(data);
+    addLinks(uiExamples, true, count);
+
+    addHelpPage(accordion);
+    accordion.onResized();
+
+    for (var a in textExamples) {
+        for (var b in textExamples[a]) {
+            display(a, b, 1, false);
+            break;
+        }
+        break;
+    }
+}
+
+function addLinks(examples, isUi, count) {
+    for (var section in examples) {
+        //var content = dojo.widget.createWidget("ContentPane", {label: section, selected: true});
+        var content = dojo.widget.createWidget("TreeNode", {title: section});
+        accordion.addChild(content);
+        var items = examples[section];
+        var sb = new sforce.StringBuffer();
+        sb.append("<b>").append(section).append("</b><br>");
+        for (var item in items) {
+            sb.append(count + "  ");
+            sb.append(makeLink(section, item, count, isUi));
+            sb.append("<span id='link-marker-").append(count).append("'></span>");
+            sb.append("<br>");
+            var node = dojo.widget.createWidget("TreeNode", {title: item});
+            node.sampleData = {section: section, item: item, count: count, isUi: isUi};
+            content.addChild(node);
+            count++;
+        }
+        //content.setContent(sb.toString());
+        //accordion.addChild(content);
+    }
+}
+
+function sendMailTo(subject) {
+    window.location = "mailto:ajaxtools@cheenath.com?Subject=" + escape(subject) +
+                      "&body=" + escape(example_ta.value);
+}
+
+function addHelpPage(accordion) {
+    var content = dojo.widget.createWidget("ContentPane", {label: "[Help]"});
+    var help = document.getElementById("example-help");
+    content.setContent(help.value);
+    accordion.addChild(content);
+}
+
+function display(section, item, count, isUi) {
+    uiSample = isUi;
+    apexCode = (section.indexOf("Apex") != -1); 
+
+    if (uiSample) {
+        document.getElementById("example-ui").style.display = "block";
+        document.getElementById("example-text").style.display = "none";
+    } else {
+        document.getElementById("example-ui").style.display = "none";
+        document.getElementById("example-text").style.display = "block";
+    }
+    var code;
+    if (isUi) {
+        code = uiExamples[section][item];
+    } else {
+        code = textExamples[section][item];
+    }
+    example_ta.value = code;
+    var selected = document.getElementById("link-marker-" + count);
+    if (lastSelectedLink) {
+        lastSelectedLink.innerHTML = "";
+    }
+    lastSelectedLink = selected;
+    //selected.innerHTML = "<img alt='' src='/img/alarmclock_next_arrow.gif'></img>";
+    var heading = document.getElementById("example-heading");
+    heading.innerHTML = section + ": " + item;
+    clear();
+
+    if (runSample) {
+        setTimeout(execExample, 1);
+    }
+}
+
+function autoRunClicked() {
+    if (runSample) {
+        runSample = false;
+        document.getElementById("auto-run-img").src = "/js/dojo/0.3.1/src/widget/templates/check_off.gif";
+    } else {
+        runSample = true;
+        document.getElementById("auto-run-img").src = "/js/dojo/0.3.1/src/widget/templates/check_on.gif";
+    }
+}
+
+function makeLink(section, item, count, isUi) {
+    return "<a href=\"javascript:display('" + section + "','" +
+           item + "','" + count + "', " + isUi + "); void 0;\">" + item + "</a>";
+}
+
+function parseScript(string) {
+    var code = string.split("//--");
+    var examples = [];
+
+    for (var i = 0; i < code.length; ++i) {
+        var c = code[i];
+        var index = c.indexOf(":");
+        if (index == -1) {
+            continue;
+        }
+        var section = c.substring(0, index);
+        section = section.replace(/^\s+|\s+$/, '');
+        var itemIndex = c.indexOf("\n");
+        if (itemIndex == -1) throw "unable to find example for section " + section + " code " + c;
+        var item = c.substring(index + 1, itemIndex);
+
+        item = item.replace(/^\s+|\s+$/, '');
+        item = item.replace(/\n/, '');
+        item = item.replace(/\r/, '');
+        var example = examples[section];
+        if (example == null) {
+            example = [];
+            examples[section] = example;
+        }
+        example[item] = c.substring(itemIndex);
+    }
+
+    return examples;
+}
+
+function log(string) {
+    var doc = document.getElementById("example-output");
+    doc.value = doc.value + string + "\n";
+}
+
+function setStatus(string) {
+    var doc = document.getElementById("example-status");
+    doc.innerHTML = string;
+    clearStatusCount++;
+    setTimeout("clearStatus()", 10000);
+}
+
+
+function clearStatus() {
+    clearStatusCount--;
+    if (clearStatusCount == 0) {
+        setStatus('');
+    }
+}
+
+function execUiExample() {
+    var str = example_ta.value;
+
+    var index = str.indexOf("<script");
+    if (index != -1) {
+        str = str.substring(0, index) +
+              "<script>__sfdcSessionId=\"" + sforce.connection.sessionId + "\";<" + '/script>' +
+              str.substring(index, str.length);
+    }
+
+    var ifr = document.getElementById("ui-frame");
+    ifr.height = 300;
+    var doc = frames['ui-frame'].document;
+    doc.open("text/html", "replace");
+    doc.write(str);
+    doc.close();
+}
+
+function execExample() {
+    if (uiSample) {
+        execUiExample();
+    } else {
+        execTextExample();
+    }
+}
+
+function execTextExample() {
+    clear();
+    var code = example_ta.value;
+    try {
+        log("Executing code ...");
+        if (apexCode) {
+            var result = sforce.apex.executeAnonymous(code);
+            if (result.getBoolean("success")) {
+                log("SUCCESS");
+            } else {
+                log("ERROR: Failed to execute Apex code:");
+                log(result);
+            }
+        } else {
+            eval(code);
+        }
+        log("------------------------------------------------------");
+    } catch(error) {
+        log("ERROR: " + error);
+        throw error;
+    }
+    example_ta.focus();
+}
+
+function clear() {
+    var doc = document.getElementById("example-output");
+    doc.value = "";
+}
+
+dojo.addOnLoad(init);
+
+function handleKeydown(e) {
+    if (e.ctrlKey) {
+        if (e.keyCode == 13) { //ctrl-enter
+            execExample();
+            return false;
+        }
+    }
+
+    if (e.keyCode == 9) { // tab
+        handleTab();
+        return false;
+    }
+
+    return true;
+}
+
+
+function handleTab() {
+    var pos = getCaretPosition(example_ta);
+    if (pos == 0) return;
+
+    var str = example_ta.value;
+    var index = pos - 1;
+    while (index > 0) {
+        var ch = str.charAt(index);
+        if (ch == ' ' || ch == '\"' || ch == '\'' || ch == '\n' || ch == '\r') {
+            break;
+        }
+
+        index--;
+    }
+    var token = str.substring(index + 1, pos);
+
+    var ind = token.lastIndexOf(".");
+    var objName = (ind == -1) ? token : token.substring(0, ind);
+    var obj;
+    var sh = "";
+
+    try {
+        obj = eval(objName);
+        if (ind != -1 && ind != pos) {
+            sh = token.substring(ind + 1, token.length);
+        }
+    } catch (error) {
+        if (ind == -1) {
+            obj = this;
+            sh = objName;
+        } else {
+            setStatus("failed " + error);
+            return;
+        }
+    }
+
+    var results = [];
+    for (var a in obj) {
+        if (a.substring(0, sh.length) == sh) {
+            results.push(a);
+        }
+    }
+
+    setStatus("found: <font color=blue>" + results.join(" ") + "</font>");
+
+    if (results.length == 1) {
+        var start = pos - sh.length;
+        example_ta.value = str.substring(0, start) + results[0] + str.substring(pos, str.length);
+        setCaretPosition(example_ta, pos + results[0].length - sh.length);
+    }
+}
+
+function setCaretPosition(ctrl, pos) {
+
+    if (ctrl.setSelectionRange)
+    {
+        ctrl.focus();
+        ctrl.setSelectionRange(pos, pos);
+    }
+    else if (ctrl.createTextRange) {
+        var range = ctrl.createTextRange();
+        range.collapse(true);
+        range.moveEnd('character', pos);
+        range.moveStart('character', pos);
+        range.select();
+    }
+}
+
+function getCaretPosition(ctrl) {
+    var caretPos = 0;
+    if (document.selection) {
+        // IE Support
+        ctrl.focus();
+        var sel = document.selection.createRange();
+        sel.moveStart('character', -ctrl.value.length);
+        caretPos = sel.text.length;
+    } else if (ctrl.selectionStart || ctrl.selectionStart == '0') {
+        //firefox
+        caretPos = ctrl.selectionStart;
+    }
+
+    return (caretPos);
+
+}
+
+
+</script>
+
+<style>
+    #main {
+        height: 95%;
+        width: 95%;
+        left: 1%;
+        top: 1%;
+        position: relative;
+    }
+
+    .label {
+        border: 1px solid black;
+        background: #638658;
+        color: #fff;
+        /*font-weight: bold;*/
+    }
+
+    .label :hover {
+        cursor: pointer;
+    }
+
+    .accBody {
+        background: #ededed;
+        overflow: auto;
+    }
+            TABLE {
+            border-collapse: collapse;
+            /*border: 1px dotted red;*/
+            border: 1px solid black;
+            /*font-size: 12px;*/
+        }
+
+        *#col1 {
+            border: 3px solid black;
+        }
+
+        TD.dotted-black {
+            border: 0px dotted black;
+            padding: 10px;
+        }
+
+        TD {
+            border: 1px dotted green;
+            padding: .25em;
+        }
+
+        TD.solid-blue {
+            border: 5px dashed blue;
+        }
+
+        TD.solid-green {
+            border: 5px solid green;
+        }
+
+            img {
+            border: 0;
+        }
+
+</style>
+
+</head>
+
+<body onkeydown="return handleKeydown(event)">
+
+
+<table widht=100%>
+    <tr><td colspan=2>
+            <table width="100%">
+                <tr>
+                    <td class="dotted-black" width=30>
+                        <a href="javascript:execExample(); void 0;">
+                            <img src="/img/campaign_target_large.gif" width="24" height="24" alt="Open"></img></a><br>Run
+                    </td>
+
+                    <td class="dotted-black" width=30>
+                        <a href="javascript:clear(); void 0;">
+                            <img src="/img/classic/icon/circle_page_icon.gif" width="24" height="24" alt="Clear"></img></a><br>Clear
+                    </td>
+                    <td class="dotted-black">
+                        <a href="javascript:sendMailTo('Bug in AJAX Toolkit Sample'); void 0;">
+                        <img src="/img/icon_warning.gif" width="24" height="24" alt="Bug"></img></a><br>Bug
+                    </td>
+                    <td class="dotted-black">
+                        <a href="javascript:sendMailTo('New AJAX Toolkit Sample'); void 0;">
+                        <img src="/img/airplane_page_icon.gif" width="24" height="24" alt="New"></img></a><br>Submit
+                    </td>
+
+                   <td class="dotted-black" width=200>
+                       <a href="javascript:autoRunClicked(); void 0;">
+                           <img id="auto-run-img" src="/js/dojo/0.3.1/src/widget/templates/check_off.gif" width=24 hight=24 alt="auto run"></img></a><br>
+                       Auto&nbsp;Run
+                       <!--<INPUT TYPE=CHECKBOX id="run-sample" width=24 height=24>-->
+                    </td>
+                    <td width=100% class="dotted-black">&nbsp;</td>
+                </tr>
+             </table>
+            
+
+</td></tr>
+
+    <tr>
+        <td><b>Samples</b></td>
+        <td><b>
+            <div id="example-heading"></div>
+        </b></td>
+    </tr>
+    <tr>
+        <td valign="top">
+            <div id="treeDiv"></div>
+            <dojo:TreeSelector widgetId="treeSelector" eventNames="select:nodeSelected"></dojo:TreeSelector>
+            
+            <div id="accordionShell"
+                 style="border: 2px solid black;  width: 200px; height: 100%; overflow: hidden"></div>
+        </td>
+        <td valign="top">
+            <textarea rows="20" cols="100" id="example-ta" style="background: #EDEDED"></textarea><br>
+
+            <div id="example-status"></div>
+
+            <div id="example-text">
+                <textarea rows="20" cols="100" id="example-output" readonly=true
+                          style="background: black; color: gray"></textarea>
+            </div>
+
+            <div id="example-ui" style="display: none">
+                <iframe title="ui-frame" hight="300" width="100%" align="top"
+                        frameborder="1" scorolling="yes" id="ui-frame"
+                        name="ui-frame"></iframe>
+            </div>
+        </td>
+    </tr>
+</table>
+
+<textarea rows="1" cols="1" style="display: none" id="example-help">
+    <div style="color: yellow">
+        <i>
+            <a href="javascript:sendMailTo('AJAX Toolkit bug report'); void 0;">Report a bug</a> <br>
+            <a href="javascript:sendMailTo('New AJAX Toolkit Sample'); void 0;">Submit Sample</a> <br>
+            <a href="http://www.salesforce.com/developer/community/">Message Board</a> <br>
+            <a href="http://www.salesforce.com/us/developer/docs/sforce70/wwhelp/wwhimpl/js/html/wwhelp.htm">API
+                Docs</a><br>
+        </i>
+    </div>
+</textarea>
+
+</body>
+</html>

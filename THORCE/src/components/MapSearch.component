@@ -1,0 +1,686 @@
+<!-- 
+*       MapSearch is VF component used to render the map search UI.  This VF component uses the AdvancedSearch code base.
+*   
+*       Author  :   Wilson Ng
+*       Date    :   October 18, 2012
+*  
+-->
+<apex:component controller="MapSearch_Controller" allowDML="true" >
+
+    <apex:attribute name="MapSearch_Controller" description="The controller that is associated with the Map Search page." type="MapSearch_Controller" required="true" assignTo="{!controller}" />
+    <apex:styleSheet value="{!URLFOR($Resource.jQueryPlugin_LoadMask, 'jquery.loadmask.css')}" />
+    <style type="text/css">
+        html, body
+        {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        td.rich-tab-inactive
+        {
+            background-color:#fff;
+            background-image: url(/img/alohaSkin/metaBar_sprite.png);
+            background-position: 0px -55px;
+        }
+        
+        td.rich-tab-active
+        {
+            background-color:#f1f1f1;
+            background-image: url(/img/alohaSkin/metaBar_sprite.png);
+            background-position: 0px -27px;
+        }            
+        /*#map_canvas {height: 90%;width: 100%;}*/
+        
+        @media print
+        {
+            html, body
+            {
+                height: auto;
+            }
+            #map_canvas
+            {
+                height: 650px;
+            }
+        }
+        
+        #map_canvas
+        {
+            height: 528px;
+            width: 77%;
+            float: left;
+        }
+        
+        DIV#rightDiv
+        {
+            padding: 0;
+            margin: 0;
+            height: 528px;
+            float: right;
+            overflow-y: scroll;
+            overflow-x: hidden;
+        }
+        /* width: 23%; overflow-x: hidden;  */
+        UL#profilesList
+        {
+            padding: 0px;
+        }
+
+    </style>
+    
+    <apex:includeScript value="{!$Resource.consoleLog}" />
+    <!-- Note: do not load the jQuery multiple times.  Since it is already load in the parent mapsearch_component, don't load it here -->
+    <apex:includeScript value="{!URLFOR($Resource.mapSearch, 'js/jquery-1.8.2.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.mapSearch, 'js/jquery-ui-1.9.1.custom.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.mapSearch, 'js/Utils.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.mapSearch, 'js/knockout-2.0.0_debug.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.mapSearch, 'js/jquery.scrollTo-min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.mapSearch, 'js/jquery.jstepper.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.mapSearch, 'js/mapScripts.js')}" />
+
+    <apex:styleSheet value="{!URLFOR($Resource.mapSearch, 'css/smoothness/jquery-ui-1.9.1.custom.css')}" />
+    <apex:styleSheet value="{!URLFOR($Resource.mapSearch, 'css/StyleSheet.css')}" />
+
+    <!--Page functions-->
+    <script type="text/javascript">
+        var j$ = jQuery.noConflict();
+        
+       
+        
+        //occurs after map scripts are loaded
+        function scriptsOnMapInitialized() {
+            initializeSearchFunctions();
+            ko.applyBindings(MapViewModel2);
+
+            MapViewModel2.firstStreetPoint.subscribe(function (newValue) {
+                //alert("Property changed " + newValue.formatted_address);
+            });
+
+            // load profiles from URL (when it is open from gridview)
+            loadProfiles();
+
+            //set area field dropdown
+            SetBaseLookupAutoComplete('ddlAreas', '140', '', null);
+        }
+
+
+        function SetBaseLookupAutoComplete(id,width,ownerInputId, selectFunction) {
+            var i = id;
+            var w = width;
+        
+            j$(function () {
+                j$('input[id=' + i + ']').bind('autocompleteopen', function (event, ui) {
+                    j$('.ui-autocomplete.ui-menu').width(w); //alert('autocompleteopen2!!!');
+                });
+            });
+        
+            j$(function () {
+
+                /*
+                j$("input").keypress(function(event) {                                
+                    if(event.which == 13) {
+                        event.preventDefault();
+                        //goSearch2();
+                        $(this).closest("form").submit();
+                        return false;
+                    }
+                });
+                */
+            
+                j$('input[id=' + i + ']').autocomplete({
+                    minLength: 1,
+                    delay: 100,
+                    //autoFocus: true,
+                    selectFirst: true,
+                    source: function (request, response) {
+                        
+                        // invoke javascript remote action to retrieve list of status history for line chart
+                        //console.log('startswith term is '+ request.term);
+                        Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.MapSearch_Controller.getLocations}', request.term,
+                            function(result, event) {
+                                if (event.status) {
+                                    //console.log('MapSearch_WrapperController.getLocations() SUCCESSFUL');
+                                    //console.log(result);
+                                    if(result!=null && result.length>0) {
+                                        response(j$.map(result, function (item) {
+                                            return {
+                                                label: item.Value,
+                                                value: item.Oid
+                                            }
+                                        }));
+                                    }
+                                } else {
+                                    alert('Error: ' + event.message);
+                                    //console.log('MapSearch_WrapperController.getLocations() ERROR: ' + event.message);
+                                }
+                            },
+                            {escape: true}
+                        );
+        
+                    },
+                    // occurs when drop down item is selected
+                    select: selectFunction
+                });
+            });                         
+        }
+
+        function initializeSearchFunctions() {
+            clearMap();
+            clearMapEvents();
+            mapSettings = null;
+            mapSettings = new MapSettings(map);
+            MapViewModel2.profiles.removeAll();
+
+            switch (searchType) {
+                case 'radio1':
+                    //j$("#filters").fadeIn(200, function myfunction() { j$("#filters").show(); });
+                    j$("#filters").fadeIn(300);
+                    AttachSearchfiltersScripts();
+                    break;
+                case 'radio2':
+                    j$("#filters").fadeOut(300);
+                    AttachPolylineScripts();
+                    break;
+            }
+        }
+
+        function configurePolylineMarker(_marker, _markerIndex, poly) {
+
+            google.maps.event.addListener(_marker, 'drag', function (dragEvent) {
+                poly.getPath().setAt(_markerIndex, dragEvent.latLng);
+            });
+
+            google.maps.event.addListener(_marker, 'dragend', function () {//attach drag action - if polyline is closed the search should process when Marker is dragged
+                if(mapSettings.polyIsClosed)
+                    processSearchRequest(poly);
+            });
+
+            return _marker;
+        }
+
+    </script>
+    <!-- Server Data Functions -->
+    <script type="text/javascript">
+        function processSearchRequest(_poly) {
+
+            clearMarkers(mapSettings.markers);
+
+            var coordinates = "";
+            for (var i = 0; i < _poly.getPath().length; i++) {
+                var y = _poly.getPath().getAt(i).lng();
+                var x = _poly.getPath().getAt(i).lat();
+                coordinates += x + ", " + y + ";";
+            }
+
+            MapViewModel2.profiles.removeAll();
+            
+            // invoke javascript remote action to retrieve list of status history for line chart
+            Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.MapSearch_Controller.getProfilesByCoordinates}', '{!controller.currConfig.Name}', coordinates,
+                function(result, event) {
+                    if (event.status) {
+                        //console.log('MapSearch_WrapperController.getProfilesByCoordinates() SUCCESSFUL');
+                        //console.log(result);
+                        if(result!=null && result.length>0) {
+                            processServerData(result);
+                            MapViewModel2.isMapSearchResultsDeletable(false);
+                            MapViewModel2.isMapSearchResultsAddable(true);
+                        }
+                        else
+                            alert('No profiles was found');
+                    } else {
+                        alert('Error: ' + event.message);
+                        //console.log('MapSearch_WrapperController.getProfilesByCoordinates() ERROR: ' + event.message);
+                    }
+                },
+                {escape: true}
+            );
+        }
+
+        function processServerData(data) {
+            if (data == null) return;
+            j$.each(data, function (index, objvalue) {
+                var profileinfo = new ProfileInfo(objvalue.Oid);
+                profileinfo.name = objvalue.Name;
+                profileinfo.street = objvalue.Street;
+                profileinfo.status = objvalue.Status;
+                var photo = objvalue.Photo;
+                // show no image if missing photo
+                if(photo == null)
+                    photo = '<div style="height: 50px; width: 75px; text-align: center; vertical-align: middle; display: table-cell; border: 4px double #EBE9E9;">No Image</div>';
+                else
+                    photo = '<img src="' + photo + '">'
+                profileinfo.photo = photo;
+                profileinfo.latitude = objvalue.Latitude;
+                profileinfo.longitude = objvalue.Longitude; 
+                profileinfo.checked(false); 
+                profileinfo.sizefilter = isNumber(objvalue.SizeFilter) ? parseInt(objvalue.SizeFilter) : '';
+                profileinfo.sizetotal = isNumber(objvalue.SizeTotal) ? parseInt(objvalue.SizeTotal) : '';
+                profileinfo.rent = isNumber(objvalue.AnnualRent) ? parseFloat(objvalue.AnnualRent) : '';
+                
+                var location = new google.maps.LatLng(profileinfo.latitude, profileinfo.longitude);
+                var marker = addMarker(location, profileinfo);
+
+                profileinfo.marker = marker;
+                MapViewModel2.profiles.push(profileinfo);
+                mapSettings.markers.push(marker);
+            });
+        }
+        
+        function isNumber(n) {
+            return !isNaN(parseFloat(n)) && isFinite(n);
+        }
+
+        function loadProfiles() {
+            try {
+                var actionbtn = document.getElementById("{!$Component.myForm.actionButtonHidden}").value;
+                var profilesids = document.getElementById("{!$Component.myForm.actionIdsHidden}").value;
+//console.log('HHEERREE - in loadprofiles, ids - ' + profilesids);
+                if(profilesids!=null) {
+                    if (profilesids.lastIndexOf(',') == profilesids.length - 1) {
+                        profilesids = profilesids.substring(0, profilesids.length - 1);
+                    }
+                    // invoke javascript remote action to retrieve list of status history for line chart
+                    Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.MapSearch_Controller.getProfilesByPortions}', '{!controller.currConfig.Name}', profilesids,
+                        function(result, event) {
+                            if (event.status) {
+                                //console.log('MapSearch_WrapperController.getProfilesByPortions() SUCCESSFUL');
+                                //console.log(result);
+                                if(result!=null && result.length>0) {
+                                    processServerData(result);
+                                    MapViewModel2.isMapSearchResultsDeletable((actionbtn.indexOf('DEL') != -1));
+                                    MapViewModel2.isMapSearchResultsAddable((actionbtn.indexOf('ADD') != -1));
+                                }
+                            } else {
+                                alert('Error: ' + event.message);
+                                //console.log('MapSearch_WrapperController.getProfilesByPortions() ERROR: ' + event.message);
+                            }
+                        },
+                        {escape: true}
+                    );
+                }
+            } catch (e) {
+                console.log('ERROR in loadprofiles: ' + e);
+            }
+        }
+        
+    </script>
+    <!--Polygon Scripts-->
+    <script type="text/javascript">
+
+        function AttachSearchfiltersScripts() {
+            google.maps.event.addListener(map, 'rightclick', function (clickEvent) {
+                    initializeSearchFunctions();
+                    //              clearPolygon(mapSettings.poly);
+                    //              clearPolyline(mapSettings.poly);
+                    //              clearMarkers(mapSettings.polymarkers);
+                    mapSettings.poly = new google.maps.Polyline({ map: map, path: [], strokeColor: "#FF0000", strokeOpacity: 1.0, strokeWeight: 2 });
+                    mapSettings.polymarkers = new Array();
+    
+                    mapSettings.polyIsClosed = false;
+                });
+        }
+        
+        function AttachPolylineScripts() {
+
+            //var poly = new google.maps.Polyline({ map: map, path: [], strokeColor: "#ffa200", strokeOpacity: 1.0, strokeWeight: 2.5 });
+            //polymarkers = new Array();
+
+            mapSettings.poly = new google.maps.Polyline({ map: map, path: [], strokeColor: "#ffa200", strokeOpacity: 1.0, strokeWeight: 2.5 });
+            mapSettings.polymarkers = new Array();
+
+            //draw on click
+            google.maps.event.addListener(map, 'click', function (clickEvent) {
+                
+                var markerIndex = mapSettings.poly.getPath().length;
+                var isFirstMarker = markerIndex === 0;
+                var marker = new google.maps.Marker({ map: map, position: clickEvent.latLng, draggable: true, icon: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png' });
+
+                mapSettings.polymarkers.push(marker);
+                if (isFirstMarker) {// close polyline if it is the first marker
+                    google.maps.event.addListener(marker, 'click', function () {
+                        if (mapSettings.polyIsClosed) {
+                            return;
+                        }
+                        var path = mapSettings.poly.getPath();
+                        mapSettings.poly.setMap(null);
+                        mapSettings.poly = new google.maps.Polygon({ map: map, path: path, strokeColor: "#FF0000", strokeOpacity: 0.8, strokeWeight: 2, fillColor: "#fd9105", fillOpacity: 0.25 });
+                        mapSettings.polyIsClosed = true;
+                        processSearchRequest(mapSettings.poly);
+                        //map.processSearchRequest(mapSettings.poly);
+                    });
+                } 
+
+                configurePolylineMarker(marker, markerIndex, mapSettings.poly);
+
+                mapSettings.poly.getPath().push(clickEvent.latLng);
+                
+                if (mapSettings.polyIsClosed) {
+                    processSearchRequest(mapSettings.poly);
+                }
+                
+            });
+
+            google.maps.event.addListener(map, 'dblclick', function (clickEvent) { });
+
+            google.maps.event.addListener(map, 'rightclick', function (clickEvent) {
+                initializeSearchFunctions();
+                //              clearPolygon(mapSettings.poly);
+                //              clearPolyline(mapSettings.poly);
+                //              clearMarkers(mapSettings.polymarkers);
+                mapSettings.poly = new google.maps.Polyline({ map: map, path: [], strokeColor: "#FF0000", strokeOpacity: 1.0, strokeWeight: 2 });
+                mapSettings.polymarkers = new Array();
+
+                mapSettings.polyIsClosed = false;
+            });
+        }
+
+    </script>
+    
+    <!--Filters points script-->
+    <script type="text/javascript">
+        function SearchByFilters() {
+            initializeSearchFunctions();
+            //clearMap();
+            //clearMarkers();
+            j$('.check:button').val('Check all');
+            var area = '';
+            var groundFloorSizeMin = 0; //txtGroundFloorSizeMin
+            var groundFloorSizeMax = 100000; //txtGroundFloorSizeMin
+
+            if (j$("#ddlAreas").val()) {
+                area = j$("#ddlAreas").val();
+            }
+
+            if (j$("#txtGroundFloorSizeMin").val()) {
+                groundFloorSizeMin = parseInt(j$("#txtGroundFloorSizeMin").val());
+            }
+
+            if (j$("#txtGroundFloorSizeMax").val()) {
+                groundFloorSizeMax = parseInt(j$("#txtGroundFloorSizeMax").val());
+            }
+
+            //console.log('area: ' + area + ', min: ' + groundFloorSizeMin + ', max: ' + groundFloorSizeMax);
+            // invoke javascript remote action to retrieve list of status history for line chart
+            Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.MapSearch_Controller.getProfilesByFilters}', '{!controller.currConfig.Name}', area, groundFloorSizeMin, groundFloorSizeMax,
+                function(result, event) {
+                    if (event.status) {
+                        //console.log('MapSearch_WrapperController.getProfilesByFilters() SUCCESSFUL');
+                        //console.log(result);
+                        if(result!=null && result.length>0) {
+                            processServerData(result);
+                            MapViewModel2.isMapSearchResultsDeletable(false);
+                            MapViewModel2.isMapSearchResultsAddable(true);
+                        }
+                        else
+                            alert('No profiles was found for the filters.');
+                    } else {
+                        alert('Error: ' + event.message);
+                        //console.log('MapSearch_WrapperController.getProfilesByFilters() ERROR: ' + event.message);
+                    }
+                },
+                {escape: true}
+            );
+            
+        }
+    </script>
+    <!--set up radio buttons-->
+    <script type="text/javascript">
+        j$(function () {
+            j$("#tabsSearch").buttonset({ icons: { primary: 'ui-icon-gear', secondary: 'ui-icon-triangle-1-s'} });
+
+            //enable dragging of list elements
+            j$( "#profilesList" ).sortable({
+              containment: "parent",
+              axis: "y",
+              stop: function(event, ui) {
+                    
+                    j$( "#profilesList" ).children().each(function(index,value){
+                        j$(this).find('input:checkbox').attr('position',index);
+                    });
+                  }
+            });
+
+            j$( "ul, li" ).disableSelection();
+
+            j$('.check:button').toggle(function(){
+                j$('.mapSearchSelectionBox').prop('checked',true);
+                j$(this).val('Uncheck all')
+            },function(){
+                j$('.mapSearchSelectionBox').prop('checked',false);
+                j$(this).val('Check all');        
+            })         
+        });
+
+        var searchType = 'radio1';
+
+        function exportToPdf(myclassname,return_in_order,orderBy){
+            var actionIds = new Array();
+            j$(myclassname).each(function(){
+                if (this.checked)
+                    actionIds.push(this.value);
+            });            
+
+           ifrm = document.createElement("IFRAME"); 
+           ifrm.setAttribute("src", "'/apex/exportPdf?ids="+ actionIds.join()+"&fieldset=PDF_Export&return_in_order=true&force_download=true"); 
+           ifrm.style.width = 0+"px"; 
+           ifrm.style.height =0+"px"; 
+           ifrm.style.border = 0 + "px";
+           document.body.appendChild(ifrm); 
+               
+            //window.open('/apex/exportPdf?ids='+actionIds.join()+'&fieldset=AdvancedSearch_Filter_Fields&return_in_order='+return_in_order+'&orderBy='+orderBy+'&force_download=true','1364931211178','width=700,height=500,toolbar=0,menubar=0,location=0,status=1,scrollbars=1,resizable=1,left=0,top=0')
+                        
+            return false;
+        }      
+                
+        function ProfileInfo(id) {
+            var self = this;
+            self.id = id;
+            self.street = null;
+            self.photo = null;
+            self.name = null;
+            self.status = null;
+            self.latitude = null;
+            self.longitude = null;
+
+            self.checked = ko.observable(null);
+            self.sizefilter = null;
+            self.sizetotal = null;
+            self.rent = null;
+        }
+        var MapViewModel2 = {
+            profiles: ko.observableArray(),
+            //firstStreetPoint: ko.observable({ formatted_address: '' }),
+            firstStreetPoint: ko.observable(null),
+            secondStreetPoint: ko.observable(null),
+            atLeastOneProfileSelected: ko.observable(false),
+            isMapSearchResultsDeletable: ko.observable(false),
+            isMapSearchResultsAddable: ko.observable(false),
+            //          firstStreetPointShortAddress: ko.computed(function () {
+            //              return this.firstName() + " " + this.lastName();
+            //          }, this),
+            showInfoWindow: function (profile) {
+                toggleBounce(profile.marker);
+                openInfoWindow(profile.marker, true);
+            }
+        }
+        //MapViewModel2.firstStreetPoint(null);
+        
+        j$(document).ready(function myfunction() {
+
+            // 10-23-2012 loadScript here    
+            loadScript();
+
+            j$('#tabsSearch input:radio').click(function (e) {
+                searchType = e.target.id;
+                clearMap();
+                initializeSearchFunctions();
+            });
+        });
+    </script>
+    
+    <!--set slider-->
+    <script type="text/javascript">
+        // issue - window load is not firing...changing to settimeout
+        setTimeout(function myfunction() {
+        //j$(window).load(function myfunction() {
+            ///set Ground size range
+            if (j$("#txtGroundFloorSizeMin").val() == "") {
+                j$("#txtGroundFloorSizeMin").val(0);
+            }
+            if (j$("#txtGroundFloorSizeMax").val() == "") {
+                j$("#txtGroundFloorSizeMax").val(25000);
+            }
+
+            j$("#slider-range").slider({
+                range: true,
+                min: 0,
+                max: 50000,
+                values: [j$("#txtGroundFloorSizeMin").val(), j$("#txtGroundFloorSizeMax").val()],
+                slide: function (event, ui) {
+                    j$("#txtGroundFloorSizeMin").val(ui.values[0]);
+                    j$("#txtGroundFloorSizeMax").val(ui.values[1]);
+                }
+            }, 500);
+
+        });
+    </script>
+    <!--set checkboxes-->
+    <script type="text/javascript">
+        
+        //review all checkboxes to find if there any checked
+        function processProfileSelection(obj) {
+            //var setChecked = false;
+//          for (var i = 0; i < MapViewModel2.profiles().length; i++) {
+//              if (MapViewModel2.profiles()[i].checkedForReport()) {
+//                  setChecked = true;
+//                  break;
+//              }
+//          }
+            //alert(setChecked + '   ' + MapViewModel2.atLeastOneProfileSelected());
+        
+            if (j$(obj).attr("checked")) {
+                MapViewModel2.atLeastOneProfileSelected(true);
+            }
+        }
+        
+        /*
+        function processSelectAll(obj) {
+            // handle select all
+            if(j$(".mapSearchSelectionBox").length == j$(".mapSearchSelectionBox:checked").length) {
+                j$("#headerMapSearchSelectionBox").attr("checked", "checked");
+            } else {
+                j$("#headerMapSearchSelectionBox").removeAttr("checked");
+            }
+        }*/
+        
+    </script>
+
+    <apex:form id="mapSearchForm" onsubmit="SearchByFilters">
+    <apex:inputHidden id="actionIdsHidden" value="{!controller.actionIds}" />
+    <apex:inputHidden id="actionButtonHidden" value="{!controller.actionButton}" />
+    
+    <div class="infoToolTips" style="position: absolute; left: 650px; margin: 8px;" data-bind="with: firstStreetPoint">
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span data-bind="text: street_number"></span> <span
+            data-bind="text: route"></span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    </div>
+    <div id="tabsSearch">
+        <input type="radio" id="radio1" name="tabsSearch" checked="checked" /><label for="radio1">Search by filters</label>
+        <input type="radio" id="radio2" name="tabsSearch" /><label for="radio2">Search by polygon</label>
+        <input type="button" class="btn" value="Export to PDF"  onclick="exportToPdf('.mapSearchSelectionBox',true);" style="float:right;"/>
+        <apex:outputPanel rendered="{!controller.useM2M2}"> 
+            <input type="button" class="btn" value="Add To List" data-bind="visible: isMapSearchResultsAddable" onclick="gatherCheckBoxes2('.mapSearchSelectionBox', '{!$Component.mapSearchForm.actionIdsHidden}');InsertRecords();" style="float:right;margin-right:5px;"/>
+            <!--- enable: atLeastOneProfileSelected,  --->
+        </apex:outputPanel>
+        <input type="button" class="btn check" value="Check all" style="float:right;margin-right:5px;"/>
+        <apex:outputPanel rendered="{!controller.useM2M2}" >
+            <apex:actionFunction name="InsertRecords" action="{!controller.insertRecords}" rerender="theManageTabPanel, messages" status="myStatus"/>
+            <apex:actionFunction name="DeleteRecords" action="{!controller.deleteRecords}" rerender="theManageTabPanel, messages" status="myStatus"/>
+            <apex:actionStatus id="myStatus" onStart="j$('#pageContentDiv').mask('Processing List...');" onStop="j$('#pageContentDiv').unmask();" />
+        </apex:outputPanel>                    
+    </div>
+    <div id="filters" style="position: absolute; top: 42px; left: 100px; z-index: 11111;
+        background-color: #fff;">
+        <table>
+            <tr>
+                <td rowspan="2" valign="top">
+                    Area:
+                    <input id="ddlAreas" type="text" name="ddlAreas" style="width: 150px" />&nbsp;&nbsp;&nbsp;
+                </td>
+                <td>
+                    SF:
+                    <input id="txtGroundFloorSizeMin" name="txtGroundFloorSizeMin" style="width: 70px;"
+                        onfocus="j$(this).jStepper({ minValue: 0, maxValue: 100000000, allowDecimals: false, disableNonNumeric: true });" />
+                </td>
+                <td>
+                    <input id="txtGroundFloorSizeMax" name="txtGroundFloorSizeMax" style="width: 70px;"
+                        onfocus="j$(this).jStepper({ minValue: 0, maxValue: 100000000, allowDecimals: false, disableNonNumeric: true });" />&nbsp;sf
+                </td>
+                <td>
+                    &nbsp;&nbsp;&nbsp;
+                    <button type="button" id="btnFilters" onclick="SearchByFilters();">
+                        search</button>
+                </td>
+            </tr>
+            <tr>
+                <!--<td></td>-->
+                <td colspan="2">
+                    <div id="slider-range" style="margin: 3px 0 10px 0; height: 10px;">
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+    <div id="map_canvas" data-bind="style: { width: profiles().length > 0 ? '77%' : '100%' }" >
+    </div>
+    <div id="rightDiv" data-bind="style: { width: profiles().length > 0 ? '23%' : '0%' }">
+        <div class="profilesListHeader">
+            &nbsp;&nbsp;&nbsp;<span data-bind="text: profiles().length"></span> profiles found</div>
+            
+       <!----      
+        <apex:outputPanel layout="block" styleClass="profilesListCommandsPanel" style="margin: 5px 0 0 0;white-space: nowrap;" rendered="{!controller.useM2M2}" >
+            <input style="margin-left: 20px" id="headerMapSearchSelectionBox" class="headerMapSearchSelectionBox" type="checkbox" onclick="j$('.mapSearchSelectionBox').attr('checked', this.checked);processProfileSelection(this);" />select all
+            <apex:actionFunction name="InsertRecords" action="{!controller.insertRecords}" rerender="theManageTabPanel, messages" />
+            <apex:actionFunction name="DeleteRecords" action="{!controller.deleteRecords}" rerender="theManageTabPanel, messages" />
+            <input type="button" style="margin-left: 20px" onclick="gatherCheckBoxes2('.mapSearchSelectionBox', '{!$Component.mapSearchForm.actionIdsHidden}');InsertRecords();" value="Add" data-bind="enable: atLeastOneProfileSelected, visible: isMapSearchResultsAddable" class="btn" ></input>
+            <input type="button" onclick="gatherCheckBoxes2('.mapSearchSelectionBox', '{!$Component.mapSearchForm.actionIdsHidden}');DeleteRecords();" value="Del" data-bind="enable: atLeastOneProfileSelected, visible: isMapSearchResultsDeletable" class="btn"></input>
+        </apex:outputPanel>
+        ---->
+        
+        <ul id="profilesList" data-bind="foreach: profiles">
+            <li>
+                <!--  1-14-2013 - commented out due to lack of thumbnail images 
+                <div class="profileImage">
+                    <a target="_blank" data-bind="attr: { href: '/' + id, title: name }">
+                        <div class="imgProfile" data-bind="html: photo" />
+                    </a>
+                </div>
+                -->
+                <div class="profileCard">
+                    <input type="checkbox" style="float:left" value="value: id"  data-bind="value: id" class="mapSearchSelectionBox" position="0" onclick="processProfileSelection(this);processSelectAll(this);"/>
+                    <div data-bind="click: $root.showInfoWindow">
+                        <input type="hidden" id="hidProfileOid" data-bind="value: id" />
+                        <div class="profileName" data-bind="text: name"><br /></div>
+                        <div class="profileStreet"  data-bind="text: street"><br /></div>
+                        <div class="profileStatus" data-bind="text: status"><br /></div>
+                        <div>Total SF: <span class="profileTotalsize" data-bind="text: sizetotal"></span></div>
+                        <div>Rent PSF: <span class="profileTotalsize" data-bind="text: rent"></span></div>
+                    </div>
+                    <!---
+                    <apex:outputPanel style="color: #fff; font-style: italic; line-height: 80%; text-align: right;" rendered="{!controller.useM2M2}">
+                        <br />
+                        <input class="mapSearchSelectionBox" type="checkbox" data-bind="value: id" id="chkChecked" name="chkChecked" onclick="processProfileSelection(this);processSelectAll(this);" />
+                        select
+                        <br />
+                    </apex:outputPanel>
+                    ---->
+                    <input type="hidden" id="hidProfileStreet" data-bind="value: street" />
+                    <input type="hidden" id="hidProfileName" data-bind="value: name" />
+                    <input type="hidden" id="hidProfileStatus" data-bind="value: status" />
+                    <input type="hidden" id="hidProfileLatitude" data-bind="value: latitude" />
+                    <input type="hidden" id="hidProfileLongitude" data-bind="value: longitude" />
+                </div>
+            </li>
+        </ul>
+    </div>
+    <div id="pageContentDiv" />
+    </apex:form>
+</apex:component>

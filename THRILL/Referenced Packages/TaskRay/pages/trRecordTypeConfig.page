@@ -1,0 +1,454 @@
+<apex:page docType="html-5.0" standardStylesheets="false" showHeader="false" sidebar="false" controller="TASKRAY.trTaskBoardController" applyHtmlTag="false" applyBodyTag="false">
+  <html>
+    <head>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no, width=device-width"/>
+      <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'angular/angular.js')}"/>
+      <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'angular/angular-animate.js')}"/>
+      <apex:includeScript value="{!URLFOR($Resource.TASKRAY__trplugins, 'angular-ui/angular-ui-router.js')}"/>
+      <link href="{!URLFOR($Resource.trplugins, 'bootstrap3/css/bootstrap.css')}" rel="stylesheet" type="text/css" />
+      <link href="{!URLFOR($Resource.trplugins, 'css/trtaskboard.css')}" rel="stylesheet" type="text/css" />
+      <script>
+        var RecordTypeMappingModule = angular.module("RecordTypeMappingModule", ['ngAnimate']);
+RecordTypeMappingModule.controller("taskRecordTypeMappingCtrl", function($scope, MappingRecord, RecordTypesForObject, FieldSetsForObject,CurrentRecordTypes, UtilMethods, errorFactory) {
+  $scope.updateTaskRecordTypes=function(){
+    RecordTypesForObject.get('TASKRAY__'+'Project_Task__c').then(function(recordTypes){ $scope.taskRecordTypes = recordTypes; });
+  }
+  $scope.updateTaskFieldSets=function(){
+    FieldSetsForObject.get('TASKRAY__'+'Project_Task__c').then(function(fieldSets){ $scope.taskFieldSets = fieldSets; });
+  }
+  $scope.updateTaskCurrentMappings=function(){
+    CurrentRecordTypes.get('TASKRAY__'+'Project_Task__c').then(function(currentMapping){$scope.taskCurrentMappings=UtilMethods.wrapSFDataArr(currentMapping);});
+  }
+  $scope.updateTaskRecordTypes();
+  $scope.updateTaskFieldSets();
+  $scope.updateTaskCurrentMappings();
+  $scope.addMode=false;
+  $scope.newTaskMapping={};
+  
+  $scope.unmappedTaskRecordTypes=[];
+  $scope.$watchCollection('taskRecordTypes',function(){
+    $scope.findUnmappedTaskRecordTypes();
+  });
+  $scope.$watchCollection('taskCurrentMappings',function(){
+    $scope.findUnmappedTaskRecordTypes();
+  });
+  $scope.findUnmappedTaskRecordTypes = function(){
+    if($scope.taskRecordTypes && $scope.taskRecordTypes.length > 0){
+      var currentlyMappedIdArray = ($scope.taskCurrentMappings) ? $scope.taskCurrentMappings.map(function(mapping){
+        return mapping.data['TASKRAY__'+'Record_Type_Id__c'];
+      }) : [];
+      $scope.unmappedTaskRecordTypes = $scope.taskRecordTypes.filter(function(recordTypeObj){
+        if(currentlyMappedIdArray.indexOf(recordTypeObj.id) !== -1){ return false; }
+        else{ return true; }
+      });
+    }
+  }
+
+  $scope.toggleAddMode=function(){
+    if($scope.addMode==false){$scope.addMode=true;}
+    else{$scope.addMode=false;}
+  }
+
+  $scope.insertMapping=function(){
+    var parsedNewTaskMapping = {};
+    parsedNewTaskMapping['TASKRAY__'+'Record_Type_Id__c']=$scope.newTaskMapping.recordType;
+    parsedNewTaskMapping['TASKRAY__'+'Field_Set_Name__c']=$scope.newTaskMapping.fieldSet;
+    parsedNewTaskMapping['TASKRAY__'+'Object_Type__c']='TASKRAY__'+'Project_Task__c';
+    var newObj = new MappingRecord(parsedNewTaskMapping);
+    newObj.insert().then(function(currentMapping){
+      $scope.taskCurrentMappings=UtilMethods.wrapSFDataArr(currentMapping);
+      $scope.addMode=false;
+    }, function(error){
+      errorFactory.add(error.message); 
+    });
+  }
+  
+  $scope.updateMapping=function(existingMappingRecord){
+    $scope.updatePromise=existingMappingRecord.update().then(function(currentMapping){
+      $scope.taskCurrentMappings=UtilMethods.wrapSFDataArr(currentMapping);
+    }, function(error){
+      errorFactory.add(error.message); 
+    });
+  }
+
+  $scope.deleteMapping=function(existingMappingRecord){
+    existingMappingRecord.delete().then(function(currentMapping){
+      $scope.taskCurrentMappings=UtilMethods.wrapSFDataArr(currentMapping);
+    }, function(error){
+      errorFactory.add(error.message); 
+    });
+  }
+
+  $scope.resetToPristine=function(existingMappingRecord){
+    $scope.updateTaskCurrentMappings();
+  }
+
+  $scope.allErrors = errorFactory.errors;
+  $scope.remove = errorFactory.remove;
+
+});
+
+RecordTypeMappingModule.controller("projectRecordTypeMappingCtrl", function($scope, MappingRecord, RecordTypesForObject, FieldSetsForObject, CurrentRecordTypes, UtilMethods, errorFactory) {
+  $scope.updateProjectRecordTypes=function(){RecordTypesForObject.get('TASKRAY__'+'Project__c').then(function(recordTypes){ $scope.projectRecordTypes = recordTypes; });}
+  $scope.updateProjectFieldSets=function(){FieldSetsForObject.get('TASKRAY__'+'Project__c').then(function(fieldSets){ $scope.projectFieldSets = fieldSets; });}
+  $scope.updateProjectCurrentMappings=function(){CurrentRecordTypes.get('TASKRAY__'+'Project__c').then(function(currentMapping){$scope.projectCurrentMappings=UtilMethods.wrapSFDataArr(currentMapping);});}
+  $scope.updateProjectRecordTypes();
+  $scope.updateProjectFieldSets();
+  $scope.updateProjectCurrentMappings();
+  $scope.addMode=false;
+  $scope.newProjectMapping={};
+
+  $scope.unmappedProjectRecordTypes=[];
+  $scope.$watchCollection('projectRecordTypes',function(){
+    $scope.findUnmappedProjectRecordTypes();
+  });
+  $scope.$watchCollection('projectCurrentMappings',function(){
+    $scope.findUnmappedProjectRecordTypes();
+  });
+  $scope.findUnmappedProjectRecordTypes = function(){
+    if($scope.projectRecordTypes && $scope.projectRecordTypes.length > 0){
+      var currentlyMappedIdArray = $scope.projectCurrentMappings.map(function(mapping){
+        return mapping.data['TASKRAY__'+'Record_Type_Id__c'];
+      });
+      $scope.unmappedProjectRecordTypes = $scope.projectRecordTypes.filter(function(recordTypeObj){
+        if(currentlyMappedIdArray.indexOf(recordTypeObj.id) !== -1){ return false; }
+        else{ return true; }
+      });
+    }
+  }
+
+  $scope.toggleAddMode=function(){
+    if($scope.addMode==false){$scope.addMode=true;}
+    else{$scope.addMode=false;}
+  }
+
+  $scope.insertMapping=function(){
+    var parsedNewProjectMapping = {};
+    parsedNewProjectMapping['TASKRAY__'+'Record_Type_Id__c']=$scope.newProjectMapping.recordType;
+    parsedNewProjectMapping['TASKRAY__'+'Field_Set_Name__c']=$scope.newProjectMapping.fieldSet;
+    parsedNewProjectMapping['TASKRAY__'+'Object_Type__c']='TASKRAY__'+'Project__c';
+    var newObj = new MappingRecord(parsedNewProjectMapping);
+    newObj.insert().then(function(currentMapping){
+      $scope.projectCurrentMappings=UtilMethods.wrapSFDataArr(currentMapping);
+      $scope.addMode=false;
+    }, function(error){
+      errorFactory.add(error.message); 
+    });
+  }
+  
+  $scope.updateMapping=function(existingMappingRecord){
+    existingMappingRecord.update().then(function(currentMapping){
+      $scope.projectCurrentMappings=UtilMethods.wrapSFDataArr(currentMapping);
+    }, function(error){
+      errorFactory.add(error.message); 
+    });
+  }
+
+  $scope.deleteMapping=function(existingMappingRecord){
+    existingMappingRecord.delete().then(function(currentMapping){
+      $scope.projectCurrentMappings=UtilMethods.wrapSFDataArr(currentMapping);
+    }, function(error){
+      errorFactory.add(error.message); 
+    });
+  }
+
+  $scope.resetToPristine=function(existingMappingRecord){
+    $scope.updateProjectCurrentMappings();
+  }
+
+  $scope.allErrors = errorFactory.errors;
+  $scope.remove = errorFactory.remove;
+});
+
+RecordTypeMappingModule.factory('errorFactory', function(){
+  var errors = [];  
+  var errorFactory = {};
+
+  errorFactory.add = function(error) {
+    var parsedMsg=error.replace(/.*First\sexception.*first\serror\:\s\w*,/,'').replace(': []','');
+    errors.push(parsedMsg);
+  }
+
+  errorFactory.errors = function() {
+    return errors;
+  };
+
+  errorFactory.remove = function(error) {
+    errors.splice(errors.indexOf(error), 1);
+  };  
+
+  return errorFactory;
+});
+
+RecordTypeMappingModule.factory('MappingRecord',function($q, RecordTypeMappingCRUD){
+  var MappingRecord = function(MappingRecordData) {
+    this.initialize = function(){
+      this.data=MappingRecordData;
+    }
+    this.objectType = function(){
+      return this.data['TASKRAY__'+'Object_Type__c'];
+    }
+    this.recordTypeId = function(){
+      return this.data['TASKRAY__'+'Record_Type_Id__c'];
+    }
+    this.recordTypeIdField = 'TASKRAY__'+'Record_Type_Id__c';
+    this.fieldSetName = function(){
+      return this.data['TASKRAY__'+'Field_Set_Name__c'];
+    }
+    this.fieldSetNameField = 'TASKRAY__'+'Field_Set_Name__c';
+    this.insert = function() {
+      var deferred = $q.defer();
+      RecordTypeMappingCRUD.insert(this.sfData()).then(function(currentMapping){
+        deferred.resolve(currentMapping);
+      },function(error){
+        deferred.reject(error);
+      });
+      return deferred.promise;
+    };
+    this.update = function(){
+      var deferred = $q.defer();
+      RecordTypeMappingCRUD.update(this.sfData()).then(function(currentMapping){
+        deferred.resolve(currentMapping);
+      },function(error){
+        deferred.reject(error);
+      });
+      return deferred.promise;
+    };
+    this.delete = function(){
+      var deferred = $q.defer();
+      RecordTypeMappingCRUD.delete(this.sfData()).then(function(currentMapping){
+        deferred.resolve(currentMapping);
+      },function(error){
+        deferred.reject(error);
+      });
+      return deferred.promise;
+    };
+    this.sfData = function(){
+      return this.data;
+    }
+    this.initialize();
+  };
+ 
+  // Return a reference to the function
+  return (MappingRecord);
+});
+
+RecordTypeMappingModule.factory('RecordTypeMapping',function($q){
+  return {
+    get: function(objName) {
+      var deferred = $q.defer();
+      TASKRAY.trTaskBoardController.recordTypeFieldSetMappingForObj(objName,function(result,event){
+        if(event.status){
+          deferred.resolve(result);
+        } else{
+          deferred.reject(event);
+        }
+      },{escape: false});
+      return deferred.promise();
+    }
+  }
+})
+
+RecordTypeMappingModule.factory('RecordTypesForObject',function($q){
+  return {
+    get: function(objName) {
+      var deferred = $q.defer();
+      TASKRAY.trTaskBoardController.recordTypesForObject(objName,function(result, event){
+        if (event.status) {
+          deferred.resolve(result);
+        } else {
+          deferred.reject(event);
+        }
+      }, {
+        escape: false
+      });
+
+      return deferred.promise;
+    }
+  }
+});
+
+RecordTypeMappingModule.factory('FieldSetsForObject',function($q){
+  return {
+    get: function(objName) {
+      var deferred = $q.defer();
+      TASKRAY.trTaskBoardController.fieldSetsForObject(objName,function(result, event){
+        if (event.status) {
+          deferred.resolve(result);
+        } else {
+          deferred.reject(event);
+        }
+      }, {
+        escape: false
+      });
+
+      return deferred.promise;
+    }
+  }
+});
+
+RecordTypeMappingModule.factory('CurrentRecordTypes',function($q){
+  return {
+    get: function(objName) {
+      var deferred = $q.defer();
+      TASKRAY.trTaskBoardController.getCurrentRecordTypeMapping(objName,function(result, event){
+        if (event.status) {
+          deferred.resolve(result);
+        } else {
+          deferred.reject(event);
+        }
+      }, {
+        escape: false
+      });
+
+      return deferred.promise;
+    }
+  }
+});
+
+RecordTypeMappingModule.factory('RecordTypeMappingCRUD',function($q){
+  return {
+    insert: function(sfDataObj) {
+      var deferred = $q.defer();
+      TASKRAY.trTaskBoardController.addRecordTypeMapping(sfDataObj,function(result, event){
+        if (event.status) {
+          deferred.resolve(result);
+        } else {
+          deferred.reject(event);
+        }
+      }, {
+        escape: false, buffer: false
+      });
+      return deferred.promise;  
+    },
+    update: function(sfDataObj){
+      var deferred = $q.defer();
+      TASKRAY.trTaskBoardController.updateRecordTypeMapping(sfDataObj,function(result, event){
+        if (event.status) {
+          deferred.resolve(result);
+        } else {
+          deferred.reject(event);
+        }
+      }, {
+        escape: false, buffer: false
+      });
+      return deferred.promise;  
+    },
+    delete: function(sfDataObj){
+      var deferred = $q.defer();
+      TASKRAY.trTaskBoardController.deleteRecordTypeMapping(sfDataObj,function(result, event){
+        if (event.status) {
+          deferred.resolve(result);
+        } else {
+          deferred.reject(event);
+        }
+      }, {
+        escape: false, buffer: false
+      });
+      return deferred.promise;  
+    }
+  }
+});
+
+RecordTypeMappingModule.factory('UtilMethods',function(MappingRecord){
+  return{
+    wrapSFDataArr: function(sfDataArr){
+      var wrappedArr = [];
+      angular.forEach(sfDataArr,function(sfDataObj){
+        wrappedArr.push(new MappingRecord(sfDataObj));
+      });
+      return wrappedArr;
+    }
+  }
+});
+      </script>
+    </head>
+    <body>
+      <div class="tr-bootstrap">
+        <h5 style="float:left;">{!HTMLENCODE($Label.TaskRay_PrefModal_RecordTypeHeader)}</h5>
+        <div id="task-record-type-mapping-container" ng-controller="taskRecordTypeMappingCtrl">
+          <div ng-repeat="error in allErrors()" class="alert alert-danger alert-dismissible" role="alert" ><button ng-click="remove(error)" type="button" class="close" data-dismiss="alert"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>{{error}}</div>
+          <span class="object-record-type-header">{!HTMLENCODE($Label.TaskRay_PrefModal_TaskRecordTypeHeader)}</span>
+          <div class="list-group form-inline" id="task-record-type-mapping">
+            <div class="list-group-item animation" ng-repeat="taskRecordTypeMapping in taskCurrentMappings">
+                <!-- Record Type choice -->
+                <label class="control-label">Record Type:</label><select class="form-control input-sm" ng-model="taskRecordTypeMapping.data[taskRecordTypeMapping.recordTypeIdField]" ng-options="taskRecordType.id as taskRecordType.label for taskRecordType in taskRecordTypes" ng-change="taskRecordTypeMapping.isDirty=true;">
+                  <!-- <option ng-repeat="taskRecordType in taskRecordTypes" ng-value="taskRecordType.id">{{taskRecordType.label}}</option> -->
+                </select>
+                <!-- Fieldset Type choice -->
+                <label class="control-label">Field Set:</label><select class="form-control input-sm" ng-model="taskRecordTypeMapping.data[taskRecordTypeMapping.fieldSetNameField]" ng-options="taskFieldSet.id as taskFieldSet.label for taskFieldSet in taskFieldSets" ng-change="taskRecordTypeMapping.isDirty=true;">
+                <!-- <option ng-repeat="taskFieldSet in taskFieldSets" ng-value="taskFieldSet.id">{{taskFieldSet.label}}</option> -->
+                </select>
+                <a class="pointer control-label" ng-click="updateMapping(taskRecordTypeMapping);" ng-if="taskRecordTypeMapping.isDirty">
+                {!HTMLENCODE($Label.TaskRay_PrefModal_RecordTypeSave)}</a>
+                <a class="pointer control-label" ng-click="resetToPristine(taskRecordTypeMapping);" ng-if="taskRecordTypeMapping.isDirty">{!HTMLENCODE($Label.TaskRay_PrefModal_RecordTypeCancel)}</a>
+                <a class="pointer control-label" ng-click="deleteMapping(taskRecordTypeMapping);">{!HTMLENCODE($Label.TaskRay_PrefModal_RecordTypeDel)}</a>
+            </div>
+
+            <div class="list-group-item">
+                <a ng-if="!addMode" class="pointer animation" ng-click="toggleAddMode();">{!HTMLENCODE($Label.TaskRay_PrefModal_RecordTypeAdd)}</a>
+                <div ng-if="addMode" class="animation">
+                      <!-- Record Type choice -->
+                      <label class="control-label">Record Type:</label><select class="form-control input-sm" ng-model="newTaskMapping.recordType"><option ng-repeat="taskRecordType in unmappedTaskRecordTypes" ng-value="taskRecordType.id">{{taskRecordType.label}}</option></select>
+                      <!-- Fieldset Type choice -->
+                      <label class="control-label">Field Set:</label><select class="form-control input-sm" ng-model="newTaskMapping.fieldSet"><option ng-repeat="taskFieldSet in taskFieldSets" ng-value="taskFieldSet.id">{{taskFieldSet.label}}</option></select>
+                      <a class="pointer" ng-click="insertMapping();">{!HTMLENCODE($Label.TaskRay_PrefModal_RecordTypeSave)}</a>
+                      <a class="pointer" ng-click="toggleAddMode();">{!HTMLENCODE($Label.TaskRay_PrefModal_RecordTypeCancel)}</a>
+                </div>
+                
+            </div>
+          </div>
+        </div>
+        <div id="project-record-type-mapping-container" ng-controller="projectRecordTypeMappingCtrl">
+          <span class="object-record-type-header">{!HTMLENCODE($Label.TaskRay_PrefModal_ProjectRecordTypeHeader)}</span>
+          <div ng-repeat="error in allErrors()" class="alert alert-danger alert-dismissible" role="alert" ><button ng-click="remove(error)" type="button" class="close" data-dismiss="alert"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>{{error}}</div>
+          <div class="list-group form-inline" id="project-record-type-mapping">
+            <div class="list-group-item animation" ng-repeat="projectRecordTypeMapping in projectCurrentMappings">
+                <!-- Record Type choice -->
+                <label class="control-label">Record Type:</label><select class="form-control input-sm" ng-model="projectRecordTypeMapping.data[projectRecordTypeMapping.recordTypeIdField]" ng-options="projectRecordType.id as projectRecordType.label for projectRecordType in projectRecordTypes" ng-change="projectRecordTypeMapping.isDirty=true;">
+                  <!-- <option ng-repeat="taskRecordType in taskRecordTypes" ng-value="taskRecordType.id">{{taskRecordType.label}}</option> -->
+                </select>
+                <!-- Fieldset Type choice -->
+                <label class="control-label">Field Set:</label><select class="form-control input-sm" ng-model="projectRecordTypeMapping.data[projectRecordTypeMapping.fieldSetNameField]" ng-options="projectFieldSet.id as projectFieldSet.label for projectFieldSet in projectFieldSets" ng-change="projectRecordTypeMapping.isDirty=true;">
+                <!-- <option ng-repeat="taskFieldSet in taskFieldSets" ng-value="taskFieldSet.id">{{taskFieldSet.label}}</option> -->
+                </select>
+                <a class="pointer control-label" ng-click="updateMapping(projectRecordTypeMapping);" ng-if="projectRecordTypeMapping.isDirty">{!HTMLENCODE($Label.TaskRay_PrefModal_RecordTypeSave)}</a>
+                <a class="pointer control-label" ng-click="resetToPristine(projectRecordTypeMapping);" ng-if="projectRecordTypeMapping.isDirty">{!HTMLENCODE($Label.TaskRay_PrefModal_RecordTypeCancel)}</a>
+                <a class="pointer control-label" ng-click="deleteMapping(projectRecordTypeMapping);">{!HTMLENCODE($Label.TaskRay_PrefModal_RecordTypeDel)}</a>
+            </div>
+
+            <div class="list-group-item">
+                <a ng-if="!addMode" class="pointer animation" ng-click="toggleAddMode();">{!HTMLENCODE($Label.TaskRay_PrefModal_RecordTypeAdd)}</a>
+                <div ng-if="addMode" class="animation">
+                      <!-- Record Type choice -->
+                      <label class="control-label">Record Type:</label><select class="form-control input-sm" ng-model="newProjectMapping.recordType"><option ng-repeat="projectRecordType in unmappedProjectRecordTypes" ng-value="projectRecordType.id">{{projectRecordType.label}}</option></select>
+                      <!-- Fieldset Type choice -->
+                      <label class="control-label">Field Set:</label><select class="form-control input-sm" ng-model="newProjectMapping.fieldSet"><option ng-repeat="projectFieldSet in projectFieldSets" ng-value="projectFieldSet.id">{{projectFieldSet.label}}</option></select>
+                      <a class="pointer" ng-click="insertMapping();">{!HTMLENCODE($Label.TaskRay_PrefModal_RecordTypeSave)}</a>
+                      <a class="pointer" ng-click="toggleAddMode();">{!HTMLENCODE($Label.TaskRay_PrefModal_RecordTypeCancel)}</a>
+                </div>
+                
+            </div>
+          </div>
+        </div>
+      </div>      
+    </body>
+    <script>
+      var taskRecordTypesEnabled=true;
+      var projectRecordTypesEnabled=true;
+      function bootstrapAngularUIs(){
+        if(taskRecordTypesEnabled){
+          var taskRecordTypeUI = document.getElementById('task-record-type-mapping-container');
+          angular.bootstrap(taskRecordTypeUI, ["RecordTypeMappingModule"]);
+        }
+        if(projectRecordTypesEnabled){
+          var projectRecordTypeUI = document.getElementById('project-record-type-mapping-container');
+          angular.bootstrap(projectRecordTypeUI, ["RecordTypeMappingModule"]);
+        }
+      }
+      bootstrapAngularUIs();  
+    </script>
+  </html>
+
+</apex:page>

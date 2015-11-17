@@ -1,0 +1,715 @@
+<apex:component >
+
+	<script type='text/javascript'>
+	
+		/********************************
+        *   Setup Context Menus
+        ********************************/
+        $(function () {
+        
+	        /* Waypoint Rows */
+	        $.contextMenu({
+	        	selector: '#Routing-Table .waypoint-row .index',
+	        	build: function($trigger, e) {
+	
+	        		//create the move to submenu
+	        		var moveToItems = {};
+	        		var itemCount = $('#Routing-Table .waypoint-row').length;
+	        		for (var i = 0; i < itemCount; i += 10)
+	        		{
+	        			var moveToSubItems = {};
+		        		for (var j = 1; j <= 10; j++)
+		        		{
+		        			//make sure this index isn't too high
+		        			var itemIndex = i+j;
+		        			if (itemIndex > itemCount) { break; }
+		        			
+		        			moveToSubItems['MoveTo'+itemIndex] = {
+		        				name: itemIndex,
+		        				callback: function (key, options) {
+		        					var $waypointRow = $(this).closest('.waypoint-row').removeClass('start end startend');
+		        					var index = Math.max(0, Math.min($('#Routing-Table .waypoint-row').length - 1, parseInt(key.removeStart('MoveTo')) - 1));
+		        					
+			            			if (index < $waypointRow.index()) {
+			            				$waypointRow.insertBefore($('#Routing-Table .waypoint-row').eq(index));
+			            				OrderNumbersOnWaypoints();
+			            			}
+			            			else if (index > $waypointRow.index()) {
+			            				$waypointRow.insertAfter($('#Routing-Table .waypoint-row').eq(index));
+			            				OrderNumbersOnWaypoints();
+			            			}
+		        				}
+		        			}
+		        		}
+		        		
+		        		moveToItems['MoveToSubItems'+i] = {
+		        			name: (i+1) + ' - ' + (i+11),
+		        			items: moveToSubItems
+		        		};
+		        	}
+	        	
+	        		//create the menu for this waypoint index
+		        	var menuItems = {
+		                items: {
+		                	buffer: {
+		                		name: '',
+		                		className: 'buffer',
+		                		disabled: true
+		                	},
+		                	lockStart: {
+		                		name: "{!$Label.MAContext_Lock_As_Start}",
+		                		callback: function () {
+		                			Waypoint_Lock($(this).closest('.waypoint-row'), 'Start');
+		                		}
+		                	},
+		                	lockEnd: {
+		                		name: "{!$Label.MAContext_Lock_As_End}",
+		                		callback: function () {
+		                			Waypoint_Lock($(this).closest('.waypoint-row'), 'End');
+		                		}
+		                	},
+		                	lockBoth: {
+		                		name: "{!$Label.MAContext_Lock_As_Start_End}",
+		                		callback: function () {
+		                			Waypoint_Lock($(this).closest('.waypoint-row'), 'Both');
+		                		}
+		                	},
+		                	unlock: {
+		                		name: "{!$Label.MAContext_Unlock}",
+		                		callback: function () {
+		                			var $waypointRow = $(this).closest('.waypoint-row');
+		                			if ($waypointRow.is('.startend')) {
+		                				$('#Routing-Table .waypoint-row.startend').last().remove();
+		                				$('#Routing-Table .waypoint-row.startend').removeClass('startend');
+		                			}
+		                			else {
+		                				$waypointRow.removeClass('start end');
+		                			}
+		                			OrderNumbersOnWaypoints();
+		                		}
+		                	},
+		                	sep1: '---------',
+		                	moveTo: {
+		                		name: "{!$Label.MAContext_Move_To}",
+		                		items: moveToItems
+		                	}
+		                },
+		                autoHide: true,
+		                reposition: false
+		            };
+		            
+		            //return the menu
+		            if (!$trigger.closest('.waypoint-row').is('.start, .end, .startend')) {
+		            	delete menuItems.items.unlock;
+		            }
+		            return menuItems;
+	        	}
+	        });
+        
+	        /* Map Items (i.e. markers, clusters, shapes) */
+	        $.contextMenu({
+		        selector: '#mapcontainer',
+		        build: function($trigger, e) {
+		        
+		        	//start building the menu items by adding a header (the text of this header will change depending on what this context menu is for, but we need to add it now so it appears first)
+		        	var menuItems = {
+		        		header: { name: '', className: 'header', disabled: true },
+		        		massActions: { name: "{!$Label.MAContext_Mass_Actions}", items: {} }
+		        	};
+		        
+	            	//if mass actions are available, build a submenu for them.  otherwise, put a placeholder
+	            	if(userSettings.ButtonSetSettings.massActionLayout && userSettings.ButtonSetSettings.massActionLayout.length > 0)
+	            	{
+	            		//loop over sections
+	            		$.each(userSettings.ButtonSetSettings.massActionLayout, function (sectionIndex, section) 
+	            		{
+	            			//add a header for this section
+	            			menuItems['massActions'].items['folder'+sectionIndex] = { name: section.Label, className: 'header', disabled: true };
+	            			
+	            			//loop over buttons and add an item for each
+	            			$.each(section.Buttons, function (buttonIndex, button) {
+	            			
+	            				//find the definition of this button in the action framework
+								var buttonDefinition = {};
+								if (button.Type == 'Custom Action' && MAActionFramework.customActions[button.Label]) {
+									$.extend(buttonDefinition, MAActionFramework.customActions[button.Label]);
+								}
+								else if (MAActionFramework.standardActions[button.Label]) {
+									$.extend(buttonDefinition, MAActionFramework.standardActions[button.Label]);
+								}
+								else {
+									return;
+								}
+	            			
+	            				//create a menu item
+	            				menuItems['massActions'].items['button'+buttonIndex+'~~'+buttonDefinition.Type+'~~'+button.Label] = { 
+	            					name: buttonDefinition.Label, 
+	            					className: 'massbutton',
+	            					callback: function () {
+	            						if (ContextMenuClick.type == 'map') {
+	            							massActionClick(button.Label, button.Type);
+	            						}
+	            						else if (ContextMenuClick.type == 'shape') {
+	            							massActionShapeClick(ContextMenuClick.target, button.Label, button.Type);
+	            						}
+	            						else {
+	            							massActionClick(button.Label, button.Type);
+	            						}
+	            					} 
+	            				};
+	            			});
+	            		});
+					}
+					else {
+			        	menuItems['massActions'].items['none'] = { name: "{!$Label.MAContext_No_Mass_Actions}", disabled: true };
+			        }
+			        
+		            //add appropriate items based on what type of item was clicked
+		            switch (ContextMenuClick.type)
+		            {
+		            	case 'map':
+		            	
+		            		//header
+		            		menuItems.header.name = "{!$Label.MAContext_Map_Options}";
+
+		            		//enable/disable ruler
+	            			menuItems.addruler = {
+	            				name: 'Add Ruler',
+	            				className: 'massbutton',
+	            				callback: function () {
+	            					new MA.Map.Ruler({ position: ContextMenuClick.latlng });
+	            				}
+	            			};
+		            		
+		            		//center map here
+		            		menuItems.center = { 
+		            			name: "{!$Label.MAContext_Center_Map_Here}", 
+		            			className: 'massbutton',
+		            			callback: function () {
+		            				MA.map.panTo(ContextMenuClick.latlng);
+		            			} 
+		            		};
+
+		            		//what's here
+		            		/*
+		            		var options = { lat: ContextMenuClick.latlng.lat, lng: ContextMenuClick.latlng.lng };
+		            		menuItems.here = {
+		            			name: "What's Here?",
+		            			className = 'massbutton',
+		            			callback: function () {
+		            				whatIsHere(options);
+		            			}
+		            		};
+		            		*/
+		            		
+		            		//remove favorites
+		            		if($('#PlottedQueriesTable .FavoriteRowUnit').length != 0) {
+		            			menuItems.removeFavorites = { name: "{!$Label.MAContext_Remove_All_Favorites}", className: 'massbutton', callback: RemovePlotFavLocation };
+		            		}
+		            		
+		            		//remove poi
+		            		if($('#search-wrapper').data('poiMarkers') && $('#search-wrapper').data('poiMarkers')._map != null) {
+		            			menuItems.removePOI = { name: "{!$Label.MAContext_Remove_POI}", className: 'massbutton', callback: removePOI };
+		            		}
+	            		
+		            		break;
+		            	case 'marker':
+		            	
+		            		//header
+		            		menuItems.header.name = "{!$Label.MAContext_Marker_Options}";
+		            		
+		            		//center map here
+		            		menuItems.center = { 
+		            			name: "{!$Label.MAContext_Center_Map_Here}", 
+		            			className: 'massbutton',
+		            			callback: function () {
+		            				MA.map.panTo(ContextMenuClick.latlng);
+		            			} 
+		            		};
+		            		
+		            		//favorite options
+		            		if(ContextMenuClick.target.layerType == 'favorite-marker') {
+		            			menuItems.header.name = "{!$Label.MAContext_Favorite_Options}";
+		            			menuItems.removeFavorite = {
+		            				name: "{!$Label.MAContext_Remove_Favorite}",
+		            				className: 'massbutton',
+		            				callback: function () {
+			            				var removeIndex = ContextMenuClick.target.removeIndex;
+		            					$('#PlottedQueriesTable .FavoriteRowUnit').each(function (i,row){
+		            						if($(row).attr('data-id') == removeIndex) {
+		            							$(row).find('.btn-remove').click();
+		            						}
+		            					});
+		            				}
+		            			};
+		            			delete menuItems.massActions;
+		            		}
+		            		
+		            		//waypoint options
+		            		if(ContextMenuClick.target.layerType == 'waypoint-marker') {
+		            			menuItems.header.name = "{!$Label.MAContext_Waypoint_Options}";
+		            			menuItems.removeFavorite = { name: "{!$Label.MAContext_Remove_Route}", className: 'massbutton', callback: ClearDirections };
+		            			delete menuItems.massActions;
+			            	}
+
+			            	//ruler options
+			            	if(ContextMenuClick.target.layerType == 'ruler-marker') {
+		            			menuItems.header.name = "Ruler Options";
+		            			menuItems.removeRuler = { name: "Remove Ruler", className: 'massbutton', callback: function () { ContextMenuClick.target.maData.ruler.remove(); } };
+		            			delete menuItems.massActions;
+			            	}
+			            	
+			            	//what's here options
+			            	if(ContextMenuClick.target.layerType == 'whatsHere-marker')
+			            	{
+			            		menuItems.header.name = 'Here Options';
+		            			menuItems.removeMarker = { 
+		            				name: "{!$Label.MAContext_Remove_Marker}", 
+		            				callback: function(key, options) {
+							        	try {
+							        		leafletMap.removeLayer($('#search-wrapper').data('whatsHere'));
+							        	}
+							        	catch (e) {}
+					                }
+		            			};
+		            			delete menuItems.massActions;
+				            }
+				            
+				            //search address options
+				            if(ContextMenuClick.target.layerType == 'searchAddress-marker')
+				            {
+				            	menuItems.header.name = "{!$Label.MAContext_Search_Options}";
+		            			menuItems.removeMarker = { 
+		            				name: "{!$Label.MAContext_Remove_Marker}", 
+		            				callback: function(key, options) {
+							        	try {
+							        		leafletMap.removeLayer($('#search-wrapper').data('newAddress'));
+							        	}
+							        	catch (e) {}
+					                }
+		            			};
+		            			delete menuItems.massActions;
+							}
+		            	
+		            		break;
+		            	case 'cluster':
+		            	
+		            		//header
+		            		menuItems.header.name = "{!$Label.MAContext_Cluster_Options}";
+		            		
+		            		//center map here
+		            		menuItems.center = { 
+		            			name: "{!$Label.MAContext_Center_Map_Here}", 
+		            			className: 'massbutton',
+		            			callback: function () {
+		            				MA.map.panTo(ContextMenuClick.latlng);
+		            			} 
+		            		};
+		            	
+		            		break;
+		            	case 'scatter':
+		            	
+		            		//header
+		            		menuItems.header.name = "{!$Label.MAContext_Scatter_Options}";
+		            		
+		            		//center map here
+		            		var lat = ContextMenuClick.latlng.lat;
+		            		var lng = ContextMenuClick.latlng.lng;
+		            		menuItems.center = { 
+		            			name: "{!$Label.MAContext_Center_Map_Here}", 
+		            			className: 'massbutton',
+		            			callback: function () {
+		            				leafletMap.panTo([lat,lng]);
+		            			} 
+		            		};
+		            	
+		            		break;
+		            	case 'shape':
+		            	
+		            		//header
+		            		menuItems.header.name = "{!$Label.MAContext_Shape_Options}";
+
+		            		//edit layer if this is a google shape
+		            		if (ContextMenuClick.target.getEditable) {
+		            			menuItems.editLayer = {
+		            				name: ContextMenuClick.target.getEditable() ? 'Stop Editing' : 'Edit Shape',
+		            				callback: function (key, options) {
+		            					ContextMenuClick.target.setEditable(!ContextMenuClick.target.getEditable());
+		            				}
+		            			};
+		            		}
+		            		
+		            		//remove layer
+		            		menuItems.removeLayer = {
+		            			name: "{!$Label.MAContext_Remove_Layer}",
+		            			callback: function(key, options) {
+		            				try
+		            				{
+		            					//check if this prox object belongs to a marker.  if it does, remove it from the marker and the associated query
+		            					var marker = ContextMenuClick.target.maData.marker;
+		            					marker.maData.proximityCircle = null;
+		            					marker.record.plottedQuery.data('proximityObjects', $.grep(marker.record.plottedQuery.data('proximityObjects'), function (proxObj, i) {
+		            						return proxObj !== ContextMenuClick.target;
+		            					}));
+		            					ContextMenuClick.target.setMap(null);
+
+		            					ChangeVisibilityWhenCircleIsAdded();
+		            				}
+		            				catch (err)
+		            				{
+		            					//the prox object doesn't belong to a marker, so search the plotted layers for it
+					                    $('#PlottedQueriesContainer .proximity.layer, #PlottedQueriesContainer .PlottedShapeLayer').each(function(index, layer) {
+					                    	if($(layer).data('proxObject') == ContextMenuClick.target) {
+					                    		$(layer).find('.btn-remove').click();
+					                    	}
+					                    	else if($(layer).data('dataLayer') && $(layer).data('dataLayer').contains(ContextMenuClick.target)) {
+					                    		$(layer).find('.btn-remove').click();
+					                    	}
+					                    });
+					                }
+				                }
+		            		};
+		            	
+		            		break;
+		            	default:
+		            		return false;
+		            }
+		            
+		            //return the context menu
+			        return {
+		                items: menuItems,
+		                autoHide: true,
+		                reposition: false
+		            };
+		        }
+		    });
+	    
+	    });
+	    
+	    /*********************************************************************************
+		* Other context menu handlers to dynamically create a map context menu
+		**********************************************************************************/
+		
+		//global var to store information about what was clicked
+		var ContextMenuClick = {};
+		
+		//click map
+		function Map_Context(e) 
+		{
+			ContextMenuClick = { type: 'map', latlng: e.latLng, target: this};
+			
+			var pixel = MA.Map.latLngOffset(e.latLng);
+			var containerOffset = $('#mapdiv').offset();
+			$('#mapdiv').contextMenu({x: pixel.x+containerOffset.left, y: pixel.y+containerOffset.top});
+		}
+		
+		//click polygon
+		function Shape_Context(e) 
+		{
+			ContextMenuClick = { type: 'shape', latlng: e.latLng, target: this };
+
+			var pixel = MA.Map.latLngOffset(e.latLng);
+			var containerOffset = $('#mapdiv').offset();
+			$('#mapdiv').contextMenu({x: pixel.x+containerOffset.left, y: pixel.y+containerOffset.top});
+		}
+		
+		//click cluster
+		function cluster_context (cluster)
+		{
+			ContextMenuClick = { type: 'cluster', latlng: cluster.getCenter(), target: cluster };
+			
+			var pixel = MA.Map.latLngOffset(cluster.getCenter());
+			var containerOffset = $('#mapdiv').offset();
+			$('#mapdiv').contextMenu({x: pixel.x+containerOffset.left, y: pixel.y+containerOffset.top});
+		}
+		
+		function marker_Context(e)
+		{
+			//quick fix for right-clicking RichMarker instead of Google Marker
+			e = e || { latLng: this.getPosition() };
+
+			ContextMenuClick = { type: 'marker', latlng: e.latLng, target: this };
+			
+			var pixel = MA.Map.latLngOffset(e.latLng);
+			var containerOffset = $('#mapdiv').offset();
+			$('#mapdiv').contextMenu({x: pixel.x+containerOffset.left, y: pixel.y+containerOffset.top});
+		}
+		
+		function scatter_Context(e)
+		{
+			ContextMenuClick = { type: 'scatter', latlng: e.latlng, target: this };
+			
+			var containerOffset = $('#mapdiv').offset();
+			$('#mapdiv').contextMenu({x: e.containerPoint.x+containerOffset.left, y: e.containerPoint.y+containerOffset.top});
+		}
+		
+		/************************************************************************
+		* Mass action context menu handlers
+		************************************************************************/
+		function massActionShapeClick (proximityLayer, buttonLabel, buttonType)
+		{
+
+		    var shapeMgr = new MA.Map.ShapeManager().addLayer(proximityLayer);
+
+			//loop over all visible records and determine which markers are in this layer
+			var matchedRecords = [];
+			$('#PlottedQueriesContainer .PlottedRowUnit').each(function () {
+				$.each($(this).data('records'), function (recordId, record) {
+					if ((record.isVisible || record.isClustered || record.isScattered) && shapeMgr.containsLatLng(record.marker.getPosition())) {
+						matchedRecords.push(record);
+					}
+				});
+			});
+			
+			//search for a matching framework action
+			var frameworkAction = buttonType == 'Custom Action'
+		    	? MAActionFramework.customActions[buttonLabel] || null
+		        : MAActionFramework.standardActions[buttonLabel] || null;
+		        
+		    //perform mass action if found
+		    if (frameworkAction) {
+		        switch (frameworkAction.Action)
+		        {
+		        	case 'Javascript':
+						
+						var favorites = [];
+						$('#PlottedQueriesTable .FavoriteRowUnit').each(function (i,row){
+							var marker = $(row).data('marker');
+							if(marker.map != null) {
+    							favorites.push($(row).data('marker'));
+    						}
+    					});
+						
+						var customMarkers = [];
+						$.each(MA.Map.Search.markers || [], function (index, poiMarker) {
+							var place = poiMarker.maData.place;
+							if (shapeMgr.containsLatLng(place.geometry.location)) {
+								customMarkers.push({ type: 'POI', title: place.name || 'My POI', latlng: place.geometry.location, address: place.formatted_address });
+							}
+						});
+						if (PositionEnabled) {
+							try {
+								if (shapeMgr.containsLatLng(PositionMarker.getPosition())) {
+									customMarkers.push({ type: 'MyPosition', title: 'My Position', latlng: PositionMarker.getPosition(), address: 'My Position' });
+								}
+							}
+							catch (err) {}
+						}
+						
+						frameworkAction.ActionValue.call(this, {
+							records			: matchedRecords,
+							favorites		: favorites,
+							customMarkers	: customMarkers,
+							isMassAction	: true
+						});
+						break;
+						
+					case 'NewWindow':
+						//check for possible options, let's say records {records}
+						//parameters check
+						var options = {
+							recString : ''
+						};
+						
+						$.each(matchedRecords || [], function (index, marker) {
+							var markId = marker.record.Id;
+							options.recString += options.recString == '' ? markId : ','+markId;
+						});
+
+						//is this a post or get request
+						var newURL = frameworkAction.ActionValue;
+						if(frameworkAction.Options.method == 'GET') {
+							//replace holders with new options
+							if(frameworkAction.Options.addRecords) {
+								newURL = frameworkAction.ActionValue 
+                                        + (frameworkAction.ActionValue.indexOf('?') == -1 ? '?'+frameworkAction.Options.paramName+'=' + options.recString : '?'+frameworkAction.Options.paramName+'=' + options.recString)
+								//newURL = frameworkAction.ActionValue.replace('{records}',options.recString);
+							}
+							window.open(newURL);
+	                        break;
+						}
+						else {
+							var postData = {};
+
+							if(frameworkAction.Options.addRecords) {
+								postData[frameworkAction.Options.paramName] = options.recString
+							}
+
+							//check if any get parameters are present and send as post as well
+							if(newURL.indexOf('?') > -1) {
+								//loop over params and make post
+								var params = newURL.split('?')[1];
+								//now split on &
+								var paramArr = params.split('&');
+								$.each(paramArr,function(index,pa){
+									var paramParts = pa.split('=');
+									if(paramParts.length == 2) {
+										postData[paramParts[0]] = paramParts[1];
+									}
+									else {
+										//invalid
+										return false;
+									}
+								});
+							}
+							openNewWindow('POST', newURL, postData, '_blank');
+							break;
+						}
+					default:
+					break;
+		        }
+		    }
+		}
+		
+		function massActionClick (buttonLabel, buttonType)
+		{
+			//search for a matching framework action
+			var frameworkAction = buttonType == 'Custom Action'
+		    	? MAActionFramework.customActions[buttonLabel] || null
+		        : MAActionFramework.standardActions[buttonLabel] || null;
+		      
+		   	//perform action if found
+		    if (frameworkAction) {  
+				switch (frameworkAction.Action)
+				{		
+					case 'Javascript':
+					
+						//build the appropriate lists of objects to act on depending on what was clicked
+						var customMarkers = [];
+						var favorites = [];
+						var records = [];
+						switch (ContextMenuClick.type)
+						{
+							case 'map':
+							
+								$('#PlottedQueriesTable .FavoriteRowUnit').each(function (i,row){
+									var marker = $(row).data('marker');
+									if(marker.map != null) {
+		    							favorites.push($(row).data('marker'));
+		    						}
+		    					});
+								$('#PlottedQueriesContainer .PlottedRowUnit').each(function() { 
+									$.each($(this).data('records'), function(index, record) {
+										if (record.isVisible || record.isClustered || record.isScattered) {
+											records.push(record);
+										}
+									});
+								});
+								$.each(MA.Map.Search.markers || [], function (index, poiMarker) {
+									var place = poiMarker.maData.place;
+									customMarkers.push({ type: 'POI', title: place.name || 'My POI', latlng: place.geometry.location, address: place.formatted_address });
+								});
+								if (PositionEnabled) {
+									try {
+										customMarkers.push({ type: 'MyPosition', title: 'My Position', latlng: PositionMarker.getPosition(), address: 'My Position' });
+									}
+									catch (err) {}
+								}
+								
+								break;
+							case 'cluster':
+						
+								$.each(ContextMenuClick.target.getMarkers(), function (index, marker) {
+									records.push(marker.record);
+								});
+								
+								break;
+							default:
+							
+								records.push(ContextMenuClick.target.record);
+						}
+						
+						//call the framework action
+						frameworkAction.ActionValue.call(this, {
+							records			: records,
+							favorites		: favorites,
+							customMarkers	: customMarkers,
+							isMassAction	: true
+						});
+						break;
+
+					case 'NewWindow':
+						//check for possible options, let's say records {records}
+						//parameters check
+						var options = {
+							recString : ''
+						};
+
+						switch (ContextMenuClick.type)
+						{
+							case 'map':
+						
+								if(frameworkAction.Options.addRecords) {
+									$('#PlottedQueriesContainer .PlottedRowUnit').each(function() { 
+										$.each($(this).data('records'), function(index, record) {
+											if (record.isVisible || record.isClustered || record.isScattered) {
+												options.recString += options.recString == '' ? record.record.Id : ','+record.record.Id;
+											}
+										});
+									});
+								}
+							break;
+
+							case 'cluster':
+								if(frameworkAction.Options.addRecords) {
+									$.each(ContextMenuClick.target.getMarkers(), function (index, marker) {
+										options.recString += options.recString == '' ? marker.record.record.Id : ','+marker.record.record.Id;
+									});
+								}
+							break;
+
+							default:
+								if(frameworkAction.Options.addRecords) {
+									options.recString += ContextMenuClick.target.record.record.Id;
+								}
+
+						}
+
+						//is this a post or get request
+						var newURL = frameworkAction.ActionValue;
+						if(frameworkAction.Options.method == 'GET') {
+							//replace holders with new options
+							if(frameworkAction.Options.addRecords) {
+								newURL = frameworkAction.ActionValue 
+                                        + (frameworkAction.ActionValue.indexOf('?') == -1 ? '?'+frameworkAction.Options.paramName+'=' + options.recString : '?'+frameworkAction.Options.paramName+'=' + options.recString)
+								//newURL = frameworkAction.ActionValue.replace('{records}',options.recString);
+							}
+							window.open(newURL);
+	                        break;
+						}
+						else {
+							var postData = {};
+
+							if(frameworkAction.Options.addRecords) {
+								postData[frameworkAction.Options.paramName] = options.recString
+							}
+							//check if any get parameters are present and send as post as well
+							if(newURL.indexOf('?') > -1) {
+								//loop over params and make post
+								var params = newURL.split('?')[1];
+								//now split on &
+								var paramArr = params.split('&');
+								$.each(paramArr,function(index,pa){
+									var paramParts = pa.split('=');
+									if(paramParts.length == 2) {
+										postData[paramParts[0]] = paramParts[1];
+									}
+									else {
+										//invalid
+										return false;
+									}
+								});
+							}
+							openNewWindow('POST', newURL, postData, '_blank');
+							break;
+						}	
+            	
+					default:
+						break;
+				}
+			}
+		}
+	
+	</script>
+
+</apex:component>

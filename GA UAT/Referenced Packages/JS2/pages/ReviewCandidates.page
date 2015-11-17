@@ -1,0 +1,366 @@
+<apex:page controller="ts2.ReviewCandidatesController" action="{!SetSelectedRecords}" tabstyle="Contact" sidebar="false" showHeader="false" title="{!$Label.ReviewEmailTitle}">
+	<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, 'jquery-1.8.2.min.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.ts2__stcode, 'res/js/ui-2.js')}" />
+	<apex:includeScript value="/apexpages/fckeditor/fckeditor.js"/>
+	<apex:stylesheet value="{!URLFOR($Resource.ts2__stcode, 'res/css/ui-2.css')}"/>
+
+<script language="javascript">
+function closeWin() {
+	parent.window.opener = self;
+	parent.window.close();
+}
+
+var TextAreaObject;
+var TextAreaConObject;
+var AdditionalToIdObject;
+var AdditionalToIdContObject;
+var Additional_To_UsersObject;
+var Additional_To_ContObject;
+var AddToUserId;
+var AddToContId
+var AddToUsersName;
+var AddToContName
+
+function SetParam(IDsInText, NamesInText) {
+	TextAreaObject.text(NamesInText);
+	AdditionalToIdObject.value = IDsInText;
+	Additional_To_UsersObject.value = NamesInText;
+	AddToUserId = IDsInText;
+	AddToUsersName = NamesInText;
+}
+function SetParamCon (IDsInText, NamesInText) {
+	TextAreaConObject.text(NamesInText);
+	AdditionalToIdContObject.value = IDsInText;
+	Additional_To_ContObject.value = NamesInText;
+	AddToContId = IDsInText;
+	AddToContName = NamesInText;
+}
+function OpenPopUpWindowUsers() {
+	var pageURL = '{!$Page.s_CTag}';
+	pageURL = (typeof(pageURL)=='string') ? pageURL : "/apex/s_CTag";
+	var url = pageURL + '?isUsers=true&AlreadySelected=' + AdditionalToIdObject.value;
+	var features = 'directories=no,menubar=no,titlebar=no,toolbar=no,scrollbars=yes,resizable=yes,width=550,height=400';
+	window.open(url, '', features, false);
+}
+function OpenPopUpWindowContacts() {
+	var pageURL = '{!$Page.s_CTag}';
+	pageURL = (typeof(pageURL)=='string') ? pageURL : "/apex/s_CTag";
+	var url = pageURL + '?isContacts=true&AlreadySelected=' + AdditionalToIdContObject.value;
+	var features = 'directories=no,menubar=no,titlebar=no,toolbar=no,scrollbars=yes,resizable=yes,width=550,height=400';
+	window.open(url, '', features, false);
+}
+function OpenPopUpWindowAddContacts() {
+	var pageURL = '{!$Page.ReviewAddContact}';
+	pageURL = (typeof(pageURL)=='string') ? pageURL : "/apex/ReviewAddContact";
+	var url = pageURL;
+	var features = 'directories=no,menubar=no,titlebar=no,toolbar=no,scrollbars=yes,resizable=yes,width=450,height=220';
+	window.open(url, '', features, false);
+}
+function confirmRemove() {
+	var mess = "{!JSENCODE($Label.ReviewRemoveMessage)}";
+	if(confirm(mess)) {
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+</script>
+
+<body width="100%" style="margin:10px;">
+
+<apex:form id="frm">
+
+	<apex:pageMessages id="pageMessages" />
+
+	<apex:pageBlock id="pbSendEmail" title="{!$Label.ReviewEmailTitle}">
+		<apex:pageBlockButtons id="pbbsMainButtons" style="text-align: right;" location="bottom">
+			<span id="pbsMainButtons_spinner" class="spinner_indicator">&nbsp;</span>
+			<apex:commandButton value="{!$Label.ReviewSendEmailButton}" title="{!$Label.ReviewSendEmailButton}" action="{!SendEmail}" rendered="{!NOT(Completed)}" onclick="setValueFromEditor({!HtmlView});jQuery('#pbsMainButtons_spinner').addClass('spinner_on');jQuery('[id$=pbSendEmail] input.btn').attr('disabled','disabled').addClass('btnDisabled');if(TextAreaObject){document.getElementById('{!$Component.Add_To_paramU}').value = AddToUserId; document.getElementById('{!$Component.Add_To_paramC}').value = AddToContId;}" rerender="frm" />
+			<apex:inputText value="{!Additional_ToU}" id="Add_To_paramU" style="display: none;"/>
+			<apex:inputText value="{!Additional_ToC}" id="Add_To_paramC" style="display:none;"/>
+
+			<apex:commandButton value="{!$Label.ReviewSelectTemplateButton}" title="{!$Label.ReviewSelectTemplateButton}" rendered="{!NOT(Completed)}" onclick="openTemplateSelectorWindow();return(false);" />
+
+			<apex:commandButton value="{!$Label.ReviewAddCandidateButton}" title="{!$Label.ReviewAddCandidateButton}" rendered="{!NOT(Completed) && NOT(ReivewMode) && ContactsList.SIZE < 5}" onclick="OpenPopUpWindowAddContacts(); return(false);"/>
+			<apex:commandButton value="{!$Label.ReviewAddCandidateButton}" title="{!$Label.ReviewAddCandidateButton}" rendered="{!NOT(Completed) && NOT(ReivewMode) && ContactsList.SIZE > 4}" onclick="return(false);" disabled="true"/>
+			<apex:actionFunction name="AddCandidate" action="{!AddCandidate}" rerender="frm">
+				<apex:param name="var1" value="" assignTo="{!AddContactId}" />
+			</apex:actionFunction>
+
+			<apex:commandButton value="{!$Label.ReviewCancelButton}" title="{!$Label.ReviewCancelButton}" rendered="{!NOT(Completed)}" onclick="closeWin();return(false);" />
+			<apex:commandButton value="{!$Label.ReviewConfimCloseButton}" title="{!$Label.ReviewConfimCloseButton}" rendered="{!Completed}" onclick="closeWin();return(false);" />
+		</apex:pageBlockButtons>
+
+		<!-- HYBRID MODE -->
+		<apex:pageBlockSection columns="1" collapsible="false" rendered="{!NOT(Completed) && $Setup.Short_List__c.Review_Mode__c == '3'}">
+			<apex:pageBlockSectionItem >
+					<apex:outputLabel value="{!$Label.ReviewMode}" />
+					<apex:outputPanel id="ReivewModeSelector">
+						<apex:selectRadio value="{!ReivewMode}" style="float:left;" required="true" >
+							<apex:selectOptions value="{!ReivewModeList}" />
+							<apex:actionSupport event="onclick" onsubmit="jQuery('#pbsRMselector_spinner').addClass('spinner_on');
+								jQuery('[id$=ReivewModeSelector] input').attr('disabled','disabled');
+								setReivewMode(jQuery('[id$=ReivewModeSelector] input:checked').val());return(false);"
+							/>
+						</apex:selectRadio>
+						<span id="pbsRMselector_spinner" class="spinner_indicator">&nbsp;</span>
+					</apex:outputPanel>
+				</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem />
+		</apex:pageBlockSection>
+
+		<!-- Review Section Standard Mode -->
+		<apex:pageBlockSection columns="3" collapsible="false" rendered="{!NOT(Completed) && ReivewMode}">
+
+			<!-- TO USER-->
+			<apex:pageBlockSectionItem rendered="{!ReviewEmailText == 'internal' || ReviewEmailText == 'both'}">
+				<apex:outputLabel value="{!$Label.ReviewToUser} " id="to_user_label"/>
+				<apex:outputPanel layout="block" styleClass="requiredInput">
+					<apex:outputPanel layout="block" styleClass="requiredBlock"/>
+					<apex:inputField required="false" value="{!eventTO.ownerId}"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+
+			<!-- ADD TO USER-->
+			<apex:pageBlockSectionItem rendered="{!ReviewEmailText == 'internal' || ReviewEmailText == 'both'}">
+				<apex:outputLabel value="{!$Label.ReviewAdditionalUser} " style="position:relative; right:20px; word-wrap:break-word; width:20px;" styleClass="StyleForIESeven"/>
+				<apex:outputPanel >
+					<apex:inputTextarea id="Additional_ToU" readonly="true" style="width:300px; position:relative; right:20px;" styleClass="StyleForIESevenFields" value="{!Additional_To_Users}"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+
+			<!-- ADD TO USER MASS-->
+			<apex:pageBlockSectionItem rendered="{!ReviewEmailText == 'internal' || ReviewEmailText == 'both'}">
+				<apex:outputPanel >
+					<apex:inputText value="{!Additional_To_Users}" id="Additional_To_Users" style="display:none;"/>
+					<apex:commandButton id="Additional_ToU_btn" reRender="Additional_ToU_btn"
+						onclick="Additional_To_UsersObject = document.getElementById('{!$Component.Additional_To_Users}'); AdditionalToIdObject = document.getElementById('{!$Component.pbbsMainButtons.Add_To_paramU}'); TextAreaObject = jQuery('[id$=Additional_ToU]'); OpenPopUpWindowUsers();"
+						style="background: url('/img/func_icons/util/lookup20.gif') repeat-y; width:20px; height:20px; border:none; cursor:pointer; text-indent:-1000em; position:relative; left:-2.6em; top:0.7em;"
+						styleClass="StyleForIESevenButton"
+						onmouseover="this.style.backgroundPosition = 'right top'"
+						onmouseout="this.style.backgroundPosition = 'left top'"
+					/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+
+			<!-- TO CONTACT-->
+			<apex:pageBlockSectionItem rendered="{!ReviewEmailText == 'external' || ReviewEmailText == 'both'}">
+				<apex:outputLabel value="To Contact: " id="to_contact_label"/>
+				<apex:outputPanel layout="block" styleClass="requiredInput">
+					<apex:outputPanel layout="block" styleClass="requiredBlock"/>
+					<apex:inputField required="false" value="{!toUserContact.ContactId}"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+
+			<!-- ADD TO CONTACT-->
+			<apex:pageBlockSectionItem rendered="{!ReviewEmailText == 'external' || ReviewEmailText == 'both'}">
+				<apex:outputLabel value="Additional To Contact: " style="position:relative; right:20px; word-wrap:break-word; width:20px;" styleClass="StyleForIESeven"/>
+				<apex:outputPanel >
+					<apex:inputTextarea id="Additional_ToC" readonly="true" style="width:300px; position:relative; right:20px;" styleClass="StyleForIESevenFields" value="{!Additional_To_Contacts}"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+
+			<!-- ADD TO CONTACT MASS-->
+			<apex:pageBlockSectionItem rendered="{!ReviewEmailText == 'external' || ReviewEmailText == 'both'}">
+				<apex:outputPanel >
+				<apex:inputText value="{!Additional_To_Contacts}" id="Additional_To_Contacts" style="display:none;"/>
+				<apex:commandButton id="Additional_ToC_btn" reRender="Additional_ToC_btn"
+					onclick="Additional_To_ContObject = document.getElementById('{!$Component.Additional_To_Contacts}'); AdditionalToIdContObject = document.getElementById('{!$Component.pbbsMainButtons.Add_To_paramC}'); TextAreaConObject = jQuery('[id$=Additional_ToC]'); OpenPopUpWindowContacts();"
+					style="background: url('/img/func_icons/util/lookup20.gif') repeat-y; width:20px; height:20px; border:none; cursor:pointer; text-indent:-1000em; position:relative; left:-2.6em; top:0.7em;"
+					styleClass="StyleForIESevenButton"
+					onmouseover="this.style.backgroundPosition = 'right top'"
+					onmouseout="this.style.backgroundPosition = 'left top'"
+				/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+
+			<!-- CC -->
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="CC" styleClass="StyleForCCField"/>
+				<apex:inputField required="false" value="{!eventCC.ownerId}" styleClass="StyleForCCField"/>
+			</apex:pageBlockSectionItem>
+
+		</apex:pageBlockSection>
+		<!-- Review Section 1 End-->
+		<apex:pageBlockSection columns="1" collapsible="false" rendered="{!NOT(Completed) && isVF_Contacts_Limit}">
+			<apex:pageBlockSectionItem >
+				<!-- SFDC Security Review: Unescaped output is necessary to render html content in vfp and does not constitute possible vulnerability -->
+				<apex:outputLabel value="<b>{!$Label.ReviewToManyContactsMessage}</b>" escape="false"/>
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+		<apex:pageBlockSection columns="1" title="{!$Label.ReviewEmailSection}" collapsible="false" rendered="{!NOT(Completed)}">
+
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="ecndSubject" value="{!$Label.Subject}" />
+				<apex:outputPanel layout="none" id="ecndSubject">
+					<apex:outputPanel layout="block" styleClass="requiredInput">
+						<apex:outputPanel layout="block" styleClass="requiredBlock" />
+						<apex:inputText rendered="{!AllowEmailEdit}" value="{!EmailSubject}" size="70" />
+						<apex:inputText rendered="{!NOT(AllowEmailEdit)}" value="{!EmailSubject}" size="70" disabled="true" />
+					</apex:outputPanel>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="ecndMessage" value="{!$Label.Message}" />
+				<apex:outputPanel layout="none" id="ecndMessage">
+					<apex:inputTextArea rendered="{!HtmlView || AllowEmailEdit}" id="theTextarea" value="{!EmailBody}" readonly="false" style="width:450px;height:120px;color:#000000;border:1px solid #666666;" />
+					<apex:inputTextArea rendered="{!NOT(HtmlView) && NOT(AllowEmailEdit)}" value="{!EmailBody}" readonly="true" style="width:450px;height:120px;color:#666666;border:1px solid #666666;" />
+					<apex:outputPanel layout="none" rendered="{!HtmlView}">
+						<script type="text/javascript">
+							RerenderEditor();
+						</script>
+					</apex:outputPanel>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+			<!-- MESSAGE -->
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$Label.ReviewMergeMessage}" />
+			</apex:pageBlockSectionItem>
+			<!-- MESSAGE -->
+		</apex:pageBlockSection>
+
+		<!-- CANDIDATES -->
+		<apex:pageBlockSection columns="1" title="{!$Label.ReviewCandidateSection}" rendered="{!NOT(Completed) && NOT(ReivewMode)}" collapsible="true">
+			<apex:pageBlockTable value="{!ContactsList}" var="att" width="98%" >
+				<apex:column headerValue="{!$Label.ReviewRemoveField}">
+					<apex:image id="removeContact" title="{!$Label.ReviewRemoveField}" styleClass="removeIcon" style="cursor:pointer; margin-left: 30px;" onclick="if(confirmRemove()){removeContact('{!att.Id}');}" onmouseover="this.className='removeIconOn';" onmouseout="this.className='removeIcon';" value="/s.gif" />
+				</apex:column>
+				<apex:column headerValue="{!$Label.ReviewCandidateField}" value="{!att.Name}" />
+			</apex:pageBlockTable>
+			<apex:actionFunction name="removeContact" action="{!removeContactAction}" rerender="frm">
+				<apex:param name="var1" value="" assignTo="{!removeContactId}" />
+			</apex:actionFunction>
+		</apex:pageBlockSection>
+		<!-- CANDIDATES -->
+
+		<!-- ATTACHMENTS -->
+		<apex:pageBlockSection columns="1" title="{!$Label.ReviewAttachmentsSection}" rendered="{!NOT(Completed) && AttachmentsList.SIZE > 0}" collapsible="true">
+			<apex:pageMessage rendered="{!AttachmentsListLimitAcheived}" summary="$Label.AMS_LABEL_ReviewWarning" severity="warning" strength="2" />
+			<apex:pageBlockTable value="{!AttachmentsList}" var="item" width="98%" >
+				<apex:column headerValue="{!$Label.ReviewSelectField}">
+					<apex:inputCheckbox value="{!item.selected}" />
+				</apex:column>
+				<apex:column rendered="{!AttachmentsList.SIZE>0}" headerValue="{!$ObjectType.Attachment.Fields.Name.Label}" value="{!item.attachmentOrDocumentName}" />
+				<apex:column rendered="{!AttachmentsList.SIZE=0}" headerValue="{!$Label.NoAttachments}" headerClass="noRowsHeader" value="{!item.attachmentOrDocumentName}" />
+			</apex:pageBlockTable>
+			<!-- SFDC Security Review: Unescaped output is necessary to render html content in vfp and does not constitute possible vulnerability -->
+			<apex:outputLabel value="<b>{!$Label.ReviewAttachmentMessage}</b>" escape="false"/>
+		</apex:pageBlockSection>
+		<!-- ATTACHMENTS -->
+
+		<!-- COMPLETED SCREEN -->
+		<apex:pageBlockSection id="pbsCompleted" columns="1" rendered="{!Completed}" >
+			<apex:pageMessage summary="{!$Label.ReviewConfimMessage}" severity="confirm" strength="2" />
+		</apex:pageBlockSection>
+
+		<apex:pageBlockSection id="pbsCompleted_user" columns="1" rendered="{!Completed && (ReviewEmailText == 'internal' || ReviewEmailText == 'both') && FolowingUserReviewList.Size > 0 }">
+		<div style="height:20px"></div>
+			<apex:outputText value="{!$Label.ReviewConfimRecipients}" style="font: bold normal 110% Arial;"/>
+			<apex:repeat value="{!FolowingUserReviewList}" var="FUR" id="theRepeat">
+				<apex:pageBlockSectionItem labelStyle="width:20%">
+					<apex:outputLabel value="{!FUR.Name}" id="NameValue" />
+					<apex:outputText value="{!FUR.Email}" id="EmailValue" />
+				</apex:pageBlockSectionItem>
+			</apex:repeat>
+		</apex:pageBlockSection>
+
+		<apex:pageBlockSection id="pbsCompleted_cont" columns="1" rendered="{!Completed && (ReviewEmailText == 'external' || ReviewEmailText == 'both' || NOT(ReivewMode)) && FolowingContReviewList.Size > 0 }">
+		<div style="height:20px"></div>
+			<apex:outputText value="A Review Email was sent to the following Contact:" style="font: bold normal 110% Arial;"/>
+			<apex:repeat value="{!FolowingContReviewList}" var="FContR" id="theRepeat">
+				<apex:pageBlockSectionItem labelStyle="width:20%">
+					<apex:outputLabel value="{!FContR.Name}" id="NameValue" />
+					<apex:outputText value="{!FContR.Email}" id="EmailValue" />
+				</apex:pageBlockSectionItem>
+			</apex:repeat>
+		</apex:pageBlockSection>
+
+		<apex:pageBlockSection id="pbsCompleted_candidate" columns="1" rendered="{!Completed && FolowingCandidateReviewList.SIZE > 0}">
+		<div style="height:20px"></div>
+			<apex:outputText value="{!$Label.ReviewConfimCandidatesSent}" style="font: bold normal 110% Arial;"/>
+			<apex:repeat value="{!FolowingCandidateReviewList}" var="FCR" id="theRepeat">
+				<apex:pageBlockSectionItem labelStyle="width:20%">
+					<apex:outputLabel value="{!FCR.Name}" id="NameValue" />
+					<apex:outputText value="{!FCR.Documents}" id="DocumentsValue" />
+				</apex:pageBlockSectionItem>
+			</apex:repeat>
+		</apex:pageBlockSection>
+
+		<apex:pageBlockSection id="pbsCompleted_cont_not_send" columns="1" rendered="{!Completed && FolowingCandidateNotReviewList.Size > 0 }">
+		<div style="height:20px"></div>
+			<apex:outputText value="{!$Label.ReviewConfimCandidatesNotSent}" style="font: bold normal 110% Arial;"/>
+			<apex:repeat value="{!FolowingCandidateNotReviewList}" var="FCRN" id="theRepeat">
+				<apex:pageBlockSectionItem labelStyle="width:20%">
+					<apex:outputLabel value="{!FCRN.Name}" id="NameValue" />
+					<apex:outputText value="{!FCRN.Documents}" id="DocumentsValue" />
+				</apex:pageBlockSectionItem>
+			</apex:repeat>
+		</apex:pageBlockSection>
+		<!-- COMPLETED SCREEN -->
+
+		<div style="display:none;" class="waitingSearchDiv waitingSearchDivOpacity"></div>
+		<div style="display:none;" class="waitingSearchDiv"><span class="waitingSearchHolder" style="top:16px;"><img src="/img/loading.gif" class="waitingImage"/><span class="waitingDescription"></span></span></div>
+	</apex:pageBlock>
+
+
+	<apex:actionFunction name="SelectTemplateAction" action="{!SelectTemplateAction}" rerender="frm">
+		<apex:param name="var1" value="" assignTo="{!TemplateId}" />
+	</apex:actionFunction>
+	<apex:actionFunction name="setReivewMode" action="{!setReivewMode}" reRender="frm" >
+		<apex:param name="a" value="" assignTo="{!ReivewMode}" />
+	</apex:actionFunction>
+
+</apex:form>
+
+</body>
+
+<script type="text/javascript">
+	jQuery.noConflict();
+	jQuery(document).ready(function() {
+		gfxInit();
+	});
+
+	function gfxInit() {
+		a1 = new Image; a1.src="{!URLFOR($Resource.stcode, 'res/img/spinner.gif')}";
+	}
+
+	function openTemplateSelectorWindow() {
+		var pageURL = '{!$Page.s_EmailTemplate}';
+		pageURL = (typeof(pageURL)=='string') ? pageURL : "/apex/s_EmailTemplate";
+		var url = pageURL;
+		var features = 'directories=no,menubar=no,titlebar=no,toolbar=no,scrollbars=yes,resizable=yes,width=600,height=300';
+		win = window.open(url, '', features);
+	}
+
+	function setTemplateId(templateId) {
+		LoadingElementShow(jQuery("[id$=pbSendEmail]").find("div.pbBody").get(0), '{!JSENCODE($Label.Candidates_LABEL_Loading)}');
+		SelectTemplateAction(templateId);
+	}
+
+	function RerenderEditor() {
+		var NameEditor = jQuery('[id$=theTextarea]').attr('name');
+		var editor = new FCKeditor(NameEditor, null, 300);
+		editor.BasePath = '/apexpages/fckeditor/';
+		editor.Config['CustomConfigurationsPath'] = '/apexpages/richtext.config.js';
+		editor.ToolbarSet = 'SalesforceBasic';
+		editor.Config['SkinPath'] = editor.BasePath + 'editor/skins/sfdc/';
+		editor.Config['DefaultLanguage'] = 'en-us';
+		editor.Config['EditorAreaStyles'] = ['{!URLFOR($Resource.steffie, 'res/css/fckstyles.css')}'];
+		editor.Config['ImageUpload'] = true;
+		editor.Config['SitesPath'] = '';
+		editor.ReplaceTextarea();
+	}
+	function setValueFromEditor(needUpdate) {
+		if (needUpdate == false) return true;
+		var NameEditor = jQuery('[id$=theTextarea___Frame]');
+		var EditorBody = NameEditor.contents().find("iframe").contents().find("body").clone();
+		EditorBody.find("br[type=_moz]").remove();
+		var EditorValue = jQuery('<div>').append(EditorBody).html();
+		jQuery('[id$=theTextarea]').val(jQuery.trim(EditorValue));
+		return true;
+	}
+</script>
+
+</apex:page>

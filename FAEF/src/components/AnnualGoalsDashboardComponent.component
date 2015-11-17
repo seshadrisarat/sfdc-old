@@ -1,0 +1,954 @@
+<apex:component controller="AnnualGoalsDashboardComponentController">
+    <apex:attribute name="onPrintPage" type="Boolean" description="Determines if the print link is displayed" assignTo="{!isOnPrintPage}"/>
+    <apex:attribute name="printPageUrl" type="String" description="Link to print page"/>
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"/>
+    <apex:includeScript value="{!URLFOR($Resource.BTG_Resources, 'bootstrap-3.0.2/js/bootstrap.min.js')}"/>
+    <!-- tamarack added a bonus :)  -->
+    <apex:includeScript value="{!URLFOR($Resource.chosenJs, 'chosen.jquery.min.js')}"/>
+
+    <apex:stylesheet value="https://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css"/>
+    <apex:stylesheet value="{!URLFOR($Resource.chosenJs, 'chosen.min.css')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.BTG_Resources, 'bootstrap-3.0.2/css/bootstrap-btg-force.css')}"/>
+    
+    
+    <style>
+       .btg-force {width: 90%; margin-left: auto; margin-right: auto; margin-top: 20px;}
+       .btg-force * {font-family: 'Trebuchet MS' , 'Helvetica', 'FontAwesome', 'sans-serif'}
+       .main-header-container {color: #177cd1 !important; background-color: #ffffff !important; padding-bottom: 0px; margin-bottom: 10px; border-bottom: 2px solid #aaaaaa;}
+       .panel-main {background-color: #eeeeee !important; border-color: #cccccc !important;}
+       .panel-pres-body-height {min-height: 246px;}
+       .panel-main-body-height {min-height: 160px}
+       .section-header {margin-bottom: 5px; border-bottom: 1px solid #aaaaaa;}
+       .section-margin {margin-top: 10px;}
+       .name-header-container {background-color: #ffffff !important; padding-bottom: 0px; margin-bottom: 15px; border-bottom: 4px solid #aaaaaa;}
+       .name-header-container h1{color: #177cd1 !important;}
+       .header{margin-bottom: 0px !important;}
+       .btg-force .progress .progress-bar{text-align: right;}
+       .btg-force .progress .progress-bar-backlog {background-color: #aaaaaa;}
+       .btg-force .progress-bar-black {background-color: #000000;}
+       
+       .quarter-goal-legend{display:inline-block; background-color:#A64D4D; width: 13px; height: 13px; margin-right: 2px;}
+       .goal-legend{display:inline-block; background-color:#800000; width: 13px; height: 13px; margin-right: 2px;}
+       .fmv-legend{display:inline-block; background-color:#8BBEE8; width: 13px; height: 13px; margin-right: 2px;}
+       .fma-legend{display:inline-block; background-color:#177cd1; width: 13px; height: 13px; margin-right: 2px;}
+       .csc-legend{display:inline-block; background-color:#0E4A7D; width: 13px; height: 13px; margin-right: 2px;}
+       .table-goals{font-size: 14px;}
+       .btg-force .chart-container [hidden], .btg-force .chart-container template {display: inline;}
+       .btg-force .progress-bar {color: #000000;}
+       .overlay {position: fixed; top: 0; left: 0; height: 100%; width: 100%; z-index: 10; background-color: rgba(0,0,0,0.5);}
+        .white-box{width: 300px; height: 110px; position: fixed; top: 50%; left: 50%; margin-top: -100px; margin-left: -150px; background-color: #FFFFFF; border-radius: 5px; text-align: center; z-index: 11;}
+        .white-box img{width: 75px;}
+        #loadingLabel{font-weight: bold; font-size: 25px;}
+   </style>
+
+   <!-- Whoever digs this ==== there is apex:actionStatus component. No need to do this. Sigh...  -->
+   <div id="overlay" style="display: none;">
+        <div class="overlay">
+        </div>
+        <div class="white-box">
+            <div style="padding: 42px 0px;">
+                <span id="loadingLabel">Loading</span>
+            </div>
+        </div>
+    </div>
+
+    <apex:form id="dashboardForm">
+        <div class="btg-force olegforce fordawin">
+            <div class="row">
+                <div class="col-md-12">
+                   <div class="name-header-container clearfix">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h1 class="name-header">Business Dashboard 
+                                    <span style="display: {!IF(onPrintPage, 'inline', 'none')};">- {!annualGoals.User__r.Name}</span>
+                                </h1>
+                                <apex:outputPanel layout="block" rendered="{!!onPrintPage && IsManager}">
+                                    <h4>
+                                        
+                                        <a href="{!URLFOR($Page.TC_TeamAnnualGoalDashboard)}?year={!annualGoals.Year__c}&&team={!annualGoals.Sales_Team__c}" title="Switch to Team Annual Goals Dashboard">
+                                            <i class="fa fa-tachometer fa-2x"></i> &nbsp; Switch to Team Business Dashboard
+                                        </a><br/>  
+                                    </h4> 
+                                </apex:outputPanel>
+                            </div>
+
+                            <div class="pull-right" style="margin-top: 8px; display: {!IF(onPrintPage, 'none', 'block')}">
+                                <apex:outputPanel id="lastModifiedPnl">
+                                    
+                                    <a href="/{!annualGoals.Id}" target="_blank" title="Annual Goals Record"> Link to Record</a>
+                                    <br/>
+                                    <a href="/apex/AnnualGoalsDashboardPrint?id={!annualGoals.Id}" target="_blank" title="Printer Friendly Version">Printer Friendly Version</a>
+                                    <br/>                           
+                                    <span class="small">Last Updated: <apex:outputField value="{!annualGoals.LastModifiedDate}" /></span>
+                                   </apex:outputPanel>
+                            </div> 
+                        </div>
+
+                        
+                        <div class="row" style="margin:8px 4px;">
+                            
+                            <!-- tamarack added label 01-25-15-->
+                            <!-- tamarack removed conditional rendering when annual goals null -->
+                            <apex:outputPanel layout="block" styleClass="col-md-3" rendered="{!NOT(onPrintPage) && IsManager}">
+                                <apex:outputLabel value="Select Individual: "/><br/>
+                                <apex:selectList html-data-placeholder="Select Individual" id="userList" value="{!userId}" multiselect="false" size="1" style="width: 200px;" styleClass="userOptions options">
+                                    <apex:selectoptions value="{!UserOptions}" />
+                                    <apex:actionsupport event="onchange" rerender="dashboardForm" action="{!rerenderDashboard}" onsubmit="displayOverlay();" oncomplete="hideOverlay();" />
+                                </apex:selectList>
+                            </apex:outputPanel>
+                             <!-- tamarack 01-25-15 years picklist -->
+                            <apex:outputPanel layout="block" styleClass="col-md-3" rendered="{!NOT(onPrintPage)}">
+                                <apex:outputLabel value="Select Year: "/><br/>
+                                <apex:selectList html-data-placeholder="Select Year" id="yearList" value="{!selectedYear}" multiselect="false" size="1" style="width: 200px;" styleClass="yearOptions options">
+                                    <apex:selectoptions value="{!goalYears}" />
+                                    <apex:actionsupport event="onchange" rerender="dashboardForm" action="{!rerenderDashboard}" onsubmit="displayOverlay();" oncomplete="hideOverlay();"/>
+                                </apex:selectList>
+                            </apex:outputPanel>
+                            <!-- end tamarack -->
+                        </div>              
+                    </div>
+                </div>
+            </div>
+
+       <apex:pageMessages />
+       
+       <apex:outputPanel id="data" rendered="{! annualGoals != null}">
+            <!-- BEGIN PRESIDENT'S CLUB -->
+            <apex:outputPanel layout="block" styleClass="row" rendered="{!permUtil.PresidentsClubQual}">
+                <div class="col-md-12">
+                    <div class="main-header-container">
+                      <h3 class="header">President's Club Qualification - {!pcCategory}</h3>
+                    </div>
+    
+                    <div class="panel panel-default panel-main">
+                      <div class="panel-body">
+                          <div class="row">
+                               <div class="col-md-4">
+                                   <div class="panel panel-default">
+                                       <div class="panel-heading">
+                                           <h4 class="sub-header">Gross Margin</h4>
+                                       </div>
+                                       <div class="panel-body panel-pres-body-height">
+                                           Awarded and Approved CGM
+                                           <div class="text-right">
+                                                ${!pcGrossMarginAACGMGoalK}K&nbsp;
+                                           </div>
+                                           <div class="progress">
+                                              <div class="progress-bar progress-bar-{!pcGrossMarginAACGMType}" role="progressbar" aria-valuenow="{!pcPercentGrossMarginAACGM}" aria-valuemin="0" aria-valuemax="100" style="width: {!pcPercentGrossMarginAACGM}%">
+                                                <span>${!pcAwardedApprovedCGMK}K&nbsp;</span>
+                                              </div>
+                                            </div>                                        
+                                             FMV or FMA CGM
+                                           <div class="text-right">
+                                                ${!pcGrossMarginFMVACGMGoalK}K&nbsp;
+                                           </div>
+                                           <div class="progress">
+                                              <div class="progress-bar progress-bar-{!pcGrossMarginFMVAType}" role="progressbar" aria-valuenow="{!pcPercentGrossMarginFMVACGM}" aria-valuemin="0" aria-valuemax="100" style="width: {!pcPercentGrossMarginFMVACGM}%">
+                                                <span>${!pcGrossMarginFMVACGMK}K&nbsp;</span>
+                                              </div>
+                                            </div>
+                                            <div class="section-header">
+                                                    <h5>Awarded and Approved CGM</h5> 
+                                            </div>
+                                             <div class="row">
+                                                <div class="col-md-6">
+                                                    <strong>YTD: </strong> <apex:outputText value="${0,number,###,###,###,###}">
+                                                                            <apex:param value="{!annualGoals.AwardedApprovedCGM__c}"/>
+                                                                        </apex:outputText>                                               
+                                                </div>
+                                                <div class="col-md-6">
+                                                     <strong>Qualified Criteria: </strong><apex:outputText value="${0,number,###,###,###,###}">
+                                                                            <apex:param value="{!pcGrossMarginAACGMGoal}"/>
+                                                                        </apex:outputText>
+                                                </div>
+                                            </div>
+                                            <div class="section-header section-margin">
+                                                    <h5>FMV or FMA CGM</h5> 
+                                            </div>
+                                            <div class="row">                                             
+                                                <div class="col-md-6">
+                                                    <strong>YTD: </strong><apex:outputText value="${0,number,###,###,###,###}">
+                                                                            <apex:param value="{!pcGrossMarginFMVACGM}"/>
+                                                                        </apex:outputText>
+                                                    
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <strong>Qualified Criteria: </strong><apex:outputText value="${0,number,###,###,###,###}">
+                                                                            <apex:param value="{!pcGrossMarginFMVACGMGoal}"/>
+                                                                        </apex:outputText>
+                                                </div>
+                                            </div>
+                                       </div>
+                                   </div>
+                               </div>     
+                               <div class="col-md-4">
+                                   <div class="panel panel-default">
+                                       <div class="panel-heading">
+                                           <h4 class="sub-header">FMV or FMA Gross Margin</h4>
+                                       </div>
+                                       <div class="panel-body panel-pres-body-height">      
+                                           <div class="text-right">
+                                                ${!pcFMAVGoalK}K&nbsp;
+                                           </div>                                 
+                                           <div class="progress">
+                                              <div class="progress-bar progress-bar-{!pcFMAVType}" role="progressbar" aria-valuenow="{!pcPercentFMAV}" aria-valuemin="0" aria-valuemax="100" style="width: {!pcPercentFMAV}%">
+                                                <span>${!pcGrossMarginFMVACGMK}K&nbsp;</span>
+                                              </div>
+                                            </div>
+                                             <div class="row">
+                                                <div class="col-md-6">
+                                                     <strong>YTD: </strong> <apex:outputText value="${0,number,###,###,###,###}">
+                                                                            <apex:param value="{!pcGrossMarginFMVACGM}"/>
+                                                                        </apex:outputText>                                                
+                                                </div>
+                                                 <div class="col-md-6">
+                                                    <strong>Qualified Criteria: </strong> <apex:outputText value="${0,number,###,###,###,###}">
+                                                                            <apex:param value="{!pcFMAVGoal}"/>
+                                                                        </apex:outputText>
+                                                </div>
+                                            </div>
+                                       </div>
+                                   </div>
+                               </div>   
+                               <div class="col-md-4">
+                                   <div class="panel panel-default">
+                                       <div class="panel-heading">
+                                           <h4 class="sub-header">New Accounts</h4>
+                                       </div>
+                                       <div class="panel-body panel-pres-body-height">   
+                                          Qualified New Accounts      
+                                           <div class="text-right">
+                                                {!pcQualifiedNewAccountsGoal}&nbsp;
+                                           </div>                               
+                                           <div class="progress">
+                                              <div class="progress-bar progress-bar-{!pcNewAccountType}" role="progressbar" aria-valuenow="{!pcPercentNewAccount}" aria-valuemin="0" aria-valuemax="100" style="width: {!pcPercentNewAccount}%">
+                                                <span>{!annualGoals.QualifiedNewAccounts__c}&nbsp;</span>
+                                              </div>
+                                            </div>
+                                            New Accounts with FMV or FMA Transactions
+                                            <div class="text-right">
+                                                {!pcQualifiedNewAccountsWithFMVFMATransGoal}&nbsp;
+                                           </div>  
+                                            <div class="progress">
+                                              <div class="progress-bar progress-bar-{!pcNewAccountTransType}" role="progressbar" aria-valuenow="{!pcPercentNewAccountTrans}" aria-valuemin="0" aria-valuemax="100" style="width: {!pcPercentNewAccountTrans}%">
+                                                <span>{!annualGoals.NewAccountsFMVFMATransactions__c}&nbsp;</span>
+                                              </div>
+                                            </div>
+                                             <div class="section-header">
+                                                    <h5>Qualified New Accounts</h5>
+                                            </div>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <strong>YTD: </strong> <apex:outputText value="{!annualGoals.QualifiedNewAccounts__c}"/>                                                                          
+                                                </div>
+                                                <div class="col-md-6"> 
+                                                    <strong>Qualified Criteria: </strong> <apex:outputText value="{!pcQualifiedNewAccountsGoal}"/>                                                                                                                     
+                                                </div>
+                                            </div>
+                                             <div class="section-header section-margin">
+                                                    <h5>New Accounts with FMV or FMA Transactions</h5> 
+                                            </div>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <strong>YTD: </strong> <apex:outputText value="{!annualGoals.NewAccountsFMVFMATransactions__c}"/> 
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <strong>Qualified Criteria: </strong> <apex:outputText value="{!pcQualifiedNewAccountsWithFMVFMATransGoal}"/>                                                                       
+                                                </div>
+                                            </div>
+                                       </div>
+                                   </div>
+                               </div>                                   
+                           </div>
+                       </div>
+                   </div>
+               </div>
+            </apex:outputPanel>
+            <!-- END PRESIDENT'S CLUB -->
+            
+            <!-- BRGIN PROMO TO NEXT LEVEL -->
+            <apex:outputPanel layout="block" styleClass="row" rendered="{!permUtil.PromotionNextLevel}">
+               <apex:outputPanel styleClass="col-md-{!IF(hideBonus == false && hidePromotions, '12','6')}" style="display: {!IF(hideBonus == true, 'none','block')};" rendered="{!permUtil.DeferredBonus}">               
+                  <div class="main-header-container">
+                     <h3 class="main-header">Deferred Bonus</h3>
+                  </div>
+                  <div class="panel panel-default panel-main">
+                       <div class="panel-body panel-main-body-height">
+                            
+                                <div class="text-right" style="display: {!IF(bonusLevelK == 1250, 'block','none')};">
+                                        <span style="display:inline-block;">$500K</span>
+                                        <span style="display:inline-block;width:20%">$750K</span>
+                                        <span style="display:inline-block;width:20%">$1000K</span>
+                                        <span style="display:inline-block;width:20%">$1250K</span>&nbsp;
+                                </div> 
+                                <div class="text-right" style="display: {!IF(bonusLevelK == 1000, 'block','none')};">
+                                        <span style="display:inline-block;">$500K</span>
+                                        <span style="display:inline-block;width:25%">$750K</span>
+                                        <span style="display:inline-block;width:25%">$1000K</span>&nbsp;
+                                </div> 
+                                <div class="text-right" style="display: {!IF(bonusLevelK == 750, 'block','none')};">
+                                        <span style="display:inline-block;">$500K</span>
+                                        <span style="display:inline-block;width:33%">$750K</span>&nbsp;
+                                </div> 
+                                <div class="text-right" style="display: {!IF(bonusLevelK == 500, 'block','none')};">
+                                        <span style="display:inline-block;">$500K</span>&nbsp;
+                                </div> 
+                               <div class="progress">
+                                 
+                                  <div class="progress-bar" role="progressbar" aria-valuenow="{!percentBonus}" aria-valuemin="0" aria-valuemax="100" style="width: {!percentBonus}%">
+                                    <span>${!pcAwardedApprovedCGMK}K&nbsp;</span>
+                                  </div>
+                                </div>
+                                <div class="section-header">
+                                        <h5>Awarded and Approved CGM</h5> 
+                                </div>
+                                <div class="row">
+                                  <div class="col-md-6">
+                                      <strong>YTD: </strong> <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.AwardedApprovedCGM__c}" />
+                                                            </apex:outputText>
+                                  </div>
+                                  <div class="col-md-6">
+                                        <strong>Goal: </strong> <apex:outputText value="${0,number,###,###,###,###}">
+                                                                  <apex:param value="{!bonusLevel}"/>
+                                                              </apex:outputText>                                  
+                                  </div>
+                                </div>
+                       </div>
+                   </div>
+                </apex:outputPanel>
+                <div class="col-md-{!IF(hidePromotions == false && hideBonus, '12','6')}" style="display: {!IF(hidePromotions == true, 'none', 'block')}">               
+                    <div class="main-header-container">
+                      <h3 class="main-header">Promotion to {!nextStatus}</h3>
+                    </div>
+                    <div class="panel panel-default panel-main">
+                       <div class="panel-body panel-main-body-height">
+                            <div class="text-right" style="width:75%">
+                                    ${!fundedCGMGoalK}K&nbsp;
+                            </div> 
+                           <div class="progress">
+                               <div class="progress-bar progress-bar-black" role="progressbar" aria-valuenow="{!percentFundedCGM}" aria-valuemin="0" aria-valuemax="100" style="width: {!percentFundedCGM}%">
+                                    <span style="color: #ffffff;">${!fundedCGMK}K&nbsp;</span>
+                              </div>
+                               <div class="progress-bar progress-bar-backlog" style="width: {!percentFundedCGMBacklog}%">
+                                    <span>${!fundedCGMBacklogK}K&nbsp;</span>
+                                </div>
+                            </div>
+                            <div class="section-header">
+                              <h5>Position</h5>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                     <strong>Current: </strong> {!annualGoals.User__r.CurrentTitle__c}
+                                </div>
+                            </div>
+                            <div class="section-header section-margin">
+                              <h5>Funded CGM</h5>
+                            </div>
+                            <div class="row">
+                                 <div class="col-md-6">
+                                    <strong>{!promotionToDateLabel}: </strong> <apex:outputText value="${0,number,###,###,###,###}">
+                                                            <apex:param value="{!fundedCGM}"/>
+                                                        </apex:outputText> (<apex:outputText value="${0,number,###,###,###,###}">
+                                                            <apex:param value="{!annualGoals.FundedCGMBacklog__c}"/>
+                                                        </apex:outputText> - backlog)
+                                </div>
+                                <div class="col-md-6">                                
+                                      <strong>Goal: </strong> <apex:outputText value="${0,number,###,###,###,###}">
+                                                            <apex:param value="{!fundedCGMGoal}"/>
+                                                        </apex:outputText>
+                                </div>
+                            </div>
+                       </div>
+                   </div>
+               </div>
+            </apex:outputPanel>
+            <!-- END PROMO TO NEXT LEVEL -->
+
+
+            <!-- BEGIN ANNUAL BUSINESS PLAN -->
+            <apex:outputPanel layout="block" rendered="{!permUtil.AnnualBusinessPlanInd}">
+                <div class="row">
+                   <div class="col-md-12">               
+                      <div class="main-header-container">
+                         <h3 class="main-header">Annual Business Plan</h3>
+                      </div>
+                  </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                      <div class="panel panel-default panel-main">
+                            <div class="panel-body">
+                                <div class="panel panel-default">
+                                    <div class="panel-heading">
+                                        <h4 class="sub-header">Activities and Production</h4>
+                                    </div>
+                                    <div class="panel-body">
+                                        <div class="row">
+                                            <div class="col-md-12">
+                                                <table class="table table-goals">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>
+                                                                
+                                                            </th>
+                                                            <th class="text-right">
+                                                                YTD
+                                                            </th>
+                                                            <th class="text-right">
+                                                                Annual Goal
+                                                            </th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                    <!-- tamarack add call stats -->
+                                                    <tr>
+                                                        <td>
+                                                            Composite Call Score
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputField value="{!annualGoals.CompositeCallScoreYTD__c}"/>
+
+                                                        </td>
+                                                            <td class="text-right">
+                                                            <apex:outputField value="{!annualGoals.CompositeCallScoreGoals__c}"/>
+                                                        </td>
+                                                    </tr>  
+                                                    <!-- end call stats -->
+                                              
+                                                    <tr>
+                                                        <td>Leads
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!annualGoals.Leads__c}
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!annualGoals.LeadsGoal__c}
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Proposals
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!annualGoals.Proposals__c}
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!annualGoals.ProposalsGoal__c}
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Lead Conversion Rate
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="{0,number,###,###,###,###}%">
+                                                                <apex:param value="{!annualGoals.Lead_Conversion_Rate__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="{0,number,###,###,###,###}%">
+                                                                <apex:param value="{!annualGoals.LeadConversionRateGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Avg. Proposal Size
+                                                        </td>
+                                                        <td class="text-right">
+                                                           <apex:outputField value="{!annualGoals.Avg_Proposal_Size__c}"/>                                                 
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.AvgProposalSizeGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Closing Rate with Prospects
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputField value="{!annualGoals.Prospects_Closing_Rate__c}"/>                                                  
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="{0,number,###,###,###,###}%">
+                                                                <apex:param value="{!annualGoals.ProspectsClosingRateGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Closing Rate with Current Customers
+                                                        </td>
+                                                        <td class="text-right">
+                                                           <apex:outputField value="{!annualGoals.Current_Customers_Closing_Rate__c}"/>                                                
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="{0,number,###,###,###,###}%">
+                                                                <apex:param value="{!annualGoals.CurrentCustomersClosingRateGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Closing Rate - All Proposals
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputField value="{!annualGoals.All_Proposals_Closing_Rate__c}"/>                                                 
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="{0,number,###,###,###,###}%">
+                                                                <apex:param value="{!annualGoals.AllProposalsClosingRateGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Awarded and Approved CGM
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.AwardedApprovedCGM__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.AwardedApprovedCGMGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>FMV - AACGM
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.FMVGrossMargin__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.FMVGrossMarginGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>FMA - AACGM
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.FMAGrossMargin__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.FMAGrossMarginGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>CSC - AACGM
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.CSCGrossMargin__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                        <td class="text-right">
+                                                        <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.CSCGrossMarginGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>New Customers
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!annualGoals.NewAccounts__c}
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!annualGoals.NewAccountsGoal__c}
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>AACGM from New Customers
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.AACGMNewCustomers__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.AACGMNewCustomersGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                     <tr>
+                                                        <td>
+                                                            Virtual Meetings
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!annualGoals.VirtualMeetings__c}
+                                                        </td>
+                                                              <td class="text-right">
+                                                            {!annualGoals.VirtualMeetingsGoal__c}
+                                                        </td>
+                                                    </tr>                                           
+                                                    <tr>
+                                                        <td>
+                                                            Office Meetings
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!annualGoals.OfficeMeetings__c}
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!annualGoals.OfficeMeetingsGoal__c}
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>
+                                                            7 Figure Deals
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!annualGoals.X7_Figure_Deals__c}
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!annualGoals.X7_Figure_Deals_Goal__c}
+                                                        </td>
+                                                    </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                      </div>
+                   </div>
+                
+                  <div class="col-md-6">
+                      <div class="panel panel-default panel-main">
+                            <div class="panel-body">
+                                <div class="panel panel-default">
+                                    <div class="panel-heading">
+                                        <h4 class="sub-header">Awarded and Approved CGM</h4>
+                                    </div>
+                                    <div class="panel-body">
+                                        <div class="row">
+                                            <div class="col-md-4">
+                                                <div>
+                                                    <span class="fmv-legend"></span>&nbsp;<apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.FMVGrossMargin__c}"/>
+                                                            </apex:outputText> (FMV YTD)<br/>
+                                                    <span class="fma-legend"></span>&nbsp;<apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.FMAGrossMargin__c}"/>
+                                                            </apex:outputText> (FMA YTD)<br/>
+                                                    <span class="csc-legend"></span>&nbsp;<apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.CSCGrossMargin__c}"/>
+                                                            </apex:outputText> (CSC YTD)<br/>
+                                                    <span class="goal-legend"></span>&nbsp;<apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!goalToDate}"/>
+                                                            </apex:outputText> (Goal Pace)<br/>
+                                                    <span class="quarter-goal-legend"></span>&nbsp;<apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!annualGoals.AwardedApprovedCGMGoal__c}"/>
+                                                            </apex:outputText> (Annual Goal)    
+                                                </div>
+                                            </div>
+                                            <div class="col-md-8 text-center">
+                                                <div class="chart-container">
+                                                    <apex:chart data="{!data}" height="400" width="100%">
+                                                        <apex:axis type="Numeric" position="left" title="Closed Won" grid="true"
+                                                            fields="quarterGoal,goal,fmvAmount,fmaAmount,cscAmount" steps="10" dashSize="2">
+                                                            <apex:chartLabel />
+                                                        </apex:axis>
+                                                        <apex:axis type="Category" position="bottom" fields="name" title="YTD vs Goal">
+                                                        </apex:axis>
+                                                        <apex:barSeries orientation="vertical" axis="left" xField="name" yField="quarterGoal,goal,fmvAmount,fmaAmount,cscAmount" stacked="true"
+                                                            colorSet="#800000,#A64D4D,#8BBEE8,#177cd1,#0E4A7D" colorsProgressWithinSeries="true" tips="false" highlight="false" highlightLineWidth="0" highlightStroke="#dddddd" />  
+                                                    </apex:chart>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                      </div>
+                   </div>
+                   
+                   
+                </div>
+            </apex:outputPanel>
+            <!-- END ANNUAL BUSINESS PLAN -->
+
+
+            <!-- BEGIN TEAM WIDGET -->
+            <apex:outputPanel layout="block" rendered="{!permUtil.AnnualBusinessPlanTeam}">
+                <div class="row">
+                   <div class="col-md-12">               
+                      <div class="main-header-container">
+                         <h3 class="main-header">Annual Business Plan (Team {!teamAnnualGoal.Sales_Team__c})</h3>
+                      </div>
+                  </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="panel panel-default panel-main">
+                            <div class="panel-body">
+                                <div class="panel panel-default">
+                                    <div class="panel-heading">
+                                        <h4 class="sub-header">Activities and Production</h4>
+                                    </div>
+                                    <div class="panel-body">
+                                        <div class="row">
+                                            <div class="col-md-12">
+                                                <table class="table table-goals">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>
+                                                                
+                                                            </th>
+                                                            <th class="text-right">
+                                                                YTD
+                                                            </th>
+                                                            <th class="text-right">
+                                                                Annual Goal
+                                                            </th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                    <!-- tamarack add call stats -->
+                                                    <tr>
+                                                        <td>
+                                                            Composite Call Score
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputField value="{!teamAnnualGoal.Team_Composite_Call_Score_YTD__c}"/>
+
+                                                        </td>
+                                                            <td class="text-right">
+                                                            <apex:outputField value="{!teamAnnualGoal.Team_Composite_Call_Score_Goal__c}"/>
+                                                        </td>
+                                                    </tr>  
+                                                    <!-- end call stats -->
+                                                    
+                                                    <tr>
+                                                        <td>Leads
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!teamAnnualGoal.Leads__c}
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!teamAnnualGoal.LeadsGoal__c}
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Proposals
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!teamAnnualGoal.Proposals__c}
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!teamAnnualGoal.ProposalsGoal__c}
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Lead Conversion Rate
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="{0,number,###,###,###,###}%">
+                                                                <apex:param value="{!teamAnnualGoal.Lead_Conversion_Rate__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="{0,number,###,###,###,###}%">
+                                                                <apex:param value="{!teamAnnualGoal.LeadConversionRateGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Avg. Proposal Size
+                                                        </td>
+                                                        <td class="text-right">
+                                                           <apex:outputField value="{!teamAnnualGoal.Avg_Proposal_Size__c}"/>                                                 
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!teamAnnualGoal.AvgProposalSizeGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Closing Rate with Prospects
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputField value="{!teamAnnualGoal.Prospects_Closing_Rate__c}"/>                                                  
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="{0,number,###,###,###,###}%">
+                                                                <apex:param value="{!teamAnnualGoal.ProspectsClosingRateGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Closing Rate with Current Customers
+                                                        </td>
+                                                        <td class="text-right">
+                                                           <apex:outputField value="{!teamAnnualGoal.Current_Customers_Closing_Rate__c}"/>                                                
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="{0,number,###,###,###,###}%">
+                                                                <apex:param value="{!teamAnnualGoal.CurrentCustomersClosingRateGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Closing Rate - All Proposals
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputField value="{!teamAnnualGoal.All_Proposals_Closing_Rate__c}"/>                                                 
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="{0,number,###,###,###,###}%">
+                                                                <apex:param value="{!teamAnnualGoal.AllProposalsClosingRateGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Awarded and Approved CGM
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!teamAnnualGoal.AwardedApprovedCGM__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!teamAnnualGoal.AwardedApprovedCGMGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>FMV - AACGM
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!teamAnnualGoal.FMVGrossMargin__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!teamAnnualGoal.FMVGrossMarginGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>FMA - AACGM
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!teamAnnualGoal.FMAGrossMargin__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!teamAnnualGoal.FMAGrossMarginGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>CSC - AACGM
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!teamAnnualGoal.CSCGrossMargin__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                        <td class="text-right">
+                                                        <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!teamAnnualGoal.CSCGrossMarginGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>New Customers
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!teamAnnualGoal.NewAccounts__c}
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!teamAnnualGoal.NewAccountsGoal__c}
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>AACGM from New Customers
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!teamAnnualGoal.AACGMNewCustomers__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                        <td class="text-right">
+                                                            <apex:outputText value="${0,number,###,###,###,###}">
+                                                                <apex:param value="{!teamAnnualGoal.AACGMNewCustomersGoal__c}"/>
+                                                            </apex:outputText>                                                  
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>
+                                                            Virtual Meetings
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!teamAnnualGoal.VirtualMeetings__c}
+                                                        </td>
+                                                              <td class="text-right">
+                                                            {!teamAnnualGoal.VirtualMeetingsGoal__c}
+                                                        </td>
+                                                    </tr>                                           
+                                                    <tr>
+                                                        <td>
+                                                            Office Meetings
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!teamAnnualGoal.OfficeMeetings__c}
+                                                        </td>
+                                                        <td class="text-right">
+                                                            {!teamAnnualGoal.OfficeMeetingsGoal__c}
+                                                        </td>
+                                                    </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </apex:outputPanel>
+            <!-- END TEAM WIDGET -->
+        </apex:outputPanel>
+    </div>
+   </apex:form>
+   <script type="text/javascript">
+        function displayOverlay()
+        {
+            $("#overlay").attr('style','display: block;');
+        }
+    
+        function hideOverlay()
+        {   
+            $("#overlay").attr('style','display: none;');
+            initPicklists ();
+        }
+
+
+        $(document).ready(function(){
+            initPicklists ();
+        });
+
+        function initPicklists () {
+            $('.options').chosen({
+                no_results_text: "Nothing found!",
+                max_selected_options : 1
+            });
+        }
+   </script>
+</apex:component>

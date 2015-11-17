@@ -1,0 +1,742 @@
+<HTML>
+<HEAD>
+<SCRIPT FOR=window EVENT=onload LANGUAGE="JavaScript">
+
+//	alert(location.href);
+	var IsErr = false;
+	var StartDate = new Date();
+	StartDate.setFullYear(StartDate.getFullYear());
+	StartDate.setDate(StartDate.getDate());
+	StartDate.setDate(1);
+	var varurlquery=location.href.split("?");
+	var varurlterms=varurlquery[1].split("&",67);
+
+	varurlterms[0]=varurlterms[0].slice(5);
+	varurlterms[1]=varurlterms[1].slice(5);
+	varurlterms[2]=varurlterms[2].slice(5);
+	varurlterms[3]=varurlterms[3].slice(5);
+	varurlterms[4]=varurlterms[4].slice(5);
+	varurlterms[5]=varurlterms[5].slice(5);
+	varurlterms[6]=varurlterms[6].slice(5);
+	varurlterms[7]=varurlterms[7].slice(5);
+	varurlterms[8]=varurlterms[8].slice(5);
+	varurlterms[9]=varurlterms[9].slice(5);
+	varurlterms[10]=varurlterms[10].slice(5);
+	varurlterms[11]=varurlterms[11].slice(5);
+	varurlterms[12]=varurlterms[12].slice(5);
+	varurlterms[13]=varurlterms[13].slice(5);
+	varurlterms[14]=varurlterms[14].slice(5);
+	varurlterms[15]=varurlterms[15].slice(5);
+	varurlterms[16]=varurlterms[16].slice(5);
+	varurlterms[17]=varurlterms[17].slice(5);
+	varurlterms[18]=varurlterms[18].slice(5);
+	varurlterms[19]=varurlterms[19].slice(5);
+	varurlterms[20]=varurlterms[20].slice(5);
+	varurlterms[21]=varurlterms[21].slice(5);
+	varurlterms[22]=varurlterms[22].slice(5);
+	varurlterms[23]=varurlterms[23].slice(5);
+	varurlterms[24]=varurlterms[24].slice(5);
+	varurlterms[25]=varurlterms[25].slice(5);
+	varurlterms[26]=varurlterms[26].slice(5);
+	varurlterms[27]=varurlterms[27].slice(5);
+	varurlterms[28]=varurlterms[28].slice(5);
+	varurlterms[29]=varurlterms[29].slice(5);
+	varurlterms[30]=varurlterms[30].slice(5);
+	varurlterms[31]=varurlterms[31].slice(5);
+	varurlterms[32]=varurlterms[32].slice(5);
+	varurlterms[33]=varurlterms[33].slice(5);
+	varurlterms[34]=varurlterms[34].slice(5);
+	varurlterms[35]=varurlterms[35].slice(5);
+	varurlterms[36]=varurlterms[36].slice(5);
+	varurlterms[37]=varurlterms[37].slice(5);
+	varurlterms[38]=varurlterms[38].slice(5);
+	varurlterms[39]=varurlterms[39].slice(5);
+	varurlterms[40]=varurlterms[40].slice(5);
+	varurlterms[41]=varurlterms[41].slice(5);
+	varurlterms[42]=varurlterms[42].slice(5);
+	varurlterms[43]=varurlterms[43].slice(5);
+	varurlterms[44]=varurlterms[44].slice(5);
+	varurlterms[45]=varurlterms[45].slice(5);
+	varurlterms[46]=varurlterms[46].slice(5);
+	varurlterms[47]=varurlterms[47].slice(5);
+	varurlterms[48]=varurlterms[48].slice(5);
+	varurlterms[49]=varurlterms[49].slice(5);
+	varurlterms[50]=varurlterms[50].slice(5);
+	varurlterms[51]=varurlterms[51].slice(5);
+	varurlterms[52]=varurlterms[52].slice(5);
+	varurlterms[53]=varurlterms[53].slice(5);
+	varurlterms[54]=varurlterms[54].slice(5);
+	varurlterms[55]=varurlterms[55].slice(5);
+	varurlterms[56]=varurlterms[56].slice(5);
+	varurlterms[57]=varurlterms[57].slice(5);
+	varurlterms[58]=varurlterms[58].slice(5);
+	varurlterms[59]=varurlterms[59].slice(5);
+	varurlterms[60]=varurlterms[60].slice(5);
+	varurlterms[61]=varurlterms[61].slice(5);
+	varurlterms[62]=varurlterms[62].slice(5);
+	varurlterms[63]=varurlterms[63].slice(5);
+	varurlterms[64]=varurlterms[64].slice(5);
+	varurlterms[65]=varurlterms[65].slice(5);
+	varurlterms[66]=varurlterms[66].slice(5);
+
+//	alert(varurlterms[0]);
+//	alert(varurlterms[1]);
+//	alert(varurlterms[2]);
+//	alert(varurlterms[3]);
+//	alert(varurlterms[4]);
+//	alert(varurlterms[5]);
+//	alert(varurlterms[6]);
+//	alert(varurlterms[7]);
+//	alert(varurlterms[8]);
+//	alert(varurlterms[9]);
+//	alert(varurlterms[10]);
+//	alert(varurlterms[11]);
+//	alert(varurlterms[12]);
+//	alert(varurlterms[13]);
+//	alert(varurlterms[14]);
+//	alert(varurlterms[15]);
+//	alert(varurlterms[16]);
+//	alert(varurlterms[17]);
+//	alert(varurlterms[18]);
+//	alert(varurlterms[19]);
+//	alert(varurlterms[20]);
+//	alert(varurlterms[21]);
+//	alert(varurlterms[22]);
+//	alert(varurlterms[23]);
+//	alert(varurlterms[24]);
+//	alert(varurlterms[25]);
+//	alert(varurlterms[26]);
+//	alert(varurlterms[27]);
+//	alert(varurlterms[28]);
+//	alert(varurlterms[29]);
+//	alert(varurlterms[30]);
+//	alert(varurlterms[31]);
+//	alert(varurlterms[32]);
+//	alert(varurlterms[33]);
+//	alert(varurlterms[34]);
+//	alert(varurlterms[35]);
+//	alert(varurlterms[36]);
+//	alert(varurlterms[37]);
+//	alert(varurlterms[38]);
+//	alert(varurlterms[39]);
+//	alert(varurlterms[40]);
+//	alert(varurlterms[41]);
+//	alert(varurlterms[42]);
+//	alert(varurlterms[43]);
+//	alert(varurlterms[44]);
+//	alert(varurlterms[45]);
+//	alert(varurlterms[46]);
+//	alert(varurlterms[47]);
+//	alert(varurlterms[48]);
+//	alert(varurlterms[49]);
+//	alert(varurlterms[50]);
+//	alert(varurlterms[51]);
+//	alert(varurlterms[52]);
+//	alert(varurlterms[53]);
+//	alert(varurlterms[54]);
+//	alert(varurlterms[55]);
+//	alert(varurlterms[56]);
+//	alert(varurlterms[57]);
+//	alert(varurlterms[58]);
+//	alert(varurlterms[59]);
+//	alert(varurlterms[60]);
+//	alert(varurlterms[61]);
+//	alert(varurlterms[62]);
+//	alert(varurlterms[63]);
+//	alert(varurlterms[64]);
+//	alert(varurlterms[65]);
+//	alert(varurlterms[66]);
+
+
+	if (varurlterms[1]=="")
+		{
+		alert("Client Code is blank");
+		IsErr = true   ;
+		}
+	
+	if (varurlterms[9]!="0120000000001Xd")
+		{
+		alert("Record Type is Not Reconciled");
+		IsErr = true;
+		}
+	
+//	if (varurlterms[10]=="No")
+//		{
+//		alert("Opportunity is Not Reconciled");
+//		IsErr = true;
+//		}
+
+	if (varurlterms[11]=="0")
+		{
+		alert("Opportunity does not have Products");
+		IsErr = true;
+		}
+
+	var i = 0;
+	var DeptNum = new Array();
+	var DeptCode = new Array();
+	var DeptProj = new Array();
+	var LawsonCount = 0
+
+	for (i = 0; i <= 12; i++)
+	{
+
+		if (IsErr == false)
+		{
+		
+			var j = 15 + i;
+			var k = 28 + i;
+			var l = 41 + i;
+//			alert(varurlterms[j].slice(0,10));
+			DeptProj[i] = varurlterms[l]
+
+			if (varurlterms[k] == 1 && varurlterms[l] == "")
+				{
+		    	DeptNum[i] = varurlterms[j].slice(0,10);
+				DeptNum[i] = DeptNum[i].replace(/\+/g," ");
+//				if (DeptNum[i] == "USA - 5001" || DeptNum[i] == "USA - 5002" || DeptNum[i] == "USA - 5003" || DeptNum[i] == "USA - 5004" || DeptNum[i] == "JPN - 5901" || DeptNum[i] == "JPN - 5902" || DeptNum[i] == "JPN - 5903" || DeptNum[i] == "JPN - 5904" || DeptNum[i] == "CHN - 5101" || DeptNum[i] == "CHN - 5102" || DeptNum[i] == "CHN - 5103" || DeptNum[i] == "CHN - 5104" || DeptNum[i] == "TWN - 5201" || DeptNum[i] == "TWN - 5202" || DeptNum[i] == "TWN - 5203" || DeptNum[i] == "TWN - 5204" || DeptNum[i] == "KOR - 5301" || DeptNum[i] == "KOR - 5302" || DeptNum[i] == "KOR - 5303" || DeptNum[i] == "KOR - 5304" || DeptNum[i] == "EUR - 5401" || DeptNum[i] == "EUR - 5402" || DeptNum[i] == "EUR - 5403" || DeptNum[i] == "EUR - 5404")
+//				if (DeptNum[i] == "USA - 5001" || DeptNum[i] == "USA - 5002" || DeptNum[i] == "USA - 5003" || DeptNum[i] == "USA - 5004" || DeptNum[i] == "JPN - 5901" || DeptNum[i] == "JPN - 5902" || DeptNum[i] == "JPN - 5903" || DeptNum[i] == "JPN - 5904" || DeptNum[i] == "CHN - 5101" || DeptNum[i] == "CHN - 5102" || DeptNum[i] == "CHN - 5103" || DeptNum[i] == "CHN - 5104")
+//				if (DeptNum[i] == "TWN - 5201" || DeptNum[i] == "TWN - 5202" || DeptNum[i] == "TWN - 5203" || DeptNum[i] == "TWN - 5204" || DeptNum[i] == "KOR - 5301" || DeptNum[i] == "KOR - 5302" || DeptNum[i] == "KOR - 5303" || DeptNum[i] == "KOR - 5304" || DeptNum[i] == "EUR - 5401" || DeptNum[i] == "EUR - 5402" || DeptNum[i] == "EUR - 5403" || DeptNum[i] == "EUR - 5404")
+//			    	{
+//			    	DeptNum[i] = "";
+//			    	}
+//			    else
+//			    	{
+//			    	DeptNum[i] = varurlterms[j].slice(0,10);
+			    	LawsonCount = LawsonCount + 1;
+//			    	}
+			    }
+			else
+				{
+				DeptNum[i] = "";
+				}
+
+			DeptNum[i] = DeptNum[i].replace(/\+/g," ");
+
+//			alert(DeptNum[i]);
+//			alert(LawsonCount);
+		    
+			switch(DeptNum[i])
+				{
+				case "":
+				  DeptCode[i] = "";
+				  break;    
+				case "JPN - 1000":
+				  DeptCode[i] = "DJ1";
+				  break;    
+				case "USA - 2500":
+				  DeptCode[i] = "PP5";
+				  break;    
+				case "USA - 2510":
+				  DeptCode[i] = "RR8";
+				  break;
+				case "USA - 2900":
+				  DeptCode[i] = "SA5";
+				  break;		  
+				case "USA - 3080":
+				  DeptCode[i] = "PP9";
+				  break;
+				case "USA - 3100":
+				  DeptCode[i] = "BB2";
+				  break;
+				case "AUS - 3100":
+				  DeptCode[i] = "AU2";
+				  break;
+				case "CHN - 3100":
+				  DeptCode[i] = "CN3";
+				  break;
+				case "MEX - 3100":
+				  DeptCode[i] = "MX1";
+				  break;
+				case "USA - 3110":
+				  DeptCode[i] = "BB3";
+				  break;
+				case "USA - 3150":
+				  DeptCode[i] = "LL6";
+				  break;
+				case "USA - 3151":
+				  DeptCode[i] = "NB7";
+				  break;
+				case "USA - 3200":
+				  DeptCode[i] = "ST1";
+				  break;
+				case "USA - 3591":
+				  DeptCode[i] = "JJ8";
+				  break;
+				case "AUS - 3600":
+				  DeptCode[i] = "AU3";
+				  break;
+				case "AUS - 3601":
+				  DeptCode[i] = "AU4";
+				  break;
+				case "USA - 3620":
+				  DeptCode[i] = "UU4";
+				  break;
+				case "JPN - 3620":
+				  DeptCode[i] = "DJ4";
+				  break;
+				case "USA - 3621":
+				  DeptCode[i] = "FF8";
+				  break;
+				case "JPN - 3622":
+				  DeptCode[i] = "DJ3";
+				  break;
+				case "USA - 3640":
+				  DeptCode[i] = "RR6";
+				  break;
+				case "USA - 3641":
+				  DeptCode[i] = "FF2";
+				  break;
+				case "USA - 3660":
+				  DeptCode[i] = "TT5";
+				  break;
+				case "USA - 3661":
+				  DeptCode[i] = "KS1";
+				  break;
+				case "BRA - 3700":
+				  DeptCode[i] = "BZ1";
+				  break;
+				case "BRA - 3710":
+				  DeptCode[i] = "BZ2";
+				  break;
+				case "USA - 3730":
+				  DeptCode[i] = "UU9";
+				  break;
+				case "USA - 3731":
+				  DeptCode[i] = "SA1";
+				  break;
+				case "USA - 3750":
+				  DeptCode[i] = "TT8";
+				  break;
+				case "USA - 3760":
+				  DeptCode[i] = "PP2";
+				  break;
+				case "USA - 3770":
+				  DeptCode[i] = "TT2";
+				  break;
+				case "USA - 3790":
+				  DeptCode[i] = "SA2";
+				  break;
+				case "CHN - 3800":
+				  DeptCode[i] = "CN2";
+				  break;
+				case "USA - 3810":
+				  DeptCode[i] = "BB8";
+				  break;
+				case "USA - 3850":
+				  DeptCode[i] = "NN5";
+				  break;
+				case "USA - 3860":
+				  DeptCode[i] = "RR4";
+				  break;
+				case "USA - 3880":
+				  DeptCode[i] = "TT9";
+				  break;
+				case "USA - 3881":
+				  DeptCode[i] = "LG1";
+				  break;
+				case "USA - 3890":
+				  DeptCode[i] = "LL3";
+				  break;
+				case "USA - 3891":
+				  DeptCode[i] = "LL7";
+				  break;
+				case "USA - 3910":
+				  DeptCode[i] = "PP8";
+				  break;
+				case "USA - 3920":
+				  DeptCode[i] = "PP7";
+				  break;
+				case "USA - 3970":
+				  DeptCode[i] = "UU2";
+				  break;
+				case "USA - 3980":
+				  DeptCode[i] = "PP3";
+				  break;
+				case "USA - 4000":
+				  DeptCode[i] = "NN6";
+				  break;
+				case "USA - 4010":
+				  DeptCode[i] = "NN7";
+				  break;
+				case "USA - 4020":
+				  DeptCode[i] = "NN8";
+				  break;
+				case "USA - 4021":
+				  DeptCode[i] = "UU6";
+				  break;
+				case "USA - 4030":
+				  DeptCode[i] = "NN9";
+				  break;
+				case "USA - 4080":
+				  DeptCode[i] = "UU1";
+				  break;
+				case "USA - 4082":
+				  DeptCode[i] = "MP1";
+				  break;
+				case "USA - 4083":
+				  DeptCode[i] = "MP2";
+				  break;
+				case "USA - 4120":
+				  DeptCode[i] = "UU5";
+				  break;
+				case "USA - 4130":
+				  DeptCode[i] = "JJ3";
+				  break;
+				case "USA - 4131":
+				  DeptCode[i] = "KK8";
+				  break;
+				case "USA - 5001":
+				  DeptCode[i] = "DU1";
+				  break;
+				case "USA - 5002":
+				  DeptCode[i] = "DU2";
+				  break;
+				case "USA - 5003":
+				  DeptCode[i] = "DU3";
+				  break;
+				case "USA - 5004":
+				  DeptCode[i] = "DU4";
+				  break;
+				case "CHN - 5101":
+				  DeptCode[i] = "DC1";
+				  break;
+				case "CHN - 5102":
+				  DeptCode[i] = "DC2";
+				  break;
+				case "CHN - 5103":
+				  DeptCode[i] = "DC3";
+				  break;
+				case "CHN - 5104":
+				  DeptCode[i] = "DC4";
+				  break;
+				case "TWN - 5201":
+				  DeptCode[i] = "DT1";
+				  break;
+				case "TWN - 5202":
+				  DeptCode[i] = "DT2";
+				  break;
+				case "TWN - 5203":
+				  DeptCode[i] = "DT3";
+				  break;
+				case "TWN - 5204":
+				  DeptCode[i] = "DT4";
+				  break;
+				case "KOR - 5301":
+				  DeptCode[i] = "DK1";
+				  break;
+				case "KOR - 5302":
+				  DeptCode[i] = "DK2";
+				  break;
+				case "KOR - 5303":
+				  DeptCode[i] = "DK3";
+				  break;
+				case "KOR - 5304":
+				  DeptCode[i] = "DK4";
+				  break;
+				case "EUR - 5401":
+				  DeptCode[i] = "DE1";
+				  break;
+				case "EUR - 5402":
+				  DeptCode[i] = "DE2";
+				  break;
+				case "EUR - 5403":
+				  DeptCode[i] = "DE3";
+				  break;
+				case "EUR - 5404":
+				  DeptCode[i] = "DE4";
+				  break;
+				case "USA - 5551":
+				  DeptCode[i] = "JJ7";
+				  break;
+				case "USA - 5553":
+				  DeptCode[i] = "JJ9";
+				  break;
+				case "USA - 5579":
+				  DeptCode[i] = "SA4";
+				  break;
+				case "USA - 5581":
+				  DeptCode[i] = "SA3";
+				  break;
+				case "USA - 5582":
+				  DeptCode[i] = "SB1";
+				  break;
+				case "USA - 5585":
+				  DeptCode[i] = "SS8";
+				  break;
+				case "JPN - 5901":
+				  DeptCode[i] = "DJ5";
+				  break;
+				case "JPN - 5902":
+				  DeptCode[i] = "DJ6";
+				  break;
+				case "JPN - 5903":
+				  DeptCode[i] = "DJ7";
+				  break;
+				case "JPN - 5904":
+				  DeptCode[i] = "DJ8";
+				  break;
+				case "CAN - 6215":  
+				  DeptCode[i] = "CF2";
+				  break;		  
+				case "CAN - 6225":  
+				  DeptCode[i] = "CF4";
+				  break;		  
+				case "CAN - 6230":  
+				  DeptCode[i] = "CF5";
+				  break;		  
+				case "CAN - 6350":  
+				  DeptCode[i] = "CG1";
+				  break;		  
+				case "CAN - 6410":  
+				  DeptCode[i] = "CS1";
+				  break;		  
+				case "CAN - 6411":  
+				  DeptCode[i] = "CS3";
+				  break;		  
+				case "CAN - 6520":  
+				  DeptCode[i] = "CH2";
+				  break;		  
+				case "CAN - 9210":  
+				  DeptCode[i] = "CT4";
+				  break;		  
+				case "CAN - 9510":  
+				  DeptCode[i] = "CT7";
+				  break;		  
+				case "CAN - 9710":  
+				  DeptCode[i] = "CH3";
+				  break;		  
+				case "CAN - 9810":  
+				  DeptCode[i] = "CH4";
+				  break;		  
+				case "MEX - 3960":  
+				  if(varurlterms[5].slice(0,3)=="MXN") {
+				    DeptCode[i] = "MX5";
+		          } else {		    
+		            DeptCode[i] = "BB5";
+				  }
+				  break;
+				case "MEX - 3961":  
+				  DeptCode[i] = "MX6";
+				  break;		  
+				case "DEU - 2402":  
+				  DeptCode[i] = "SGY";
+				  break;		  
+				case "DE2 - 2402":  
+				  DeptCode[i] = "OS2";
+				  break;		  
+				case "DEU - 3200":  
+				  DeptCode[i] = "C49";
+				  break;		  
+				case "DEU - 3600":  
+				  DeptCode[i] = "T49";
+				  break;		  
+				case "DEU - 3800":  
+				  DeptCode[i] = "B49";
+				  break;		  
+				case "ESP - 2405":  
+				  DeptCode[i] = "SSP";
+				  break;		  
+				case "ESP - 3200":  
+				  DeptCode[i] = "C34";
+				  break;		  
+				case "ESP - 3600":  
+				  DeptCode[i] = "Y34";
+				  break;		  
+				case "ESP - 3800":  
+				  DeptCode[i] = "B34";
+				  break;		  
+				case "FRA - 2403":  
+				  DeptCode[i] = "SFR";
+				  break;		  
+				case "FR2 - 2403":  
+				  DeptCode[i] = "OS6";
+				  break;		  
+				case "FRA - 2410":  
+				  DeptCode[i] = "R02";
+				  break;		  
+				case "FRA - 3200":  
+				  DeptCode[i] = "FRF";
+				  break;		  
+				case "FRA - 3210":  
+				  DeptCode[i] = "R03";
+				  break;		  
+				case "FRA - 3600":  
+				  DeptCode[i] = "TFR";
+				  break;		  
+				case "FRA - 3610":  
+				  DeptCode[i] = "R01";
+				  break;		  
+				case "FRA - 3800":  
+				  DeptCode[i] = "BFR";
+				  break;		  
+				case "FR2 - 3800":  
+				  DeptCode[i] = "BFP";
+				  break;		  
+				case "FRA - 3810":  
+				  DeptCode[i] = "R04";
+				  break;		  
+				case "GBR - 2401":  
+				  DeptCode[i] = "SUK";
+				  break;		  
+				case "GBR - 3200":  
+				  DeptCode[i] = "C44";
+				  break;		  
+				case "GBR - 3600":  
+				  DeptCode[i] = "T44";
+				  break;		  
+				case "GBR - 3602":  
+				  DeptCode[i] = "T45";
+				  break;		  
+				case "GBR - 3800":  
+				  DeptCode[i] = "B35";
+				  break;		  
+				case "ITA - 2404":  
+				  DeptCode[i] = "SIT";
+				  break;		  
+				case "ITA - 3200":  
+				  DeptCode[i] = "C39";
+				  break;		  
+				case "ITA - 3600":  
+				  DeptCode[i] = "T39";
+				  break;		  
+				case "ITA - 3800":  
+				  DeptCode[i] = "B39";
+				  break;		  
+				case "POL - 3601":  
+				  DeptCode[i] = "T50";
+				  break;		  				  		  
+				default:
+				  alert("No such LOB");
+				  IsErr = true; 
+				}
+//				alert(DeptCode[i]);
+			}
+			else
+			{
+				break;
+			}
+		
+		}
+			
+	if (LawsonCount == 0)
+		{
+		alert("Process Aborted: all project numbers have been issued for this opportunity");
+		window.close();
+		}
+
+	var ClientCode = varurlterms[1];
+	var ClientName = varurlterms[2].replace(/25/g,"");
+	ClientName = ClientName.replace(/\+/g," ");
+	ClientName = ClientName.replace(/\%2F/g,"\/");
+	ClientName = ClientName.replace(/\%2C/g,",");
+	ClientName = ClientName.replace(/\%27/g,"'");
+	ClientName = ClientName.replace(/\%26/g,"\&");
+	ClientName = ClientName.replace(/\%28/g,"(");
+	ClientName = ClientName.replace(/\%29/g,")");
+	ClientName = ClientName.toLowerCase();
+	EndDate = new Date();
+	EndDate.setDate(EndDate.getDate()+93);
+	EndDate.setDate(1);
+	if (varurlterms[3] != "")
+		{
+		var vardateterms=varurlterms[3].split("%2F",3);
+		EndDate.setFullYear(vardateterms[2]);
+		EndDate.setMonth(vardateterms[0]);
+		EndDate.setDate(EndDate.getDate()+62);
+		EndDate.setDate(1);
+		}
+	if (StartDate>EndDate)
+		{
+		alert("End Date is less than current month/year");
+		IsErr == true;
+		}
+
+
+	if (IsErr == true)
+		{
+		alert("Process Aborted: error");
+		window.close();
+		}
+	else
+		{
+		// CHANGE FIELD IDs BELOW
+		var ProjFld = new Array("","00N00000008ikJb","00N00000008ikJc","00N00000008ikJd","00N00000008ikJe","00N00000008ikJf","00N00000008ikJg","00N00000008ikJh","00N00000008ikJi","00N00000008ikJW","00N00000008ikJX","00N00000008ikJY","00N00000008ikJZ");
+
+	    var win=window.open('','_self');
+	    win.name = "Lawson Values";
+		win.document.open("text/html","replace");
+
+		
+		for (i = 0; i <= 12; i++)
+			{
+			var m = 54 + i;
+
+			if (DeptNum[i] != "")
+				{
+
+				var OppName = varurlterms[4].replace(/25/g,"");
+				OppName = OppName.replace(/\+/g," ");
+				OppName = OppName.replace(/\%2F/g,"\/");
+				OppName = OppName.replace(/\%2C/g,",");
+				OppName = OppName.replace(/\%27/g,"'");
+				OppName = OppName.replace(/\%26/g,"\&");
+				OppName = OppName.replace(/\%28/g,"(");
+				OppName = OppName.replace(/\%29/g,")");
+				OppName = OppName.toLowerCase();
+				var OppAmount = varurlterms[m].replace(/\+/g," ");
+				OppAmount = OppAmount.replace(/USD/g,"");
+				OppAmount = OppAmount.replace(/CAD/g,"");
+				OppAmount = OppAmount.replace(/\%2C/g,",");
+				var SplitOpp = varurlterms[6];
+				var OppID = varurlterms[7];
+				var OppTotal = varurlterms[8].replace(/\+/g," ");
+				OppTotal = OppTotal.replace(/USD/g,"");
+				OppTotal = OppTotal.replace(/CAD/g,"");
+				OppTotal = OppTotal.replace(/\%2C/g,",");
+				var OppRcdType = varurlterms[9];
+				var OppRecon = varurlterms[10];
+				var OppProduct = varurlterms[11];
+				var DataBarter = varurlterms[12];
+				var SplitCount = varurlterms[14];
+			    win.document.write(DeptCode[i] + "<br />");
+			    win.document.write(DeptNum[i] + "<br />");
+			    win.document.write(ClientCode + "<br />");
+			    win.document.write(ClientName + "<br />");
+		    	win.document.write(StartDate.getMonth()+1);
+		    	win.document.write("0" + StartDate.getDate());		    
+			    win.document.write(StartDate.getFullYear() + "<br />");
+		    	win.document.write(EndDate.getMonth()+1);
+		    	win.document.write("0" + EndDate.getDate());		    
+			    win.document.write(EndDate.getFullYear() + "<br />");
+			    win.document.write(OppName + "<br />");
+			    win.document.write(OppAmount + "<br />");
+			    win.document.write(SplitOpp + "<br />");
+			    win.document.write(OppID + "<br />");
+			    win.document.write(OppTotal + "<br />");
+			    win.document.write(OppRcdType + "<br />");
+			    win.document.write(OppRecon + "<br />");
+			    win.document.write(OppProduct + "<br />");
+			    win.document.write(DataBarter + "<br />");
+			    win.document.write(ProjFld[i] + "<br />");
+			    win.document.write(LawsonCount + "<br />");
+			    win.document.write(DeptProj[0] + "<br />");
+			    win.document.write("<br />");
+			    win.document.write("<br />");
+			    win.document.write("<br />");
+			    win.document.write("<br />");
+			    win.document.write("-------------------------------------" + "<br />");
+
+				}
+			}
+
+//		document.execCommand('SaveAs','false','c:\\user\\LawsonValues.txt');
+		// CHANGE DOCUMENT ID BELOW
+//		document.location.href = "https://na7.salesforce.com/servlet/servlet.FileDownload?file=01500000000cudy";
+		document.location.href = "https://c.na7.content.force.com/servlet/servlet.FileDownload?file=01500000000cudy";
+//		win.document.close();
+
+		} 
+</SCRIPT>
+</HEAD> 
+</HTML>

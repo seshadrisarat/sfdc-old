@@ -1,0 +1,132 @@
+<apex:component >
+    <apex:attribute name="setCon" description="{!$Label.Custom_List_Controller}" type="mkto_si.MarketoCustomListController" required="true"/>
+    <apex:attribute name="escape" description="{!$Label.Is_Data_Escaped}" type="Boolean" required="true"/>
+	<apex:attribute name="currentSObjectName" description="{!$Label.SFDC_Object_Name}" type="String" required="true"/>
+	<apex:attribute name="helpLink" description="{!$Label.Watch_List_Help_Link}" type="String" required="true"/>
+		
+	<apex:outputPanel >
+    <apex:pageBlockSection columns="1" rendered="{!setCon.resultPageSize > 0}">
+    	<apex:pageBlockTable value="{!setCon.listItemsPage}" var="item" styleClass="mkt-watch-list-table">
+        	<apex:column headerValue="{!$Label.Name}" styleClass="mkt-watch-list-name-cell">
+                <apex:outputLink onclick="Marketo.actionStart();" value="{!item.contactLink.url}" rendered="{!(item.contactLink.url != null)}">{!item.contactLink.name}</apex:outputLink>
+                <apex:outputText value="{!item.contactLink.name}" rendered="{!(item.contactLink.url == null)}" />&nbsp;
+            </apex:column>  
+            <apex:column headerValue="{!$Label.Account}">
+                <apex:outputLink onclick="Marketo.actionStart();" value="{!item.accountLink.url}" rendered="{!item.accountLink.url != null}">{!item.accountLink.name}</apex:outputLink>
+                <apex:outputText value="{!item.accountLink.name}" rendered="{!(item.accountLink.url == null)}"/>&nbsp;
+            </apex:column> 
+            <apex:column headerValue="{!$Label.Last_Interesting_Moment_Header}">
+                <apex:outputText value="{!item.momentType+':' }" style="font-weight: bold"/>&nbsp;
+                <apex:outputText value="{!item.momentNote}"/>
+                <div class="mktStreamTime"><apex:outputText value="{!item.momentStreamTime}" title="{!item.sMomentDT}"/></div>
+            </apex:column> 
+            <apex:column headerValue="{!$Label.Status_Message}">
+                  <apex:outputText value="{!item.status}"/>&nbsp;
+            </apex:column>
+            <apex:column styleClass="mkt-column-priority">
+            		<apex:facet name="header"><div style="text-align: center">{!$Label.Priority_Score_Header}</div></apex:facet>
+                <img src="{!$Resource.mkto_si__web}/mkto/images/{!item.urgencyIcon}" title="{!item.urgencyTipText}"/>
+                <img src="{!$Resource.mkto_si__web}/mkto/images/{!item.relativeScoreIcon}" title="{!item.relativeScoreTipText}"/>
+            </apex:column>  
+            <apex:column styleClass="mkt-column-remove">
+            	<apex:facet name="header"><div style="text-align: center">{!$Label.Remove}</div></apex:facet>
+            	<a href="#" class="mkt-watch-list-add-link mktDisplay-false mktHoverIcon" data-type="{!item.objType}" data-id="{!item.objId}" style="position: relative; z-index: 100">
+            		<img src="{!$Resource.web}/mkto/images/eyeglasses.png"/>
+            	</a>
+            	<a href="#" class="mkt-watch-list-remove-link mktHoverIcon" data-type="{!item.objType}" data-id="{!item.objId}">
+            		<img src="{!$Resource.web}/mkto/images/eyeglasses_delete.png"/>
+            	</a>
+            </apex:column>  
+        </apex:pageBlockTable>
+    </apex:pageBlockSection>
+    
+    <div class="mkt-tabs-message mktDisplay-{!setCon.resultSize == 0}">{!$Label.Add_any_leads_or_contacts_to_your_Watch_List} &nbsp; <a href="javascript:Marketo.openHelp('{!helpLink}')">{!$Label.Learn_how}</a></div>
+		
+    <div class="mkt-tabs-row-undo mkt-template-element">
+    	<img src="{!$Resource.web}/mkto/images/eyeglasses_delete.png" />&nbsp;&nbsp;
+    	<span>[LEAD_NAME_LINK] {!$Label.was_removed_from_your_watch_list}&nbsp;&nbsp;&nbsp;(<a href="#" class="mkt-watch-list-undo-link">{!$Label.undo}</a>)</span>
+    </div>
+  </apex:outputPanel>
+  
+  <script type="text/javascript">
+	(function()
+	{
+		function updateRowUI($row, isAdding)
+		{
+			var $link = $row.find('.mkt-watch-list-' + (isAdding ? 'add' : 'remove') + '-link'),
+					$cell = $link.parent(),
+					$rowDim = $link.siblings('.mkt-tabs-row-dim'),
+					$rowUndo = $link.siblings('.mkt-tabs-row-undo');
+		
+			if(!$rowDim.length || !$rowUndo.length) {
+				var css = $row.position();
+				css.height = $row.outerHeight() - 1;
+				css.width = $row.outerWidth();
+				css.lineHeight = (css.height - 4) + 'px';
+		
+				if(!$rowDim.length) {
+					$rowDim = $j('<div class="mkt-tabs-row-dim"></div>');
+					$rowDim.hide().css(css).appendTo($cell);
+				}
+		
+				if(!$rowUndo.length) {
+					// adjust top position for border
+					css.top -= 1;
+					
+					$rowUndo = $j('.mkt-tabs-row-undo.mkt-template-element').clone().removeClass('mkt-template-element');
+					$rowUndo.hide().css(css).appendTo($cell);
+					$rowUndo.html($rowUndo.html().replace('[LEAD_NAME_LINK]', $row.find('.mkt-watch-list-name-cell').html()));
+					$undoLink = $rowUndo.find('.mkt-watch-list-undo-link');
+					$undoLink.data('type', $link.data('type'));
+					$undoLink.data('id', $link.data('id'));
+				}
+			}
+		
+			$link.hide();
+		
+			if(isAdding) {
+				$rowUndo.fadeOut(300, function() {
+					setTimeout(function() {
+						$link.siblings('a').show();
+						$rowDim.fadeOut(600);
+					}, 100);
+				});
+			}
+			else {
+				$rowDim.fadeIn(300, function() {
+					setTimeout(function() {
+						$link.siblings('a').css({opacity: 1}).show();
+						$rowUndo.fadeIn(600);
+					}, 100);
+				});
+			}
+		}
+		
+		$j(function() {
+			$j('.mkt-watch-list-table').delegate('.mkt-watch-list-add-link, .mkt-watch-list-remove-link, .mkt-watch-list-undo-link', 'click', function() {
+				var $link = $j(this),
+						$row = $link.closest('tr'),
+						// TODO change to isRemoving to be more logical
+						isAdding = !$link.hasClass('mkt-watch-list-remove-link');
+		
+				updateRowUI($row, isAdding);
+				
+				Marketo.ajax(
+					isAdding ? 'addToWatchList' : 'removeFromWatchList',
+					{
+						objectType: $link.data('type'),
+						objectId: $link.data('id')
+					},
+					function(data) {
+						if(!data || !data.success) {
+							updateRowUI($row, !isAdding);
+						}
+					}
+				);
+		
+				return false;
+			});
+		});
+	})();
+  </script>
+</apex:component>

@@ -1,0 +1,245 @@
+<!-- 
+*   The CrunchbaseAccountSearchPage displays the Screen scraping of the Crunchbase using the response from HTTP class.   
+* 
+*   Revision History:
+*
+*   Version         Author          Date            Description
+*   1.0             J.Shah          Nov/01/2011     Initial Draft
+*    
+--> 
+<apex:page id="pgCBDetail" sidebar="false" showheader="false" controller="RKCB.CrunchbaseAccountDetailCtl" tabStyle="Account">
+    <apex:includeScript value="{!URLFOR($Resource.RKCB__CrunchbaseResources,'js/BaseTargetBlank.js')}" />
+    <apex:stylesheet value="{!URLFOR($Resource.RKCB__CrunchbaseJQueryUI ,'css/cupertino/jquery-ui-1.8.12.custom.css')}" />
+    <apex:stylesheet value="{!URLFOR($Resource.RKCB__CrunchbaseResources,'css/Crunchbase.css')}" />
+	<apex:stylesheet value="{!URLFOR($Resource.RKCB__jqueryLoadmask, 'jquery.loadmask.css')}" />
+	
+    
+    <apex:includeScript value="{!URLFOR($Resource.RKCB__CrunchbaseJQueryUI ,'js/jquery-1.5.1.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.RKCB__CrunchbaseJQueryUI ,'js/jquery-ui-1.8.12.custom.min.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.RKCB__jqueryLoadmask, 'jquery.loadmask.min.js')}" />
+    
+    <apex:includeScript value="{!URLFOR($Resource.RKCB__CrunchbaseResources,'js/CommonFunctions.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.RKCB__CrunchbaseResources,'js/CommonVariables.js')}" />
+    <!-- Force the load of Salesforce's javaScript scaleImage function -->
+    <apex:includeScript value="{!URLFOR($Resource.RKCB__CrunchbaseResources,'js/ScaleImage.js')}"/>   
+    
+    <script type="text/javascript">
+        var AccountName = "{!JSINHTMLENCODE(strAccountName)}";
+        var remotingController;
+		if (typeof RKCB != 'undefined') remotingController=RKCB.CrunchbaseAccountDetailCtl;
+        else remotingController=CrunchbaseAccountDetailCtl;
+        
+        j$=jQuery.noConflict();
+        j$(document).ready(function(){
+        	openWait("{!$Label.RKCB_Wait_Loading}");
+            /*	Display first page on page load	*/
+            siteSearch(AccountName, 1);
+        });
+        
+        /*  Parse and display Screen scrapping results  */
+        function siteSearch(pAccountName, pSearchPageNum){
+        
+        	/*	Display Loading Message	*/
+        	openWait("{!$Label.RKCB_Wait_Searching}");
+        	
+            /* Form a query to fetch the response from crunchbase */
+            var searchUrl = CB_URLBASE + "/search?query="+ encodeURIComponent(pAccountName) + "&page=" + pSearchPageNum;
+            
+            /* Call remoting function to fetch the response as HTML string */
+            remotingController.fetchHttpResponse(searchUrl, function(result, event){
+                        if(event.status && 
+                        	(result.response != null && 
+                        	(result.statusCode == "200" && result.status == "OK"))){
+                            displaySiteSearchResults(result.response, pSearchPageNum);
+                        }
+                        else{ 
+                            alert("{!$Label.RKCB_SiteSearch_Error}");
+                        }
+                    },{escape:false}); 
+        }
+        
+        /*  Generates the HTML needed for the Search results and Paging, 
+        and loads the html in the respected divs to display Screenscrapping     */
+        function displaySiteSearchResults(HTMLResponse, currentPageNo){
+        
+            /*  Loads the required div's to the hidden div needed for storing response - useful for dev */
+            j$("#valueResponse").html(j$(HTMLResponse).find(SEARCHRESPONSE_RESULTS_CONTAINER).html());
+            
+            var jqResponse = j$(HTMLResponse); 
+            
+            /*  Load the div with search results    */
+            if(jqResponse.find(SEARCHRESPONSE_SEARCHRESULT).length > 0){
+                
+                /*  get the HTML of the search result by paging the divs of search results 
+                in Array to the parseSiteSearchResults  */
+                var searchResults = parseSiteSearchResults(jQuery.makeArray(jqResponse.find(SEARCHRESPONSE_SEARCHRESULT).get()));
+                
+                /*	fix search result content - change relative URLS to Absolute */
+                searchResults = completeRelativeUrl(searchResults);
+                
+                /*	Scroll to top of div	*/
+                j$("#valueCBSearchResults").scrollTop(0);
+                
+                /*	Set the value in the div	*/
+				j$("#valueSearchResults").html(searchResults);
+				
+                /*  Load the div with Paging html returned by generateSearchPageLinks function,
+                    And display the header information of the paging    */
+                var jqRespPager = jqResponse.find(SEARCHRESPONSE_PAGINATION); 
+                if(jqRespPager.length > 0)
+                {
+                    /* Total number of search pages for the query */
+                    // Crunchbase seems to always return a node with a next at least the last 2 search pages as nodes
+                    var totalSearchPagesCnt = jqRespPager.children().last().prev().html(); //return the page number as a number
+                    
+                    /* Number of records to be shown either side of the current record  */
+                    var noPrevNextPages = 3;                                                
+                    
+                    /*  Fetch the HTML of paging using generateSearchPageLinks and display it   */                                           
+                    j$("#valuePagingLink").html(generateSearchPageLinks(totalSearchPagesCnt, currentPageNo, noPrevNextPages,
+                    	"{!$Label.RKCB_Search_Pager_PrevLink}", "{!$Label.RKCB_Search_Pager_NextLink}", "siteSearch"));
+                }
+            }
+            else{
+                /*  Display a message when no results found */
+                j$("#searchResults").hide();
+                j$("#noResultFound").append(SYSMSG_BEGIN + String.format("{!$Label.RKCB_Content_None}", "", AccountName ) + SYSMSG_END);
+            }
+            /*	Stop Loading Message	*/
+            closeWait();
+        }
+        
+        /*  Generate the HTML needed to display Search Result   */
+        function parseSiteSearchResults(searchResultArray){
+        
+            var cbSearchList = SEARCH_RESULTAREA_BEGIN;
+            
+            /* Convert the search results in Html into an array 
+                and iterate to display them on the page. */
+            for(var count=0; count < searchResultArray.length; count++){
+            	var jqCurrResult = j$(searchResultArray[count]);
+            
+                /*  Start creating UI for each results  */
+                cbSearchList += SEARCH_RESULT_BEGIN + 
+                				SEARCH_RESULT_IMG_BEGIN;
+                
+                /*  parse Image of each result  */
+                if(jqCurrResult.find("img").length>0){
+                    /*  Fetch Image url of search results   */
+                    var imageURL = jqCurrResult.find("img").first().attr('src');
+                    cbSearchList += generateImageHtml(imageURL);
+                }
+                else{
+                    cbSearchList += generateImageHtml("{!URLFOR($Resource.CrunchbaseResources,'images/NoLogo_250x70.png')}");
+                }
+                cbSearchList += SEARCH_RESULT_IMG_END + SEARCH_RESULT_CONTENT_BEGIN;
+
+
+                /*  Add Use this profile button to search result with namespace not equals to Person or product */  
+                var resultNamespace = jqCurrResult.find(SEARCHRESPONSE_SEARCHRESULT_TYPE).text().trim();
+                if( resultNamespace != SEARCHRESPONSEVALUE_PERSON && resultNamespace != SEARCHRESPONSEVALUE_PRODUCT){
+                    
+                    //alert(jqCurrResult.find(SEARCHRESPONSE_SEARCHRESULT_NAME).html()); // this alert should show us the <a href="">company</a> nodes (html should children html)
+                    var cbPermalink = CB_PERMALINKURLBASE + 
+                    				  jqCurrResult.find(SEARCHRESPONSE_SEARCHRESULT_NAME).children().attr("href") + // this is like /company/companyName
+                    				  ".js"
+                    cbSearchList += SEARCH_RESULT_BUTTON_BEGIN + 
+                    				generateSearchSelectButton("{!$Label.RKCB_Search_Select}", cbPermalink) + 
+                    				SEARCH_RESULT_BUTTON_END;
+                }
+
+
+                /* parse Name of each result - rebuild the link the way we want it */
+                var jqCurrResultNameLink = jqCurrResult.find(SEARCHRESPONSE_SEARCHRESULT_NAME+' a').first();
+                var resultName = jqCurrResultNameLink.text();
+                var resultURL = CB_URLBASE + jqCurrResultNameLink.attr('href');
+                cbSearchList += SEARCH_RESULT_NAME_BEGIN + 
+                				generateHyperlinkHtml(resultURL, resultName, "_blank", "") + 
+                				SEARCH_RESULT_NAME_END;
+
+                
+                /* parse Type of each result    */
+                cbSearchList += SEARCH_RESULT_TYPE_BEGIN 
+                    + resultNamespace + SEARCH_RESULT_TYPE_END;
+                
+                /* parse Description of each result */
+                if(jqCurrResult.find(SEARCHRESPONSE_SEARCHRESULT_PREVIEW).children().text() != null){
+                    var resultDescription = jqCurrResult.find(SEARCHRESPONSE_SEARCHRESULT_PREVIEW).children().text();
+                    if (resultDescription.length >= 400){
+                    	resultDescription = resultDescription.substr(0,396)+"...";
+                    }
+                    cbSearchList += resultDescription;
+                }
+                 
+                cbSearchList += SEARCH_RESULT_CONTENT_END + 
+                				SEARCH_RESULT_END;
+            }
+            cbSearchList += SEARCH_RESULTAREA_END;
+
+            return cbSearchList;
+        } 
+                
+        // Makes a call to the Controller's remoting method to update the permalink value on Account
+        //  This method is different from the AccounteDetailPage function but must be called the same (since it's being called by a common button creation code)
+        function updatePermalink(pButtonId){
+        
+        	/*	Display Loading Message	*/
+  			openWait("{!$Label.RKCB_Wait_Saving}");
+  			
+            var permalinkUrl = pButtonId;
+            var cbAccountId = "{!Id}";  /* Assign the Id of the Account record to update */
+
+            /* Update the permalink value on Account record 
+                when the user clicks an associated button */
+			remotingController.updateAccount(cbAccountId, permalinkUrl, function(result, event){
+                if(event.status){
+                    //window.open("/apex/CrunchbaseAccountDetailPage?Id="+cbAccountId, "_self");
+					//   -- previously, we'd update the record, but if inline editing was enabled, the data on the detail view would not have been 
+					//   -- updated and performing any inline editing would blank out the permalink 
+					top.location.href = '/'+cbAccountId;
+                }
+                else{
+                	closeWait();
+                    showError("{!$Label.RKCB_Save_Error}", event.message);
+                }
+            });
+        }
+        
+    </script>  
+    
+<apex:outputPanel id="pageView" layout="block" styleClass="pageViewPanel">
+    <div Id="valueCBSearchResults" class="contentDiv">
+        <!--    Screen scraping results are displayed in this div -->
+		<div id="searchResults">
+			<div id="search-result-header">
+				{!$Label.RKCB_Search_HeaderMessage}
+				<span id="searchControl">
+					<!-- Simplified search control.  for this page just display the name -->
+					<span class="display-name">{!strAccountName}.</span>
+				</span>
+			</div>
+        	<div Id="valueSearchResults"></div>
+        </div>
+        <!--    Paging links are displayed in this div -->
+        <table Id="valuePagingLink" class="search-result-table">
+        </table>
+
+        <div id="noResultFound"></div>
+    </div>
+    
+    <!--	Loading Dialog UI	-->
+	<div id="waitDialog" style="display:none;">
+		<div id="wait-dialog-content">
+			<img class="wait-image" src="{!URLFOR('/img/loading.gif')}"/>
+			<span class="wait-message" >Please wait ...</span>
+		</div>
+	</div>
+	
+	<c:CrunchbaseErrorDialog />
+
+	<!--    Response is loaded in this div which is needed for reference -->
+	<div Id="valueResponse" style="display:none"></div>
+    
+    <c:CrunchbaseErrorDialog />
+</apex:outputPanel>
+</apex:page>

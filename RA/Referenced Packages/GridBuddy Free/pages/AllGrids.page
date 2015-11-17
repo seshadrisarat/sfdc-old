@@ -1,0 +1,266 @@
+<apex:page controller="GBFree.GridSelector" sidebar="false" action="{!init}" showHeader="true" title="{!lang.AllGridsTitle}" tabStyle="All_Grids__tab">
+    <apex:stylesheet value="{!URLFOR($Resource.GBFree__gb_resources, 'gb-jq-min.css')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.GBFree__gb_resources, 'gbw-min.css')}"/>
+    <style type="text/css">
+        /*override*/
+        body .bPageFooter {display:none;}
+        .outerNoSidebar {padding-bottom:0 !important;}
+    </style>
+
+    <apex:form styleClass="gbAllGrids gb{!lang.langCode}">
+        <c:EmptyComponent id="noGridMsg" rendered="{!NOT(gridsExist)}">
+            <div id="pageWarnings" class="msgBox infoMsg instr"><apex:outputText value="{!lang.AllGridsNoGridsMsg}" escape="false"/>
+            </div>
+        </c:EmptyComponent> 
+        
+        <c:EmptyComponent id="GridSelector" rendered="{!gridsExist}">
+            <table class="grSlctr" width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                    <td align="left" valign="middle" class="searchGrids">
+                        <span class="search-wrapper">
+                            <input type="text" id="searchBox" autocomplete="off"></input>
+                            <span class="placeholder">{!lang.AllGridsSearchLbl}</span>
+                            <span class="arrow"></span>
+                            <div id="searchresult" class="searchresult boxShadow {!isFolders}">
+                                <ul id="gridFolderList">
+                                    <apex:repeat value="{!gridFolderList}" var="gridFolder">
+                                        <li class="{!gridFolder[0]}" itemid="{!gridFolder[1]}"><span class="{!gridFolder[2]}"></span><span class="value">{!gridFolder[3]}</span></li>
+                                    </apex:repeat>
+                                </ul>
+                                <ul id="searchList">
+                                    <apex:repeat value="{!searchList}" var="grid">
+                                        <li><span class="valueToSearch none">{!grid}</span><span class="valueToDisplay"></span></li>
+                                    </apex:repeat>
+                                </ul>
+                                <div class="nomatch">{!lang.NoMatchesFoundTxt}</div>
+                                 <div class="nogrid">{!lang.NoAccessToGridsMsg}</div>
+                            </div>
+                        </span>
+                        &nbsp;&nbsp;<span class="none gbLoading">{!lang.LoadTxt}</span>
+                    </td>
+                    <td align="right" valign="middle">
+                        <span class="none spanLink">{!lang.AllGridsLinkTxt}</span>
+                    </td>
+                </tr>
+            </table>
+            
+            <!-- this javascript must come before the iframe -->
+            <script type="text/javascript" src="{!URLFOR($Resource.gb_resources, 'jquery/jquery-min.js')}"></script>
+            <script type="text/javascript">
+                // this will not show the searchbox as selected onload
+                function setFocusOnLoad() {} 
+                
+                var jq = jQuery.noConflict();
+                
+                jq(document).ready(function(){
+                	var searchbox = jq('#searchBox');
+                	
+                    jq(window).resize(function() {
+                        resizeGridFrame();
+                    });
+                    
+                    jq('span.spanLink').click(function() {
+                        var gridUrl = jq('#gridFrame').attr('src');
+                        if (gridUrl.length > 0) {
+                            // remove the sh and ssb params
+                            gridUrl = gridUrl.replace('&sh=0', '');
+                            gridUrl = gridUrl.replace('&ssb=0', '');
+                            window.open(gridUrl);
+                        }
+                    });
+                    //when user types into search box, update the search results
+                    searchbox.keyup(function(){
+                        var ghostTxt = jq('span.placeholder');
+                        var userinput = jq(this).val();
+                        userinput=='' ? ghostTxt.show() : ghostTxt.hide();
+                        showResultList(userinput);              
+                    });
+                    //on click on search field, hide the placeholder, if field had a value, show the results for that
+                    jq('#searchBox, span.placeholder').click(function(){
+                        var searchBox = jq('#searchBox');
+                        jq('span.placeholder').hide();
+                        searchBox.focus();
+                        var userinput = searchBox.val();
+                        if(userinput){
+                            showResultList(userinput);
+                        }
+                        else{
+                        	var gridFolderList = jq('#gridFolderList');
+                            gridFolderList.show();
+                            jq('#searchList').hide();
+                            jq('div.nomatch').hide();
+                            jq('li',gridFolderList).length > 0? jq('div.nogrid').hide() : jq('div.nogrid').show();  
+                            jq('#searchresult').show();
+                        }
+                    });
+                    //reset the placeholder when clicking out of search field and it is empty
+                    searchbox.blur(function(){
+                        if(jq(this).val()==''){
+                            jq('span.placeholder').show();
+                        }
+                    });
+                    //select the value of search field on focus
+                    searchbox.focus(function() {
+						jq(this).select();
+					});
+					//select the value of search field on focus (Safari, Chrome)
+					searchbox.mouseup(function() {
+						jq(this).select();
+					});
+                    //when user clicks down arrow, show/hide all the grids and folders
+                    jq('span.search-wrapper .arrow').click(function(){
+                        var dropdown = jq('#searchresult');
+                        if(dropdown.css('display')!='none'){
+                            dropdown.hide();
+                        }
+                        else{
+                        	var gridFolderList = jq('#gridFolderList');
+                            gridFolderList.show();
+                            jq('#searchList').hide();
+                            jq('div.nomatch').hide();
+                            jq('li',gridFolderList).length > 0? jq('div.nogrid').hide() : jq('div.nogrid').show();  
+                            dropdown.show();                             
+                        }
+                    });
+                    //when user clicks out, hide the grid list
+                    jq('html').click(function(event){
+                        var dropdown = jq('#searchresult');
+                        if(dropdown.css('display')!='none'){
+                            var element=jq(event.target);
+                            var dropdownPar = element.parents('#searchresult');
+                            if(element.attr('id')!='searchBox' && !element.hasClass('placeholder') && !element.hasClass('arrow') && (dropdownPar == undefined || dropdownPar.length == 0)){
+                                dropdown.hide();
+                            }
+                        }
+                    }); 
+                    //on mouseout, hide the grid list
+                    jq('#searchresult').mouseleave(function(){
+                    	jq(this).hide();
+                    });
+                    //when user clicks on grid name in grid-folder list, load the grid
+                    jq('li.item-grid, li.item-grid .value').click(function(){
+                        var value;
+                        var element = jq(this);
+                        element.hasClass('item-grid') ? value = element.find('.value').html() : value = element.html();
+                        loadGrid(value);
+                    });
+                     //when user clicks on grid name in search result list, load the grid
+                    jq('li, span, strong', jq('#searchList')).click(function(){
+                        var value;
+                        var element = jq(this);
+                        this.nodeName.toLowerCase() == 'li' ? value = element.find('.valueToSearch').html() : value = element.parent().find('.valueToSearch').html();
+                    	loadGrid(value);
+                    });
+                    //when user clicks on plus/minus icon, show/hide grids under folder name
+                    jq('span.toggle').click(function(){
+	                    var element = jq(this);
+	                    var id = element.parent().attr('itemid');                 
+	                    jq('li.item-grid[itemid='+id+']').toggle();
+	                    element.hasClass('expanded') ? element.removeClass('expanded').addClass('collapsed') : element.removeClass('collapsed').addClass('expanded');
+                	});
+                	
+                	if (jq.browser.msie==true) {
+                		jq('.frameScrollFix').removeClass('frameScrollFix');
+               		}
+                	
+                	// load the first grid
+                	loadFirstGrid();
+                });
+                
+                function loadFirstGrid() {
+                	var firstGrid = jq('li.item-grid:first');
+                	if (firstGrid.length > 0) {
+                		firstGrid.click();
+                	}
+                }
+                
+                function loadGrid(value){
+                	var searchBox = jq('#searchBox');
+                	searchBox.val(value);
+                    jq('span.placeholder').hide();
+                    jq('#searchresult').hide();
+                    jq('span.gbLoading').removeClass('none');
+                    jq('span.spanLink').addClass('none');   
+                    jq('#gridFrame').attr('src', '/apex/Grid?gname='+searchBox.val()+'&sh=0&ssb=0');
+                }
+                
+                function resizeGridFrame() {
+                    var gridFrame = jq('#gridFrame'),
+                        winHeight = jq(window).height(),
+                        gridFrameHeight,
+                        winHeightMin = 400,
+                        sfTabHeader = jq('#AppBodyHeader'),
+                        allGridsHeader = jq('table.grSlctr'),
+                        motifCurve = jq('#motifCurve'),
+                        bottomCurve = jq('#bd_b');
+                    
+                    // calculate new height and width
+                    if (winHeight < winHeightMin) {
+                        winHeight = winHeightMin;
+                    }
+                    
+                    var sfTabHeight = (sfTabHeader.length > 0) ? sfTabHeader.height() : 0,
+                        motifCurveHeight = (motifCurve.length > 0) ? motifCurve.height() : 0,
+                        bottomCurveHeight = (bottomCurve.length > 0) ? bottomCurve.height() : 0,
+                        sfBottomPadding = 45;
+                        
+                    gridFrameHeight = winHeight - sfTabHeight - motifCurveHeight - allGridsHeader.height() - bottomCurveHeight - sfBottomPadding;
+                    gridFrame.attr('height', gridFrameHeight);
+                    
+                    // set the height on the div to retain the same height after changing grids
+                    jq('#resizeDiv').css('height', gridFrameHeight+'px');
+                }
+                
+                function gridFrameLoaded() {
+                    resizeGridFrame();      
+                    // set the focus on the grid
+                    var doc = jq('#gridFrame').contents();
+                    if (doc) {
+                        doc.find('input.refreshBtn:first').focus().blur();
+                    }
+                    jq('span.gbLoading').addClass('none');
+                    if (jq('#gridFrame').attr('src') && jq('#gridFrame').attr('src').length > 0) {
+                        // show link
+                        jq('span.spanLink').removeClass('none');
+                    }
+                }
+                //when user types in search field, show the matching grids in a list
+                function showResultList(input){
+                    var dropdown = jq('#searchresult');
+                    jq('#gridFolderList').hide();
+                    jq('div.nogrid').hide();
+                    var searchList = jq('#searchList');
+                    var length = input.length;
+                    if(length>0){
+                        var arr = jq('li', searchList);
+                        var nomatchTxt = jq('div.nomatch');
+                        jq.each(arr, function(i,item){
+                            var current = jq(item);
+                            var valueToSearch = jq('.valueToSearch', item).html();
+                            var displayDiv = jq('.valueToDisplay', item);
+                            if(valueToSearch.toLowerCase().substring(0,length)==input.toLowerCase()){                             
+                                current.show();
+                                var textToHighLight = valueToSearch.substring(0,length);
+                                var restOfText = valueToSearch.substring(length);
+                                displayDiv.html('<strong>'+textToHighLight+'</strong>'+restOfText);                                 
+                            }
+                            else{
+                                current.hide(); 
+                            }
+                        });
+                        searchList.show();
+                        dropdown.show();
+                        jq('li:visible', searchList).length > 0 ? nomatchTxt.hide() : nomatchTxt.show();
+                    }
+                    else{
+                        dropdown.hide();
+                    }
+                }
+            </script>
+            
+            <div id="resizeDiv" class="frameScrollFix">
+                <iframe src="" id="gridFrame" scrolling="auto" height="300" width="100%" frameborder="0" onload="gridFrameLoaded()"></iframe>
+             </div>
+        </c:EmptyComponent>
+    </apex:form>
+</apex:page>

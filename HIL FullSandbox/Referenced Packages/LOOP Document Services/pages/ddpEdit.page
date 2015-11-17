@@ -1,0 +1,162 @@
+<apex:page tabStyle="Loop__DDP__c" controller="Loop.ddpContentWorkspaceController" action="{!onload}" title="{!objTitle} Edit: {!objName}" sidebar="{!$Request.type!='chattergroups'}">
+    <style>
+        select.article { min-width: 100px; }
+        td.noSidebarCell div.bPageTitle { padding: 0; }
+        .groupImage { float: left; }
+        div.groupData { padding-top: 1em; }
+        div.groupData span { display: block; }
+        table.grouptable tr { cursor: pointer; }
+    </style>
+    <script src="{!$Resource.JQuery}"></script>
+    <script src="{!URLFOR($Resource.Scripts, 'jquery.drawloop.js')}"></script>
+    <script type="text/javascript">
+    jQuery.noConflict();
+    jQuery(function() {
+        if ("{!JSENCODE($Request.type)}" == "chattergroups")
+            jQuery("#AppBodyHeader").css('display', 'none');
+        jQuery('table.grouptable tr').live('click', selectGroup);
+        jQuery.notifie({
+            allowCompatibilityView: false,
+            requiredVersion: 8,
+            containerSelector: '#ieMsgs',
+            compatibilityViewMessage: '{!JSENCODE($Label.IE_Compatibility_View_Warning)}',
+            versionMessage: '{!JSENCODE($Label.IE_Higher_Version_Required)}'
+        });
+    });
+    function selectGroup(event) {
+        var jtarget = jQuery(event.target);
+        while (!jtarget.is('td') && !jtarget.is('tr')) {
+            jtarget = jtarget.parent();
+        }
+        window.parent.opener.setChatterGroupId(jtarget.find('[id$=:groupId]').val(), jtarget.find('[id$=:groupName]').val());
+        window.parent.close();
+    }
+    </script>
+    <apex:sectionHeader title="{!objTitle} Edit" subtitle="{!objName}" rendered="{!$Request.type!='chattergroups'}" />
+    <apex:sectionHeader title="Select {!$ObjectType['CollaborationGroup'].label}" rendered="{!$Request.type='chattergroups'}" />
+    <div id="ieMsgs" />
+    <apex:outputPanel id="pgmsgs">
+        <apex:pageMessages />
+    </apex:outputPanel>
+    <apex:form >
+        <apex:pageBlock mode="edit">
+            <apex:pageBlockButtons location="top" rendered="{!$Request.type!='chattergroups'}">
+                <apex:commandButton value="Save" reRender="pgmsgs" action="{!save}" />
+                <apex:commandButton value="Cancel" action="{!cancel}" />
+            </apex:pageBlockButtons>
+            <apex:pageBlockSection columns="2" id="pbs">
+                <apex:pageBlockSectionItem rendered="{!$Request.type='orgwideemail'}">
+                    <apex:outputLabel for="orgWideEmail" value="{!$ObjectType.Loop__DDP__c.fields.Loop__Org_Wide_Email__c.label}" />
+                    <apex:selectList id="orgWideEmail" value="{!orgWideEmailId}" size="1">
+                        <apex:selectOptions value="{!orgWideEmails}" />
+                        <apex:actionSupport event="onchange" rerender="pbs" />
+                    </apex:selectList>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!AND($Request.type='orgwideemail',orgWideEmailId='custom')}">
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!AND($Request.type='orgwideemail',orgWideEmailId='custom')}">
+                    <apex:outputLabel for="orgWideEmailName" value="Name" />
+                    <apex:inputText value="{!cio.Loop__OrgWideEmailName__c}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!AND($Request.type='orgwideemail',orgWideEmailId='custom')}">
+                    <apex:outputLabel for="orgWideEmailAddress" value="Email" />
+                    <apex:inputText value="{!cio.Loop__OrgWideEmailAddress__c}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!AND($Request.type='orgwideemail',orgWideEmailId='custom')}">
+                    <apex:outputLabel />
+                    <apex:commandLink onclick="openIntegration('{!JSENCODE(URLFOR($Page.Loop__fieldTagger, null, [id=cio.Loop__DDP__c]))}', 'height=675,width=840,location=no,resizable=yes,toolbar=no,status=no,menubar=no,scrollbars=1', 1);" value="Field Tagger" />
+                </apex:pageBlockSectionItem>
+                
+                <apex:pageBlockSectionItem rendered="{!$Request.type='objectname'}" helpText="Standard objects not listed need to be set at the DDP Record Type level.">
+                    <apex:outputLabel for="objectName" value="{!$ObjectType.Loop__DDP__c.fields.Loop__Object_Name_Link__c.label}" />
+                    <apex:selectList id="objectName" value="{!customObjectName}" size="1">
+                        <apex:selectOptions value="{!allObjects}" />
+                    </apex:selectList>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!$Request.type='massreport'}">
+                    <apex:outputLabel for="reportFolder" value="Report Folder" />
+                    <apex:outputPanel >
+                        <apex:selectList id="reportFolder" value="{!reportFolder}" size="1">
+                            <apex:selectOptions value="{!reportFolders}" />
+                            <apex:actionSupport event="onchange" rerender="reportListPanel" status="reportFolderStatus" />
+                        </apex:selectList>
+                        <apex:actionStatus stopText="" id="reportFolderStatus">
+                            <apex:facet name="start">
+                                <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                            </apex:facet>
+                        </apex:actionStatus>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!$Request.type='massreport'}" />
+                <apex:pageBlockSectionItem rendered="{!$Request.type='massreport'}" helpText="{!$ObjectType.Loop__DDP__c.fields.Loop__Mass_Email_Report_to__c.inlineHelpText}">
+                    <apex:outputLabel for="massReport" value="{!$ObjectType.Loop__DDP__c.fields.Loop__Mass_Email_Report_to__c.label}" />
+                    <apex:outputPanel id="reportListPanel">
+                        <apex:selectList id="massReport" value="{!ddp.Loop__MassEmailReport__c}" size="1">
+                            <apex:selectOption itemValue="" itemLabel="--None--" />
+                            <apex:selectOptions value="{!reports}" />
+                        </apex:selectList>
+                    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!$Request.type='article'}" helpText="{!$ObjectType.Loop__DDP__c.fields.Loop__KA_Optional__c.inlineHelpText}">
+                    <apex:outputLabel for="optionalArticles" value="{!$ObjectType.Loop__DDP__c.fields.Loop__KA_Optional__c.label}" />
+                    <apex:selectList id="optionalArticles" value="{!optionalArticles}" size="5" multiselect="true" styleClass="article">
+                        <apex:selectOptions value="{!articleTypes}" />
+                    </apex:selectList>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!$Request.type='article'}" helpText="{!$ObjectType.Loop__DDP__c.fields.Loop__KA_Separate__c.inlineHelpText}">
+                    <apex:outputLabel for="separateArticles" value="{!$ObjectType.Loop__DDP__c.fields.Loop__KA_Separate__c.label}" />
+                    <apex:selectList id="optionalArticles" value="{!separateArticles}" size="5" multiselect="true" styleClass="article">
+                        <apex:selectOptions value="{!articleTypes}" />
+                    </apex:selectList>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!$Request.type='article'}" helpText="{!$ObjectType.Loop__DDP__c.fields.Loop__KA_Required__c.inlineHelpText}">
+                    <apex:outputLabel for="requiredArticles" value="{!$ObjectType.Loop__DDP__c.fields.Loop__KA_Required__c.label}" />
+                    <apex:selectList id="requiredArticles" value="{!requiredArticles}" size="5" multiselect="true" styleClass="article">
+                        <apex:selectOptions value="{!articleTypes}" />
+                    </apex:selectList>
+                </apex:pageBlockSectionItem>
+                <apex:inputField value="{!cio.Loop__Storage_Folder__c}" rendered="{!$Request.type='storageFolder'}" />
+                <apex:pageBlockSectionItem rendered="{!$Request.type='storageFolder'}" />
+                <apex:pageBlockSectionItem rendered="{!$Request.type='storageFolder'}">
+                    <apex:outputLabel />
+                    <apex:outputLink value="{!$Page.Loop__fieldTagger}?id={!cio.Loop__DDP__c}" target="_blank">Field Tagger</apex:outputLink>
+                </apex:pageBlockSectionItem>
+				<apex:pageBlockSectionItem rendered="{!$Request.type='storageData'}" >
+					<apex:outputLabel for="fieldValuePairs" value="{!$ObjectType.Loop__DDP_Integration_Option__c.fields.Loop__Storage_Data__c.label}" />
+					<apex:outputPanel id="fieldValuesPanel">
+		                <apex:repeat value="{!storageDataFieldValues}" var="fvp" >
+		                	<apex:outputPanel layout="block" styleClass="bFilterReport" style="margin-left: 0px;">
+			   	            	<apex:inputTextArea rows="1" value="{!fvp.fieldName}" />
+			   	            	<span> = </span>
+			   	            	<apex:inputTextArea rows="1" value="{!fvp.fieldValue}" />
+		                	</apex:outputPanel>
+		                </apex:repeat>
+		                <apex:outputPanel layout="block" style="clear: both;">
+		                	<apex:commandlink value="Add field" action="{!addStorageDataFieldValue}" />
+		                </apex:outputPanel>
+					</apex:outputPanel>
+				</apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!$Request.type='dataMapping'}">
+                    <apex:outputLabel for="dataMapping" value="{!$ObjectType.Loop__DDP_Integration_Option__c.fields.Loop__Data_Mapping__c.label}" />
+                    <apex:selectList id="dataMapping" value="{!dataMappingId}" size="1">
+                        <apex:selectOptions value="{!dataMappings}" />
+                    </apex:selectList>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            <apex:pageBlockSection columns="1">
+                <apex:pageBlockTable rendered="{!$Request.type='chattergroups'}" value="{!groups}" var="group" styleclass="grouptable">
+                    <apex:column headerValue="{!$ObjectType['CollaborationGroup'].label}">
+                        <apex:image value="{!group['FullPhotoUrl']}" width="80px" styleclass="groupImage" />
+                        <div class="groupData">
+                            <apex:outputText value="{!group['Name']} ({!group['CollaborationType']})" />
+                            <apex:outputField value="{!group['Description']}" />
+                        </div>
+                        <apex:inputHidden id="groupId" value="{!group['Id']}" />
+                        <apex:inputHidden id="groupName" value="{!group['Name']}" />
+                    </apex:column>
+                </apex:pageBlockTable>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+    </apex:form>
+</apex:page>

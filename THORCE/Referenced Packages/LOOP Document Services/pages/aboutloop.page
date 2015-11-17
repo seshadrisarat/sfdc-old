@@ -1,0 +1,430 @@
+<apex:page sidebar="false" controller="Loop.aboutLoop" id="aPage" title="About LOOP Document Services" showHeader="true" tabStyle="DDP_Admin__tab" action="{!onload}">
+    <style type="text/css">
+        div.pbBody div.innerDiv div { margin-top: 12px; }
+        div.left {
+            float: left;
+            width: 20em;
+        }
+        div.bPageTitle { padding: 0; }
+        .msg {
+            font-weight: bold;
+        }
+        #authRptFrame, #authSandFrame {
+            height: 1.3em;
+            width: 100%;
+        }
+        .bPageBlock .pbTitle {
+            width: 50%;
+        }
+        fieldset li {
+            margin-bottom: 1em;
+        }
+        fieldset ul {
+            margin: 0;
+        }
+        .resultMsg {
+            font-family: Arial, Helvetica, sans-serif;
+            font-weight: bold;
+            margin: 0;
+            color: #333333;
+        }
+        span.pbSubExtra { display: none; }
+        span.newFlag { vertical-align: middle; }
+        .editPage .btn {
+            margin-top: 4px;
+        }
+        .authorizeReports .btn {
+            margin-right: 10px;
+        }
+        div.supportButtons { margin-top: 4px; }
+        div.supportButtons a.btn {
+            padding: 4px 3px;
+            text-decoration: none;
+        }
+        div.supportButtons a.btn:hover { color: #333; }
+    </style>
+    <script src="{!URLFOR($Resource.Scripts, 'jquery-1.9.1.min.js')}"></script>
+    <script src="{!URLFOR($Resource.Scripts, 'jquery.drawloop.js')}"></script>
+    <script src="{!URLFOR($Resource.Scripts, 'json2.min.js')}"></script>
+    <script type="text/javascript" src="/soap/ajax/25.0/connection.js"></script>
+    <script type="text/javascript">
+        $(function() {
+            if ("{!JSENCODE($Request.sfdc.tabName)}" == "")
+                $("#AppBodyHeader").css('display', 'none');
+            $('.hidden').hide();
+            
+            setDisabled('.authorizeReports .btn', true);
+            $.authorize({
+                accessToken: '{!JSENCODE(sessionId)}',
+                userId: '{!$User.Id}',
+                sandbox: {!isSandbox},
+                //promptLogin: true,
+                promptConsent: true,
+                verifySuccess: function(data) {
+                    setDisabled('.authorizeReports .btn', false);
+                },
+                verifyError: function(data) {
+                    var msg;
+                    if (!data.Response) {
+                        msg = 'An unexpected response was received attempting to verify authorization.';
+                    } else if (data.Response.toLowerCase() == 'error') {
+                        msg = data.Error;
+                    }
+                    setAuthFlowMessage(msg);
+                },
+                authFlowComplete: function(result) {
+                    if (result.status == 'success') {
+                        setAuthFlowMessage('');
+                        $('.authorizeReports .btn').click();
+                    } else {
+                        setAuthFlowMessage('You need to authorize LOOP Document Services to run LOOP Reports / Mass LOOP Plus.');
+                    }
+                }
+            });
+            $.notifie({
+                allowCompatibilityView: false,
+                requiredVersion: 8,
+                containerSelector: '#ieMsgs',
+                compatibilityViewMessage: '{!JSENCODE($Label.IE_Compatibility_View_Warning)}',
+                versionMessage: '{!JSENCODE($Label.IE_Higher_Version_Required)}'
+            });
+        });
+    </script>
+    <script type="text/javascript">
+        var num = 1;
+        function getIp(cb, p) {
+            appendScript('https://apps.drawloop.com/IP.aspx?callback='+cb+'&process='+p);
+        }
+        function appendScript(str) {
+            var ss = document.createElement('script');
+            ss.setAttribute('type', 'text/javascript');
+            ss.src = str;
+            $(function() {
+                $("body").append(ss);
+            });
+        }
+        function displayIp(result) {
+            $("#iprange").text(result);
+        }
+        function authorizeip(result) {
+            window.top.location="/05G/e?" + result + "&retURL={!JSENCODE(URLENCODE($Page.aboutloop))}%3Fsfdc.tabName={!JSENCODE($Request.sfdc.tabName)}&saveURL={!JSENCODE(URLENCODE($Page.aboutloop))}%3Fsfdc.tabName={!JSENCODE($Request.sfdc.tabName)}";
+        }
+        function authorizeLogin() {
+            if ($.authorize('getStatus').requiresAuthorization) {
+                $.authorize('launchAuthorizationFlow');
+                return false;
+            }
+            setAuthFlowMessage('');
+            /*un = $('[id=aPage:aForm:aPB:un]').val();
+            pw = $('[id=aPage:aForm:aPB:pw]').val();
+            if (!un || !pw) {
+                alert('Please enter a username and password.');
+                return false;
+            }
+            try { sid = sforce.connection.login(un, pw).sessionId;
+            } catch(err) {
+                alert(err);
+                alert(err.detail.fault.exceptionMessage);
+                return false;
+            }
+            if (sid == "") {
+                alert("There was an error logging in with the username and password entered.");
+                return false;
+            }*/
+            return true;
+        }
+        
+        function func(result) {
+            $(".hidden").hide();
+            $("#"+result).show();
+            $("input").removeAttr("disabled");
+        }
+        
+        function rep(result) {
+            $(".hidden").hide();
+            $("#rep"+result).show();
+            $("input").removeAttr("disabled");
+        }
+        function modSubs() {
+            $("#next").val('/ddps/149/1?no=true&dsa={!dsAccount}&dse={!dsEnvironment}');
+            $("#auto").val('false');
+            $("#authRptForm").removeAttr('target').submit();
+            return false;
+        }
+        function handleSearchEnter(event) {
+            if (event.keyCode == 13) {
+                $('[id$=":searchBtn"]').click();
+                return false;
+            }
+        }
+        function setFocusOnLoad() {
+            // do nothing. We don't want to focus on the first available element here.
+        }
+        function setDisabled(selector, disabled) {
+            if (disabled) {
+                $(selector).addClass('btnDisabled').attr('disabled', true);
+            } else {
+                $(selector).removeClass('btnDisabled').removeAttr('disabled');
+            }
+        };
+        function setAuthFlowMessage(msg) {
+            var $msg = $('.authFlowResponse');
+            if (!$msg.length) $msg = $('<span class="authFlowResponse resultMsg" />').insertAfter('.authorizeReports .btn');
+            $msg.text(msg);
+            if (msg) $msg.show();
+            else $msg.hide();
+        };
+    </script>
+    <apex:sectionHeader title="LOOP Document Services from Drawloop Technologies" help="http://support.drawloop.com/lds/" />
+    <div id="ieMsgs" />
+    <apex:form id="aForm">
+        <input type="hidden" tabindex="1" />
+        <apex:pageBlock title="About LOOP Document Services" mode="edit" id="aPB">
+            <div class="innerDiv" style="margin: 12px 7px;">
+                <div>
+                    <div style="margin: 0; width: 48%; float: left; padding-right: 4%">
+                        <strong>LOOP Plus</strong> automates the document creation process in Salesforce by allowing your sales and service teams to build
+                        Dynamic Document Packages (DDPs&trade;) – a single packaged asset comprised of one or more document templates
+                        merged with your Salesforce data and delivered to anyone at anytime.
+                        <div>
+                            You can run DDPs from Leads, Accounts, Contacts, Opportunities, Quotes, Contracts, Cases,
+                            and many other Salesforce objects, including custom objects. If
+                            you need to integrate document creation with other work flows and business requirements, you can learn more 
+                            <a href="http://www.drawloop.com/salesforce/features/" target="_blank">here</a>.
+                        </div>
+                    </div>
+                    <div style="margin: 0; width: 48%; float: left;">
+                        <strong>LOOP Reports</strong> eliminates the manual process of distributing Salesforce Reports by automating and
+                        scheduling the email delivery of them to any Salesforce user or contact in Salesforce.
+                        Utilize the same reports you always have but you now have the ability to deliver multiple reports in a single package.
+                    </div>
+                    <div style="clear: both;" />
+                </div>
+                <div style="font-weight: bold;">
+                    Need help? Visit our <a href="http://support.drawloop.com/lds/" target="_blank">support site</a> or use one of the options below.
+                    <div class="supportButtons">
+                        <apex:commandLink value="Grant Drawloop Login Access" action="/partnerbt/grantLoginAccess.apexp" target="_blank" styleclass="btn" />
+                        <apex:commandLink value="Log a Case" action="mailto:loopsupport@drawloop.com?subject=SUPPORT REQUEST&body={!URLENCODE(caseBody)}" target="_blank" styleclass="btn" />
+                    </div>
+                </div>
+            </div>
+            <apex:outputPanel rendered="{!showAdminOptions}" id="adminOptionsPanel">
+            <fieldset>
+                <span style="float: left; width: 60%;">
+                    <apex:outputPanel rendered="{!NOT(isProductionOrg)}">
+	                    <ul>
+	                        <li>
+	                            <div>
+	                                If this is a sandbox organization, please click the button below. (Did this accidentally? Click&nbsp;
+	                                <apex:commandLink value="here" action="{!notSandbox}" rerender="sbResPanel" status="sandboxStatus" />.)
+	                            </div>
+	                            <apex:commandButton value="Authorize Sandbox Account" action="{!authorizeSandbox}" rerender="sbResPanel" status="sandboxStatus" />
+	                            <apex:actionStatus stopText="" id="sandboxStatus">
+	                                <apex:facet name="start">
+	                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+	                                </apex:facet>
+	                            </apex:actionStatus>
+	                            <apex:outputPanel id="sbResPanel" styleClass="resultMsg" layout="block">
+	                                {!sandboxResult}
+	                            </apex:outputPanel>
+	                        </li>
+	                    </ul>
+                    </apex:outputPanel>
+                    <ul>
+                        <li>
+                            <div>
+                                To learn more about deploying and using DDPs, visit our&nbsp;
+                                <apex:outputLink value="http://support.drawloop.com/lds/" target="_blank">support site</apex:outputLink>.
+                                <div>To get started, click on the links below to authorize the LOOP buttons.</div>
+                            </div>
+                            <div class="left">
+                                <a href="/ui/setup/layout/PageLayouts?type=Lead&setupid=LeadLayouts" target="_top">Lead Page Layouts</a>
+                            </div>
+                            <div>
+                                <a href="/ui/setup/layout/PageLayouts?type=Account&setupid=AccountLayouts" target="_top">Account Page Layouts</a>
+                            </div>
+                            <div class="left">
+                                <a href="/ui/setup/layout/PageLayouts?type=Contact&setupid=ContactLayouts" target="_top">Contact Page Layouts</a>
+                            </div>
+                            <div>
+                                <a href="/ui/setup/layout/PageLayouts?type=Opportunity&setupid=OpportunityLayouts" target="_top">Opportunity Page Layouts</a>
+                            </div>
+                            <div class="left">
+                                <a href="/ui/setup/layout/PageLayouts?type=Contract&setupid=ContractLayouts" target="_top">Contract Page Layouts</a>
+                            </div>
+                            <div>
+                                <a href="/ui/setup/layout/PageLayouts?type=Case&setupid=CaseLayouts" target="_top">Case Page Layouts</a>
+                            </div>
+                        </li>
+                        <li>
+                            <div>To create a custom button for a standard or custom object, use our DDP Button Wizard.</div>
+                            <div>
+                                <apex:commandButton action="{!ddpButtonWizard}" value="DDP Button Wizard" />
+                                <!--span class="newFlag">New!</span-->
+                            </div>
+                        </li>
+                        <li style="padding-top: 0px;">
+                            <div>By default, your install comes with LOOP Plus Standard. Use the button below to upgrade to LOOP Plus Business or add on LOOP Reports.</div>
+                            <apex:commandButton value="Modify Subscription Services" action="{!modifySubscriptions}" />
+                            <apex:commandButton value="Subscribe/Add On" action="{!subscribe}" />
+                            <apex:commandButton value="Request Proposal/Quote" action="{!requestQuote}" />
+                        </li>
+                        <li>
+                            <div>
+                                If using LOOP Reports, Mass LOOP Plus, or the DDP Migration tool, click the button below to authorize IP Range:
+                                <span style="display: inline;" id="iprange"></span>.
+                                <div>If migrating DDPs, you will also need to authorize this IP range in your target account.</div>
+                            </div>
+                            <apex:commandButton value="Authorize IP Ranges" onclick="getIp('authorizeip', 'url'); return false;" />
+                            <script>getIp('displayIp', 'string');</script>
+                        </li>
+                        <li>
+                            <div class="authorizeReports">
+                                Click the button below to authorize LOOP Reports and Mass LOOP Plus to run as your user. If you wish to run LOOP Reports or Mass LOOP Plus as another user, you can <a href="{!authorizeLoginUrl}">click here</a> to login and authorize as that user.
+                                <div><apex:commandButton value="Authorize LOOP Services" action="{!authorizeReports}" rerender="msg,reportResPanel" onclick="if (!authorizeLogin()) return false;" status="loopReportsStatus" /></div>
+                            </div>
+                            <apex:actionStatus stopText="" id="loopReportsStatus">
+                                <apex:facet name="start">
+                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                </apex:facet>
+                            </apex:actionStatus>
+                            <apex:outputPanel id="reportResPanel" styleClass="resultMsg" layout="block">
+                                {!loopReportsResult}
+                            </apex:outputPanel>
+                        </li>
+                        <li>
+                            <div>
+                                If you will be using Mass LOOP Plus via Reports, you will need to enable
+                                your Salesforce for LOOP domain as a Remote Site.
+                            </div>
+                            <apex:commandButton value="Enable Mass LOOP Plus via Reports" action="{!addSfForLoopRemoteSite}" />
+                        </li>
+                        <li>
+                            <div>
+                                Connected Apps use the standard OAuth 2.0 protocol to authenticate
+                                and acquire access tokens for use with Salesforce APIs.
+                            </div>
+                            <apex:commandButton value="{!IF(connectedAppEnabled, 'Disable', 'Enable')} Connected App & OAuth" action="{!toggleConnectedApp}" rerender="adminOptionsPanel" status="connectedAppStatus" />
+                            <apex:actionStatus stopText="" id="connectedAppStatus">
+                                <apex:facet name="start">
+                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                </apex:facet>
+                            </apex:actionStatus>
+                            <apex:outputText value="{!toggleConnectedAppMessage}" />
+                        </li>
+                        <li>
+                            If your organization runs automated DDPs (Mass, Apex, Outbound Messages), you can view
+                            the status of the job queue&nbsp;<apex:outputLink value="{!URLFOR($Page.Loop__JobQueueStatus)}">here</apex:outputLink>.
+                        </li>
+                    </ul>
+                    <apex:pageMessages id="msg" />
+                </span>
+                
+                <span style="float: right; width: 40%">
+                    <apex:pageBlockSection columns="1" title="DDP Testers" id="securityPBS">
+                        <apex:pageBlockSectionItem >
+                            This section determines which users can use the Run Test button when the DDP test service is available.
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Search:" for="searchFilter" />
+                            <apex:outputPanel >
+                                <apex:inputText value="{!searchFilter}" id="searchFilter" onkeypress="return handleSearchEnter(event);" />
+                                <apex:commandButton id="searchBtn" value="Find" action="{!resetUserList}" status="secSearchStatus" rerender="pageMessages,duel" />
+                                <apex:actionStatus stopText="" id="secSearchStatus" styleClass="nowrap">
+                                    <apex:facet name="start">
+                                        <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                    </apex:facet>
+                                </apex:actionStatus>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel />
+                            <apex:outputPanel id="duel" styleClass="duelingListBox">
+                                <apex:outputText id="resultsErrMsg" styleClass="errorMsg" value="{!resultsErrMsg}" />
+                                <table class="layout"> <tr>
+                                    <td class="selectCell">
+                                        <div class="selectTitle">
+                                            <apex:outputLabel value="Available Users" for="secIds" styleClass="selectTitle" />
+                                        </div>
+                                        <apex:selectList size="14" multiselect="true" id="secIds" value="{!selectedAvailableIds}">
+                                            <apex:selectOptions value="{!availableUsers}" />
+                                        </apex:selectList>
+                                        <script type="text/javascript">
+                                            jQuery(function() {
+                                                var errMsg = '{!resultsErrMsg}';
+                                                if (errMsg) jQuery('[id$=":resultsErrMsg"]').text(errMsg);
+                                            });
+                                        </script>
+                                    </td>
+                                    <td class="buttonCell">
+                                        <div class="text">
+                                            Add
+                                            <apex:actionStatus startText=". . ." stopText="" id="addStatus" styleClass="nowrap">
+                                                <apex:facet name="start">
+                                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                                </apex:facet>
+                                            </apex:actionStatus>
+                                        </div>
+                                        <div class="text">
+                                            <apex:commandLink action="{!addTestingUser}" status="addStatus" rerender="pageMessages,duel">
+                                                <apex:image title="Add" styleClass="rightArrowIcon" alt="Add" value="/s.gif" />
+                                            </apex:commandLink>
+                                        </div>
+                                        <div class="text">
+                                            <apex:commandLink action="{!removeTestingUser}" status="remStatus" rerender="pageMessages,duel">
+                                                <apex:image title="Remove" styleClass="leftArrowIcon" alt="Remove" value="/s.gif" />
+                                            </apex:commandLink>
+                                        </div>
+                                        <div class="duelingText">
+                                            Remove
+                                            <apex:actionStatus startText=". . ." stopText="" id="remStatus" styleClass="nowrap">
+                                                <apex:facet name="start">
+                                                    <span class="statusContainer"><span class="status"><img src="/img/loading.gif" alt="Processing..." width="16" height="16" title="Processing..." /></span></span>
+                                                </apex:facet>
+                                            </apex:actionStatus>
+                                        </div>
+                                    </td>
+                                    <td class="selectCell">
+                                        <div class="selectTitle">
+                                            <apex:outputLabel value="DDP Testers" for="selectedSecIds" styleClass="selectTitle" />
+                                        </div>
+                                        <apex:selectList size="14" multiselect="true" id="selectedSecIds" value="{!selectedSelectedIds}">
+                                            <apex:selectOptions value="{!selectedUsers}" />
+                                            <apex:actionSupport event="ondblclick" onsubmit="if (event.target.nodeName=='OPTION') window.open('/'+event.target.value); return false;" />
+                                        </apex:selectList>
+                                    </td>
+                                </tr> </table>
+                            </apex:outputPanel>
+                        </apex:pageBlockSectionItem>
+                    </apex:pageBlockSection>
+                </span>
+            </fieldset>
+            </apex:outputPanel>
+        </apex:pageBlock>
+        <apex:pageBlock tabStyle="User" title="Drawloop Technologies, Inc.">
+            <div>
+                Businesses rely on Drawloop to help them automate the creation of proposals,
+                sales quotes, presentations and any other document package critical to selling or
+                servicing a product. Our document creation services will allow you to deliver a cloud-based
+                process for the creation of Dynamic Document Packages (DDP). We are your solution
+                to deliver document creation in the cloud.
+            </div>
+            <p>
+                Ease of use, control of deliverables, and powerful customization make our products
+                a compelling document solution for your sales reps, service reps, marketing managers and executives.
+            </p>
+            <p>
+                <a href="http://www.drawloop.com/salesforce" target="_blank">www.drawloop.com/salesforce</a><br />
+                <apex:commandLink action="{!resetDdpFilesUpdate}" value="reset" style="display: none;" />
+            </p>
+        </apex:pageBlock>
+    </apex:form>
+    <apex:outputPanel id="authRptPanel">
+        <form method="POST" id="authRptForm" style="height: 0;" action="{!actionUrl}">
+            <input type="hidden" name="sessionid" value="{!sessionId}" />
+            <input type="hidden" name="location" value="{!$Api.Partner_Server_URL_300}" />
+            <input type="hidden" name="auto" value="true" id="auto" />
+            <input type="hidden" name="next" value="" id="next" />
+        </form>
+    </apex:outputPanel>
+</apex:page>

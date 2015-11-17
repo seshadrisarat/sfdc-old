@@ -1,0 +1,271 @@
+<apex:page controller="SLLMA.SL_AddUsersToQueue_Controller" sidebar="false">
+    <apex:sectionHeader title="Select Users For Queue"></apex:sectionHeader>
+    <apex:form >
+        <apex:inputHidden id="hidRecIds" value="{!hidRecIds}"/>
+        <apex:inputHidden id="hidSelectedIds" value="{!hidSelectedIds}"/>
+        <script>
+            var objHidRecId = document.getElementById('{!$Component.hidRecIds}');
+            var objHidSelectedIds = document.getElementById('{!$Component.hidSelectedIds}');            
+        </script>
+        
+         <table height="20%" valign="middle">
+            <tr>
+                <td height="100%" valign="middle">
+                    <apex:outputLabel value="Step 1 :" style="font-weight:bold"/>                    
+                </td>
+                <td height="100%" valign="middle">
+                    <apex:outputLabel value="Choose Queue "/> 
+                </td>
+                <td height="100%" valign="middle">                    
+                    <apex:selectList id="selectQueue" size="1" value="{!selectedQueue}"  >
+                        <apex:selectOptions value="{!Queue}" />
+                        <apex:actionSupport status="statusRefresh" event="onchange" action="{!getSearchResults}" rerender="chkBoxForStatus,pbAddUsers,pbInsertSelected"/>
+                        <apex:actionstatus id="statusRefresh" startText="Requesting..." >
+                            <apex:facet name="start">
+                                <c:SL_SaveComponent Message="Refreshing......."/>
+                            </apex:facet>
+                            <apex:facet name="stop">
+                            </apex:facet>
+                        </apex:actionstatus>
+                    </apex:selectList>
+                </td>
+            </tr>
+            <tr>
+                <td height="100%" valign="middle">
+                    <apex:outputLabel value="Step 2 :" style="font-weight:bold"/>                    
+                </td>
+                <td height="100%" valign="middle">
+                    <apex:outputLabel value="Enable/Disable Assignment "/> 
+                </td>
+                <td height="100%" valign="middle">                    
+                    <apex:inputCheckBox id="chkBoxForStatus" value="{!setStatus}" />
+                </td>
+            </tr>
+            <tr>
+                <td height="100%" valign="middle">
+                    <apex:outputLabel value="Step 3 :" style="font-weight:bold"/>                    
+                </td>
+                <td height="100%" valign="middle">
+                    <apex:outputLabel value="Filter Available Users By "/> 
+                </td>
+                <td height="100%" valign="middle">                    
+                    <apex:selectList size="1" id="selectFilterBy" value="{!selectedFilterBy}" >                     
+                        <apex:selectOptions value="{!FilterBy}" />
+                        <apex:actionSupport event="onchange"  action="{!getProfileRole}" rerender="pbAddUsers,pbInsertSelected,selectProfileRoleALL"/>
+                    </apex:selectList>                  
+                </td> 
+                <td height="100%" valign="middle">                    
+                    <apex:selectList size="1" id="selectProfileRoleALL" value="{!selectedProfileRoleAll}" disabled="{!disableProfileRoleALL}">                        
+                        <apex:selectOptions value="{!ProfileRoleAll}" />
+                        <apex:actionSupport status="statusRefresh" event="onchange" action="{!getSearchResults}" rerender="chkBoxForStatus,pbAddUsers,pbInsertSelected"/>
+                    </apex:selectList>
+                </td>                                
+            </tr>
+            <tr></tr>
+            <tr></tr>
+            <tr></tr> 
+            <tr></tr>
+            <tr></tr>
+        </table>
+        <script>
+            var objChkboxArr = new Array();         
+            var intGlobalProductPageCounter = 0;
+            var objRecIds = '';                
+        </script>
+        <apex:pageBlock title="Add Users" mode="Edit" id="pbAddUsers" rendered="true">
+            <apex:pageBlockButtons >
+                <apex:commandButton value="Add to Queue" action="{!showPBInsertSelected}" rerender="pbInsertSelected, pbAddUsers" status="statusAddUser"/>  
+                <apex:actionstatus id="statusAddUser" startText="Requesting..." >
+	                <apex:facet name="start">
+                        <c:SL_SaveComponent Message="Adding User(s)......."/>
+                    </apex:facet>
+                    <apex:facet name="stop">
+                    </apex:facet>
+                </apex:actionstatus>              
+                <apex:commandButton value="Apply Changes" status="statusSave" action="{!addUsersToQueue}" rerender="pbInsertSelected, pbAddUsers"/>                
+            </apex:pageBlockButtons> 
+            <apex:outputPanel >             
+                  <apex:pageBlockTable value="{!searchResult}" var="records" >  
+                    <apex:column headerValue="" id="chkAll" rendered="true"  > 
+                        <apex:facet name="header">
+                            <apex:inputCheckbox id="chkgridSelect" onClick="javascript:checkAll(this, objChkboxArr)"/>
+                        </apex:facet>
+                        <apex:inputCheckbox id="chkRecord" value="{!records.selected}" rendered="{!records.isNotExist}" />
+                         <script>
+                            objChkboxArr.push('{!$Component.chkRecord}');
+                            objRecIds += "{!records.recId}" + ",";
+                        </script>
+                    </apex:column>
+                    <apex:column headerValue="First Name" value="{!records.recFirstName}"/>
+                    <apex:column headerValue="Last Name" value="{!records.recLastName}" />
+                    <apex:column headerValue="Profile" value="{!records.recProfile}"/>                        
+                    <apex:column headerValue="Role" value="{!records.recRole}"/>                        
+                </apex:pageBlockTable>  
+                 <font size="1pt">Page #:&nbsp;<apex:outputLabel value="{!PageNumber}"/>&nbsp;out of&nbsp;<apex:outputLabel value="{!TotalPageNumber}"/>&nbsp;&nbsp;&nbsp;&nbsp;</font>
+                 <apex:commandButton value="Previous" action="{!PreviousBtnClick}" disabled="{!PreviousButtonEnabled}" reRender="pbAddUsers" ></apex:commandButton>
+                 <apex:commandButton value="Next" action="{!NextBtnClick}" reRender="pbAddUsers" disabled="{!NextButtonDisabled}" ></apex:commandButton>
+            </apex:outputPanel>  
+        </apex:pageBlock>
+        <apex:outputPanel id="pbInsertSelected">    
+            <script>
+                var objChkboxISArr = new Array();
+                var objhidISRecIdArr = new Array();
+                var hidSelectedIds = '';
+            </script>
+            <apex:pageBlock title="Selected List" mode="Edit" rendered="true">
+             <apex:pageBlockButtons >
+                <apex:commandButton value="Remove from Queue" action="{!callRemoveSelected}" rerender="pbInsertSelected, pbAddUsers" status="statusRemoveUser"/>
+                <apex:actionstatus id="statusRemoveUser" startText="Requesting..." >
+	                <apex:facet name="start">
+                        <c:SL_SaveComponent Message="Removing User(s)......."/>
+                    </apex:facet>
+                    <apex:facet name="stop">
+                    </apex:facet>
+                </apex:actionstatus>                              
+                <apex:commandButton value="Apply Changes" status="statusSave" action="{!addUsersToQueue}" rerender="pbInsertSelected, pbAddUsers"/>                
+                <apex:actionstatus id="statusSave" startText="Requesting..." >
+                    <apex:facet name="start">
+                        <c:SL_SaveComponent Message="Saving......."/>
+                    </apex:facet>
+                    <apex:facet name="stop">
+                    </apex:facet>
+                </apex:actionstatus>
+            </apex:pageBlockButtons> 
+                <apex:outputPanel > 
+                     <apex:pageBlockTable value="{!insertSelected}" var="ISrecords" > 
+                        <apex:inputHidden id="hidISRecId"/>
+                        <apex:column headerValue="" id="chkISAll" rendered="true" > 
+                            <apex:facet name="header">
+                                <apex:inputCheckbox id="chkgISridSelect" onclick="javascript:checkAll(this , objChkboxISArr)"/>
+                            </apex:facet>
+                            <apex:inputCheckbox id="chkISRecord" value="{!ISrecords.selected}"/>
+                            <script>
+                                objChkboxISArr.push('{!$Component.chkISRecord}');
+                                objhidISRecIdArr.push('{!ISrecords.recId}');
+                            </script>
+                        </apex:column> 
+                        <apex:column headerValue="First Name" value="{!ISrecords.recFirstName}"/>
+                        <apex:column headerValue="Last Name" value="{!ISrecords.recLastName}"/>
+                        <apex:column headerValue="Profile" value="{!ISrecords.recProfile}"/>                        
+                        <apex:column headerValue="Role" value="{!ISrecords.recRole}"/>                       
+                    </apex:pageBlockTable>                 
+                </apex:outputPanel>  
+            </apex:pageBlock>
+        </apex:outputPanel>  
+    </apex:form>
+    <script>
+        function checkAll(inputField, objArr)             
+        {
+            var ArrSize = objArr.length;
+            if (ArrSize > 0)
+            {
+                for(var j = 0; j < ArrSize; j++)
+                {
+                    if(document.getElementById(objArr[j]) != null)
+                    {
+                        if(inputField.checked)
+                        {
+                            document.getElementById(objArr[j]).checked = true;
+                        }
+                        else
+                        {
+                            document.getElementById(objArr[j]).checked = false;
+                        }
+                    }
+                }
+            }
+        }    
+        
+        var mainPrevCheckedArray = new Array();                     
+        var globalRecIds = '';                  
+        
+        function fillPrevCheckedArray(btnClicked)
+        {                                           
+            var prevCheckedArray = new Array();
+            
+            var recIdarr = objRecIds.split(",");
+            
+            if(objChkboxArr.length > 0)
+            {
+                for(var j = 0; j < objChkboxArr.length; j++)
+                {
+                     var isExist = false;
+                     if(document.getElementById(objChkboxArr[j]) != null && document.getElementById(objChkboxArr[j]).checked == true)
+                     {                        
+                        for(var k = 0; k < prevCheckedArray.length; k++)
+                        {
+                            if(objChkboxArr[j] == prevCheckedArray[k])
+                            {
+                                isExist = true;
+                            }                            
+                        }
+                        if(!isExist)
+                        {
+                            prevCheckedArray.push(objChkboxArr[j]);                             
+                            globalRecIds += recIdarr[j] + ",";
+                        }
+                     }
+                }
+            }           
+            mainPrevCheckedArray[intGlobalProductPageCounter]= new Array();
+            mainPrevCheckedArray[intGlobalProductPageCounter]= prevCheckedArray ;                               
+            
+            objChkboxArr = new Array();
+            
+            objHidRecId.value = globalRecIds;
+            objRecIds = '';
+            
+            if(btnClicked == 'prev')
+            {
+                intGlobalProductPageCounter--;
+            }
+            else
+            {
+                intGlobalProductPageCounter++;
+            }               
+        }
+    
+        function setCheckedBoxes()
+        {                        
+            var count=0;
+            
+            while(mainPrevCheckedArray.length > 0 && count <= mainPrevCheckedArray.length && count != intGlobalProductPageCounter)
+            {
+                for(var k = 0; k < mainPrevCheckedArray[count].length; k++)
+                {
+                    document.getElementById(mainPrevCheckedArray[count][k]).checked = false;                                                
+                }                
+                count++;
+            }
+            
+            if(mainPrevCheckedArray.length > 0 &&  mainPrevCheckedArray[intGlobalProductPageCounter] != null && mainPrevCheckedArray[intGlobalProductPageCounter].length > 0)
+            {                  
+                for(var k = 0; k < mainPrevCheckedArray[intGlobalProductPageCounter].length; k++)
+                {                       
+                    document.getElementById(mainPrevCheckedArray[intGlobalProductPageCounter][k]).checked = true;                 
+                }
+            }            
+        }
+        function checkAll(inputField, objArr)             
+        {
+
+            for(var j = 0; j < objArr.length; j++)
+            {
+               if(inputField.checked)
+               {
+                   if(document.getElementById(objArr[j]) != null)
+                   {
+                        document.getElementById(objArr[j]).checked = true;                      
+                   }                   
+               }
+               else
+               {
+                   if(document.getElementById(objArr[j]) != null)
+                   {
+                        document.getElementById(objArr[j]).checked = false;
+                   }
+               }
+            }
+        }   
+    </script>   
+</apex:page>

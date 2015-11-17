@@ -1,0 +1,476 @@
+<!--
+* @PagetName   : SL_ChangeOrderLineItems
+* @JIRATicket  : Silverline-144
+* @CreatedOn   : 3/JAN/13
+* @ModifiedBy  : Rehan
+* @Description : This page is used to create records for Change Order Line Items
+-->
+<apex:page standardController="Change_Order__c" extensions="SL_ChangeOrderLineItems_Controller,SL_AutocompleteChangeOrderLineItems" sidebar="false">
+	<apex:form >
+	<apex:includeScript value="{!URLFOR($Resource.SL_jsFiles, 'jquery-1.7.1.min.js')}"/>
+   	<apex:includeScript value="{!URLFOR($Resource.SL_jsFiles, 'jquery-ui-1.8.18.custom.min.js')}"/>
+   	<apex:stylesheet value="{!URLFOR($Resource.SL_jsFiles,'AutoCompleteCSS.css')}"/>
+	<style>
+        .ui-autocomplete-loading { background: white url("/img/loading.gif") right center no-repeat; } 
+        .ui-menu-item
+        {
+            background:#aaa;
+            font-size: 11;
+        }
+    </style>
+  
+		<script>
+			var x=0;
+			var optionSelected = false;
+			function addCommas(n){  // works with negative numbers
+			var s = Math.round(n*Math.pow(10,2))/Math.pow(10,2);  // 2 decimal places
+			var s = s.toString();
+			var ssplt = s.split(".");
+			s = Number(ssplt[0]).toLocaleString();
+			s = s.replace(/\..+/,"");
+			return s + "."+ (ssplt[1] || "00");  // if only integer numbers required simply return s;
+			}
+			
+			function calculateTotalPrice(varTableRow)
+			{
+				var cells = varTableRow.getElementsByTagName("td");
+
+				var productId = cells[2].getElementsByTagName('input')[0].id;
+				var intQuantity = cells[2].getElementsByTagName('input')[0].value;
+				var intSalesPrice = cells[3].getElementsByTagName('input')[0].value;
+
+				var intDiscount = cells[4].getElementsByTagName('input')[0].value;
+
+				var intTotalPrice = 0;
+
+				if(intQuantity != '' && intSalesPrice != '' && intDiscount == '')
+					intTotalPrice = (intQuantity * intSalesPrice)
+				else if(intQuantity != '' && intSalesPrice != '' && intDiscount != '' )
+				{
+					if( intSalesPrice <= 0)
+					{
+						intDiscount = 0;	
+						cells[4].getElementsByTagName('input')[0].value = 0;
+					}
+					intTotalPrice = ((intQuantity * intSalesPrice) - ((intDiscount * (intQuantity * intSalesPrice))/100))
+				}
+				
+				cells[6].innerHTML  =  '$' + addCommas(intTotalPrice);
+				
+				cells[9].getElementsByTagName('input')[0].value =  intTotalPrice;
+			}
+			/*Validate the input values,  for the sort order field .. it should not allow to enter -ve values*/
+			function validateMinus(evt)
+			{
+				var theEvent = evt || window.event;
+				var key = theEvent.keyCode || theEvent.which;
+				if ( key == 45)
+				{
+					theEvent.returnValue = true;
+					if (theEvent.preventDefault)
+					theEvent.preventDefault();
+				}
+				validateNumber(evt);
+			}
+			/*Validate the input values, if a field is a number field*/
+			function validateNumber(evt)
+			{
+				var theEvent = evt || window.event;
+				var key = theEvent.keyCode || theEvent.which;
+				//var ctrl = (document.all) ? evt.ctrlKey : evt.modifiers & Event.CONTROL_MASK;
+				/*Updating as per me Melissa comment on 22/FEB by Kamal (key != 45)*/
+				//Allows the user to Ctrl+V and Ctrl+C
+				if ((key < 48 || key > 57) && !(key == 8 || key == 9 || key == 37 || key == 39 || key == 46) && !(evt.ctrlKey && (key == 118 || key == 99)) && key != 45)
+				{
+					theEvent.returnValue = false;
+					if (theEvent.preventDefault)
+					theEvent.preventDefault();
+				}
+			}
+
+			function noEnter(e)
+			{
+			  	var event = e || window.event;
+			  	if (event.keyCode == 13)
+			  	{
+				 	event.cancelBubble = true;
+				 	return false;
+		   		}
+			}
+
+			function checkNumber(idd)
+			{
+				var valText = document.getElementById(idd).value;
+				var newValue ;
+
+				if(valText > 100)
+				{
+					alert('Discount should not be greater than 100');
+					newValue = 0.0;
+					document.getElementById(idd).value = newValue;
+					return false;
+				}
+
+				if(valText.indexOf('%') != -1)
+				{
+					newValue = valText.replace('%', '');
+					document.getElementById(idd).value = newValue;
+				}
+			}
+
+			function checkWholeNumber(idd)
+			{
+				var valText = document.getElementById(idd).value;
+				var newValue ;
+
+				if(valText.length > 10)
+				{
+					alert('Quantity Integer is too large');
+					newValue = valText.substring(0, 10);
+					document.getElementById(idd).value = newValue;
+					return false;
+				}
+
+				if(valText.indexOf('.') != -1)
+				{
+					alert('Quantity must be enter in Integer');
+					newValue = valText.replace('.', '');
+					document.getElementById(idd).value = newValue;
+				}
+				if(valText.indexOf('%') != -1)
+				{
+					alert('Quantity must be enter in Integer');
+					newValue = valText.replace('.', '');
+					document.getElementById(idd).value = newValue;
+				}
+			}
+
+			function stopDefAction(evt) {
+			    evt.preventDefault();
+			    evt.stopPropagation();
+			}  
+		</script>
+		<apex:actionfunction name="addProducts" action="{!btnAddSelectedAutoComplete}" status="processingImg" rerender="pbSelectedAll" oncomplete="searchTextNull();">
+			<apex:param name="productId" value="" assignTo="{!strSelectedProductId}"/>
+		</apex:actionfunction>
+		<apex:actionfunction name="callGoSearch" action="{!searchProducts}" status="processingImg" rerender="pbDisplayAll" >
+			<apex:param name="txtSearch" value="" assignTo="{!strSearch}"/>
+		</apex:actionfunction>
+		<apex:sectionHeader title="Add Products" subTitle="{!Change_Order__c.Name}" />
+		<apex:pageMessages id="errorMessage" />
+	
+		<apex:pageBlock id="pbDisplayAll">
+			<table width="100%">
+				<tr>
+					<td width="20%">
+						<b>Select</b> &nbsp;
+
+						<apex:outputPanel rendered="{!lstBindCustomProductsDisplayed.size > 0}">
+							<apex:commandLink value="All" action="{!selectAll}" status="processingImg" reRender="pbDisplayAll"/>
+							&nbsp; | &nbsp;
+							<apex:commandLink value="None" action="{!deSelectAll}" status="processingImg"  reRender="pbDisplayAll" />
+						</apex:outputPanel>
+
+						<apex:outputPanel rendered="{!lstBindCustomProductsDisplayed.size == 0}">
+							<span >All | None</span>
+						</apex:outputPanel>
+
+					</td>
+					<td align="center">
+						<apex:inputText id="inputTxtId" value="{!strSearch}" onkeydown="return callActionFunctionToSearch(event,this.value);">
+							<script>
+					            function searchTextNull()    
+					            {
+					            	optionSelected = false;
+					            	document.getElementById('{!$Component.inputTxtId}').blur();
+					            	if(document.getElementById('{!$Component.inputTxtId}') != null)
+					            		document.getElementById('{!$Component.inputTxtId}').value = '';
+					            }
+							</script>
+							<script type="text/javascript">
+							
+							/************* JS for auto complete starts *********/
+					      var j$ = jQuery.noConflict();
+					      
+					      j$(document).ready(function() {
+					    
+					          var sObjects;
+					          var queryTerm;
+					          j$(esc('{!$Component.inputTxtId}')).autocomplete({
+					              minLength: 2,
+					              
+					              source: function(request, response) {
+					                          queryTerm = request.term;
+					                          queryTerm = queryTerm.trim();
+					                          SL_AutocompleteChangeOrderLineItems.findSObjects(queryTerm,
+					                           
+					                              function(result, event){
+					                              if(event.type == 'exception') { 
+					                              } else {
+					                                   sObjects = result;
+					                                   response(sObjects);
+					                              }
+					                          });
+					                     },
+					                     
+					              focus: function( event, ui ) {
+					                    itemName = htmlDecodeString(ui.item.Name);
+					                      j$(esc('{!$Component.inputTxtId}')).val( itemName );                      
+					                      return false;
+					                      },
+					              select: function( event, ui ) {
+					              					
+					              				optionSelected = false;
+												document.getElementById('{!$Component.inputTxtId}').value= '';
+					                        itemName = htmlDecodeString(ui.item.Name);
+					                          j$(esc('{!$Component.inputTxtId}')).val(itemName);
+					                          j$(esc('{!$Component.inputTxtId}_lkid')).val( ui.item.Id );
+					                          j$(esc('{!$Component.inputTxtId}_lkold')).val(itemName); 
+					                          addProducts(ui.item.Id);
+					                          return false;
+					                      }
+					           }).data( "autocomplete" )._renderItem = function( ul, item ) {
+							              var entry =  item.Name;
+							              entry = entry.replace(queryTerm, "<b>" + queryTerm + "</b>");
+							               entry ="<a>"+  entry + "</a>";
+							              return j$( "<li>" + "</li>" )
+							                  .data( "item.autocomplete", item )
+							                  .append( entry )
+							                  .appendTo( ul );                
+							          };
+							      })
+							     
+							    
+					      function esc(myid) {
+					             return '#' + myid.replace(/(:|\.)/g,'\\\\$1');
+					      }
+					      
+					      function htmlDecodeString(s)
+					      {
+					            var d = document.getElementById('divDecoder');
+					            d.innerHTML = s
+					            return d.firstChild.nodeValue; 
+					      }   
+					      
+					        
+					    </script>
+        				</apex:inputText>
+        				<apex:commandButton id="btnSearch" value="Search" style="margin-left:10px;margin-right:5px;" status="processingImg"  action="{!searchProducts}" reRender="pbDisplayAll"/>
+        				<script>
+        					function callActionFunctionToSearch(e,txtVal)
+							{
+								if(window.event)
+					                 key = window.event.keyCode; 	//IE
+					            else
+					                 key = e.which;     			//firefox
+								//alert(key);
+								 if(key == 13)
+								 {
+								 	//alert(optionSelected);
+								 	if(!optionSelected)
+								 	{
+								 	  document.getElementById('{!$Component.btnSearch}').focus();	
+								 	  document.getElementById('{!$Component.inputTxtId}').blur();
+								 	  callGoSearch(txtVal);
+								      return false;
+									}
+								 }
+								 else
+								 	return true;
+							}
+						</script>        				
+						<apex:commandButton value="Add Selected" action="{!btnAddSelected}" disabled="{!lstBindCustomProductsDisplayed.size == 0}"
+											status="processingImg"  rerender="errorMessage, pbDisplayAll, pbSelectedAll"/> &nbsp;
+						<apex:commandButton value="Save" action="{!btnSave}" status="processingImg" reRender="errorMessage, pbSelectedAll" /> &nbsp;
+						<apex:commandButton value="Cancel" status="processingImg"  action="{!btnCancel}"/> 
+						
+					</td>
+					<td width="20%">
+					</td>
+				</tr>
+			</table>
+
+			<apex:pageBlockTable width="100%" id="lstAllDisplayed" value="{!lstBindCustomProductsDisplayed}" var="bindProduct" rendered="{!lstBindCustomProductsDisplayed.size > 0}">
+
+				<apex:column headerValue="" width="5%">
+					<apex:inputCheckBox value="{!bindProduct.isSelected}" />
+				</apex:column>
+
+				<apex:column headerValue="Product Name" width="20%">
+					<apex:outputText value="{!bindProduct.strProductName}" />
+				</apex:column>
+
+				<apex:column headerValue="Description" width="65%">
+					<apex:outputText value="{!bindProduct.strProductDescription}" />
+				</apex:column>
+
+				<apex:column headerValue="Rate" width="10%">
+					<apex:outputText value="{0, number, $0}">
+					    <apex:param value="{!bindProduct.intProductRate}" />
+					</apex:outputText>
+				</apex:column>
+
+			</apex:pageBlockTable>
+
+			<apex:outputPanel rendered="{!lstBindCustomProductsDisplayed.size == 0}">
+				<table class="list" border="0" cellpadding="0" cellspacing="0">
+				    <tbody>
+					<tr class="headerRow">
+					    <th class="noRowsHeader">Product Name</th>
+					    <th>Description</th>
+					    <th>Rate</th>
+					</tr>
+					<tr class="noRows">
+					    <td colspan="9" class="noRowsHeader"><font color="grey">No records to display.</font></td>
+					</tr>
+				    </tbody>
+				</table>
+    		</apex:outputPanel>
+
+    		<div style="position:relative; width:100% height:30px; text-align:left;" class="paginator">
+              	 <div style="margin:0 auto; width:auto; text-align:left;">
+					<apex:outputText rendered="{!prevDisable}">
+						<apex:commandLink style="text-decoration : none; padding-left :3px; padding-right:4px;" action="{!previous}" id="prevComLinId" status="processingImg" rerender="pbDisplayAll">
+                         	<u>Previous</u>  |
+						</apex:commandLink>
+					</apex:outputText>
+					<apex:outputText rendered="{!(!prevDisable)}"  styleClass="hiddenStyle">
+						<span class="prevNext">
+                         	<font color="#A8A8A8"><u>Previous</u>  |</font>
+                    	</span>
+					</apex:outputText>
+					<apex:outputText rendered="{!nextDisable}">
+						<apex:commandLink style="text-decoration : none; padding-left :3px; padding-right:4px;" action="{!next}" id="nxtComLinId" status="processingImg" rerender="pbDisplayAll">
+							<u>Next</u>
+						</apex:commandLink> &nbsp;
+					</apex:outputText>
+					<apex:outputText rendered="{!(!nextDisable)}" >
+						<span>
+                          	<font color="#A8A8A8"><u>Next</u></font>
+                       	</span>
+					</apex:outputText>
+				</div>
+			</div>
+
+		</apex:pageBlock>
+
+		<apex:outputPanel id="dummy">
+
+		</apex:outputPanel>
+
+		<apex:pageBlock id="pbSelectedAll">
+			<table width="100%">
+				<tr>
+					<td width="20%">
+					</td>
+					<td align="center">
+						<apex:commandButton value="Remove Selected" action="{!btnRemoveSelected}" disabled="{!lstBindCustomProductsSelected.size == 0}"
+											status="processingImg"  rerender="errorMessage, pbSelectedAll"/> &nbsp;
+						<apex:commandButton value="Save" action="{!btnSave}" status="processingImg" reRender="errorMessage, pbSelectedAll" /> &nbsp;
+						<apex:commandButton value="Cancel" action="{!btnCancel}" />
+					</td>
+					<td width="20%">
+					</td>
+				</tr>
+			</table>
+
+			<apex:pageBlockTable width="100%" value="{!lstBindCustomProductsSelected}" var="bindSelectedProduct" rendered="{!lstBindCustomProductsSelected.size > 0}">
+				<apex:column headerValue="" width="5%">
+					<apex:inputCheckBox value="{!bindSelectedProduct.isSelected}" />
+				</apex:column>
+
+				<apex:column headerValue="Product Name" width="25%" >
+					<apex:outputText value="{!bindSelectedProduct.strProductName}" />
+				</apex:column>
+
+				<apex:column headerValue="Quantity(hours)" width="10%" >
+					<apex:inputText id="productQTY" onkeyup="checkWholeNumber(this.id); calculateTotalPrice(this.parentNode.parentNode);" onkeydown="return noEnter(event);" onkeypress="validateNumber(event);" value="{!bindSelectedProduct.intProductQuantity}" />
+					<script>
+						if(x == 0 && document.getElementById('{!$Component.productQTY}').value == '')
+						{
+							document.getElementById('{!$Component.productQTY}').focus();
+							x= x+1;
+						}
+					</script>
+				</apex:column>
+
+				<apex:column headerValue="Sales Price" width="10%" >
+					<apex:inputText id="productSP" onkeyup="calculateTotalPrice(this.parentNode.parentNode);" onkeydown="return noEnter(event);" onkeypress="validateNumber(event);" value="{!bindSelectedProduct.intProductSalesPrice}" />
+				</apex:column>
+
+				<apex:column headerValue="Discount" width="5%" >
+					<apex:inputText id="productDIS" onkeyup="checkNumber(this.id); calculateTotalPrice(this.parentNode.parentNode);" onkeydown="return noEnter(event);" onkeypress="validateNumber(event);" value="{!bindSelectedProduct.intProductDiscount}" />
+				</apex:column>
+
+				<apex:column headerValue="Line Description" width="30%" > 
+					<apex:inputText id="checkId" style="width:95%;" value="{!bindSelectedProduct.strProductLineDescription}"/>
+				</apex:column>
+				<apex:column headerValue="Total Price" width="12%" >
+						<apex:outputText id="productTP" value="{0, number, $###,###,###,###,###,###.00}" >
+							<apex:param value="{!bindSelectedProduct.intProductTotalPrice}"/>
+						</apex:outputText>
+				</apex:column>
+				
+				<apex:column headerValue="Role" width="5%" >
+					<apex:inputField label="Role" id="role" value="{!bindSelectedProduct.coli.Role__c}" />
+				</apex:column>
+				
+				<apex:column headerValue=" Sort Order" width="1%" >
+					<apex:inputText value="{!bindSelectedProduct.SortOrder}" onkeypress="validateMinus(event);"/>
+				</apex:column>
+				<apex:column width="0%" >
+					<apex:inputHidden value="{!bindSelectedProduct.intProductTotalPrice}" />
+				</apex:column>
+			</apex:pageBlockTable>  
+
+			<script>
+				x = 0;
+			</script>
+
+			<apex:outputPanel rendered="{!lstBindCustomProductsSelected.size == 0}">
+				<table width="100%" class="list" border="0" cellpadding="0" cellspacing="0">
+				    <tbody>
+					<tr class="headerRow">
+					    <th class="noRowsHeader">Product Name</th>
+					    <th>Quantity(hours)</th>
+					    <th>Sales Price</th>
+					    <th>Discount</th>
+					    <th>Line Description</th>
+					    <th>Total Price</th>
+					    <th>Role</th>
+					</tr>
+					<tr class="noRows">
+					    <td colspan="9" class="noRowsHeader"><font color="grey">No records to display.</font></td>
+					</tr>
+				    </tbody>
+				</table>
+    		</apex:outputPanel>
+
+		</apex:pageBlock>
+
+		<apex:actionstatus id="processingImg" startText="Loading...">
+			<apex:facet name="start">
+				<div id="salesforceSource_blurybackground" style="position: absolute; left: 1px; z-index: 9999; top: 1px; width: 100%; height: 100%; text-align: center; vertical-align: middle; background-color: #dcdcdc; opacity: 0.5; filter: alpha(opacity = 50)"></div>
+				<div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 80%; display: '';">
+					<div style="width: 144px; vertical-align: middle;" class="waitingHolder">
+						<table align="center" valign="top" style="width: 100%; height: 30%">
+							<tr align="center" valign="top" style="width: 100%; height: 30%">
+								<td valign="top"><img class="waitingImage"
+								src="/img/loading.gif" /><span class="waitingDescription">Loading......</span></td>
+							</tr>
+						</table>
+					</div>
+				</div>
+				<div id="ManageMembersViewport_loading" class="waitingSearchDiv"
+				style="width: 100%; height: 100%; display: '';"></div>
+				<script>
+					document.getElementById('ManageMembersViewport_loading').height = window.innerHeight * (3/4);
+				</script>
+			</apex:facet>
+			<apex:facet name="stop">
+			</apex:facet>
+		</apex:actionstatus>
+    <div id="divDecoder" style="display:none">
+    </div>
+	</apex:form>
+</apex:page>

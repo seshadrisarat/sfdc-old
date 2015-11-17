@@ -1,0 +1,499 @@
+<apex:page sidebar="false" showHeader="false" controller="RT1.addInviteeController">
+	<apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" />
+	<apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js" />
+	<apex:includeScript value="{!URLFOR($Resource.RT1__meetingsr, 'jquery.jqGrid.min.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.RT1__meetingsr, 'sticky.min.js')}" />
+	<apex:stylesheet value="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/redmond/jquery-ui.css" />
+	<apex:stylesheet value="{!URLFOR($Resource.RT1__meetingsr, 'ui.jqgrid.css')}" />
+	<apex:stylesheet value="{!URLFOR($Resource.RT1__meetingsr, 'sticky.min.css')}" />
+	<style type="text/css">
+body {
+	padding: 10px;
+}
+
+.sticky-close {
+	background: url('{!URLFOR($Resource.meetingsr, ' close.png ')}');
+	float: right;
+}
+
+.name-input {
+	font-size: 19px;
+}
+
+.gridPager {
+	text-align: center;
+	font-size: 15px;
+	margin: 0 auto;
+	width: 400px;
+}
+
+.selected-page {
+	color: #015ba7 !important;
+	font-weight: bold;
+}
+
+.pagination-page {
+	cursor: pointer;
+}
+
+.paginate {
+	font-size: 18px;
+	font-weight: bold;
+	text-decoration: none !important;
+	cursor: pointer;
+}
+
+.dialog-unmatched-info {
+	
+}
+
+#gbox_leadSearchResultsGrid {
+	margin-bottom: 10px;
+}
+</style>
+	<script type="text/javascript">
+	var gridData = [];
+	var ajaxloader_green = '{!URLFOR($Resource.meetingsr,'ajaxloader_green.gif')}';
+	var leadPageNum = 1;
+	var contactPageNum = 1;
+	var pageSize = 100;
+	var timeoutHnd; //timeout for searching on email address
+	var unmatchedSearch = false;
+	$ = jQuery.noConflict();
+	$(document).ready(function(){
+		var loader = "<img id=\'dataloader\' src=\'"+ajaxloader_green+"'' style=\'display:none;float:right;margin-right:75px;\' />"; 
+		$('.mainTitle').parent().prepend(loader);
+		// some css
+		$('.bPageBlock').css('border-top-color','#3a7728');	//this isn't being set by default style sheet
+		
+		
+		// add an unmatched meeting member by email address
+		$('#enterUnmatchedInvitee').click(function(e){
+			e.preventDefault();
+			if(validateEmail($('#unmatchedEmail').val())){
+				
+				$('#unmatched-email-string').text($('#unmatchedEmail').val());
+				
+				// add unmatched email 'FirstName' and 'LastName' input dialog
+				$('#dialog-unmatched-info').dialog({
+					modal: true,
+					minHeight: 200,
+					minWidth: 350,
+					buttons: {
+						"Continue": function(){
+							addInvitee($('#unmatchedEmail').val(),'',$('#unmatched-firstname').val(),$('#unmatched-lastname').val());
+							//setTimeout("addInvitee($('#unmatchedEmail').val(),'');",2000);	//setting timeout for parent page to respond, with slow VF	
+							$('#unmatchedEmail').val('');
+							$(this).dialog("close");
+						}
+					}
+				});
+			}
+			else{
+				$.sticky('<span style="color:red;"><strong>Invalid email.</strong></span>');
+			}
+		});
+		
+		$('#unmatchedEmail').keypress(function(e){
+			if(e.keyCode=='13'){
+				e.preventDefault();
+				if(validateEmail($('#unmatchedEmail').val())){
+					// add unmatched email 'FirstName' and 'LastName' input dialog
+					$('#dialog-unmatched-info').dialog({
+						modal: true,
+						minHeight: 200,
+						minWidth: 350,
+						buttons: {
+							"Continue": function(){
+								addInvitee($('#unmatchedEmail').val(),'',$('#unmatched-firstname').val(),$('#unmatched-lastname').val());
+								//setTimeout("addInvitee($('#unmatchedEmail').val(),'');",2000);	//setting timeout for parent page to respond, with slow VF	
+								$('#unmatched-firstname, #unmatched-lastname, #unmatchedEmail').val('');
+								$(this).dialog("close");
+							}
+						}
+					});
+				}
+				else{
+					$('#unmatchedEmail').focus();
+					$.sticky('<span style="color:red;"><strong>Invalid email.</strong></span>');
+				}
+			}
+			else{
+				doSearch(e);
+			}
+		});
+		
+		// search leads and contacts
+		$('#searchTerm').keypress(function(e){
+			if(e.keyCode=='13'){
+				e.preventDefault();
+				$('#leadSearchResultsGrid, #contactSearchResultsGrid').jqGrid('clearGridData');
+				doKeyPressSearch();
+			}
+			else{
+				doKeyPressSearch()
+			}
+		});
+		
+		$('#search').click(function(e){
+			e.preventDefault();
+			if($('#searchTerm').val().length < 1){
+				alert('You must enter a search term to find matching Contact and Lead records.');
+				$('#leadSearchResultsGrid, #contactSearchResultsGrid').jqGrid('clearGridData');
+				doKeyPressSearch();
+			}
+			$('#leadSearchResultsGrid, #contactSearchResultsGrid').jqGrid('clearGridData');
+			doKeyPressSearch();
+		});
+		
+		// calculate grid height
+		var gridHeight = Math.ceil($(this).height()/3);
+		if(gridHeight < 200)
+			gridHeight = 200;
+		
+		$('#leadSearchResultsGrid').jqGrid({
+			caption: "Leads",
+		   	height: gridHeight,
+			width: 765,
+			colNames: ['Action','First Name','Last Name','Email','Company'],
+			colModel: [
+				{
+				name:'Invite',
+				index:'Invite', 
+				width:50,
+				align: 'center',
+				sortable:false},
+				{
+				name: 'FirstName',
+				index: 'FirstName',
+				width: 75
+				}, {
+				name: 'LastName',
+				index: 'LastName',
+				width: 75
+				},{
+				name: 'Email',
+				index: 'Email',
+				width: 100
+				},{
+				name: 'Company',
+				index: 'Company',
+				width: 100				
+				}],
+				//add the buttons for adding
+			gridComplete: function(){
+				var ids = $('#leadSearchResultsGrid').jqGrid('getDataIDs');
+				for(var i=0;i<ids.length; i++){
+					//var typeOfResult = $('#leadSearchResultsGrid').getCell(ids[i],'Type');
+					var inviteBtn = "<input style='height:22px;width:55px;' type='button' value='Add' onclick=\"addInvitee(\'"+ids[i]+"\',\'Lead\');$(\'#"+ids[i]+"\','','').hide(); \" \>";
+					$("#leadSearchResultsGrid").jqGrid('setRowData',ids[i],{Invite:inviteBtn});
+				}
+			}	
+		});
+		
+		$('#contactSearchResultsGrid').jqGrid({
+			caption: "Contacts",
+		   	height: gridHeight,
+			width: 765,
+			colNames: ['Action','First Name','Last Name','Email','Account Name'],
+			colModel: [
+				{
+				name:'Invite',
+				index:'Invite', 
+				width:50,
+				align: 'center',
+				sortable:false},
+				{
+				name: 'FirstName',
+				index: 'FirstName',
+				width: 75
+				}, {
+				name: 'LastName',
+				index: 'LastName',
+				width: 75
+				},{
+				name: 'Email',
+				index: 'Email',
+				width: 100
+				},{
+				name: 'AccountName',
+				index: 'AccountName',
+				width: 100				
+				}],
+				//add the buttons for adding
+			gridComplete: function(){
+				var ids = $('#contactSearchResultsGrid').jqGrid('getDataIDs');
+				for(var i=0;i<ids.length; i++){
+					//var typeOfResult = $('#contactSearchResultsGrid').getCell(ids[i],'Type');
+					var inviteBtn = "<input style='height:22px;width:55px;' type='button' value='Add' onclick=\"addInvitee(\'"+ids[i]+"\',\'Contact\');$(\'#"+ids[i]+"\','','').hide(); \" \>";
+					$("#contactSearchResultsGrid").jqGrid('setRowData',ids[i],{Invite:inviteBtn});
+				}
+			}	
+		});
+		//	$('#searchResultsGrid').jqGrid('navGrid','#gridpager',{edit:false,add:false,del:false});	
+	});
+	
+	function leadGridReload(){
+		if(($('#searchTerm').val() != '' && $('#searchTerm').val().length >= 3) ||
+			($('#unmatchedEmail').val() != '' && $('#unmatchedEmail').val().length >= 3)
+		){
+			var searchTerm; 
+			//set the search term
+			if(!unmatchedSearch){
+				searchTerm = $('#searchTerm').val();
+			}
+			else{
+				searchTerm = $('#unmatchedEmail').val();
+			}
+			$('#dataloader').show();
+			$('#leadSearchResultsGrid').jqGrid('clearGridData');
+			RT1.addInviteeController.searchLeadsContacts(searchTerm,leadPageNum,contactPageNum,true,false,function(event,result){
+				if(result.status == true){
+					if (result.result.lengh == 0) {
+						//fetchavailableProvisions();
+					}
+					else {
+						// pagination: jqGrid default parameters are difficult. Jordan, 3/21/2012
+						if(event.leadResultCount > 100){
+							addPagination($("#leadGridPager"),event.leadResultCount);
+						}
+						else{
+							$('#leadGridPager').html('');
+							$('#gbox_leadSearchResultsGrid').css('margin-bottom','10px');
+						}
+						//displaySearchResultsText(event.totalResults);
+					
+						$.each(result.result.searchResults, function(i, record){
+							var rowData = [{
+								'Id': record.Id,
+								'FirstName': record.FirstName,
+								'LastName': record.LastName,
+								'Email': record.Email,
+								'Type': record.Type,
+								'Company': record.Company,
+								'AccountName': record.AccountName
+							}];
+							if(record.Type == 'Lead'){
+								$('#leadSearchResultsGrid').jqGrid('addRowData', record.Id, rowData[0]);	
+							}
+							/**else{
+								$('#contactSearchResultsGrid').jqGrid('addRowData', record.Id, rowData[0]);	
+							}**/
+						});
+						$('#dataloader').hide();
+					}
+				}
+			});
+		}
+	}
+	
+	function contactGridReload(){
+		if(($('#searchTerm').val() != '' && $('#searchTerm').val().length >= 3) ||
+			($('#unmatchedEmail').val() != '' && $('#unmatchedEmail').val().length >= 3)
+		){
+			//set the search term
+			if(!unmatchedSearch){
+				var searchTerm = $('#searchTerm').val();
+			}
+			else{
+				searchTerm = $('#unmatchedEmail').val();
+			}
+			
+			$('#dataloader').show();
+			$('#contactSearchResultsGrid').jqGrid('clearGridData');
+			RT1.addInviteeController.searchLeadsContacts(searchTerm,leadPageNum,contactPageNum,false,true,function(event,result){
+				if(result.status == true){
+					if (result.result.lengh == 0) {
+						//fetchavailableProvisions();
+					}
+					else {
+						// pagination: jqGrid default parameters are difficult. Jordan, 3/21/2012
+						
+						if(event.contactResultCount > 100){
+							addPagination($("#contactGridPager"),event.contactResultCount);
+						}
+						else{
+							$('#contactGridPager').html('');
+						}
+						
+						//displaySearchResultsText(event.totalResults);
+					
+						$.each(result.result.searchResults, function(i, record){
+							var rowData = [{
+								'Id': record.Id,
+								'FirstName': record.FirstName,
+								'LastName': record.LastName,
+								'Email': record.Email,
+								'Type': record.Type,
+								'Company': record.Company,
+								'AccountName': record.AccountName
+							}];
+							if(record.Type == 'Contact'){
+								$('#contactSearchResultsGrid').jqGrid('addRowData', record.Id, rowData[0]);	
+							}
+						});
+						$('#dataloader').hide();
+					}
+				}
+			});
+		}
+	}
+	
+	/**function displaySearchResultsText(totalResultsCount){
+		var displayTextHtml = 'Search Results';
+		if(totalResultsCount < 200 && pageNum == 1){
+			displayTextHtml = displayTextHtml + '&nbsp;-&nbsp;Displaying results: 1-'+totalResultsCount+' of '+totalResultsCount;
+		}
+		else{
+			var resultsBottom; var resultsTop; 
+			if(pageNum == 1){
+				resultsBottom = 1;
+				resultsTop = 200;
+			}
+			else{
+				resultsBottom = (pageNum-1) * 200;
+				resultsTop = resultsBottom+200;
+			}
+			displayTextHtml = displayTextHtml + '&nbsp;-&nbsp;Displaying results: '+resultsBottom+' to '+resultsTop+' of '+totalResultsCount;
+		}
+		
+		$('.mainTitle:nth-child(2)').html(displayTextHtml).css('width','500px');
+	}**/
+	
+	/** 
+	 *	addPagination(totalResultsCount)
+	 *	SFDC Result Pagination hack for jqGrid, standardsetcontroller, etc., Jordan, 3/21/2012
+	 **/
+	function addPagination(targetGrid, totalResultsCount){
+		if($(targetGrid).attr('id') == 'leadGridPager'){
+			var paginationHtml = '<a class="paginate" onclick="leadPageNum = leadPageNum-1; if(leadPageNum<= 0) leadPageNum= 1; leadGridReload();">&nbsp;&#8249&nbsp;&nbsp;</a>';
+		}
+		else{
+			var paginationHtml = '<a class="paginate" onclick="contactPageNum = contactPageNum-1; if(contactPageNum <= 0) contactPageNum = 1; contactGridReload();">&nbsp;&#8249&nbsp;&nbsp;</a>';
+		}
+		var numPages = Math.ceil(totalResultsCount / pageSize);
+		for(var i = 1; i <= numPages; i++){
+			if(leadPageNum == i && $(targetGrid).attr('id') == 'leadGridPager'){
+				paginationHtml = paginationHtml+'<a class="pagination-page selected-page" onclick="leadPageNum = '+i+'; leadGridReload();">'+i+'</a>&nbsp;';
+			}else if(contactPageNum == i && $(targetGrid).attr('id') == 'contactGridPager'){
+				paginationHtml = paginationHtml+'<a class="pagination-page selected-page" onclick="contactPageNum = '+i+'; contactGridReload();">'+i+'</a>&nbsp;';
+			}
+			else if($(targetGrid).attr('id') == 'leadGridPager'){
+				paginationHtml = paginationHtml+'<a class=\"pagination-page\" onclick=\"leadPageNum='+i+'; leadGridReload();\">'+i+'</a>&nbsp;';	
+			}
+			else{
+				paginationHtml = paginationHtml+'<a class=\"pagination-page\" onclick=\"contactPageNum='+i+'; contactGridReload();\">'+i+'</a>&nbsp;';		
+			}
+		}
+		if($(targetGrid).attr('id') == 'leadGridPager'){
+			paginationHtml = paginationHtml+'<a class="paginate" onclick="leadPageNum = leadPageNum+1; if(leadPageNum >= '+numPages+') leadPageNum= '+numPages+'; leadGridReload();">&nbsp;&#8250&nbsp;&nbsp;</a>';
+		}
+		else{
+			paginationHtml = paginationHtml+'<a class="paginate" onclick="contactPageNum = contactPageNum+1; if(contactPageNum>= '+numPages+') contactPageNum= '+numPages+'; contactGridReload();">&nbsp;&#8250&nbsp;&nbsp;</a>';
+		}
+		if($(targetGrid).attr('id')=='leadGridPager'){
+			$('#gbox_leadSearchResultsGrid').css('margin-bottom','0px');
+		}
+		$(targetGrid).html(paginationHtml);
+	}
+	
+	/**
+	 *	Add the indicator and call the parent to add them to the list
+	 **/
+	function addInvitee(id, type, firstName, lastName){
+			$.sticky('<strong>Added.</strong>');
+			parent.addInviteeToList(id,type,firstName,lastName);
+	}	
+	
+	/** 
+	 *	Searching on the email address, incase an matching email exists
+	 *	Doubles for 'unmatchedSearch()', Jordan, 3/23/2012'
+	 **/
+	function doSearch(ev){
+	if (timeoutHnd) {
+		clearTimeout(timeoutHnd);
+	}
+	timeoutHnd = setTimeout("unmatchedSearch = true; leadGridReload(); contactGridReload();", 500);	
+	}
+	
+	/** 
+	 *	Searching while entering a name, while more than 3 characters are entered
+	 *	Doubles for 'Search Input Search', Jordan, 3/23/2012
+	 **/
+	function doKeyPressSearch(ev){
+	if (timeoutHnd) {
+		clearTimeout(timeoutHnd);
+		}
+ 	timeoutHnd = setTimeout("unmatchedSearch = false; leadGridReload(); contactGridReload();", 500);	
+	}
+	
+	/**
+	 *	Validate Email -adapted from: http://stackoverflow.com/questions/46155/validate-email-address-in-javascript
+	 **/
+	 function validateEmail(email) { 
+		    var re = /^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+		    return re.test(email);
+	} 
+</script>
+	<apex:pageBlock title="Invite Others">
+		<apex:pageBlockSection columns="1" rendered="{!hideEmailsInput}">
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="Search Leads & Contacts" for="searchTerm" />
+				<apex:pageBlockSectionItem >
+					<input id="searchTerm" type="text" placeHolder="Search Term..."
+						style="width: 300px;" />
+					<button id="search">Search</button>
+				</apex:pageBlockSectionItem>
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+		<apex:pageBlockSection columns="2" rendered="{!NOT(hideEmailsInput)}">
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="Invitee Emails" for="unmatchedEmail" />
+				<apex:pageBlockSectionItem >
+					<input id="unmatchedEmail" type="text"
+						placeHolder="Enter an email..." />
+					<button id="enterUnmatchedInvitee">Add</button>
+				</apex:pageBlockSectionItem>
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="Search Leads & Contacts" for="searchTerm" />
+				<apex:pageBlockSectionItem >
+					<input id="searchTerm" type="text" placeHolder="Search Term..." />
+					<button id="search">Search</button>
+				</apex:pageBlockSectionItem>
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+	</apex:pageBlock>
+	<apex:pageBlock title="Search Results">
+		<apex:pageBlockSection columns="1">
+			<table id="leadSearchResultsGrid"></table>
+			<div class="gridPager" id="leadGridPager"></div>
+			<table id="contactSearchResultsGrid"></table>
+			<div class="gridPager" id="contactGridPager"></div>
+		</apex:pageBlockSection>
+	</apex:pageBlock>
+	<div id="dialog-unmatched-info" title="Invitee Details"
+		style="display: none; text-align: justify;">
+		<table>
+			<tr>
+				<td><span class="ui-icon ui-icon-plus"
+					style="float: left; margin: 0 7px 10px 0;"></span>Do you want to
+					add first and last name for <span id="unmatched-email-string"
+					style="font-weight: bold;"></span>?</td>
+			</tr>
+			<tr>
+				<td>First Name:&nbsp;<input type="text"
+					style="font-size: 18px; width: 200px;" id="unmatched-firstname" /></td>
+			</tr>
+			<tr>
+				<td>Last Name:&nbsp;<input type="text"
+					style="font-size: 18px; width: 200px;" id="unmatched-lastname" /></td>
+			</tr>
+			<tr>
+				<td><span style="font-size: 10px;">* These fields are
+						not required and will be updated with the meeting member details
+						later</span></td>
+			</tr>
+		</table>
+	</div>
+</apex:page>

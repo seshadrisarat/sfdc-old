@@ -1,0 +1,179 @@
+<apex:page standardController="Opportunity" extensions="SL_ProjectCoverageTeamsController">
+	<style>
+	    @media all and (max-width: 400px) and (min-width: 320px) {
+	        .inmobile{
+                width:100%;	            
+	        }
+	    }  
+	</style>
+	<script>
+        function autoCompleteSelRecord(objDtls,objName){
+            autoUserName(objDtls.Id,objName);
+        }
+        function resetId(element){
+            element.value = '';
+        }
+    </script>
+        <apex:form >
+            <apex:pageBlock title="Project" tabStyle="Opportunity">
+            <apex:pageMessages id="msg"/>
+            <apex:pageBlockButtons >
+                <apex:commandButton action="{!saveClick}" status="loading" value="Save"/>
+                <apex:commandButton action="{!cancelClick}" status="loading" value="Cancel" immediate="true"/>
+            </apex:pageBlockButtons>
+            
+            <apex:actionFunction action="{!updateAccountIdOnProject}" name="updateAccIdOnProjectAF" status="loading" rerender="SelectCoverageTeamPanel,otherCoverageTeamPanel,listCoverageTeamPanel,msg" oncomplete="clearInput()">
+	        	<apex:param name="companyId" value="" assignTo="{!strCompanyId}"/>
+	        </apex:actionFunction>
+            
+            <apex:actionFunction action="{!bussGroupRelatedCoverageTeamMembers}" name="fetchCoverageTeamAF" status="loading" rerender="SelectCoverageTeamPanel,otherCoverageTeamPanel,listCoverageTeamPanel,msg" oncomplete="clearInput()">
+	        	<apex:param name="BUId" value="" assignTo="{!strBusinessUnitId}"/>
+	        	<apex:param name="BUName" value="" assignTo="{!strBusinessUnitName}"/>
+	        </apex:actionFunction>
+	    	
+	    	<apex:actionFunction action="{!otherTeamMembers}" name="autoUserName" status="loading" rerender="SelectCoverageTeamPanel,otherCoverageTeamPanel,listCoverageTeamPanel,msg" oncomplete="clearInput()">
+	        	<apex:param name="userId" value="" assignTo="{!selUserId}"/>
+	        	<apex:param name="userName" value="" assignTo="{!selUserName}"/>
+	        </apex:actionFunction>
+	        <apex:pageBlockSection id="firstSec" columns="1" collapsible="false">
+	            <apex:pageBlockSectionItem >
+	                <apex:outputLabel value="Project Name" for="projName" />
+	                <apex:inputField value="{!objProject.Name}" id="projName"/>
+	            </apex:pageBlockSectionItem>
+	            
+	            <apex:pageBlockSectionItem > 
+	                <apex:outputLabel value="Project Code" for="projBillCode" />
+	                <apex:inputField value="{!objProject.Billing_Code__c}" id="projBillCode"/>
+	            </apex:pageBlockSectionItem>
+	            
+	            <apex:pageBlockSectionItem >
+	                <apex:outputLabel value="Client/Company" for="projComp" />
+                    <apex:outputPanel layout="block" styleClass="requiredInput">
+                        <div class="requiredBlock"></div>
+                        <apex:inputText required="true" id="accInputTxtId" html-placeholder="search company" value="{!strCompanyName}" onkeyup="resetId(document.getElementById('{!$Component.accInputTxtId_lkid}'));"> 
+                            <apex:inputHidden value="{!strCompanyId}" id="accInputTxtId_lkid"/>
+    			            <c:SL_AutoComplete objectname="Account" sObjectFieldName="Name" 
+    			            autocomplete_textbox="{!$Component.accInputTxtId}" isInlineVF="false" bgColor="#FFFFFF" fontSize="12"/>
+    			        </apex:inputText>
+                    </apex:outputPanel>
+	            </apex:pageBlockSectionItem>
+				<apex:pageBlockSectionItem >
+	                <apex:outputLabel value="Status Date" for="projCloseDate" />
+	                <apex:inputField value="{!objProject.CloseDate}" id="projCloseDate" required="true"/>
+	            </apex:pageBlockSectionItem>
+	            <apex:pageBlockSectionItem >
+	                <apex:outputLabel value="Stage" for="projStage" />
+	                <apex:inputField value="{!objProject.StageName}" id="projStage" required="true"/>
+	            </apex:pageBlockSectionItem>	           
+	            <apex:pageBlockSectionItem >
+	                <apex:outputLabel value="Business Group" for="projBussGrp" />
+	                <apex:outputPanel layout="block" styleClass="requiredInput">
+                        <div class="requiredBlock"></div>
+                        <apex:inputText required="true" id="buinputTxtId" html-placeholder="search business unit" value="{!strBusinessUnitName}" onkeyup="resetId(document.getElementById('{!$Component.buinputTxtId_lkid}'));">
+    	                    <apex:inputHidden value="{!strBusinessUnitId}" id="buinputTxtId_lkid"/>
+    			            <c:SL_AutoComplete objectname="Business_Unit__c" sObjectFieldName="Name" 
+    			            autocomplete_textbox="{!$Component.buinputTxtId}" isInlineVF="false" bgColor="#aaa" fontSize="12"/>
+    			        </apex:inputText>
+                    </apex:outputPanel>
+	            </apex:pageBlockSectionItem>
+	            <apex:pageBlockSectionItem rendered="{!isAccessible}">
+	                <apex:outputLabel value="Generate Project Code" for="projCode"/>
+	                <apex:inputField value="{!objProject.Generate_Project_Code__c}" id="projCode"/>
+	            </apex:pageBlockSectionItem>
+	        </apex:pageBlockSection>
+
+	        <apex:outputPanel id="SelectCoverageTeamPanel"> 
+		        <apex:pageBlockSection columns="2" title="Add Coverage Team Members">
+		        	<apex:pageBlockSectionItem >
+		        		<apex:pageBlockSectionItem >
+		        			<apex:dataTable value="{!lstBusinessGrpUsers}" var="BGUser" headerClass="headerRow" rowClasses="dataRow" styleClass="list">
+		        				<apex:facet name="header">From Business Group</apex:facet>
+		        				<apex:column >
+				        			<apex:inputCheckbox value="{!BGUser.isChecked}" >
+				        				<apex:actionSupport event="onchange" action="{!selectUnselectCoverageTeam}" status="loading" rerender="listCoverageTeamPanel,otherCoverageTeamPanel,msg">
+					        				<apex:param name="uId" value="{!BGUser.bussUserId}" assignTo="{!selUserId}"/>
+			        						<apex:param name="uName" value="{!BGUser.bussUserName}" assignTo="{!selUserName}"/>
+			        						<apex:param name="remove" value="" assignTo="{!strSelAll}"/>		
+		        						</apex:actionSupport>
+				        			</apex:inputCheckbox>
+				        			<apex:outputPanel >
+				        				{!BGUser.bussUserName}
+				        			</apex:outputPanel>
+						        </apex:column>
+						        <apex:facet name="footer">
+									<apex:outputPanel rendered="{!if(lstBusinessGrpUsers.size == 0,true,false)}">
+										<apex:outputText value="No records to display"/>
+									</apex:outputPanel>
+						        </apex:facet>
+		        			</apex:dataTable>
+                            <apex:outputPanel rendered="{!if(lstBusinessGrpUsers.size == 0,false,true)}" id="allButtons"> 
+                                <apex:commandButton action="{!selectAllOrRemoveUsers}" status="loading" value="Add All" id="theAddButton" rerender="SelectCoverageTeamPanel,listCoverageTeamPanel,otherCoverageTeamPanel,msg">
+                                    <apex:param name="addAll" value="AddAll" assignTo="{!strSelAll}"/>
+                                </apex:commandButton>
+                                <apex:commandButton action="{!selectAllOrRemoveUsers}" status="loading" value="Remove All" id="theRemoveButton" rerender="SelectCoverageTeamPanel,listCoverageTeamPanel,otherCoverageTeamPanel,msg">
+                                    <apex:param name="removeAll" value="RemoveAll" assignTo="{!strSelAll}"/>
+                                </apex:commandButton>
+                            </apex:outputPanel>
+		        		</apex:pageBlockSectionItem>
+		        	</apex:pageBlockSectionItem>
+		        	<apex:pageBlockSectionItem >
+		        		<apex:outputPanel id="otherCoverageTeamPanel"> 
+			        		<strong><font style="font-size:.9em;">Search for More Team Members :</font></strong> &nbsp;
+							<apex:inputText id="inputTxtId" html-placeholder="search members" styleclass="inmobile">
+					            <c:SL_AutoComplete objectname="User" sObjectFieldName="Name" selectedUsers="{!lstSelGroupUserId}" 
+					            autocomplete_textbox="{!$Component.inputTxtId}" isInlineVF="false" bgColor="#aaa" fontSize="12"/>
+					        </apex:inputText>
+					        <script>
+					            function clearInput(){
+					                document.getElementById('{!$Component.inputTxtId}').value = '';
+					            }
+					        </script>
+				        </apex:outputPanel>
+		        	</apex:pageBlockSectionItem>
+		        </apex:pageBlockSection>
+			</apex:outputPanel>
+			<apex:outputPanel id="listCoverageTeamPanel">
+		        <apex:pageBlockSection columns="1" title="Coverage Team">
+		        	<apex:pageBlockTable value="{!mapCoverageTeam}" var="coverageTeam1" width="100%">
+                        <apex:facet name="header">Coverage Team Member</apex:facet>
+                        <apex:column >
+                            <apex:facet name="header">Action</apex:facet>
+    	        			<apex:commandLink styleClass="actionLink" status="loading" action="{!selectUnselectCoverageTeam}" value="Remove" rerender="SelectCoverageTeamPanel,listCoverageTeamPanel,otherCoverageTeamPanel,msg">
+    	        				<apex:param name="uId" value="{!coverageTeam1}" assignTo="{!selUserId}"/>
+    	        				<apex:param name="uName" value="{!mapCoverageTeam[coverageTeam1]}" assignTo="{!selUserName}"/>
+    	        				<apex:param name="remove" value="RemoveOne" assignTo="{!strSelAll}"/>
+    	        			</apex:commandLink>
+    					</apex:column>		                
+    					<apex:column >
+    					    <apex:facet name="header">Name</apex:facet>
+    					    <apex:outputText value="{!mapIdToUser[coverageTeam1].Name}"/>
+    					</apex:column>
+    					<apex:column >
+    					    <apex:facet name="header">Title</apex:facet>
+    					    <apex:outputText value="{!mapIdToUser[coverageTeam1].Coverage_Team_Role__c}"/>
+    					</apex:column>
+    	            </apex:pageBlockTable>
+		        </apex:pageBlockSection>
+	        </apex:outputPanel>
+	        
+            <apex:actionstatus id="loading" startText="Requesting...">
+                <apex:facet name="start">
+                    <div id="salesforceSource_blurybackground" style="position:absolute; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: white; opacity:0.7; filter-alpha(opacity:60)"></div>
+                    <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; ">
+                        <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+                            <table  style="width: 100%; height: 30%">
+                                <tr align="center" valign="top" style="width: 100%; height: 30%">
+                                    <td valign="top"><img src="/img/loading32.gif"/><span class="waitingDescription"><b>Loading...</b></span></td>
+                                </tr>
+                            </table>
+                        </div>
+             	 	</div>
+                    <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display:''; "></div>
+                    <script>document.getElementById('ManageMembersViewport_loading').height = window.innerHeight * (3/4);</script>
+                </apex:facet>
+                <apex:facet name="stop"></apex:facet>
+            </apex:actionstatus>
+	        
+        </apex:pageBlock>
+    </apex:form>
+</apex:page>

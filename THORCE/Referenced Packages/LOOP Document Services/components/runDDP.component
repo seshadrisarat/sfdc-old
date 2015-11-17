@@ -1,0 +1,1019 @@
+<apex:component controller="Loop.loopController" id="aPage" access="global" allowDml="true">
+<apex:attribute name="init" description="Simulates the action attribute on an apex:page element." type="Boolean" default="true" assignTo="{!initialize}" />
+<apex:attribute name="inQuickAction" description="Determines whether the interface will be rendered in the style of a Quick Action." type="Boolean" default="true" assignTo="{!attrInQuickAction}" />
+<apex:stylesheet value="{!URLFOR($Resource.Loop__Styles, '/css/ddp.css')}" />
+<script type="text/javascript" src="{!URLFOR($Resource.Scripts, 'jquery-code.js')}" ></script>
+<script type="text/javascript" src="{!URLFOR($Resource.Scripts, 'jquery.drawloop.js')}"></script>
+<!-- <apex:includeScript value="/support/console/28.0/integration.js"/>-->
+<apex:includescript value="{!URLFOR($Resource.Loop__CKEditor, 'ckeditor/ckeditor.js')}" />
+<script type='text/javascript' src='/canvas/sdk/js/publisher.js'/>
+<script type="text/javascript">
+jQuery.noConflict(); // Can not use $ because prototype and jQuery will have naming issues.
+                     // This command fixes that, but you must use "jQuery" instead of "$"
+                     // for jQuery commands.
+
+// Set body class for styles
+jQuery('body').addClass('Salesforce1');
+
+jQuery(function() {
+    jQuery.notifie({
+        allowCompatibilityView: false,
+        requiredVersion: 7,
+        containerSelector: '#ieMsgs',
+        compatibilityViewMessage: '{!JSENCODE($Label.IE_Compatibility_View_Warning)}',
+        versionMessage: '{!JSENCODE($Label.IE_Higher_Version_Required)}'
+    });
+    
+    // In some instances (possibly based on Salesforce instance -- observed so far in ap1.salesforce.com),
+    // VF auto-generated apex:form action url attribute value is for mismatches salesforce domain
+    // (e.g. page is on ap1.salesforce.com, action url points to c.ap1.visual.force.com). This causes
+    // javascript postbacks to fail, so, as a workaround, always make sure the form action url matches
+    // the domain of the current page.
+    var urlRegex = /^(http[s]?:\/\/)([^\/]+)(\/.*)$/;
+    var $apexForm = jQuery('[id$=":aForm"]');
+    var match = $apexForm.attr('action').match(urlRegex);
+    if (match && match[2] !== window.location.hostname) {
+        // Mismatched action hostname
+        $apexForm.attr('action', $apexForm.attr('action').replace(urlRegex, '$1' + window.location.hostname + '$3'));
+    }
+});
+
+String.prototype.escapeHtml = function()
+{
+    return this.replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;');
+}
+
+function setFocusOnLoad() {
+    // do nothing. We don't want to focus on the first available element here.
+}
+
+function checkForOAuthResponse() {
+    var s = /[\?&]callback=([^&]+)/;
+    if (s.test(window.location.search)) {
+        var m = window.location.search.match(s)[1];
+        invokeOpenerMethod(m, [window.location.href]);
+    }
+};
+function invokeOpenerMethod(method, args) {
+    var win = window.opener;
+    //win[method].apply(this, args);
+    Function.prototype.apply.call(win[method], this, args);
+    //win[method](args);
+    window.close();
+};
+
+checkForOAuthResponse();
+
+isSubmitted = false;
+RunContext = {
+    Standard: 0,
+    ServiceCloudConsole: 1,
+    Salesforce1: 2
+};
+
+Loop = {
+    isQuickAction:  false,
+    runContext:     window.sforce && sforce.one
+                        ? RunContext.Salesforce1
+                        : (window.sforce && sforce.console && sforce.console.isInConsole()
+                           ? RunContext.ServiceCloudConsole
+                           : RunContext.Standard
+                        )
+};
+
+function runSubmit(a) {
+    if (a == 'run') {
+        if (connectedAppsEnabled && jQuery.authorize('getStatus').requiresAuthorization) {
+            jQuery.authorize('launchAuthorizationFlow');
+            return false;
+        }
+        jQuery('[id="aPage:aForm:pageMessages"]').hide();
+    }
+    setRunEnabled(false);
+    //jQuery('[id="aPage:aForm:run"]').attr('disabled', 'disabled');
+    jQuery('#wait').css('visibility', 'visible');
+    disableForm();
+    isSubmitted = true;
+    return true;
+}
+
+function runUnSubmit() {
+    setRunEnabled(true);
+    //jQuery('[id="aPage:aForm:run"]').removeAttr('disabled');
+    jQuery('#wait').css('visibility', 'hidden');
+    jQuery('input.required').parent().addClass('required');
+    enableForm();
+    isSubmitted = false;
+}
+
+function disableForm() {
+    jQuery('#overlay').css('height', jQuery('[id="aPage:aForm"]').height());
+    jQuery('#form_proc_img,#overlay').removeClass('invisible');
+}
+
+function enableForm() {
+    jQuery('#form_proc_img,#overlay').addClass('invisible');
+}
+
+function moveMiscFiles(elementId) {
+    var mouseX, mouseY, lastX, lastY = 0;
+    var moved = false;
+    jQuery().mousemove(function(e) { mouseX = e.pageX; mouseY = e.pageY; moved = true; });
+    var need_select_workaround = typeof jQuery(document).attr('onselectstart') != 'undefined';
+    jQuery('[id="aPage:aForm:'+elementId+'"] tr').bind('mousedown', function (e) {
+        moved = false;
+        jQuery('label').unbind('click');
+        if (e.target.type != 'checkbox')
+        {
+            lastY = mouseY;
+            var firstY = lastY;
+            var tr = jQuery(this);
+            var checked = jQuery(this).find('input').attr('checked');
+            tr.fadeTo('fast', 0.2);
+            jQuery('tr', tr.parent() ).not(this).mouseenter(function(event){
+                if (
+                    (tr.nextAll(':has(div.sortLine):first').length == 0 || tr.nextAll(':has(div.sortLine):first').prevAll().index(event.currentTarget) > -1)
+                 && (tr.prevAll(':has(div.sortLine):first').length == 0 || tr.prevAll(':has(div.sortLine):first').nextAll().index(event.currentTarget) > -1)
+                ) {
+                    if (tr.parent().find('tr').index(this) > tr.parent().find('tr').index(tr.get(0)))
+                        jQuery(this).after(tr);
+                    else
+                        jQuery(this).before(tr);
+                }
+                lastY = mouseY;
+            });
+            jQuery('body').mouseup(function () {
+                tr.fadeTo('fast', 1);
+                jQuery('tr', tr.parent()).unbind('mouseenter');
+                if (need_select_workaround)
+                    jQuery(document).unbind('selectstart');
+                if (moved)
+                    tr.find('label').bind('click', function() { return false; });
+                reorder(elementId);
+                jQuery('body').unbind('mouseup');
+            });
+            e.preventDefault();
+            if (need_select_workaround)
+                jQuery(document).bind('selectstart', function () { return false; });
+        }
+        return false;
+    }).css('cursor', 'move');
+}
+
+function sortableStopBorders() {
+    var sortableDocs = JSON.parse(jQuery("[id$=':sortableDocs']").val());
+    
+    var hasSortGroups = false;
+    var inputs = jQuery("[id$=':optionalDocs'] input");
+    for (var i = 0; i < sortableDocs.length; i++) {
+        if (sortableDocs[i].length > 1 || (i+1 < sortableDocs.length && sortableDocs[i+1].length > 1)) {
+            hasSortGroups = true;
+            jQuery("[value='"+sortableDocs[i].join("'],[value='")+"']")
+                .filter(':last').parent().parent()
+                .after('<tr><td><div class="sortLine">&nbsp;</div></td></tr>');
+        }
+    }
+    jQuery("[id$=':optionalDocs'] tr:last:has(div.sortLine)").remove();
+    if (hasSortGroups)
+        moveMiscFiles('optionalDocs');
+}
+
+function reorder(elementId) {
+    var position = 1;
+    var order = new Array();
+    var order2 = new Array();
+    jQuery('[id="aPage:aForm:'+elementId+'"] tbody tr input:checked').each(function (i) {
+        order.push(jQuery(this).val());
+        if (jQuery(this).parent().parent().find('input[id$="caseAttachmentVal"]').length > 0)
+            order2.push(jQuery(this).parent().parent().find('input[id$="caseAttachmentVal"]').val());
+    });
+    if (elementId == 'enclosureSelect') {
+        jQuery('[id="aPage:aForm:enclosureOrder"]').val(order.join(','));
+    }
+    else if (elementId == 'attachments') { /* ONLY USED IN NON-MASS */
+        jQuery('[id="aPage:aForm:attachmentOrder"]').val(order.join(';'));
+        jQuery('[id="aPage:aForm:caseAttachmentOrder"]').val(order2.join(';'));
+    }
+    else if (elementId == 'optionalDocs') {
+        var sortableDocs = JSON.parse(jQuery("[id$=':sortableDocs']").val());
+        var newSortableDocs = [];
+        for (var i = 0; i < sortableDocs.length; i++) {
+            newSortableDocs.push([]);
+            jQuery("[id$=':optionalDocs'] tr:has(input[value='"+sortableDocs[i].join("'],[value='")+"'])").each(function() {
+                newSortableDocs[i].push(jQuery(this).find('input').val());
+            });
+            if (newSortableDocs[i].length < 1) {
+                for (var j = 0; j < sortableDocs[i].length; j++) {
+                    newSortableDocs[i].push(sortableDocs[i][j]);
+                }
+            }
+        }
+        jQuery("[id$=':sortableDocs']").val(JSON.stringify(newSortableDocs));
+    }
+}
+
+function addMoreInputs(divId, namePrefix) {
+    if (!namePrefix) namePrefix = '';
+    var ser = jQuery('[id="aPage:aForm"]').serialize().split('&');
+    jQuery("#"+divId).html('');
+    if (jQuery("#"+divId).length == 0) {
+        jQuery('#myForm,#ddpForm').append('<div id="'+divId+'"></div>');
+    }
+    for (var i = 0; i < ser.length; i++) {
+        var inputVal = '';
+        if (ser[i].split(/=/).length > 1)
+            inputVal = decodeURIComponent(ser[i].split(/=/)[1].replace(/\+/g, ' '));
+        var inputName = decodeURIComponent(ser[i].split(/=/)[0]);
+        if (inputName.indexOf('com.salesforce.visualforce.ViewState') != 0) {
+            jQuery("#"+divId).append(jQuery('<input />').attr('type', 'hidden').attr('name', namePrefix + inputName).val(inputVal));
+        }
+    }
+}
+
+// BEGIN SERVICE CLOUD CONSOLE SCRIPT
+thisTabId = null;
+primaryTabId = null;
+function resetPreviousTab(result) {
+    if (result.success == true)
+        sforce.console.getEnclosingTabId(refreshTab);
+}
+function refreshTab(result) {
+    sforce.console.refreshSubtabById(result.id);
+}
+function openSubTab(result) { 
+    sforce.console.openSubtab(result.id, window.location.href+'&previousTabId='+thisTabId+'&isSubTab=true', true, '', null, resetPreviousTab, '');
+};
+function getTabId(result) {
+    return result.id
+}
+function openCaseTab(caseId) {
+    if (Loop.runContext == RunContext.ServiceCloudConsole) {
+        if (caseId == '{!JSENCODE(caseId)}')
+            sforce.console.focusSubtabById('{!JSENCODE($Request.previousTabId)}');
+        else {
+            sforce.console.getEnclosingPrimaryTabId(function(result) {
+                sforce.console.openSubtab(result.id, '/'+caseId, true);
+            });
+        }
+    }
+    else
+        window.open('/'+caseId);
+}
+function cancelClick() {
+    if (Loop.runContext == RunContext.ServiceCloudConsole) {
+        sforce.console.closeTab(thisTabId);
+        return false;
+    }
+    else if ('{!JSENCODE(cancelURL)}'.toLowerCase() == 'closewindow') {
+        window.close();
+        return false;
+    }
+    jQuery('[id="aPage:aForm"]').attr('target', '_top');
+    return true;
+}
+
+function receiveOldStyleMessage(e) {
+    if ((/^https:/gi).test(e.data))
+    {
+        var redirect = e.data;
+        sforce.console.getEnclosingPrimaryTabId(function(result) {
+            sforce.console.openSubtab(
+                result.id,
+                redirect,
+                true,
+                'DDP {!JSENCODE($Label.site.powered_by)} Drawloop',
+                thisTabId
+            );
+        });
+    }
+    else
+    {
+        if (e.data != 'closeTab')
+            alert(e.data);
+        sforce.console.refreshSubtabById('{!JSENCODE($Request.previousTabId)}', false, function(){
+            sforce.console.closeTab(thisTabId);
+        });
+    }
+};
+
+function breadcrumbClick() {
+    if (isSubmitted) {
+        sforce.console.refreshSubtabById('{!JSENCODE($Request.previousTabId)}', false, function(){
+            sforce.console.closeTab(thisTabId);
+        });
+    }
+    else {
+        sforce.console.closeTab(thisTabId);
+    }
+    return false;
+}
+// END SERVICE CLOUD CONSOLE SCRIPT
+
+// OAuth Authorization
+function setRunEnabled(enabled) {
+    if (!enabled) {
+        jQuery('.buttondiv .btn:not(.cancelBtn)').addClass('btnDisabled').attr('disabled', true);  
+    } else {
+        jQuery('.buttondiv .btn:not(.cancelBtn)').removeClass('btnDisabled').removeAttr('disabled');   
+    }
+};
+function setRequestingAuth(requesting) {
+    setRunEnabled(!requesting);
+};
+function setAuthRequired(required) {
+    requiresAuthorization = required;
+    if (required) {
+        setMessage('Authorization is required to continue. Click "Run" to authorize and run your DDP');
+    } else {
+        jQuery('#authRequired').fadeOut(400, function() { jQuery('#authRequired').remove(); });
+    }
+};
+function setMessage(msg, msgType) {
+    var $con = jQuery('#authRequired');
+    if (!$con.length) $con = jQuery('<span id="authRequired" class="message infoM4" />').insertAfter('.buttondiv .cancelBtn');
+
+    var $con = jQuery('#authRequired');
+    $con.text(msg || '')
+        .removeClass('infoM4 warningM4 errorM4')
+        .addClass((msgType || 'info') + 'M4')
+        .prepend('<img class="msgIcon" src="/s.gif" />');
+    if (msg) $con.show();
+    else $con.hide();
+};
+function handleAuthCallback(result) {
+    var status = (result.status || '').toLowerCase();
+    if (result.status == 'success') {
+        setAuthRequired(false);
+        runSubmit('run');
+        submitLooplus(true);
+    } else if (result.error == 'access_denied') {
+        setMessage('You must authorize LOOP Document Services to run DDPs.', 'warning');
+    } else if (result.error == 'oauth_app_access_denied') {
+        setMessage('You are not approved to access this app. Contact your Salesforce Administrator for approval.', 'error');
+    } else {
+        setMessage(result.error + ': ' + result.error_description, 'error');
+    }
+};
+
+function matchesSalesforceUrl(url) {
+    if (!url) return false;
+    var reUrl = /https:\/\/(.*)\.(salesforce\.com|force\.com)\//i;
+    return url.match(reUrl) !== null;
+};
+
+function matchSalesforceRecordUrl(url) {
+    if (!url) return null;
+    var reFeedUrl = /https:\/\/(.*)\.(salesforce\.com|force\.com)\/([a-z0-9]{15}|[a-z0-9]{18})/i;
+    return url.match(reFeedUrl);
+};
+function getSalesforceRecordFromUrl(url) {
+    var m = matchSalesforceRecordUrl(url);
+    return m !== null
+        ? m[3]
+        : null;
+};
+</script>
+<apex:outputPanel id="ckEditorScript">
+    <script type="text/javascript">
+    function ReloadCKEditor() {
+       for(name in CKEDITOR.instances) {
+           delete CKEDITOR.instances[name];
+       }
+       CKEDITOR.replaceAll('ckeditor');
+       console.log('{!JSENCODE(cOption.body)}');
+       CKEDITOR.instances['aPage:aForm:dsEmail'].setData('{!JSENCODE(cOption.body)}');
+    }
+    </script>
+</apex:outputPanel>
+<apex:outputPanel id="onloadScript">
+    <script type="text/javascript">
+    jQuery(function() {
+        if (!window.authSet) {
+            authSet = true;
+            connectedAppsEnabled = {!connectedAppsEnabled};
+            if (connectedAppsEnabled && '{!JSENCODE(autoPost)}' != 'true' && '{!JSENCODE(autoPost)}' != 'test') {
+                jQuery.authorize({
+                    accessToken: '{!JSENCODE(sessionid)}',
+                    userId: '{!JSENCODE(loopUserId)}',
+                    sandbox: {!isSandbox},
+                    onChangeRequiresAuth: setAuthRequired,
+                    onChangeRequestingAuth: setRequestingAuth,
+                    verifyError: function(data) {
+                        if (!data.Response) {
+                            setMessage('An unexpected response was received attempting to verify authorization.', 'error');
+                        } else if (data.Response.toLowerCase() == 'error') {
+                            if (data.Error && data.Error.toLowerCase() == 'invalid_app_access') {
+                               setMessage('You do not have access to this app. If you feel this is an error, please contact your Administrator about gaining access.', 'error');
+                               setRunEnabled(false);
+                            } else {
+                                setMessage(data.ErrorDescription, 'error');
+                            }
+                        }
+                    },
+                    authFlowComplete: handleAuthCallback
+                });
+            }
+        }
+
+        var bcTarget = 'target="_top"';
+        var actsLikeSafari = Object.prototype.toString.call(window.HTMLElement).indexOf('Constructor') > 0;
+        if (Loop.runContext == RunContext.ServiceCloudConsole
+            || Loop.runContext == RunContext.Salesforce1) {
+            
+            // We are going to need the child frame to communicate to us, 
+            // so initialize an object to do so.
+            
+            if (Loop.runContext == RunContext.Salesforce1) {
+                Sfdc.canvas.publisher.subscribe({ name: "publisher.setupPanel",
+                    onData: function(e) {
+                        Loop.isQuickAction = true;
+                    }
+                });
+
+                // Give the Submit button in Sf1 an action
+                Sfdc.canvas.publisher.subscribe({ name: "publisher.post",
+                    onData: function(e) {
+                        var result = runSubmit('run');
+                        if (result !== false) {
+                            window.scrollTo(0, 0);
+                            submitLooplus(false);
+                        }
+                }}); 
+                // Enable the Submit button in Sf1
+                Sfdc.canvas.publisher.subscribe({name: "publisher.showPanel",
+                    onData:function(e) {
+                        Sfdc.canvas.publisher.publish({name:"publisher.setValidForSubmit", payload:"true"});
+                }});
+                
+                jQuery('input.btn').removeClass('btn');
+            }
+            
+            var childFrame = document.getElementById('lpIframe');
+            jQuery.messenger({
+                endpoint:  '{!JSENCODE(loopUrl)}',
+                window:    childFrame,
+                onReceive: function(data, e) {
+                    window.console && console.log('data received');
+                    window.console && console.log(data);
+                    
+                    if (typeof data === 'string') {
+                        receiveOldStyleMessage(data, e)
+                    }
+                    else if (data.status == 'error') {
+                        alert(data.message || 'An unexpected error occurred.');
+                    }
+                    else if (data.action == 'download') {
+                        var isIOS = /(iPad|iPhone|iPod)/g.test(navigator.userAgent);
+                        if (!isIOS)
+                            sforce.one.navigateToURL(data.url);
+                        else
+                            window.open(data.url);
+                    } else {
+                        // Otherwise try to interpret the redirect URL to navigate to.
+                        // Actions: docusign, redirect
+                        
+                        if (data.action && data.action.toLowerCase() == 'docusign' && data.message)
+                            alert(data.message);
+                        
+                        try {
+                            var record = getSalesforceRecordFromUrl(data.url);
+                            
+                            if (Loop.isQuickAction 
+                                && record && '{!JSENCODE(objId)}'.substring(0, 15) == record.substring(0, 15)) {
+                               // If we don't need to redirect the user anywhere, just close the publisher
+                               // 'nested' navigateToSObject calls do not appear to work:
+                               // User runs a DDP, navigateToSObject is used, user runs a DDP again from this page,
+                               // another navigateToSObject call is made, but didn't work properly during testing.
+                               Sfdc.canvas.publisher.publish({ name: "publisher.close", payload: { refresh: "true" } });
+                            } else if (record) {
+                                // this appears to work better with 'detail' than without it
+                                // In some instances, the redirect action was simply not occurring.
+                                sforce.one.navigateToSObject(record, 'detail');
+                            } else {
+                                sforce.one.navigateToURL(data.url);
+                                if (!matchesSalesforceUrl(data.url))
+                                   Sfdc.canvas.publisher.publish({ name: "publisher.close", payload: { refresh: "true" } });
+                            }
+                        } catch (ex) { alert('Error: ' + ex); }
+                    }
+                }
+            });
+            
+            if (Loop.runContext == RunContext.ServiceCloudConsole) {
+                // Service Cloud
+                bcTarget = 'onclick="return breadcrumbClick();"';
+                if ('{!JSENCODE($Request.isSubTab)}' != 'true') {
+                    sforce.console.getEnclosingTabId(function(result){
+                        thisTabId=result.id;
+                        sforce.console.getEnclosingPrimaryTabId(openSubTab);
+                    });
+                    return false;
+                }
+                else {
+                    if ('{!JSENCODE($Request.dlpb)}' != '')
+                        sforce.console.setTabTitle('{!JSENCODE($Request.dlpb)}');
+                    else
+                        sforce.console.setTabTitle('DDP {!JSENCODE($Label.site.powered_by)} Drawloop');
+                    sforce.console.getEnclosingTabId(function(result){thisTabId=result.id;});
+                    jQuery('#dlContainer').show();
+                }
+            }
+        }
+        else if ('{!JSENCODE(cancelURL)}'.toLowerCase() == 'closewindow') {
+            bcTarget = 'onclick="return cancelClick();"';
+        }
+        
+        if ('{!JSENCODE(tabPrefix)}' != '') {
+            //OLD ACTIVE TAB STYLE
+            jQuery('.currentTab, .primaryPalette').removeClass('currentTab primaryPalette');
+            jQuery('a[href$="/{!JSENCODE(tabPrefix)}/o"]').parent().parent('td').addClass('currentTab primaryPalette');
+            //NEW ACTIVE TAB STYLE
+            jQuery('li.zen-active,li.phm.active').removeClass('zen-active primaryPalette active');
+            jQuery('li a[href$="/{!JSENCODE(tabPrefix)}/o"]').parent().addClass('zen-active primaryPalette active');
+        }
+        if ('{!JSENCODE(ddpRecordType)}' != '' && '{!JSENCODE(ddpRecordType)}' != 'Custom Object' && '{!JSENCODE(ddpRecordType)}' != 'Form')
+            jQuery("body").addClass('{!JSENCODE(ddpRecordType)}'.toLowerCase()+"Tab").removeClass("taskTab").removeClass("homeTab");
+        else if ('{!JSENCODE($Request.tabclass)}' != '')
+            jQuery("body").addClass('{!JSENCODE($Request.tabclass)}').removeClass("taskTab").removeClass("homeTab");
+
+        if ('{!JSENCODE(IF(cOption.r.dsAllowEmailCustomizations__c,"true","false"))}' == 'true') {
+            if (CKEDITOR && CKEDITOR.instances && CKEDITOR.instances['aPage:aForm:dsEmail'] && CKEDITOR.instances['aPage:aForm:dsEmail'].getData())
+                jQuery('#{!JSENCODE(cOption.r.Id)}_emailText').val(CKEDITOR.instances['aPage:aForm:dsEmail'].getData());
+            else
+                jQuery('#{!JSENCODE(cOption.r.Id)}_emailText').val('{!JSENCODE(cOption.body)}');
+        }
+        
+        var promptUserAndRedirect = '{!JSENCODE(loopAlert)}' != '';
+        if ('{!JSENCODE(loopSrc)}' != '')
+        {
+            addMoreInputs("moreInputs");
+            if (jQuery('#myForm input[name="next"]').val() == '') {
+                jQuery('#myForm input[name="next"]').val('{!JSENCODE(loopSrc)}');
+            }
+            jQuery('#lpIframe').css('display', 'block');
+            jQuery("#myForm").submit();
+            
+            if (Loop.isQuickAction) {
+                Sfdc.canvas.publisher.publish({name:"publisher.setValidForSubmit", payload:"false"});
+            }
+        }
+        else if ('{!JSENCODE(formSrc)}' != '') { /* ONLY USED IN NON-MASS */
+            runSubmit();
+            addMoreInputs("moreFormInputs", 'frm:');
+            //SOMETHING'S NOT WORKING HERE
+            if (jQuery('#ddpForm input[name="formSrc"]').val() == '') {
+                jQuery('#ddpForm input[name="formSrc"]').val('{!JSENCODE(formSrc)}')
+            }
+            jQuery("#ddpForm").submit();
+        }
+        else 
+        {
+            if ('{!JSENCODE(breadCrumbUrl)}' != '' && '{!JSENCODE(headerTitle)}' != '' && jQuery('#dlbc').size() < 1)
+                jQuery('.bPageTitle:first').append('<div class="ptBreadcrumb" id="dlbc"><a class="lnkBreadcrumb" href="{!JSENCODE(breadCrumbUrl)}" '+bcTarget+'> « {!JSENCODE($Label.DDP_Breadcrumb)} {!JSENCODE(headerTitle)}</a></div>');
+            if ('{!JSENCODE(autoPost)}' == 'true')
+                jQuery('[id="aPage:aForm:run"]').click();
+            else if ('{!JSENCODE(autoPost)}' == 'test' && jQuery('[id="aPage:aForm:runtest"]').length > 0)
+                jQuery('[id="aPage:aForm:runtest"]').click();
+            else {
+                runUnSubmit();
+            }
+            jQuery('#dlContainer').show();
+        }
+        if (promptUserAndRedirect) {
+            var waitTime = actsLikeSafari ? 500 : 100;
+            setTimeout(function() {
+                runUnSubmit();
+                alert('{!JSENCODE(loopAlert)}');
+                
+                if (Loop.isQuickAction) {
+                    Sfdc.canvas.publisher.publish({ name: "publisher.close", payload: { refresh: "false" } });
+                }
+                else {
+                    jQuery('[id="aPage:aForm:cancel"]').click();
+                }
+            }, waitTime);
+        }
+    });
+    </script>
+</apex:outputPanel>
+<div id="dlContainer" class="invisible">
+    <!-- 'Forms' TITLE ONLY USED IN NON-MASS -->
+    <apex:sectionHeader title="{!IF(AND(headerTitle='',$Request.form='true'),'Forms',headerTitle)}" subtitle="{!poweredBy}" id="sheader" rendered="{!showHeader}" />
+    <div id="ieMsgs" />
+    <apex:outputPanel id="looplusForm">
+        <form method="POST" id="myForm" style="height: 0px;" target="lpIframe" action="{!loopUrl}/SFLogin.aspx">
+            <input type="hidden" name="sessionid" value="{!sessionId}" />
+            <input type="hidden" name="location" value="{!IF(partnerServerUrl='',$Api.Partner_Server_URL_300,partnerServerUrl)}" />
+            <input type="hidden" name="auto" value="true" />
+            <input type="hidden" name="next" value="{!loopSrc}" />
+            <input type="hidden" name="attachments" value="{!jsonAttachments}" /> <!-- NON-MASS ONLY -->
+            <input type="hidden" name="sandbox" value="{!isSandbox}" />
+            <apex:outputPanel rendered="{!connectedAppsEnabled}">
+                <input type="hidden" name="userId" value="{!loopUserId}" />
+            </apex:outputPanel>
+            <div id="moreInputs"></div>
+        </form>
+        <!-- ddpForm form FOR NON-MASS ONLY -->
+        <form method="POST" id="ddpForm" style="height: 0px;" action="{!formUrl}{!IF($Request.isdtp='','','?isSubTab=true&isdtp='&$Request.isdtp)}">
+            <input type="hidden" name="id" value="{!selectedDdpId}" />
+            <input type="hidden" name="formSrc" value="{!formSrc}" />
+            <input type="hidden" name="retURL" value="{!breadCrumbUrl}" />
+            <input type="hidden" name="waitForProcessing" value="{!formWaitForProcessing}" />
+            <input type="hidden" name="formMessageOnRun" value="{!HTMLENCODE(formMessageOnRun)}" />
+            <input type="hidden" name="jsonAttachments" value="{!jsonAttachments}" />
+            <apex:repeat value="{!listParams}" var="o">
+                <input type="hidden" name="{!o.label}" value="{!o.value}" />
+            </apex:repeat>
+            <div id="moreFormInputs"></div>
+        </form>
+    </apex:outputPanel>
+    <apex:form id="aForm" styleClass="{!IF(OR(autoPost='true', loopSrc!=''), 'invisible', '')}" target="lpIframe">
+        <apex:pageMessages id="pageMessages" />
+        <div class="bDescription">{!ddpInstructions}</div>
+        <div class="relative">
+            <div id="form_proc_img" class="invisible">
+                <img alt="processing" class="loading" src="/img/s.gif" />
+                please wait
+            </div>
+            <div id="overlay" class="invisible"></div>
+            <apex:actionRegion immediate="true">
+                <apex:outputPanel rendered="{!showContactSel}" id="cpliContainer">
+                    <ol>
+                        <li id="cp">
+                            <div>
+                                <span class="block">
+                                    <label for="contactpick">{!IF(ddpLabel='',$Label.DDP_Select_Contact,SUBSTITUTE($Label.DDP_Select_Contact,'DDP',ddpLabel))}</label>
+                                </span>
+                                <apex:outputPanel styleClass="{!IF(selectedDdp.contactRequired, 'required', '')}">
+                                    <apex:selectList value="{!selectedContactId}" id="contactpick2" size="1">
+                                        <apex:selectOption itemLabel="--{!$Label.loop__DDP_None}--" itemValue="" />
+                                        <apex:selectOptions value="{!contacts}" />
+                                        <apex:actionSupport event="onchange" rerender="attachments,dsli2" action="{!changedContact}" onsubmit="runSubmit();" oncomplete="runUnSubmit();" />
+                                    </apex:selectList>
+                                </apex:outputPanel>
+                            </div>
+                        </li>
+                    </ol>
+                </apex:outputPanel>
+                <apex:outputPanel rendered="{!showDdpUl}">
+                <ol start="{!IF(showContactSel, 2, 1)}">
+                    <li id="ddpDocs2" class="delivli">
+                        <div class="moveup">
+                            <apex:outputPanel styleClass="ddps" rendered="{!showDdp}" layout="block">
+                                <apex:outputPanel layout="block">
+                                    <label for="ddpselect2">{!IF(ddpLabel='',$Label.loop__DDP_Select,SUBSTITUTE($Label.loop__DDP_Select,'DDP',ddpLabel))}</label>
+                                </apex:outputPanel>
+                                <apex:selectList value="{!selectedDdpId}" id="ddpselect2" size="{!ddpHeight}">
+                                    <apex:selectOptions value="{!ddps}" />
+                                    <apex:actionSupport event="onchange" action="{!ddpChanged}" onsubmit="runSubmit();" oncomplete="runUnSubmit();" rerender="cpliContainer,optDocs,attachments,enclosuresPanel,delivPanel,dsli2,looplusForm,pageMessages,onloadScript" />
+                                </apex:selectList>
+                            </apex:outputPanel>
+                            <apex:outputPanel layout="block" id="optDocs">
+                                <apex:outputPanel styleClass="optdiv" layout="block" rendered="{!showOptionalDocs}">
+                                    <div ondblclick="jQuery('[name$=\':optionalDocs\']').attr('checked', 'checked');">{!$Label.loop__DDP_Optional_Docs}</div>
+                                    <apex:selectCheckboxes value="{!selectedDdp.selectedOptionalDocs}" id="optionalDocs" layout="pageDirection">
+                                        <apex:selectOptions value="{!selectedDdp.optionalDocs}" />
+                                    </apex:selectCheckboxes>
+                                    <apex:inputHidden value="{!selectedDdp.sortableDocs}" id="sortableDocs" />
+                                    <script>sortableStopBorders();</script>
+                                </apex:outputPanel>
+                            </apex:outputPanel>
+                            <apex:outputPanel layout="block" id="attachments">
+                                <apex:outputPanel styleClass="attachli2" layout="block" rendered="{!showAttachments}">
+                                    <apex:outputPanel layout="block">{!$ObjectType.Attachment.labelplural}:</apex:outputPanel>
+                                    <apex:outputPanel id="xattachments">
+                                        <apex:selectCheckboxes value="{!selectedAttachments}" layout="pageDirection" onchange="reorder('attachments');">
+                                            <apex:selectOptions value="{!attachments}" />
+                                        </apex:selectCheckboxes>
+                                        <script>moveMiscFiles('attachments');</script>
+                                        <apex:inputHidden value="{!miscAttachments.attachmentOrder}" id="attachmentOrder" />
+                                    </apex:outputPanel>
+                                </apex:outputPanel>
+                                <apex:outputPanel styleclass="attachli2" layout="block" rendered="{!showCaseAttachments}" style="max-width: {!caseAttachmentTableMaxWidth};">
+                                    <apex:dataTable value="{!caseAttachments}" var="caseDoc" cellpadding="2px" styleClass="attachTable">
+                                        <apex:column style="white-space: nowrap;">
+                                            <apex:inputCheckbox value="{!caseDoc.isSelected}" onchange="reorder('attachments');" disabled="{!AND(NOT(caseDoc.isValid),caseDoc.typeName='VeevaVaultAttachment')}" />
+                                            <apex:inputHidden value="{!caseDoc.checkboxValue}" id="caseAttachmentVal" />
+                                            <apex:image rendered="{!AND(NOT(caseDoc.isValid),caseDoc.typeName='VeevaVaultAttachment')}" title="This ad hoc file is not valid. Data may be missing or incorrect." value="/img/msg_icons/warning16.png" styleClass="invalidAdHocFile" />
+                                        </apex:column>
+                                        <apex:column headerValue="{!$ObjectType.Case.fields.CaseNumber.label}">
+                                            <apex:repeat value="{!IF(OR(caseDoc.typeName='CaseAttachment',caseDoc.typeName='VeevaVaultAttachment',caseDoc.typeName='KnowledgeArticle'),caseDoc['cases'],'')}" var="case">
+                                                <div><apex:outputLink onclick="openCaseTab('{!JSENCODE(case.Id)}'); return false;">{!case.CaseNumber}</apex:outputLink></div>
+                                            </apex:repeat>
+                                        </apex:column>
+                                        <apex:column headerValue="{!$ObjectType.Case.fields.Status.label}">
+                                            <apex:repeat value="{!IF(OR(caseDoc.typeName='CaseAttachment',caseDoc.typeName='VeevaVaultAttachment',caseDoc.typeName='KnowledgeArticle'),caseDoc['cases'],'')}" var="case">
+                                                <div><apex:outputText value="{!case.status}" /></div>
+                                            </apex:repeat>
+                                        </apex:column>
+                                        <apex:column styleClass="wide" headerValue="{!$ObjectType.User.fields.Title.label}">
+                                            <apex:outputText value="{!IF(OR(caseDoc.typeName='KnowledgeArticle',caseDoc.typeName='VeevaVaultAttachment'),caseDoc['articleTitle'],'')}" />
+                                        </apex:column>
+                                        <apex:column styleClass="wide" headerValue="{!$ObjectType.Document.fields.Name.label}">
+                                            <apex:repeat value="{!IF(caseDoc.typeName='KnowledgeArticle',caseDoc['fileNames'],caseDoc['fileName'])}" var="fileName">
+                                                <div><apex:outputText value="{!fileName}" /></div>
+                                            </apex:repeat>
+                                        </apex:column>
+                                        <apex:column headerValue="Type">
+                                            <apex:outputText value="{!caseDoc.displayType}" />
+                                        </apex:column>
+                                        <apex:column headerValue="{!$ObjectType.Case.fields.Subject.label}" rendered="{!caseSubjectIsAccessible}">
+                                            <apex:repeat value="{!IF(OR(caseDoc.typeName='CaseAttachment',caseDoc.typeName='VeevaVaultAttachment',caseDoc.typeName='KnowledgeArticle'),caseDoc['cases'],'')}" var="case">
+                                                <div style="min-width: 100px;"><apex:outputLink onclick="openCaseTab('{!JSENCODE(case.Id)}'); return false;">{!case.subject}</apex:outputLink></div>
+                                            </apex:repeat>
+                                        </apex:column>
+                                    </apex:dataTable>
+                                    <script>moveMiscFiles('attachments');</script>
+                                    <apex:inputHidden value="{!caseAttachmentOrder}" id="caseAttachmentOrder" />
+                                </apex:outputPanel>
+                            </apex:outputPanel>
+                        </div>
+                    </li>
+                </ol>
+                </apex:outputPanel>
+                <apex:outputPanel id="enclosuresPanel">
+                    <apex:outputPanel rendered="{!showEnclosures}">
+                    <ol start="{!1+IF(showContactSel, 1, 0)+IF(showDdpUl, 1, 0)}">
+                        <li>
+                            <div>Select Enclosures:</div>
+                            <div class="outerdiv">
+                                <div class="innerdiv">
+                                    <apex:selectCheckboxes id="enclosureSelect" layout="pageDirection" onchange="reorder('enclosureSelect');">
+                                        <apex:selectOptions value="{!miscAttachments.enclosures}" />
+                                    </apex:selectCheckboxes>
+                                </div>
+                            </div>
+                            <apex:inputHidden id="enclosureOrder" value="{!selectedEnclosures}" />
+                            <script>moveMiscFiles('enclosureSelect');</script>
+                        </li>
+                    </ol>
+                    </apex:outputPanel>
+                </apex:outputPanel>
+                <apex:outputPanel id="delivPanel">
+                    <ol start="{!1+IF(showContactSel, 1, 0)+IF(showDdpUl, 1, 0)+IF(showEnclosures, 1, 0)}">
+                        <li class="delivli third">
+                            <div>{!IF(ddpLabel='',$Label.DDP_Delivery,SUBSTITUTE($Label.DDP_Delivery,'DDP',ddpLabel))}</div>
+                            <div id="delivdiv2">
+                                <apex:selectRadio value="{!selectedDelivery}" id="deliveryRadios" layout="pageDirection" rendered="{!!attrInQuickAction}">
+                                    <apex:selectOptions value="{!deliveries}" />
+                                    <apex:actionSupport event="onclick" rerender="attachBackPanel,workspacePanel,emailPanel,dsli2" action="{!cOptionChanged}" onsubmit="runSubmit();" oncomplete="runUnSubmit();" />
+                                </apex:selectRadio>
+                                <apex:selectList value="{!selectedDelivery}" id="deliverySelect" size="1" rendered="{!attrInQuickAction}">
+                                    <apex:selectOptions value="{!deliveries}" />
+                                    <apex:actionSupport event="onchange" rerender="attachBackPanel,workspacePanel,emailPanel,dsli2" action="{!cOptionChanged}" onsubmit="runSubmit();" oncomplete="runUnSubmit();" />
+                                </apex:selectList>
+                                <apex:outputPanel id="attachBackPanel" layout="block">
+                                    <apex:outputPanel rendered="{!showAttachBack}">
+                                        <table><tbody><tr><td>
+                                            <apex:inputCheckbox value="{!attachBack}" id="attachback">
+                                                <apex:actionSupport event="onchange" rerender="workspacePanel" action="{!attachBackChange}" onsubmit="runSubmit();" oncomplete="runUnSubmit();" />
+                                            </apex:inputCheckbox>&nbsp;
+                                            <apex:outputLabel for="attachback" value="{!$Label.loop__DDP_Attach_To} {!headerTitle}" />
+                                        </td></tr></tbody></table>
+                                    </apex:outputPanel>
+                                </apex:outputPanel>
+                                <apex:outputPanel id="workspacePanel" layout="block">
+                                    <apex:outputPanel rendered="{!showWorkspaceSelect}">
+                                        <table><tbody><tr><td>
+                                            <span style="margin-left: 5px;">{!$Label.DDP_Select_Library} </span>
+                                            <apex:selectList size="1" value="{!workspaceId}">
+                                                <apex:selectOptions value="{!workspaces}" />
+                                            </apex:selectList>
+                                        </td></tr></tbody></table>
+                                    </apex:outputPanel>
+                                </apex:outputPanel>
+                            </div>
+                            <apex:outputPanel id="emailPanel">
+                                <apex:outputPanel rendered="{!cOption.r.Loop__dsAllowEmailCustomizations__c}" id="dsCustomEmail2" layout="block" style="margin-top: 10px;">
+                                    <apex:commandButton action="{!cOption.toggleEmailEdit}" value="{!$Label.loop__Loop_Edit} {!$Label.site.email}" rerender="dsCustomEmail2,ckEditorScript" oncomplete="ReloadCKEditor();" />
+                                    <table cellspacing="0" class="ds {!cOption.emailEditRendered}" id="emailEdit">
+                                        <tr>
+                                            <td><apex:outputLabel value="{!$ObjectType.Task.fields.Subject.label}: " for="dsSubject" /></td>
+                                            <td><apex:inputText value="{!cOption.subject}" id="dsSubject" styleClass="subject" /></td>
+                                            <td><input type="hidden" name="{!cOption.r.Id}_emailSubject" value="{!cOption.subject}" /></td>
+                                        </tr>
+                                        <tr>
+                                            <td><apex:outputLabel value="{!$ObjectType.Document.fields.Body.label}: " for="dsEmail" /></td>
+                                            <td><apex:inputTextarea value="{!cOption.body}" id="dsEmail" styleClass="{!IF(cOption.isHtmlEmail,'ckeditor','emailBody')}" /></td>
+                                            <td><input type="hidden" id="{!cOption.r.Id}_emailText" name="{!cOption.r.Id}_emailText" value="" /></td>
+                                        </tr>
+                                    </table>
+                                </apex:outputPanel>
+                            </apex:outputPanel>
+                        </li>
+                    </ol>
+                </apex:outputPanel>
+                <apex:outputPanel id="dsli2">
+                    <apex:outputPanel rendered="{!showEsignRecipients}">
+                        <input type="hidden" name="dsun" value="{!dsun}" />
+                        <input type="hidden" name="dspass" value="{!dspass}" />
+                        <input type="hidden" name="dsacct" value="{!dsacct}" />
+                        <ol start="{!2+IF(showContactSel, 1, 0)+IF(showDdpUl, 1, 0)+IF(showEnclosures, 1, 0)}">
+                            <li class="delivli" id="dsli3" style="list-style-type: decimal;">
+                                <div>{!cOption.r.RecordType.Name} {!$ObjectType.dsRecipient__c.labelplural}:</div>
+                                <apex:outputPanel layout="block" rendered="{!(cOption.r.RecordType.Name == 'DocuSign')}" styleClass="dslogin {!IF(OR(showDsAccountIds,showDsun,showDspass), '', 'invisible')}">
+                                    <apex:outputPanel layout="block" rendered="{!showDsAccountIds}">
+                                        <apex:outputLabel value="{!$ObjectType.Account.name}: " for="dsacct" />
+                                        <apex:selectList value="{!dsacct}" size="1">
+                                            <apex:selectOptions value="{!dsAccountIds}" />
+                                            <apex:actionSupport event="onchange" action="{!changeDsAcct}" rerender="" />
+                                        </apex:selectList>
+                                    </apex:outputPanel>
+                                    <apex:outputPanel layout="block" rendered="{!showDsun}">
+                                        <apex:outputLabel value="{!$Label.site.username}:" for="dsun" />
+                                        <apex:inputText id="dsun" value="{!dsun}" />
+                                    </apex:outputPanel>
+                                    <apex:outputPanel layout="block" rendered="{!showDspass}">
+                                        <apex:outputLabel value="{!$Label.site.password}:" for="dspass" />
+                                        <apex:inputSecret id="dspass" value="{!dspass}" redisplay="true" />
+                                    </apex:outputPanel>
+                                </apex:outputPanel>
+                                <apex:dataTable value="{!recipients}" var="r" id="recipientTable" styleClass="list ds">
+                                    <apex:column width="100">
+                                        <apex:facet name="header">{!$ObjectType.Loop__dsRecipient__c.fields.Loop__dsRoutingOrder__c.label}</apex:facet>
+                                        <apex:outputText value="{!IF(AND(cOption.r.RecordType.Name == 'Sertifi',r.r.Loop__dsRoutingOrder__c==0), 'CC', TEXT(FLOOR(r.r.Loop__dsRoutingOrder__c)))}" />
+                                    </apex:column>
+                                    
+                                    <apex:column width="160">
+                                        <apex:facet name="header">{!$ObjectType.Name.label}</apex:facet>
+                                        <apex:outputPanel rendered="{!r.r.Loop__dsType__c == 'In Person Signer'}">
+                                            <apex:outputText value="Signer: " style="font-weight: bold;" />
+                                        </apex:outputPanel>
+                                        <apex:outputPanel rendered="{!r.signer.isText}">
+                                            <apex:outputText value="{!r.signer.label}" id="showText" />
+                                            <input type="hidden" name="{!r.r.Id}_recipient" value="{!r.signer.recipientValue}" />
+                                        </apex:outputPanel>
+                                        <apex:outputPanel rendered="{!r.signer.isUserLookup}">
+                                            <apex:inputField value="{!r.r.Loop__dsUser__c}" styleClass="{!IF(r.r.Loop__dsRequired__c, 'required', '')}" />
+                                            <input type="hidden" name="{!r.r.Id}_recipient" value="{!r.r.Loop__dsUser__c}" />
+                                        </apex:outputPanel>
+                                        <apex:outputPanel rendered="{!r.signer.isContactLookup}">
+                                            <apex:inputField value="{!r.r.Loop__dsContact__c}" styleClass="{!IF(r.r.Loop__dsRequired__c, 'required', '')}" />
+                                            <input type="hidden" name="{!r.r.Id}_recipient" value="{!r.r.Loop__dsContact__c}" />
+                                        </apex:outputPanel>
+                                        <apex:outputPanel rendered="{!r.signer.isNameEmail}" style="white-space: nowrap;">
+                                            <apex:inputText value="{!r.signer.staticName}" styleClass="recipientName {!IF(r.r.Loop__dsRequired__c, 'required', '')}" title="Name" />
+                                            <apex:inputText value="{!r.signer.staticEmail}" styleClass="recipientEmail" style="margin-left: 3px;" title="Email" />
+                                            <input type="hidden" name="{!r.r.Id}_recipient" value="name_email" />
+                                            <script>
+                                                jQuery('input.recipientName').attr('placeholder', '{!JSENCODE(LOWER($ObjectType.Name.label))}...');
+                                                jQuery('input.recipientEmail').attr('placeholder', '{!JSENCODE(LOWER($ObjectType.User.fields.Email.label))}...');
+                                            </script>
+                                        </apex:outputPanel>
+                                        <apex:outputPanel rendered="{!NOT(OR(r.signer.isText, r.signer.isUserLookup, r.signer.isContactLookup, r.signer.isNameEmail))}" id="showDD">
+                                            <apex:selectList value="{!r.signer.recipientValue}" size="1" id="recipient">
+                                                <apex:selectOptions value="{!r.signer.signers}" />
+                                            </apex:selectList>
+                                            <input type="hidden" name="{!r.r.Id}_recipient" value="{!r.signer.recipientValue}" />
+                                        </apex:outputPanel>
+                                        <apex:outputPanel rendered="{!OR(r.signer.isNameEmail,BEGINS(r.r.Loop__StaticName__c, '!'),r.r.Loop__dsStaticRecipient__c='Dynamic Name-Email')}">
+                                            <input type="hidden" name="{!r.r.Id}_recipient_name" value="{!r.signer.staticName}" />
+                                            <input type="hidden" name="{!r.r.Id}_recipient_email" value="{!r.signer.staticEmail}" />
+                                        </apex:outputPanel>
+                                        
+                                        <apex:outputPanel layout="block" rendered="{!r.r.Loop__dsType__c == 'In Person Signer'}">
+                                            <apex:outputText value="Host: " style="font-weight: bold;" />
+                                            <apex:outputPanel rendered="{!r.host.isText}">
+                                                <apex:outputText value="{!r.host.label}" id="showHostText" />
+                                                <input type="hidden" name="{!r.r.Id}_host" value="{!r.host.recipientValue}" />
+                                            </apex:outputPanel>
+                                            <apex:outputPanel rendered="{!r.host.isUserLookup}">
+                                                <apex:inputField value="{!r.r.Loop__Host_User__c}" styleClass="{!IF(r.r.Loop__dsRequired__c, 'required', '')}" />
+                                                <input type="hidden" name="{!r.r.Id}_host" value="{!r.r.Loop__Host_User__c}" />
+                                            </apex:outputPanel>
+                                            <apex:outputPanel rendered="{!r.host.isContactLookup}">
+                                                <apex:inputField value="{!r.r.Loop__Host_Contact__c}" styleClass="{!IF(r.r.Loop__dsRequired__c, 'required', '')}" />
+                                                <input type="hidden" name="{!r.r.Id}_host" value="{!r.r.Loop__Host_Contact__c}" />
+                                            </apex:outputPanel>
+                                            <apex:outputPanel rendered="{!r.host.isNameEmail}" style="white-space: nowrap;">
+                                                <apex:inputText value="{!r.host.staticName}" styleClass="recipientName {!IF(r.r.Loop__dsRequired__c, 'required', '')}" title="Name" />
+                                                <apex:inputText value="{!r.host.staticEmail}" styleClass="recipientEmail" style="margin-left: 3px;" title="Email" />
+                                                <input type="hidden" name="{!r.r.Id}_host" value="name_email" />
+                                                <script>
+                                                    jQuery('input.recipientName').attr('placeholder', '{!JSENCODE(LOWER($ObjectType.Name.label))}...');
+                                                    jQuery('input.recipientEmail').attr('placeholder', '{!JSENCODE(LOWER($ObjectType.User.fields.Email.label))}...');
+                                                </script>
+                                            </apex:outputPanel>
+                                            <apex:outputPanel rendered="{!NOT(OR(r.host.isText, r.host.isUserLookup, r.host.isContactLookup, r.host.isNameEmail))}" id="showHostDD">
+                                                <apex:selectList value="{!r.host.recipientValue}" size="1" id="hostRecipient">
+                                                    <apex:selectOptions value="{!r.host.signers}" />
+                                                </apex:selectList>
+                                                <input type="hidden" name="{!r.r.Id}_host" value="{!r.host.recipientValue}" />
+                                            </apex:outputPanel>
+                                            <apex:outputPanel rendered="{!OR(r.host.isNameEmail,BEGINS(r.r.Loop__Host_Static_Name__c, '!'),r.r.Loop__Specified_Host__c='Dynamic Name-Email')}">
+                                                <input type="hidden" name="{!r.r.Id}_host_name" value="{!r.host.staticName}" />
+                                                <input type="hidden" name="{!r.r.Id}_host_email" value="{!r.host.staticEmail}" />
+                                            </apex:outputPanel>
+                                        </apex:outputPanel>
+                                    </apex:column>
+                                    
+                                    <apex:column width="90" rendered="{!cOption.showRole}">
+                                        <apex:facet name="header">{!$ObjectType.Loop__dsRecipient__c.fields.Loop__dsRoleName__c.label}</apex:facet>
+                                        <apex:outputText value="{!r.r.Loop__dsRoleName__c}" />
+                                        &nbsp;
+                                    </apex:column>
+                                    <apex:column width="90">
+                                        <apex:facet name="header">{!$ObjectType.Loop__dsRecipient__c.fields.Loop__dsType__c.label}</apex:facet>
+                                        <apex:outputText value="{!r.r.Loop__dsType__c}" />
+                                    </apex:column>
+                                    <apex:column width="175" rendered="{!cOption.showAccessCode}">
+                                        <apex:facet name="header">{!$ObjectType.Loop__dsRecipient__c.fields.Loop__CustomAccessCode__c.label}</apex:facet>
+                                        <apex:outputPanel id="accessCode" rendered="{!r.r.Loop__dsAllowAccessCode__c}" >
+                                            <apex:inputText value="{!r.accessCode}" />
+                                            <input type="hidden" name="{!r.r.Id}_accesscode" value="{!r.accessCode}" />
+                                        </apex:outputPanel>
+                                        &nbsp;
+                                    </apex:column>
+                                    <apex:column width="240" rendered="{!AND(cOption.r.RecordType.Name == 'DocuSign',NOT(attrInQuickAction))}">
+                                        <apex:facet name="header">{!$ObjectType.Note.label}</apex:facet>
+                                        <apex:commandButton action="{!r.toggleEditNote}" value="{!LOWER($Label.loop__Loop_Edit)}" rerender="recipientTable" styleClass="{!r.btnRendered}" />
+                                        <apex:inputTextarea id="note" value="{!r.note}" rows="3" styleClass="note {!r.noteRendered}" cols="34"></apex:inputTextarea>
+                                        <input type="hidden" name="{!r.r.Id}_note" value="{!r.note}" />
+                                    </apex:column>
+                                </apex:dataTable>
+                                <apex:outputPanel rendered="{!AND(cOption.r.RecordType.Name == 'DocuSign',cOption.r.Loop__dsExposeExpirations__c)}" id="dsCustomExpire" layout="block" style="margin-top: 10px;">
+                                    <apex:commandButton action="{!cOption.toggleExpireEdit}" value="{!$Label.loop__Loop_Edit} {!$Label.loop__DDP_RemindExpires}" rerender="dsCustomExpire" />
+                                    <table cellspacing="0" class="ds {!cOption.expireEditRendered}" id="expireEdit">
+                                        <tr>
+                                            <td>
+                                                <apex:outputLabel value="{!$ObjectType.Loop__DDP_Integration_Option__c.fields.Loop__dsReminderDelay__c.label}" for="dsRemDelay" />
+                                                <span class="helpButton">
+                                                    <img class="helpOrb" title="Send reminder in # days. 0 days will not send a reminder." alt="Send reminder in # days. 0 days will not send a reminder." src="/s.gif" />
+                                                </span>
+                                            </td>
+                                            <td><apex:inputText value="{!cOption.remindDelay}" id="dsRemDelay" /></td>
+                                            <td>
+                                                <apex:outputLabel value="{!$ObjectType.Loop__DDP_Integration_Option__c.fields.Loop__dsReminderFrequency__c.label}" for="dsRemFreq" />
+                                                <span class="helpButton">
+                                                    <img class="helpOrb" title="Repeat reminder every # days until complete." alt="Repeat reminder every # days until complete." src="/s.gif" />
+                                                </span>
+                                            </td>
+                                            <td><apex:inputText value="{!cOption.remindFreq}" id="dsRemFreq" /></td>
+                                        </tr>
+                                        <tr>
+                                            <td>
+                                                <apex:outputLabel value="{!$ObjectType.Loop__DDP_Integration_Option__c.fields.Loop__dsExpireAfter__c.label}" for="dsExpire" />
+                                                <span class="helpButton">
+                                                    <img class="helpOrb" title="Expire/Void Envelope in # days. 0 days will never expire the envelope." alt="Expire/Void Envelope in # days. 0 days will never expire the envelope." src="/s.gif" />
+                                                </span>
+                                            </td>
+                                            <td><apex:inputText value="{!cOption.expireAfter}" id="dsExpire" /></td>
+                                            <td>
+                                                <apex:outputLabel value="{!$ObjectType.Loop__DDP_Integration_Option__c.fields.Loop__dsExpireWarn__c.label}" for="dsExpireWarn" />
+                                                <span class="helpButton">
+                                                    <img class="helpOrb" title="Warn of expiration # days prior to expiration." alt="Warn of expiration # days prior to expiration." src="/s.gif" />
+                                                </span>
+                                            </td>
+                                            <td><apex:inputText value="{!cOption.expireWarn}" id="dsExpireWarn" /></td>
+                                        </tr>
+                                    </table>
+                                    <input type="hidden" name="{!cOption.r.Id}_remindDelay" value="{!cOption.remindDelay}" />
+                                    <input type="hidden" name="{!cOption.r.Id}_remindFreq" value="{!cOption.remindFreq}" />
+                                    <input type="hidden" name="{!cOption.r.Id}_expireAfter" value="{!cOption.expireAfter}" />
+                                    <input type="hidden" name="{!cOption.r.Id}_expireWarn" value="{!cOption.expireWarn}" />
+                                </apex:outputPanel>
+                            </li>
+                        </ol>
+                    </apex:outputPanel>
+                </apex:outputPanel>
+            </apex:actionRegion>
+            
+            <div class="buttondiv">
+                <apex:actionFunction action="{!submitLooplus}" name="submitLooplus" rerender="formPanel,looplusForm,aForm,loading,lpdiv,onloadScript">
+                    <apex:param name="runTest" assignTo="{!runTest}" value="false" />
+                </apex:actionFunction>
+                <ul>
+                    <li>
+                        <apex:commandButton styleClass="{!IF(attrInQuickAction, 'sf1Btn', '')}" action="{!submitLooplus}" value=" {!$Label.loop__DDP_Run} " rerender="formPanel,looplusForm,aForm,loading,lpdiv,onloadScript" onclick="var result = runSubmit('run'); if (result === false) { return false; } window.scrollTo(0, 0);" id="run">
+                            <apex:param name="runTest" assignTo="{!runTest}" value="false" />
+                        </apex:commandButton>
+                    </li>
+                    <li>
+                        <apex:commandButton rendered="{!showTestBtn}" styleClass="{!IF(attrInQuickAction, 'sf1Btn', '')}" action="{!submitLooplus}" value=" {!$Label.loop__DDP_Run} Test " rerender="formPanel,looplusForm,aForm,loading,lpdiv,onloadScript" onclick="var result = runSubmit('run'); if (result === false) { return false; } window.scrollTo(0, 0);" id="runtest" style="border-color: green;">
+                            <apex:param name="runTest" assignTo="{!runTest}" value="true" />
+                        </apex:commandButton>
+                    </li>
+                    <li>
+                        <apex:commandButton action="{!cancel}" value=" {!$Label.loop__DDP_Cancel} " onclick="return cancelClick();" id="cancel" styleClass="cancelBtn {!IF(attrInQuickAction, 'sf1Btn', '')}" />
+                    </li>
+                </ul>
+                <span id="wait">Please wait...</span>
+            </div>
+        </div>
+    </apex:form>
+    
+    <apex:outputPanel id="loading">
+        <div id="form_loading_img" class="{!IF(autoPost='true', '', 'invisible')}">
+            <img src="/img/loading.gif" alt="loading" />
+            <span>loading...</span>
+        </div>
+    </apex:outputPanel>
+
+    <div class="invisible">
+        <img src="https://apps.drawloop.com/graphics/backgrounds/fillBar2.png" />
+    </div>
+    <apex:outputPanel id="lpdiv" style="{!IF(loopAlert!='', 'visibility: hidden;', '')}">
+        <apex:iframe id="lpIframe" frameborder="0" rendered="true" height="600" scrolling="true" />
+    </apex:outputPanel>
+</div>
+</apex:component>

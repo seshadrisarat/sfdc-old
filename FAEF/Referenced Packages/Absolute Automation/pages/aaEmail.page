@@ -1,0 +1,122 @@
+<apex:page standardController="i__Email__c" extensions="i.CtlEmail" tabStyle="i__Email__c" title="Email: {!Subject}" rendered="{!renderOK}">
+<apex:stylesheet value="{!$Resource.i__aastyles}"/>
+<apex:includeScript value="{!URLFOR($Resource.i__MobileDesignTemplates, 'common/js/jQuery2.0.2.min.js')}"/>
+<apex:outputText value="{!notViewableReason}" escape="false"/>
+<apex:outputText rendered="{!viewable}">
+
+
+<div class="bPageTitle">
+    <div class="ptBody secondaryPalette">
+        <div class="content">
+            <a href="https://www.ihance.com/aav2link.aspx"><img src="https://www.ihance.com/img/aav2/icon_trans.png" alt="iHance" class="pageTitleIcon" title="iHance" style="background:{!IF($User.UIThemeDisplayed == 'Theme2', '#565959', '#FFFFFF')};"/></a>
+            <h1 class="pageType">{!ProxyMsg.Type} email</h1>
+            <h2 class="pageDescription">{!Subject}</h2>
+            <div class="blank">&nbsp;</div>
+        </div>
+    </div>
+</div>
+<div style="margin: -1.5em 0 1em 0; font-size: 91%; line-height: 1.5em;">
+&#171; <a href="{!goBackUrl}">Go Back</a>
+</div>
+
+<br/><br/>
+<apex:relatedList list="NotesAndAttachments" title="Attachments"/>
+<br/><br/>
+
+<apex:form >
+<apex:actionFunction name="ajaxCopyToTask" action="{!copyToTask}" immediate="true" oncomplete="$('#copyToTaskRunning').hide();$('#copyToTaskDone').show();"/>
+
+<apex:pageBlock title="Sent: {!sentAt}">
+<apex:pageBlockButtons >
+    <apex:commandButton action="{!edit}" value="Edit" style="margin:2px;"/>
+    <apex:commandButton action="{!delete}" value="Delete" style="margin:2px;margin-left:10px;"/>
+    <apex:commandButton id="copyToTaskButton" onClick="$(this).hide(); $('#copyToTaskRunning').show(); ajaxCopyToTask(); return false;" value="Copy to Task" style="margin:2px;margin-left:10px;" rendered="{!hasContactsOrLeads}"/>
+    <span id="copyToTaskRunning" style="display:none;font-style:italic;" class="hd"><span>copying...</span></span>
+    <span id="copyToTaskDone"    style="display:none;font-style:italic;">copy complete</span>
+</apex:pageBlockButtons>
+
+<apex:outputText rendered="{!AACfg.EmailLifespan != 0}">
+<div style="margin:12px 0;">
+	<apex:outputText rendered="{!OR(hasCase,hasOpp)}">
+	This email will not be auto-deleted because it is linked directly to a Case or Opportunity.
+	</apex:outputText>
+	<apex:outputText rendered="{!NOT(OR(hasCase,hasOpp))}">
+		<apex:outputText rendered="{!ProxyMsg.NoAutoDelete}">
+		This email is protected against auto-deletion. <span class="helptext">(Click "Edit" to unprotect)</span>
+		</apex:outputText>
+		<apex:outputText rendered="{!NOT(ProxyMsg.NoAutoDelete)}">
+		Emails are eligible for auto-deletion&nbsp;<apex:outputText value="{!AACfg.EmailLifespan}"/> month<apex:outputText rendered="{!AACfg.EmailLifespan > 1}" value="s"/> after their Sent date.
+		<span class="helptext">(Click "Edit" to protect this email from auto-deletion)</span>
+		</apex:outputText>
+	</apex:outputText>
+</div>
+</apex:outputText>
+
+
+<apex:dynamicComponent componentValue="{!lookupsOutput}"/>
+
+<div class="aaTableHdr" style="margin-top:0px;">Contacts and Leads on this Email</div>
+
+<apex:outputText rendered="{! contactsAndLeads.size == 0}"><i>(none)</i></apex:outputText>
+<apex:pageBlockTable value="{!contactsAndLeads}" var="each" cellPadding="4" rendered="{! contactsAndLeads.size > 0}">
+<apex:column >
+	<apex:facet name="header">Role</apex:facet>
+	{!each.role}
+</apex:column>
+<apex:column >
+	<apex:facet name="header">Contact/Lead</apex:facet>
+	<a href="/{!each.Id}">{!each.name}</a>
+</apex:column>
+<apex:column >
+	<apex:facet name="header">Email</apex:facet>
+	<a href="mailto:{!each.addr}">{!each.addr}</a>
+</apex:column>
+<apex:column >
+	<apex:facet name="header">Account</apex:facet>
+	<apex:outputText rendered="{!NOT(ISNULL(each.aid))}"><a href="/{! each.aid }">{! each.account } </a></apex:outputText>
+	<apex:outputText rendered="{!ISNULL(each.aid)}"><font style="color:#ccc;font-style:italic;">{!IF(each.type = 'Contact', 'No account', 'Lead')}</font></apex:outputText>
+</apex:column>
+<apex:column >
+	<apex:facet name="header">Need to merge duplicates?</apex:facet>
+	<apex:outputText rendered="{!NOT(ISNULL(each.aid))}"><i><a href="/merge/conmergewizard.jsp?retURL={!returl}&id={!each.aid}">Go to contact merge</a></i></apex:outputText>
+	<apex:outputText rendered="{! each.type = 'Lead'  }"><i><a href="/lead/leadmergewizard.jsp?retURL={!returl}&id={!each.id}">Go to lead merge</a></i></apex:outputText>
+</apex:column>
+</apex:pageBlockTable>
+
+
+<div class="aaTableHdr">Pending addresses on this Email<span class="comment smalltext">(<a href="{! $Page.i__aaPendingAddrs }?pgwantpg=p&pgrowkey={!ProxyMsg.MsgDigest}:0:0">view pending page</a>)</span></div>
+
+<apex:outputText rendered="{! unlinkedAddrs.size == 0}"><i>(none)</i></apex:outputText>
+<apex:pageBlockTable value="{!unlinkedAddrs}" var="each" cellPadding="4" rendered="{! unlinkedAddrs.size > 0}">
+<apex:column >
+	<apex:facet name="header">Role</apex:facet>
+	{!each.role}
+</apex:column>
+<apex:column >
+	<apex:facet name="header">Email</apex:facet>
+	<a href="mailto:{!each.addr}">{!each.addr}</a>
+</apex:column>
+<apex:column >
+	<apex:facet name="header">Actions</apex:facet>
+	<i>
+	<a href="/003/e?retURL={!returl}&name_firstcon2={!URLENCODE(each.firstname)}&name_lastcon2={!URLENCODE(each.lastname)}&con15={!URLENCODE(each.addr)}">Create Contact</a> &nbsp;|&nbsp;
+	<a href="/00Q/e?retURL={!returl}&name_firstlea2={!URLENCODE(each.firstname)}&name_lastlea2={!URLENCODE(each.lastname)}&lea11={!URLENCODE(each.addr)}">Create Lead</a>
+	</i>
+</apex:column>
+</apex:pageBlockTable>
+
+<div class="aaTableHdr">Email Content</div>
+
+<table class="list" width="100%" cellspacing="0" cellpadding="4" border="0" rows="0"> <!-- puts pretty lines above/below the content -->
+<tr><td>
+<apex:outputText value="{!escapedContent}" escape="false"/>
+</td></tr>
+</table>
+
+</apex:pageBlock>
+
+</apex:form>
+
+
+</apex:outputText>
+</apex:page>

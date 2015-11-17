@@ -1,0 +1,1 @@
+public with sharing class SL_MissingArgumentException extends Exception{ }

@@ -1,0 +1,305 @@
+<apex:page controller="RT1.InviteToMeetingController" doctype="html-5.0" applyHtmlTag="false" applyBodyTag="false" showHeader="false">
+    <link rel="stylesheet"  type="text/css" href="{!URLFOR($Resource.meetingsr, 'datetimepicker/datetimepicker.min.css')}" />
+    <link rel="stylesheet"  type="text/css" href="{!URLFOR($Resource.meetingsr, 'css/inviteperson.css')}" />
+    
+    <script type='text/javascript' src="{!URLFOR($Resource.Mobile_Design_Templates, 'common/js/jQuery2.0.2.min.js')}"/>
+    <script type='text/javascript' src="{!URLFOR($Resource.Mobile_Design_Templates, 'common/js/jquery.touchwipe.min.js')}"/>
+    <script type='text/javascript' src="{!URLFOR($Resource.Mobile_Design_Templates, 'common/js/main.min.js')}"/>
+    <script type='text/javascript' src="{!URLFOR($Resource.meetingsr, 'js/moment.min.js')}" />
+    <script type='text/javascript' src="{!URLFOR($Resource.meetingsr, 'js/moment-timezone-with-data.min.js')}" />
+    <script type='text/javascript' src="{!URLFOR($Resource.meetingsr, 'datetimepicker/datetimepicker.min.js')}" />
+    <script type='text/javascript' src='/canvas/sdk/js/publisher.js' />
+    
+    <script>
+        var isSF1 = (typeof sforce != 'undefined') && (sforce != null);
+
+        $(document).ready(function(){
+            if(!isSF1) {
+                $('#nonSF1').show();
+                $('#pubInvite').click(function() {
+                      window.parent.location.href = '/apex/rt1__InvitePersonToMeeting?id=<apex:insert name="personId"/>';
+                });
+            }
+            var meetingUser = {!OR($User.ReadyTalkUser__c, $User.MeetingsCollaboratorUser__c)};
+            if(meetingUser && "{!userSettings.RT1__NewMeetingTimeZone__c}".trim() != "") {
+                $('#personName').val('<apex:insert name="personName"/>');
+                $('#logActivity').prop( "checked", {!userSettings.RT1__Log_Activities__c});
+                $('#duration').val('MINUTES60');
+                var timeZone = '{!userSettings.RT1__NewMeetingTimeZone__c}';
+                $('#timeZone').val(timeZone);
+                var baseTime = moment().add(10, "m");
+                var mod = baseTime.minute() % 30;
+                if (mod != 0) {
+                    baseTime = baseTime.add(30 - mod, "m");
+                }
+
+                $('#dateTime').val(baseTime.tz(timeZone).format("MMM DD, YYYY hh:mm A"));
+                $('#dateTime').datetimepicker({step: 30, formatTime:'h:i A', format: 'M d, Y h:i A'});
+                
+                setTimeout(function(){
+                    Sfdc.canvas.publisher.publish({name: "publisher.setValidForSubmit", payload:"true"});
+                }, 1000);
+                Sfdc.canvas.publisher.publish({name: "publisher.setValidForSubmit", payload:"true"});
+                
+                if (isSF1) {
+                    $('#createMeeting').show();
+                }
+            } else if (meetingUser) {
+                displayErrors("Your user settings are not configured for the ReadyTalk application. To configure your user settings, navigate to the ReadyTalk application within salesforce.com."); 
+            } else {
+                displayErrors("Your are not currently a ReadyTalk for Salesforce User, please contact your system administrator.");
+            }
+        });
+
+        $.fn.serializeObject = function() {
+            var o = {};
+            var a = this.serializeArray();
+            
+            $.each(a, function() {
+                var key = this.name;
+                var value = this.value || '';
+                if(key == "dateTime") {
+                    value = moment.tz(value, "MMM DD, YYYY hh:mm A", $('#timeZone').val()).format();
+                }
+                if (o[key] !== undefined) {
+                    if (!o[key].push) {
+                        o[key] = [o[key]];
+                    }
+                    o[key].push(value);
+                } else {
+                    o[key] = value;
+                }
+            });
+            return o;
+        };        
+    
+        function validate() {
+            var errors = [];
+            var missingRequired = [];
+            var errorFields = [];
+            $('.inputError').removeClass("inputError");
+            $("#createMeeting [required|='true']").each(function() {
+                    if (!$(this).val()) {
+                        missingRequired[missingRequired.length] = $(this).prev().text().trim();
+                        errorFields[errorFields.length] = $(this);
+                    }
+                });
+
+            if(missingRequired.length > 0) {
+                errors[errors.length] = "These required fields must be completed: " + missingRequired.join(", ");
+            }
+
+            var $field = $('#meetingTitle');
+            var errorMessage = checkFieldLength($field, 1, $field.attr('maxlength'), false);
+            if(errorMessage != null) {
+                errors[errors.length] = errorMessage;
+                errorFields[errorFields.length] = $field;
+            }
+
+            $field = $('#accessCode');
+            if(isNaN($field.val())) {
+                errors[errors.length] = $field.prev().text() + "  must be numeric.";
+                errorFields[errorFields.length] = $field;
+            } else {
+                errorMessage = checkFieldLength($field, 4, $field.attr('maxlength'), true);
+                if(errorMessage != null) {
+                    errors[errors.length] = errorMessage;
+                    errorFields[errorFields.length] = $field;
+                }
+            }
+
+            $field = $('#passCode');
+            if(isNaN($field.val())) {
+                errors[errors.length] = $field.prev().text() + "  must be numeric.";
+                errorFields[errorFields.length] = $field;
+            } else {
+                errorMessage = checkFieldLength($field, 4, $field.attr('maxlength'), true);
+                if(errorMessage != null) {
+                    errors[errors.length] = errorMessage;
+                    errorFields[errorFields.length] = $field;
+                }
+            }
+            
+            if (errors.length > 0) {
+                displayErrors(errors);
+                var i;
+                for (i = 0; i < errorFields.length; ++i) {
+                    errorFields[i].addClass("inputError");
+                }
+                return false;
+            }
+            $('.forcePageError').hide();
+            return true;
+        }
+
+        function checkFieldLength($field, minLength, maxLength, isNumeric) {
+            var fieldLength = $field.val().trim().length;
+            var errorMessage = null;
+            if(fieldLength < minLength || fieldLength > maxLength) {
+                errorMessage = $field.prev().text() + "  must be between " + minLength + " and " + maxLength;
+                if(isNumeric) {
+                    errorMessage += " digits.";
+                } else {
+                    errorMessage += " characters.";
+                }
+            }
+            return errorMessage;
+        }
+
+        function scheduleMeeting() {
+            var pId = '<apex:insert name="personId"/>';
+            var objectType = '<apex:insert name="objectType"/>';
+            var firstName = '<apex:insert name="firstName"/>';
+            var lastName = '<apex:insert name="lastName"/>';
+            var email = '<apex:insert name="email"/>';
+            var jsonMeeting = JSON.stringify($('#createMeeting').serializeObject());
+            console.log(jsonMeeting);
+            
+            Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.InviteToMeetingController.scheduleMeeting}', pId, objectType, 
+                firstName, lastName, email, jsonMeeting, 
+                function(result, event){
+                    if(event.status){
+                        $('.forcePageError').hide();
+                        Sfdc.canvas.publisher.publish({name: "publisher.close", payload:{ refresh:"true"}});  
+                    } else if (event.type === 'exception'){
+                        console.log(result);
+                        var errors = event.message.match(/.*SOAP Fault:\s(.*)\sfaultcode/);
+                        console.log(errors);
+                        console.log(event.message);
+                        if(errors != null && errors.length > 1) {
+                            displayErrors(errors[1]);
+                        } else {
+                            displayErrors(event.message);
+                        }
+
+
+                    }
+                }
+            );
+        }
+
+        function displayErrors(errors) {
+            var $pageErrors = $('.pageErrors');
+            if($.isArray(errors)){
+                $pageErrors.html('<li>' + errors.join("</li><li>") + '</li>')
+            } else {
+                $pageErrors.html('<li>' + errors + '</li>');
+            }
+            $('.forcePageError').show();
+        }
+    </script>
+    <div class="container forceRecordLayout">
+        <div class="forcePageError" style="display: none;">
+            <div class="error pOne forceMessage">
+                <div class="bLeft">
+                    <img class="errorIcon forceIcon" alt="error" src="/auraFW/resources/aura/s.gif" data-icon=""></img>
+                </div>
+                <div class="bRight">
+                    <p class="summary">Looks like there's a problem.</p>
+                    <p class="genericError">Review the errors on this page.</p>
+                </div>
+                <div class="bBody">
+                    <p class="detail">
+                        <ul class="pageErrors">
+                        </ul>
+                    </p>
+                </div>
+            </div>
+        </div>
+        <form id="createMeeting" style="display: none;">
+            <div class="row">
+                    <div class="inputItem">
+                        <label class="inputLabel" for="personName">
+                            <div class="inputLabel">Invitee</div>
+                        </label>
+                        <input id="personName" name="personName" disabled="true" class="uiInput uiInputText"></input>
+                    </div>
+                    <div class="inputItem">
+                        <label class="inputLabel" for="meetingTitle">
+                            <div class="inputLabel">Meeting Title</div>
+                        </label>
+                        <input id="meetingTitle" name="title" class="uiInput uiInputText" required="true" maxlength="300" value="{!userSettings.NewMeetingDefaultName__c}"></input>
+                    </div>
+            </div>
+            <div class="row">
+                    <div class="inputItem">
+                        <label class="inputLabel" for="dateTime">
+                            <div class="inputLabel">Date and Time</div>
+                        </label>
+                        <input id="dateTime" name="dateTime" type="text" data-field="datetime" readonly="true" class="uiInput uiInputText" required="true"></input>
+                    </div>
+                    <div class="inputItem">
+                        <label class="inputLabel" for="timeZone">
+                            <div class="inputLabel">Time Zone</div>
+                        </label>
+                        <select id="timeZone" name="timeZone" class="inputPicklist" required="true" >
+                            <apex:repeat value="{!timeZones}" var="item">
+                                <option value="{!item}">{!item}</option>
+                            </apex:repeat>
+                        </select>
+                    </div>
+            </div>
+            <div class="row">
+                    <div class="inputItem">
+                        <label class="inputLabel" for="duration">
+                            <div class="inputLabel">Duration</div>
+                        </label>
+                        <select id="duration" name="duration" class="inputPicklist" required="true" >
+                            <apex:repeat value="{!durations}" var="item">
+                                <option value="{!item.name}">{!item.value}</option>
+                            </apex:repeat>
+                        </select>
+                    </div>
+                    <div class="inputItem">
+                        <label class="inputLabel" for="meetingType">
+                            <div class="inputLabel">Meeting Type</div>
+                        </label>
+                        <select id="meetingType" name="meetingType" class="inputPicklist" required="true">
+                            <apex:repeat value="{!meetingTypes}" var="item">
+                                <option value="{!item.name}">{!item.value}</option>
+                            </apex:repeat>
+                        </select>
+                    </div>
+            </div>
+            <div class="row">
+                    <div class="inputItem">
+                        <label class="inputLabel" for="accessCode">
+                            <div class="inputLabel">Access Code</div>
+                        </label>
+                        <input id="accessCode" name="accessCode" maxlength="20" class="uiInput uiInputText" required="true" value="{!userSettings.AccessCode__c}"></input>
+                    </div>
+                    <div class="inputItem">
+                        <label class="inputLabel" for="passCode">
+                            <div class="inputLabel">Pass Code</div>
+                        </label>
+                        <input id="passCode" name="passCode" type="password" maxlength="10" class="uiInput uiInputText" required="true" value="{!userSettings.PassCode__c}"></input>
+                    </div>
+            </div>
+            <div class="row">
+                    <div class="inputItem">
+                        <label class="inputLabel" for="logActivity">
+                            <div class="inputLabel">Log Activity</div>
+                        </label>
+                        <input type="checkbox" class="uiInput uiInputCheckbox" id="logActivity" name="logActivity"></input>
+                    </div>
+            </div>            
+        </form>
+    </div>
+    <div id="nonSF1" style="display: none;">
+        <button id="pubInvite" type="button" style="margin: 14px; padding: 5px;">Invite To ReadyTalk Meeting</button>
+    </div>        
+    
+    <div id="dtBox"></div>
+    
+    <script type='text/javascript'>  
+        if(typeof sforce != 'undefined' && sforce != null) {
+            Sfdc.canvas.publisher.subscribe({name: "publisher.post", onData:function(e) {
+                if(validate()) {
+                    scheduleMeeting();
+                }
+            }});
+            var objectType= '<apex:insert name="objectType"/>';
+            Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.InviteToMeetingController.countHit}', objectType, function(result, event){});        
+        }
+     </script>    
+</apex:page>

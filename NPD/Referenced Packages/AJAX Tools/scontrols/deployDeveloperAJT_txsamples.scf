@@ -1,0 +1,931 @@
+//-- Ajax Query: sync
+  result = sforce.connection.query("Select Name,Id from User");
+  records = result.getArray("records");
+
+  for (var i=0; i<records.length; i++) {
+    var record = records[i];
+    log(record.Name + " -- " + record.Id);
+  }
+
+//-- Ajax Query: async
+  var result = sforce.connection.query("Select Name,Id from User", {
+      onSuccess : success,
+      onFailure : failure
+    });
+
+  function success(result) {
+    var records = result.getArray("records");
+
+    for (var i=0; i<records.length; i++) {
+      var record = records[i];
+      log(record.Name + " -- " + record.Id);
+    }
+  }
+
+  function failure(error) {
+    log("oops something went wrong " + error);
+  }
+
+//-- Ajax Query: async inline function
+  var result = sforce.connection.query("Select Name,Id from User", {
+      onSuccess : function(result) {
+         var records = result.getArray("records");
+
+         for (var i=0; i<records.length; i++) {
+           var record = records[i];
+           log(record.Name + " -- " + record.Id);
+         }
+      },
+      onFailure : function(error) {
+        log("oops something went wrong " + error);
+      }
+  });
+
+//-- Ajax Query: query result iterator
+  var result = sforce.connection.query("Select Name,Id from User", {
+    onSuccess : success, onFailure : failure});
+
+  function success(result) {
+    var it = new sforce.QueryResultIterator(result);
+    while(it.hasNext()){
+      var record = it.next();
+      log(record.Name + " -- " + record.Id);
+    }
+  }
+
+  function failure(error) {
+    log("oops something went wrong " + error);
+  }
+
+
+//-- Ajax Query: query more sync
+  var result = sforce.connection.query("select name, id from account");
+
+  var queryMore = true;
+  while (queryMore) {
+      var records = result.getArray("records");
+      var sb = new sforce.StringBuffer();
+
+      for (var i = 0; i < records.length; i++) {
+        sb.append(records[i].Name).append(",");
+      }
+
+      log(records.length);
+      log(sb.toString());
+
+      if (result.queryLocator == null) {
+        queryMore = false;
+      } else {
+        result = sforce.connection.queryMore(result.queryLocator);
+    }
+  }
+
+//-- Ajax Query: query more async
+  sforce.connection.query("Select Name,Id from Account", {
+      onSuccess : success, onFailure : log });
+
+  function success(result) {
+    var records = result.getArray("records");
+
+    var sb = new sforce.StringBuffer();
+    for (var i=0; i<records.length; i++) {
+      var record = records[i];
+      sb.append(record.Name).append(",");
+    }
+
+    log(records.length);
+    log(sb.toString());
+
+    if (result.queryLocator) {
+      sforce.connection.queryMore(result.queryLocator, {
+          onSuccess : success, onFailure : log});
+    }
+  }
+
+
+//-- Ajax Query: query all sync
+  var result = sforce.connection.queryAll("Select Name,Id from User");
+  var records = result.getArray("records");
+
+  for (var i=0; i<records.length; i++) {
+    var record = records[i];
+    log(record.Name + " -- " + record.Id);
+  }
+
+//-- Ajax Query: limit
+  var result = sforce.connection.query("Select Name,Id from Account limit 10", {
+    onSuccess : success, onFailure : failure});
+
+  function success(result) {
+    var it = new sforce.QueryResultIterator(result);
+    while(it.hasNext()){
+      var record = it.next();
+      log(record.Name + " -- " + record.Id);
+    }
+  }
+
+  function failure(error) {
+    log("oops something went wrong " + error);
+  }
+
+//-- Ajax Query: relationships
+  var result = sforce.connection.query("SELECT c.Id, c.firstname, " +
+    "c.lastname, c.leadsource, a.Id, a.name, a.industry, c.accountId " +
+    "FROM Contact c, c.account a limit 10");
+
+  var it = new sforce.QueryResultIterator(result);
+
+  while(it.hasNext()) {
+    var record = it.next();
+    var accountName = record.Account ? record.Account.Name : null;
+
+    log( record.FirstName + " " + record.LastName +
+         " in account " + accountName);
+  }
+
+
+//-- Ajax Query: joins
+  var result = sforce.connection.query("select a.name, a.industry, " +
+    "(select c.lastname, c.leadsource from a.contacts c) " +
+    "from account a limit 100");
+
+  var ait = new sforce.QueryResultIterator(result);
+
+  while(ait.hasNext()) {
+    var account = ait.next();
+
+    var contacts = [];
+    if (account.Contacts) {
+      var cit = new sforce.QueryResultIterator(account.Contacts);
+      while(cit.hasNext()) {
+        var contact = cit.next();
+        contacts.push(contact.LastName);
+      }
+    }
+
+    log(account.Name + ": " + contacts.join(","));
+  }
+
+
+//-- Ajax CRUD: create - sync
+  var account = new sforce.SObject("Account");
+  account.Name = "my new account";
+  var result = sforce.connection.create([account]);
+
+  if (result[0].getBoolean("success")) {
+    log("new account created with id " + result[0].id);
+  } else {
+    log("failed to create account " + result[0]);
+  }
+
+//-- Ajax CRUD: create - async
+  var account = new sforce.SObject("Account");
+  account.Name = "my new account";
+
+  sforce.connection.create([account],
+    {onSuccess : success, onFailure : failed});
+
+  function success(result) {
+    if (result[0].getBoolean("success")) {
+      log("new account created with id " + result[0].id);
+    } else {
+      log("failed to create account " + result[0]);
+    }
+  }
+
+  function failed(error) {
+    log("oops something went wrong " + error);
+  }
+
+//-- Ajax CRUD: create- with other data types
+  var campaign = new sforce.SObject("Campaign");
+  campaign.Name = "new campaign";
+  campaign.ActualCost = 12938.23;
+  campaign.EndDate = new Date();
+  campaign.IsActive = true;
+
+  sforce.connection.create([campaign ],
+    {onSuccess : success, onFailure : log});
+
+  function success(result) {
+    if (result[0].getBoolean("success")) {
+      log("new campaign created with id " + result[0].id);
+    } else {
+      log("failed to create campaign " + result[0]);
+    }
+  }
+
+//-- Ajax CRUD: create- batch
+  var accounts = [];
+
+  for (var i=0; i<10; i++) {
+    var account = new sforce.SObject("Account");
+    account.Name = "my new account " + i;
+    accounts.push(account);
+  }
+
+  var result = sforce.connection.create(accounts);
+
+  for (var i=0; i<result.length; i++) {
+    if (result[i].getBoolean("success")) {
+      log("new account created with id " + result[i].id);
+    } else {
+      log("failed to create account " + result[i]);
+    }
+  }
+
+//-- Ajax CRUD: create- with base64Binary
+  fr = sforce.connection.query("select name,id from folder");
+
+  records = fr.getArray("records");
+  if (records.size == 0) {
+    log("unable to find any folders");
+  }
+
+  folderId = records[0].Id;
+  log(folderId);
+
+  var doc = new sforce.SObject("document");
+  doc.Name = "new doc";
+  doc.FolderId = folderId;
+  doc.Body = new sforce.Base64Binary("some body string");
+
+  result = sforce.connection.create([doc]);
+  log(result);
+
+  doc = sforce.connection.retrieve("name,body",
+    "document", [result[0].id]);
+
+  log(doc[0].getBase64Binary("Body"));
+
+//-- Ajax CRUD: delete
+  //create an account
+  var account = new sforce.SObject("Account");
+  account.Name = "my new account";
+  var result = sforce.connection.create([account]);
+
+  if (result[0].getBoolean("success")) {
+    log("new account created with id " + result[0].id);
+    account.Id = result[0].id;
+  } else {
+    throw ("failed to create account " + result[0]);
+  }
+
+  //now delete that account
+  var delResult = sforce.connection.deleteIds([account.Id]);
+  if (delResult[0].getBoolean("success")) {
+    log("account with id " + result[0].id + " deleted");
+  } else {
+    log("failed to delete account " + result[0]);
+  }
+
+
+//-- Ajax CRUD: update
+  //create an account
+  var account = new sforce.SObject("Account");
+  account.Name = "manoj";
+  account.Phone = "2837484894";
+  result = sforce.connection.create([account]);
+
+  //update that account
+  account.id = result[0].id;
+  account.Phone = "12398238";
+  result = sforce.connection.update([account]);
+
+  if (result[0].getBoolean("success")) {
+    log("account with id " + result[0].id + " updated");
+  } else {
+    log("failed to update account " + result[0]);
+  }
+
+//-- Ajax CRUD: upserta
+//TODO
+
+//-- Ajax CRUD: merge
+  //create two accounts
+  var account1 = new sforce.SObject("Account");
+  account1.Name = "manoj";
+  account1.Phone = "2837484894";
+
+  var account2 = new sforce.SObject("Account");
+  account2.Name = "cheenath";
+  account2.Phone = "938475950";
+
+  var result = sforce.connection.create([account1, account2]);
+  if (result.length != 2) throw "create failed";
+
+  account1.id = result[0].id;
+  account2.id = result[1].id;
+
+  //create merge request
+  var request = new sforce.MergeRequest();
+  request.masterRecord = account1;
+  request.recordToMergeIds = account2.id;
+
+  //call merge
+  result = sforce.connection.merge([request]);
+
+  if (result[0].getBoolean("success")) {
+    log("merge success " + result[0]);
+  } else {
+    log("merge failed " + result[0]);
+  }
+
+//-- Ajax CRUD: undelete
+  var account = new sforce.SObject("Account");
+  account.Name = "account to delete";
+  account.Phone = "2837484894";
+  result = sforce.connection.create([account]);
+  account.id = result[0].id;
+  log("account created " + account);
+
+  result = sforce.connection.deleteIds([account.id]);
+  if (!result[0].getBoolean("success")) throw "delete failed";
+  log("account deleted " + result);
+
+  result = sforce.connection.undelete([account.id]);
+  if (!result[0].getBoolean("success")) throw "undelete failed";
+  log("account undeleted " + result[0]);
+
+//-- Ajax CRUD: retrieve
+  var account = new sforce.SObject("Account");
+  account.Name = "retrieve update test";
+  account.Phone = "2837484894";
+  var result = sforce.connection.create([account]);
+  if (result[0].getBoolean("success") == false) throw "create failed";
+  log("account created " + result[0]);
+
+  result = sforce.connection.retrieve("Name,Phone", "Account", [result[0].id]);
+  if (result[0] == null) throw "retrive failed";
+  log("account retrieved: " + result[0]);
+
+  result[0].Phone = "111111111111";
+  result = sforce.connection.update(result);
+  if (result[0].getBoolean("success") == false) throw "update failed";
+  log("account updated: " + result[0]);
+
+//-- Ajax CRUD: retrieve async
+  var account = new sforce.SObject("Account");
+  account.Name = "retrieve update test";
+  account.Phone = "2837484894";
+  var result = sforce.connection.create([account]);
+  if (result[0].getBoolean("success") == false) throw "create failed";
+  log("account created " + result[0]);
+
+  var callback = {
+    onSuccess: function(result) {
+      if (result[0] == null) throw "retrive failed";
+      log("account retrieved: " + result[0]);
+    },
+    onFailure: function(error) {
+      log("failed due to " + error);
+    }
+  };
+
+  result = sforce.connection.retrieve("Name,Phone", "Account",
+     [result[0].id], callback);
+
+//-- Ajax Describe: SObject
+  var result = sforce.connection.describeSObject("Account");
+
+  log(result.label + " : " + result.name + " : ");
+
+  log("---------- fields ---------");
+  for (var i=0; i<result.fields.length; i++) {
+    var field = result.fields[i];
+    log(field.name + " : " + field.label + " : " + field.length + " : ");
+  }
+
+  log("---------- child relationships ---------");
+  for (var i=0; i<result.childRelationships.length; i++) {
+    var cr = result.childRelationships[i];
+    log(cr.field + " : " + cr.childSObject);
+  }
+
+  log("---------- record type info ----------");
+  for (var i=0; i<result.recordTypeInfos.length; i++) {
+    var rt = result.recordTypeInfos[i];
+    log(rt.name);
+  }
+
+//-- Ajax Describe: SObjects
+  var result = sforce.connection.describeSObjects(["Account", "Contact"]);
+
+  for (var i=0; i<result.length; i++) {
+    log(result[i].label + " : " + result[i].name + " : ");
+  }
+
+//-- Ajax Describe: global
+  var result = sforce.connection.describeGlobal();
+
+  var types = result.getArray("types");
+  for (var i=0; i<types.length; i++) {
+    log(types[i]);
+  }
+
+//-- Ajax Describe: layout
+  var result = sforce.connection.describeLayout("Account");
+
+  var layouts = result.getArray("layouts");
+
+  for (var i=0; i<layouts.length; i++) {
+    var layout = layouts[0];
+    detailLayoutSections(layout.detailLayoutSections);
+  }
+
+
+  function detailLayoutSections(sections) {
+    for (var i=0; i<sections.length; i++) {
+      var section = sections[i];
+      log(section.columns + ":" + section.heading + ":");
+      layoutRows(section.getArray("layoutRows"));
+    }
+  }
+
+  function layoutRows(rows) {
+    for (var i=0; i<rows.length; i++) {
+      var row = rows[i];
+      layoutItems(row.getArray("layoutItems"));
+    }
+  }
+
+  function layoutItems(items) {
+    for (var i=0; i<items.length; i++) {
+      var item = items[i];
+      log("  " + item.label);
+    }
+  }
+
+
+//-- Ajax Describe: tabs
+  var result = sforce.connection.describeTabs();
+
+  for (var i=0; i<result.length; i++) {
+    var tabSet = result[i];
+    log( tabSet.label);
+    displayTabs(tabSet.get("tabs"));
+  }
+
+  function displayTabs(tabs) {
+    for( var i=0; i<tabs.length; i++) {
+      var tab = tabs[i];
+      log( "  " + tab.label + " " + tab.url);
+    }
+  }
+
+
+//-- Ajax Util: get deleted
+  var start = new Date();
+  var end = new Date();
+  start.setDate(end.getDate() - 1);
+
+  var result = sforce.connection.getDeleted("Account", start, end);
+
+  var records = result.getArray("deletedRecords");
+
+  log("following records are deleted:");
+
+  for (var i=0; i<records.length; i++) {
+    log(records[i].id);
+  }
+
+
+//-- Ajax Util: get updated
+  var start = new Date();
+  var end = new Date();
+  start.setDate(end.getDate() - 1);
+
+  var result = sforce.connection.getUpdated("Account", start, end);
+
+  var records = result.getArray("ids");
+
+  log("following records are updated:");
+  for (var i=0; i<records.length; i++) {
+    log(records[i]);
+  }
+
+//-- Ajax Util: convert lead
+  var account = new sforce.SObject("Account");
+  account.Name = "convert lead sample";
+  account.Phone = "2837484894";
+  result = sforce.connection.create([account]);
+  account.Id = result[0].id;
+
+  var lead = new sforce.SObject("Lead");
+  lead.Country = "US";
+  lead.Description = "This is a description";
+  lead.Email = "someone@somewhere.com";
+  lead.FirstName = "first";
+  lead.LastName = "last";
+  lead.Company = account.Name;
+  result = sforce.connection.create([lead]);
+  lead.Id = result[0].id;
+
+  var convert = new sforce.LeadConvert();
+  convert.accountId = account.Id;
+  convert.leadId = lead.Id;
+  convert.convertedStatus = "Qualified";
+
+  result = sforce.connection.convertLead([convert]);
+  if (result[0].getBoolean("success")) {
+    log("lead converted " + result[0]);
+  } else {
+    log("lead convert failed " + result[0]);
+  }
+
+
+//-- Ajax System: login
+  try{
+    var result = sforce.connection.login("manoj1@cheenath.com", "123456");
+    log("logged in with session id " + result.sessionId);
+  }catch(error) {
+    if (error.faultcode.indexOf("INVALID_LOGIN") != -1) {
+      log("check your username and passwd, invalid login");
+    } else {
+      log(error);
+    }
+  }
+
+//-- Ajax System: get server timestamp
+  var result = sforce.connection.getServerTimestamp();
+  log(result.timestamp);
+
+//-- Ajax System: get user info
+  var user = sforce.connection.getUserInfo();
+  log("Hello " + user.userName);
+  log("Your email id is " + user.userEmail);
+  log("and you work for " + user.organizationName);
+
+//-- Ajax System: set/reset password
+  var username = "manoj1@cheenath.com";
+
+  var result = sforce.connection.query(
+    "SELECT ID from User WHERE User.username='" + username + "'");
+
+  var records = result.getArray("records");
+  if (records.length != 1) throw "unable to find user";
+  var id = records[0].Id;
+
+  sforce.connection.resetPassword(id);
+  sforce.connection.setPassword(id, "123456");
+
+//-- Ajax Remote Proxy: http get sync
+
+    /* This feature is not enabled by default.
+       Please contact support */
+    sforce.connection.remoteFunction({
+        url : "http://www.cheenath.com",
+        onSuccess : function(response) {
+            log("Got response" + response);
+        },
+        onFailure : function(error) {
+            log("ERROR: " + error);
+        },
+        async: false
+    });
+
+//-- Ajax Remote Proxy: http get async
+
+    /* This feature is not enabled by default.
+       Please contact support */
+    sforce.connection.remoteFunction({
+        url : "http://www.cheenath.com",
+        onSuccess : function(response) {
+            log("Got response" + response);
+        },
+        onFailure : function(error) {
+            log("ERROR: " + error);
+        },
+        async: true
+    });
+
+//-- Ajax Remote Proxy: web service
+
+    /* This feature is not enabled by default.
+       Please contact support */
+  var envelope =
+        '<soap:Envelope xmlns:mrns0="urn:xmethods-CurrencyExchange" ' +
+        'xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" ' +
+        'xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" ' +
+        'xmlns:xs="http://www.w3.org/2001/XMLSchema" ' +
+        'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +
+        '<soap:Body soap:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">' +
+        '<mrns0:getRate><country1 xsi:type="xs:string">us</country1>' +
+        '<country2 xsi:type="xs:string">india</country2> </mrns0:getRate> </soap:Body> </soap:Envelope>';
+
+    sforce.connection.remoteFunction({
+        url : "http://services.xmethods.net/soap",
+        requestHeaders: {"Content-Type":"text/xml",
+            "SOAPAction": "\"\""
+        },
+        requestData: envelope,
+        method: "POST",
+        onSuccess : function(response) {
+            log(response);
+        },
+        onFailure : function(response) {
+            log("Failed testRemoteFunctionPostAsync " + response)
+        }
+    });
+
+//-- Ajax Remote Proxy: xml mime type
+
+    /* This feature is not enabled by default.
+       Please contact support */
+
+  var envelope =
+        '<soap:Envelope xmlns:mrns0="urn:xmethods-CurrencyExchange" ' +
+        'xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" ' +
+        'xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" ' +
+        'xmlns:xs="http://www.w3.org/2001/XMLSchema" ' +
+        'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +
+        '<soap:Body soap:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">' +
+        '<mrns0:getRate><country1 xsi:type="xs:string">us</country1>' +
+        '<country2 xsi:type="xs:string">india</country2> </mrns0:getRate> </soap:Body> </soap:Envelope>';
+
+    sforce.connection.remoteFunction({
+        url : "http://services.xmethods.net/soap",
+        mimeType: "text/xml",
+        requestHeaders: {"Content-Type":"text/xml",
+            "SOAPAction": "\"\""
+        },
+        requestData: envelope,
+        method: "POST",
+        onSuccess : function(response) {
+            log("response is " + typeof response);
+            logXml(response);
+        },
+        onFailure : function(response) {
+            log("Failed testPostMimeType: " + response)
+        }
+    });
+
+    function logXml(node) {
+      if (node.nodeValue == null) {
+        log(node.nodeName);
+      } else {
+        log(node.nodeName + ":" + node.nodeValue);
+      }
+      var children = node.childNodes;
+      for (var i = 0; i < children.length; i++) {
+        logXml(children[i]);
+      }
+    }
+
+//-- Ajax Misc: search
+  var result = sforce.connection.search(
+    "find {manoj} in Name fields RETURNING Account(name, id)");
+
+  if (result) {
+    var records = result.getArray("searchRecords");
+
+    for (var i=0; i<records.length; i++) {
+      var record = records[i].record;
+      log(record.Id + " -- " + record.Name);
+    }
+  } else {
+    log("No records found");
+  }
+
+//-- Ajax Misc: base64
+  var base64 = new sforce.Base64Binary("encode this string");
+  var encodedString = base64.toString();
+  log (encodedString);
+
+//-- Ajax Misc: fieldsToNull
+  //create an account
+  var account = new sforce.SObject("Account");
+  account.Name = "fields to null sample";
+  account.Phone = "2837484894";
+  result = sforce.connection.create([account]);
+
+  //set phone to null
+  account.id = result[0].id;
+  account.Phone = null;
+  result = sforce.connection.update([account]);
+
+  if (result[0].getBoolean("success")) {
+    log("account with id " + result[0].id + " updated");
+  } else {
+    log("failed to update account " + result[0]);
+  }
+
+//-- Ajax Misc: SOAP headers
+TODO
+
+//-- Ajax Misc: debug
+TODO
+
+//-- Ajax Misc: source
+TODO
+
+//-- Ajax Misc: exceptions
+TODO
+
+//-- Ajax Misc: perf sycn
+TODO
+
+//-- Ajax Misc: perf async
+TODO
+
+//-- Apex Language: data types
+  //This examples shows all the primitive types in Apex
+
+  Boolean boolValue = true;
+  Date dateValue = System.today();
+  Datetime datetimeValue = System.now();
+  Double doubleValue = 19.4;
+  Id idValue = '01N500000008re2';
+  Integer intValue = 10;
+  String stringValue = 'string type';
+
+//-- Apex Language: expressions
+  Integer a, b, c, d;
+  a = b = c = d = 10; //assign
+
+  a = b + c; //add
+  a = b - c; //subtract
+  a = b / c; //multiply
+  a = b * c; //divide
+
+  a += b;
+  a -= b;
+  a /= b;
+  a *= b;
+
+  a++; //increment
+  a--; //decrement
+
+//-- Apex Language: conditions
+  Integer a, b, c, d;
+  a = b = c = d = 10;
+
+  if (a == b){} //equal to
+  if (a != b){} //not equal to
+  if (a > b){}  //greater than
+  if (a < b){}  //smaller than
+  if (a >= b){} //greater than or equal to
+  if (a <= b){} //smaller than or equal to
+
+  a = (b==c) ? b : c; //ternary
+
+//-- Apex Language: flow control
+  Integer i = 100;
+
+//if condition
+  if (i == 10){
+    //do something
+  }
+
+//if-else condition
+  if (i == 100) {
+    //do something
+  } else {
+    //do something else
+  }
+
+//if-else-if condition
+  if (i == 100) {
+    //do something
+  } else if (i == 200) {
+    //do something else
+  } else {
+    //do yet another thing
+  }
+
+//-- Apex Language: do-while loop
+
+  Integer count = 10;
+  do {
+    count--;
+  }while(count >0);
+
+//-- Apex Language: while loop
+
+  Integer count = 0;
+  while(count < 10) {
+    count++;
+  }
+
+//-- Apex Language: for loop
+
+  for (Integer i=0; i<20; i++) {
+    //dosoemthing
+  }
+
+//-- Apex Language: array
+
+  String[] strArray = new String[3];
+  strArray[0] = 'zero';
+  strArray[1] = 'one';
+  strArray[2] = 'two';
+
+  //adds an eleemnt at the end of array
+  strArray.add('three');
+
+  //loop through array
+  for (String str : strArray) {
+    System.debug(str);
+  }
+
+  for (Integer i=0; i<strArray.size(); i++) {
+    String str = strArray[i];
+  }
+
+//-- Apex Language: map
+
+  //key is always String
+  Map<String, Double> dmap = new Map<String, Double>();
+
+  dmap.put('One', 1.0001);
+  dmap.put('Two', 2.0002);
+
+  Double one = dmap.get('One');
+
+  //get all values
+  Double[] doubles = dmap.values();
+
+//-- Apex Language: set
+
+  Set<Integer> intSet = new Set<Integer>();
+
+  for (Integer index=0; index < 10; index++) {
+    intSet.add(index);
+  }
+
+  //size of the set
+  System.assert(intSet.size() == 10);
+
+  //check if set contains a value
+  System.assert(intSet.contains(3));
+
+//-- Apex Language: user defined method
+
+  Integer myMethod(String s) {
+    return s.length();
+  }
+
+  Integer i = myMethod('what is the length');
+
+//-- Apex Language: exception
+
+  public class SomeException extends Exception {
+  }
+
+  Integer a = 10;
+  Integer b = 20;
+
+  try {
+    if (a != b) {
+      throw new SomeException();
+    }
+  }catch(SomeException e) {
+    System.debug(e);
+  }
+
+
+//-- Apex DML: query
+
+   //Query for one record
+   Contact c = [select account.name from contact limit 1];
+
+   System.debug(c.account.name);
+   System.debug(c.lastname);
+
+   //Query for list of records
+   Account[] accounts = [select id, name, billingcity from account limit 10];
+
+   for (Account a : accounts) {
+     System.debug(a.name + a.id + a.billingcity);
+   }
+
+//-- Apex DML: insert
+
+  Account newAccount = new Account(name = 'test account');
+  insert(newAccount);
+  commit;
+
+//-- Apex DML: update
+  Account newAccount = new Account(name = 'test account');
+  insert(newAccount);
+
+  newAccount.billingcity = 'san ramon';
+  update newAccount;
+  commit;
+
+
+//-- Apex DML: upsert
+
+  //todo
+
+//-- Apex DML: delete
+  Account newAccount = new Account(name = 'test account');
+  insert(newAccount);
+  delete newAccount;
+  commit;
+
+//-- Apex DML: merge
+  //todo
+
+//-- Apex DML: transaction
+  //todo

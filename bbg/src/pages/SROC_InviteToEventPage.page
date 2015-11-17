@@ -1,0 +1,296 @@
+<apex:page showHeader="false" sidebar="false" controller="SROC_InviteToEventPageController" standardStylesheets="true" applyHtmlTag="false" applyBodyTag="false" docType="html-5.0">
+  <style>
+    .marginleft {
+        margin-left: 4%;
+    }
+    .panelwidth {
+        width:19% !important;
+    }
+    
+    .panel {
+        background-color: #CCCCCC !important;
+    }
+    .userDetails {
+        margin-left: 19%;
+        margin-top: -15%;
+        font-size: 12px;
+        word-break: break-word;
+        min-height: 51px;
+    }
+    .btnClearAll {
+        margin-left: -120%;
+        margin-top: 9%;
+        padding: 3%;
+        width: 81%;
+    }
+    .messagearea {
+        margin-left: 30% !important;
+        height: 150px !important;
+        width: 150% !important;
+     }
+     .textbelowMsg {
+         margin-left: 10%;
+        margin-top: 1%;
+        text-align: left;
+        font-size: 12px;
+        width: 80%;
+     }
+     
+     .selectedUser {
+         
+         border-color: black !important;
+     }
+     
+     .deselectedUser {
+         
+         border-color: #ebebeb !important;
+     }
+     
+     .disabledPanel {
+         
+         border-color: #ebebeb !important;
+         pointer-events: none;
+         opacity: 0.6;
+     }
+     
+  </style>
+  <script>
+      function markSelectedorUnselected(PanelId) {
+          
+          if($('#Div_'+PanelId).hasClass( "deselectedUser" )) {
+    
+              markUserSelectedUnselcted(PanelId,'selected');
+          }
+          else if($('#Div_'+PanelId).hasClass( "selectedUser")) {
+              
+              markUserSelectedUnselcted(PanelId,'deselected');
+          }
+      }
+      
+      function SelectAllChecked() {
+          
+          $('[id$=selectAll]').attr('disabled', true);
+          markSelectAll();
+      }
+      
+      function removeDisabledSelectAll() {
+          
+          $('[id$=selectAll]').attr('checked', false);
+          $('[id$=selectAll]').attr('disabled', false);
+      }
+  </script>
+  <apex:composition template="{!$Site.Template}">
+    <apex:define name="body" >
+        <div class="row"  style="background-color: #CCCCCC;height:120px;color:#333333;">
+            <div class="col-xs-6 marginleft" style="margin-top:1%;">
+                <a>?</a> | <a>?</a>
+            </div>
+            <div class="col-xs-12 marginleft">
+                <h1>{!objEvent.Name}</h1>
+            </div>
+        </div>
+        <apex:form >
+            <!--Need to rerender to make actionFunction work-->
+            <apex:actionFunction action="{!GoToPage}" name="goToPage"  reRender="userContent,paginationUp,paginationDown" >
+              <apex:param name="param" assignTo="{!SpecifiedPageNumber}" value="param" />
+            </apex:actionFunction>
+            
+            <apex:actionFunction action="{!filterRecords}"   status="loading" name="filterRecords" reRender="userContent,paginationUp,paginationDown,totalsearchresults" oncomplete="removeDisabledSelectAll();">
+            </apex:actionFunction>
+            
+            <apex:actionFunction action="{!markUserSelectedUnselcted}"  name="markUserSelectedUnselcted" reRender="userContent,selectedCount" status="loading"> 
+              <apex:param name="param1" assignTo="{!strselctedUserId}" value="" />
+              <apex:param name="param2" assignTo="{!strcheckselected}" value="" />
+            </apex:actionFunction>
+            
+            <apex:actionFunction action="{!markSelectAll}"   status="loading" name="markSelectAll" reRender="userContent,selectedCount" > 
+            </apex:actionFunction>
+            <apex:outputPanel id="userdetailgrid">
+                <div name="container" class="marginleft">
+                    
+                    <div class="row">
+                        <div class="col-xs-6">
+                            <h3>SELECT MEMBERS TO INVITE:</h3>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-xs-2">
+                            <div class="checkbox">
+                              <label> <apex:inputCheckbox value="{!boolpeopleIfollow}" onchange="filterRecords();"/>Only People I Follow</label>
+                            </div>
+                        </div>
+                        <div class="col-xs-2">
+                            <div class="checkbox">
+                              <label title="Available only to dealers"> <apex:inputCheckbox value="{!boolprefferedOwners}" onchange="filterRecords();" disabled="{!if(boolDisableprefferedOwners,'false','true')}" />Only Preferred Owners</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-xs-2">
+                            <apex:inputtext id="postalCode" value="{!strPostalCode}"  Styleclass="form-control" html-placeholder="Location Postal Code..." onblur="filterRecords();"/>
+                        </div>
+                        <div class="col-xs-2">
+                            <apex:selectList multiselect="false" size="1" value="{!withinDistance}"  styleClass="form-control chosen" html-data-placeholder="Distance Within:" onchange="if($('[id$=postalCode]').val() != ''){filterRecords();}">
+                                <apex:selectOption itemValue="1" itemLabel="1 Mile"/>
+                                <apex:selectOption itemValue="3" itemLabel="3 Miles"/>
+                                <apex:selectOption itemValue="5" itemLabel="5 Miles"/>
+                                <apex:selectOption itemValue="10" itemLabel="10 Miles"/>
+                                <apex:selectOption itemValue="20" itemLabel="20 Miles"/>
+                                <apex:selectOption itemValue="50" itemLabel="50 Miles"/> 
+                                <apex:selectOption itemValue="100" itemLabel="100 Miles"/>
+                             </apex:selectList>
+                        </div>
+                        <div class="col-xs-1" style="width: inherit;margin-top: 0.4%;">
+                        Boat Type :
+                        </div>
+                        <div class="col-xs-2">
+                            <apex:selectList multiselect="false" size="1" styleClass="form-control chosen">
+                             </apex:selectList>
+                        </div>
+                        <div class="col-xs-3"> 
+                            <apex:inputtext value="{!strUserName}" id="userName" Styleclass="form-control" html-placeholder="Type in an Owners Username..." onkeyUp="if($('[id$=userName]').val().length == 0 || $('[id$=userName]').val().length > 2){filterRecords();}"/>
+                        </div>
+                        <div class="col-xs-2" style="float:right;">
+                            <apex:commandbutton status="loading" styleclass="btn-primary" style="padding: 3%;width: 58%;" value="Clear Filters" action="{!clearFilters}" rerender="userdetailgrid" />
+                        </div>
+                    </div>
+                    <div class="row" style="margin-top:2%;">
+                        <div class="col-xs-6">
+                            <h5><apex:outputpanel id="totalsearchresults">SEARCH RESULTS : {!inttotalrecords}</apex:outputpanel></h5>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-xs-2">
+                            <apex:selectList multiselect="false" size="1" styleClass="form-control chosen" value="{!strOrderBy}" onchange="filterRecords();" id="orderBy">
+                                <apex:selectOption itemValue="0" itemLabel="Select One"/>
+                                <apex:selectOption itemValue="1" itemLabel="A - Z"/>
+                                <apex:selectOption itemValue="2" itemLabel="Z - A"/>
+                                <apex:selectOption itemValue="3" itemLabel="Nearest"/>
+                                <apex:selectOption itemValue="4" itemLabel="Farthest"/>
+                             </apex:selectList>
+                        </div>
+                        <div class="col-xs-2">
+                            <div class="checkbox">
+                              <label> <apex:inputCheckbox id="selectAll" value="{!boolselectAll}" onchange="SelectAllChecked();"/>Select All Results</label>
+                            </div>
+                        </div>
+                        <div class="col-xs-2" style="float:right;">
+                             <div class="pagination-wrapper pull-right hidden-xs">
+                                <apex:outputPanel id="paginationUp" >
+                                  <div class="form-inline pull-left" role="form">
+                                    <div class="form-group">
+                                      <label for="page">Page</label>
+                                      <input type="text" class="form-control input-sm"  value="{!pageNumber}" onchange="goToPage(this.value)" />
+                                    </div>
+                                    <div class="form-group">&nbsp;of {!IF(TotalPages == 0,"1", TotalPages)}</div>
+                                  </div>
+            
+                                  <ul class="pagination pagination-sm pull-right hidden-xs">
+                                    <apex:outputPanel layout="none" rendered="{!hasPrevSet==true}">
+                                      <li>
+                                        <apex:commandLink value="<" action="{!prevSet}" rerender="userContent,paginationUp,paginationDown"></apex:commandLink>
+                                      </li>
+                                    </apex:outputPanel>
+                                    <apex:outputPanel layout="none" rendered="{!hasNextSet==true}">
+                                      <li>
+                                        <apex:commandLink value=">" action="{!nextSet}" rerender="userContent,paginationUp,paginationDown"></apex:commandLink>
+                                      </li>
+                                    </apex:outputPanel>
+                                  </ul>
+                                 </apex:outputPanel>
+                              </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <apex:outputPanel id="userContent">
+                            <apex:repeat value="{!lstUsers}" var="objUser">
+                            <div class="col-xs-2 panelwidth " id="{!objUser.Id}" onClick="markSelectedorUnselected(this.id)"> 
+                                <div  id="Div_{!objUser.Id}" class="{!if(mapCheckSelectedUnselected[objUser.Id] == 'true', 'panel panel-default selectedUser', if(mapCheckSelectedUnselected[objUser.Id] == 'disabled','panel panel-default disabledPanel','panel panel-default deselectedUser'))} ">
+                                    <div class="panel-body">
+                                        <img src="{!objUser.SmallPhotoURL}"  style="width:25px;height:25px;"/>
+                                        <div name="UserDetails" class="userDetails">
+                                            {!objUser.UserName}<br/>
+                                            {!mapAccountIdToBoatDetails[objUser.Contact.AccountId]}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            </apex:repeat>
+                         </apex:outputPanel>
+                    </div>
+                    <div class="row">
+                        <div class="col-xs-2" style="float:right;">
+                           <div class="pagination-wrapper pull-right hidden-xs">
+                                <apex:outputPanel id="paginationDown" >
+                                  <div class="form-inline pull-left" role="form">
+                                    <div class="form-group">
+                                      <label for="page">Page</label>
+                                      <input type="text" class="form-control input-sm"  value="{!pageNumber}" onchange="goToPage(this.value)" />
+                                    </div>
+                                    <div class="form-group">&nbsp;of {!IF(TotalPages == 0,"1", TotalPages)}</div>
+                                  </div>
+            
+                                  <ul class="pagination pagination-sm pull-right hidden-xs">
+                                    <apex:outputPanel layout="none" rendered="{!hasPrevSet==true}">
+                                      <li>
+                                        <apex:commandLink value="<" action="{!prevSet}" rerender="userContent,paginationUp,paginationDown" ></apex:commandLink>
+                                      </li>
+                                    </apex:outputPanel>
+                                    <apex:outputPanel layout="none" rendered="{!hasNextSet==true}">
+                                      <li>
+                                        <apex:commandLink value=">" action="{!nextSet}" rerender="userContent,paginationUp,paginationDown" ></apex:commandLink>
+                                      </li>
+                                    </apex:outputPanel>
+                                  </ul>
+                                 </apex:outputPanel>
+                              </div>
+                        </div>
+                    </div>
+                    <div class="row" style="margin-top:2%;margin-left: 20%;">
+                        <div class="col-xs-8" style="background-color: #424242;color: #CCCCCC;">
+                            <apex:outputPanel id="selectedCount"><h3 class="marginleft" style="margin-bottom: 3%;">You have selected {!selectedrecordcount} Owners to this invite. </h3></apex:outputPanel>
+                        </div>
+                        <div class="col-xs-2">
+                            <apex:commandbutton status="loading" styleclass="btn-primary btnClearAll" value="Deselect All" action="{!DeselectAll}" rerender="userContent,selectedCount" />
+                        </div>
+                    </div> 
+                    <div class="row" style="margin-top:1%;margin-left: 20%;">
+                        <div class="col-xs-8" style="background-color: #ebebeb;padding: 1%;">
+                            <div align="center">
+                                <h3 style="color: black;font-style: italic;">Add a personalized message below, or click Invite to send your invitation now.</h3>
+                                <div class="row">
+                                    <div class="col-xs-6">
+                                    <h5>ADD YOUR MESSAGE:</h5>
+                                    </div> 
+                                </div>
+                                <div class="row">
+                                    <div class="col-xs-6">
+                                        <apex:inputtextarea value="{!strMessage}" Styleclass="form-control messagearea" html-placeholder="Customized message..."/>
+                                    </div> 
+                                </div>
+                                <div class="textbelowMsg" >
+                                Invited members will receive an email notification as well as invitation that will appear in their personal community stream.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row" style="margin-left: 28%;padding:1%;">
+                        <div class="col-xs-4">
+                            <apex:commandbutton status="loading"  styleclass="btn-primary"  style="padding:3%;width: 40%;" value="Invite" action="{!createSRandSendInvite}" />
+                        </div>
+                        <div class="col-xs-4">
+                             <apex:commandbutton status="loading"  styleclass="btn-default"  style="padding:3%;width: 40%;" value="Cancel"/>
+                        </div>
+                    </div>
+                </div>
+            </apex:outputPanel>
+            <apex:actionstatus id="loading" startText="Requesting...">
+                <apex:facet name="start">
+                    <div id="salesforceSource_blurybackground" style="position:absolute; left:1px; top:1px; width:500%; height:500%; text-align:center; vertical-align: middle; z-index:300;background-color: #dcdcdc; opacity:0.5;filter:alpha(opacity=60) "></div>
+                </apex:facet>
+                <apex:facet name="stop"></apex:facet>  
+            </apex:actionstatus>
+          </apex:form>
+    </apex:define>
+  </apex:composition>
+</apex:page>

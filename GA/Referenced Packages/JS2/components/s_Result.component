@@ -1,0 +1,74 @@
+<apex:component id="resultComp" controller="ts2.s_ResultController" allowDML="true">
+	<apex:attribute name="criteriaHolder" type="ts2.s_CriteriaHolder" required="true" description="CriteriaHolder" assignTo="{!CriteriaHolder}"/>
+	<apex:attribute name="resultSetHolder" type="ts2.s_ResultSetHolder" required="true" description="ResultSetHolder" assignTo="{!ResultSetHolder}"/>
+	<apex:attribute name="pager" type="ts2.s_ItemPager" required="true" description="pager" assignTo="{!Pager}"/>
+	<apex:attribute name="IsSearchMode" type="Boolean" required="false" description="Search Mode Flag" assignTo="{!IsSearchMode}" />
+	<apex:attribute name="customize" type="Boolean" required="false" description="Customize Button" />
+	<apex:attribute name="showFilter" type="Boolean" required="false" description="Show Show/Hide Filter flag" />
+
+	<apex:pageBlock title="Contacts [{!NumberResults}]" id="resultsPb">
+		<apex:pageBlockButtons id="resultsPbb">
+			<table>
+				<tr>
+					<td style="padding-right:14px; width:450px;">
+						<apex:outputPanel id="popupNotInProgress" style="visibility:visible;" >
+							<apex:commandButton value="Apply to Jobs" onclick="openApplyToWindow('{!$Page.ts2__ApplyJobPage}');return(false);" rendered="{!AND(HasResults,Setup_SearchSettings.ts2__show_button_applytojob__c)}"/>
+							<apex:commandButton value="Add Skills" onclick="openSkillsWindow('{!$Page.ts2__add_skills_temp}');return(false);" rendered="{!AND(HasResults,Setup_SearchSettings.ts2__show_button_addskills__c)}"/>
+							<apex:commandButton value="Add Tags" onclick="openAddTagsWindow('{!$Page.ts2__AddTagsCandidate}');return(false);" rendered="{!AND(HasResults,Setup_SearchSettings.ts2__show_button_addtags__c)}"/>
+							<apex:commandButton value="Add to List" onclick="openAddToListWindow('{!$Page.ts2__AddToList}');return(false);" rendered="{!AND(HasResults,Setup_SearchSettings.ts2__show_button_addtoshortlist__c)}"/>
+							<apex:commandButton value="Assign To Job" onclick="openAssignToWindow('{!$Page.ts2__s_AssignTo}','{!ResultSetHolder.ResultSetId}');return(false);" rendered="{!AND(HasResults&&IsSearchMode&&NOT(IsJobMatchSearchMode),Setup_SearchSettings.ts2__show_button_assigntojob__c)}"/>
+							<apex:commandButton value="{!Setup_SearchSettings.ts2__button_custom1_label__c}" onclick="openCustomButtonWindow('{!URLENCODE(Setup_SearchSettings.ts2__button_custom1_url__c)}',{!Setup_SearchSettings.ts2__button_custom1_needselection__c});return(false);" rendered="{!AND(HasResults,Setup_SearchSettings.ts2__button_custom1_active__c&&!ISBLANK(Setup_SearchSettings.ts2__button_custom1_url__c))}"/>
+						</apex:outputPanel>
+					</td>
+					<td align="right" style="padding-right:10px;">
+						<apex:commandButton value="Save As Named Search" onclick="openSaveAsNamedSearchWindow('{!$Page.ts2__s_ulPopup}','{!CriteriaHolderId}','{!ResultSetHolderId}');return(false);" rendered="{!AND(HasResults,Setup_SearchSettings.ts2__show_button_saveasnamedsearch__c)}" />
+					</td>
+				</tr>
+			</table>
+		</apex:pageBlockButtons>
+		<c:s_Pager id="resultPager" pager="{!Pager}" isIncludeSharedData="true" rerender="resultsPb,msg" rendered="{!HasResults}" showFilter="{!showFilter}" customize="{!customize}" IsFilterVisible="{!CriteriaHolder.IsFiltersVisible}" />
+		<apex:outputPanel rendered="{!HasResults}">
+			<c:s_Filter id="filterComponent" criteriaHolder="{!CriteriaHolder}" sType="{!sType}" rendered="{!showFilter}" />
+			<apex:pageBlockTable value="{!Pager.DispList}" var="contactItem" cellpadding="6" width="100%" border="0" >
+				<apex:column width="23px">
+					<apex:facet name="header"><apex:inputCheckbox id="checkAllCb" value="{!SelectAllValue}" onclick="checkAll(this)" /></apex:facet>
+					<apex:inputCheckbox id="resultRowCb" value="{!contactItem.IsSelected}" onclick="resultsCbChange('{!contactItem.ContactRef.Id}');" />
+					<apex:inputHidden id="resultRowHf" value="{!contactItem.ContactRef.Id}" />
+				</apex:column>
+				<apex:column width="42px" style="white-space:nowrap;" >
+					<apex:facet name="header"><apex:outputText value="Action" /></apex:facet>
+					<apex:image id="mapIconImg" value="{!$Resource.ts2__s_MapIcon}" title="View Candidates Location with Google Maps" style="cursor:pointer;" onclick="openMapWindow('{!$Page.ts2__CandidateMap}','{!contactItem.ContactRef.Id}');" />&nbsp;
+					<apex:image id="resumeIconImg" value="{!$Resource.ts2__s_ResumeIcon}" title="View Candidate Resume" style="cursor:pointer;" onclick="openResumeWindow('{!$Page.ts2__ShowResume}','{!contactItem.ContactRef.Id}','{!JSENCODE(criteriaHolder.HighlighKey)}')" />
+				</apex:column>
+				<apex:column rendered="{!IsRanked}" >
+					<apex:facet name="header"><apex:outputText value="Rank" /></apex:facet>
+					<apex:outputText value="{!contactItem.rank}" />
+				</apex:column>
+
+				<apex:repeat value="{!Pager.DispResultSetFields}" var="fs">
+					<apex:column >
+						<apex:facet name="header">
+							<apex:outputPanel layout="block">
+								<apex:outputPanel rendered="{!$ObjectType.Contact.fields[fs].Sortable}" layout="none">
+									<apex:outputLink value="#" title="{!$ObjectType.Contact.fields[fs].Label} {!IF(fs==Pager.CurrSortFieldIn, IF(CONTAINS(Pager.CurrSortClause,'DESC'), 'Sorted descending', 'Sorted ascending'), 'Click to sort ascending')}" onclick="sortResultColumnSelect_custom(this,'{!fs}');return(false);"><apex:outputText value="{!$ObjectType.Contact.fields[fs].Label}"/></apex:outputLink>
+									<apex:image url="/s.gif" styleClass="sortAsc" alt="Sorted Descending" rendered="{!AND(fs==Pager.CurrSortFieldIn, NOT(CONTAINS(Pager.CurrSortClause,'DESC')))}" />
+									<apex:image url="/s.gif" styleClass="sortDesc" alt="Sorted Descending" rendered="{!AND(fs==Pager.CurrSortFieldIn, CONTAINS(Pager.CurrSortClause,'DESC'))}" />
+								</apex:outputPanel>
+								<apex:outputText rendered="{!NOT($ObjectType.Contact.fields[fs].Sortable)}" value="{!$ObjectType.Contact.fields[fs].Label}" />
+							</apex:outputPanel>
+						</apex:facet>
+						<apex:outputField value="{!contactItem.ContactRef[fs]}" rendered="{!NOT($ObjectType.Contact.Fields[fs].NameField) && NOT($ObjectType.Contact.Fields[fs].Calculated && $ObjectType.Contact.Fields[fs].Type='string')}" />
+						<apex:outputLink value="/{!contactItem.ContactRef.Id}" target="_blank" rendered="{!$ObjectType.Contact.Fields[fs].NameField}"><apex:outputText value="{!contactItem.ContactRef.Name}"/></apex:outputLink>
+						<apex:outputText value="{!contactItem.ContactRef[fs]}" rendered="{!$ObjectType.Contact.Fields[fs].Calculated && $ObjectType.Contact.Fields[fs].Type='string'}" escape="false" />
+					</apex:column>
+				</apex:repeat>
+
+			</apex:pageBlockTable>
+
+			<div style="display:none;" class="waitingSearchDiv waitingSearchDivOpacity waitingSearchDivSearchBlock"></div>
+			<div style="display:none;" class="waitingSearchDiv waitingSearchDivSearchBlock"><span class="waitingSearchHolder" style="top:16px;"><img src="/img/loading.gif" class="waitingImage" /><span class="waitingDescription"></span></span></div>
+			</apex:outputPanel>
+		<c:s_Pager id="bottomPager" rerender="resultsPb,msg" isIncludeSharedData="false" pager="{!Pager}" rendered="{!HasResults}" showFilter="FALSE" customize="FALSE" />
+	</apex:pageBlock>
+
+</apex:component>

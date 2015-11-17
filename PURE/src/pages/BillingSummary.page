@@ -1,0 +1,1149 @@
+<apex:page showHeader="false" sidebar="false" standardStylesheets="false"  controller="SL_BillingSummaryController" >
+	
+	<!--Start of Page --> 
+	<apex:composition template="SL_SiteTemplate">  
+		
+		<!-- Start of Main section -->        
+		<apex:define name="mainSection">
+			<style>
+				.message
+				{
+					display: none;
+				}
+				
+				.messageCell
+				{
+					width: 80%;
+				}
+			</style>
+			<script>
+				$( document ).ready(function() 
+				{
+					var isIndividuallyBilled = '{!isIndividaullyBilled}';
+					var isNotIndividaullyBilled = '{!isNotIndividaullyBilled}';
+					
+					if(isIndividuallyBilled == 'true' && isNotIndividaullyBilled == 'false')
+					{
+						$('#IndividualPolicies').addClass('bill-sum-collapse');
+						$('#RotateCaretDownId').addClass('rotate-caret-down');
+						
+						$('#MobileViewExpanded').addClass('bill-sum-collapse');
+					}
+					if(isNotIndividaullyBilled == 'true')
+					{
+						$('#PrimaryBillingRotateDownId').addClass('rotate-caret-down');
+						$('#MobileExpandedprimaryBill').addClass('bill-sum-collapse');
+						//$('#MobileExpandedprimaryBill').removeClass('mobile-expandable-div');
+					}	
+								
+				});
+				
+				function expandAll() 
+				{
+					$('#primaryIstDiv').addClass('bill-sum-collapse');
+					$('.bill-sum-div').addClass('bill-sum-collapse');
+					$('.bill-mega-div').addClass('bill-sum-collapse');
+					
+				}
+				
+			</script>
+			<apex:form >
+					<c:SL_PureJSScripts />
+					<apex:pageMessages />
+					<div style="visibility: visible;color: red;" id="errorTextId" align="center"/>
+					
+					<script>
+						if($('.messageText').text() != '')
+						{
+							var strError = $('.messageText').text();
+							SL_PureJSUtil.registerShowErrorMessage(strError.split(/:([^:]+)$/)[1]);
+						}
+					</script>
+			</apex:form>
+			<div id="main-content" class="span9" style="margin-left: 0em;display:{!If(isError == true, 'none', '')};">
+
+			<ul class="print-group">
+				<apex:outputPanel rendered="{!IF($Profile.Name == 'Pure Customer Community Login User', true, false)}">
+					<li><a href="javascript:window.open('/BillingSummaryPDFPage')"><i class="fa fa-file-o fa-2x"></i></a></li>
+				</apex:outputPanel>
+				<apex:outputPanel rendered="{!IF($Profile.Name != 'Pure Customer Community Login User', true, false)}">
+					<li><a href="javascript:window.open('/BrokerView/BillingSummaryPDFPage')"><i class="fa fa-file-o fa-2x"></i></a></li>
+				</apex:outputPanel>
+				<li><a onclick="expandAll();" href="javascript:window.print()"><i class="fa fa-print fa-2x"></i></a></li>
+			</ul>
+		<!-- welcome message goes in here -->
+			<h1 class="welcome">Billing Center</h1> 
+
+			<hr />
+
+			<!-- bread crumb goes here -->
+			<div class="row-fluid crumb-container">
+				<apex:outputPanel rendered="{!IF($Profile.Name == 'Pure Customer Community Login User', true, false)}">
+				<ul class="breadcrumb pure-crumb">
+					<li><a href="/MemberHomePage">pure</a> <span class="divider">/</span></li>
+					<li class="active">billing center</li>
+				</ul>
+				</apex:outputPanel>
+				<apex:outputPanel rendered="{!IF($Profile.Name != 'Pure Customer Community Login User', true, false)}">
+					<ul class="breadcrumb pure-crumb">
+					<li><a href="/BrokerView/MemberHomePage?mId={!$CurrentPage.parameters.mId}">pure</a> <span class="divider">/</span></li>
+					<li class="active">billing center</li>
+				</ul>
+				</apex:outputPanel>
+			</div>
+
+			<!-- member-info goes here -->
+			<div id="member-info" class="row-fluid">
+				<div class="span12">
+					<div class="row-fluid">
+						<dl class="span6">
+							<dt>MEMBER NAME:</dt>
+							<dd>{!objMemberInformation.Name}</dd>
+						</dl>
+						<dl class="span6">
+							<dt>MEMBER ID:</dt>
+							<dd>{!objMemberInformation.Member_Key_EDW__c}</dd>
+						</dl>
+					</div>
+				</div>
+			</div>
+
+			<!-- Billing Snapshot fill in table below. If none, hide. -->
+				<div class="bill-sum-full-container row-fluid">
+					<div class="table-header table-header-short arrow-container">
+						<h1 class="table-h1-title">Billing Snapshot </h1>
+						<div class="rotate-caret mobile"><i class="fa fa-caret-right fa-2x"></i></div>
+						<apex:outputpanel rendered="{!IF(objMemberInformation.IsOverdue__c==null,false,true)}" layout="none">
+							<apex:outputpanel rendered="{!IF(objMemberInformation.IsOverdue__c>0,true,false)}" layout="none">
+								<span class="account-error">
+									<img src="{!URLFOR($Resource.SL_PureInsuranceResources,'images/pure-triangle.png')}"  class="pure-triangle"/> 
+									<span class="table-warning text-error">YOUR ACCOUNT IS PAST DUE</span>
+								</span>
+							</apex:outputpanel>
+						</apex:outputpanel>
+					</div>
+					
+					<div class="row-fluid desktop">
+						<div class="span12 unit-content snapshot-content">   
+							<div class="row-fluid">
+								<div class="span6 bill-sum-section">
+									<div class="snapshot-payment">
+										<p><strong>LAST PAYMENT RECEIVED: </strong>
+											<apex:outputpanel rendered="{!If(lastPaymentReceived == null, false,true)}">
+												<apex:outputText value="${0, number,###,##0.00}">
+													<apex:param value="{!lastPaymentReceived}"/>
+												</apex:outputText>
+											</apex:outputpanel>
+											<apex:outputpanel rendered="{!If(lastPaymentReceived == null, true,false)}">
+												$0.00
+											</apex:outputpanel>
+										</p>
+									</div>
+								</div>
+								<div class="span6 bill-sum-section">
+									<div class="snapshot-payment">
+										<p><strong>LAST PAYMENT MADE: </strong>
+											<apex:outputpanel rendered="{!If(lastPaymentDate == null, false,true)}">
+												<apex:outputText value="{0,date,MM/dd/yy}">
+													<apex:param value="{!lastPaymentDate}"/>
+												</apex:outputText>
+											</apex:outputpanel>
+											<apex:outputpanel rendered="{!If(lastPaymentDate == null, true,false)}">
+												N/A
+											</apex:outputpanel>	
+										</p>
+									</div>
+								</div>
+							</div>
+							
+							<div class="row-fluid">
+								<div class="span12 bill-sum-section">
+									<div class="arrow-container bill-sum-title">
+										<h1>Accounts</h1>
+									</div>
+									
+									<table class="table policies-desktop table-striped">
+										<thead>
+											<tr>
+												<th class="number">Bill Name <a class="has-popover" data-toggle="popover" data-placement="right" data-content="Listed below are all bills associated with your policies. Your Primary Bill is sent to your primary billing or email address and Individual Bills are separately billed policies mailed to an addresses designated by you, such as a bank." href="#"><i class="icon fa fa-info-circle"></i></a></th>
+												<th>Bill Type</th>
+												<th class="type">Total <br/>Charges <a class="has-popover" data-toggle="popover" data-placement="right" data-content="This is the sum of ALL of your current policies with PURE (regardless of how or to whom they are billed). It is inclusive of all required surplus contributions and any applicable state taxes, fees, or surcharges." href="#"><i class="icon fa fa-info-circle"></i></a></th>
+												<th class="type">Balance</th>
+												<th class="type">Minimum <br/>Due</th>
+											</tr>
+										</thead>
+										<tbody>
+											<apex:outputpanel rendered="{!IF(isNotIndividaullyBilled,true,false)}">
+												<tr>
+													<td>Primary Bill</td>
+													<td>Primary</td>
+													<td>
+													
+													<apex:outputpanel rendered="{!If(totalCharges == null, true,(If(totalCharges == 0, true, false)))}">
+														$0.00
+													</apex:outputpanel>
+													<apex:outputpanel rendered="{!If(totalCharges == null, false,(If(totalCharges == 0, false, true)))}">
+														<apex:outputText value="${0, number,###,##0.00}">
+															<apex:param value="{!totalCharges}"/>
+														</apex:outputText>
+													</apex:outputpanel>
+														
+													</td>
+													<td>
+														<apex:outputpanel rendered="{!If(totalBalance == null, true,(If(totalBalance == 0, true, false)))}">
+															$0.00
+														</apex:outputpanel>
+														<apex:outputpanel rendered="{!If(totalBalance == null, false,(If(totalBalance == 0, false, true)))}">
+															<apex:outputText value="${0, number,###,##0.00}">
+																<apex:param value="{!totalBalance}"/>
+															</apex:outputText>
+														</apex:outputpanel>
+														
+													</td>
+													<apex:outputpanel rendered="{!IF(totalMinDue==null,false,(If(totalMinDue == 0, false, true)))}" layout="none">
+														<td class="{!IF(totalMinDue>0 && objMemberInformation.IsOverdue__c!=null && objMemberInformation.IsOverdue__c>0,'text-error','')}">
+															<apex:outputText value="${0, number,###,##0.00}">
+																<apex:param value="{!totalMinDue}"/>
+															</apex:outputText>
+														</td>
+													</apex:outputpanel>
+													<apex:outputpanel rendered="{!IF(totalMinDue==null,true,(If(totalMinDue == 0, true, false)))}" layout="none">
+														<td>$0.00</td>
+													</apex:outputpanel>
+												</tr>
+											</apex:outputpanel>    
+											<apex:outputpanel rendered="{!If(lstBillingPolicyWrapper.size > 0, true, false)}">
+												<apex:repeat value="{!lstBillingPolicyWrapper}" var="BP">
+													<tr>
+														<apex:outputPanel rendered="{!IF($Profile.Name == 'Pure Customer Community Login User', true, false)}">
+															<td><a href="/PolicyDetailPage?url={!BP.policyNumber}" target="_self">{!BP.policyDescription}</a></td>
+														</apex:outputPanel>
+														<apex:outputPanel rendered="{!IF($Profile.Name != 'Pure Customer Community Login User', true, false)}">
+															<td><a href="/BrokerView/PolicyDetailPage?url={!BP.policyNumber}&mId={!$CurrentPage.parameters.mId}" target="_self">{!BP.policyDescription}</a></td>
+														</apex:outputPanel>
+														<td>Individual</td>
+														<td>
+															<apex:outputpanel rendered="{!If(BP.policyTotalCharges == null, true,(If(BP.policyTotalCharges == 0, true, false)))}">
+																$0.00
+															</apex:outputpanel>
+															<apex:outputpanel rendered="{!If(BP.policyTotalCharges == null, false,(If(BP.policyTotalCharges == 0, false, true)))}">
+																<apex:outputText value="${0, number,###,##0.00}">
+																	<apex:param value="{!BP.policyTotalCharges}"/>
+																</apex:outputText>
+															</apex:outputpanel>
+														</td>
+														<td>
+															<apex:outputpanel rendered="{!If(BP.Balance == null, true,(If(BP.Balance == 0, true, false)))}">
+																$0.00
+															</apex:outputpanel>
+															<apex:outputpanel rendered="{!If(BP.Balance == null, false,(If(BP.Balance == 0, false, true)))}">
+																<apex:outputText value="${0, number,###,##0.00}">
+																	<apex:param value="{!BP.Balance}"/>
+																</apex:outputText>
+															</apex:outputpanel>
+														</td>
+														<td style="color:{!IF(BP.policyIsOverdue,'red;','')}">
+															<apex:outputpanel rendered="{!If(BP.policyMinDue== null, true,(If(BP.policyMinDue == 0, true, false)))}">
+																$0.00
+															</apex:outputpanel>
+															<apex:outputpanel rendered="{!If(BP.policyMinDue == null, false,(If(BP.policyMinDue == 0, false, true)))}">
+																<apex:outputText value="${0, number,###,##0.00}">
+																	<apex:param value="{!BP.policyMinDue}"/>
+																</apex:outputText>
+															</apex:outputpanel>
+														</td>
+													</tr>
+												</apex:repeat>
+											</apex:outputpanel>
+										</tbody>
+									</table>
+								</div>
+							</div>
+						</div> <!-- snapshot-content div -->
+					</div>
+					
+					<!-- Mobile table ("desktop" version is removed on mobile, this is displayed.) if none, hide.-->
+					<div class="mobile-expandable-div">
+						<div class="policies-mobile">
+							<div class="mobile-policy-container">
+							   <ul>  
+									<li class="Dgray">
+										<h3>LAST PAYMENT RECEIVED:</h3>
+										<p>
+											<apex:outputpanel rendered="{!If(objMemberInformation.Last_Payment_Received__c == null, false,true)}">
+												<apex:outputText value="${0, number,###,##0.00}">
+													<apex:param value="{!objMemberInformation.Last_Payment_Received__c}"/>
+												</apex:outputText>
+											</apex:outputpanel>
+											<apex:outputpanel rendered="{!If(objMemberInformation.Last_Payment_Received__c == null, true,false)}">
+												$0.00
+											</apex:outputpanel></p>
+									</li>
+									 <li class="Lgray">
+										<h3>LAST PAYMENT MADE:</h3>
+										<p>
+											<apex:outputpanel rendered="{!If(objMemberInformation.Last_Payment_Date__c == null, false,true)}">
+												<apex:outputText value="{0,date,MM/dd/yy}">
+													<apex:param value="{!objMemberInformation.Last_Payment_Date__c}"/>
+												</apex:outputText>
+											</apex:outputpanel>
+											<apex:outputpanel rendered="{!If(objMemberInformation.Last_Payment_Date__c == null, true,false)}">
+												N/A
+											</apex:outputpanel>	</p>
+									</li>
+					
+								</ul>
+							</div>
+							<div class="mobile-policy-container">
+							   <ul>  
+									<li class="Tgray">
+										<h2>Accounts</h2>
+									</li>
+									<apex:outputpanel rendered="{!IF(isNotIndividaullyBilled,true,false)}">
+										<li class="Lgray">
+											<h3>BILL NAME</h3>
+											<p>Primary Bill</p>
+										</li>
+									</apex:outputpanel>
+									<apex:outputpanel rendered="{!IF(isNotIndividaullyBilled,true,false)}">
+										<li class="Dgray">
+											<h3>BILL TYPE</h3>
+											<p>Primary</p>
+										</li>
+									</apex:outputpanel> 
+									<apex:outputpanel rendered="{!IF(isNotIndividaullyBilled,true,false)}">   
+										<li class="Lgray">
+												<h3>TOTAL CHARGES</h3>
+												<p>
+													<apex:outputpanel rendered="{!If(totalCharges == null, true,(If(totalCharges == 0, true, false)))}">
+														$0.00
+													</apex:outputpanel>
+													<apex:outputpanel rendered="{!If(totalCharges == null, false,(If(totalCharges == 0, false, true)))}">
+														<apex:outputText value="${0, number,###,##0.00}">
+															<apex:param value="{!totalCharges}"/>
+														</apex:outputText>
+													</apex:outputpanel>
+												</p>
+										</li>
+									</apex:outputpanel>	
+									<apex:outputpanel rendered="{!IF(isNotIndividaullyBilled,true,false)}">
+										<li class="Dgray">
+												<h3>BALANCE</h3>
+												<p>
+													<apex:outputpanel rendered="{!If(totalBalance == null, true,(If(totalBalance == 0, true, false)))}">
+														$0.00
+													</apex:outputpanel>
+													<apex:outputpanel rendered="{!If(totalBalance == null, false,(If(totalBalance == 0, false, true)))}">
+														<apex:outputText value="${0, number,###,##0.00}">
+															<apex:param value="{!totalBalance}"/>
+														</apex:outputText>
+													</apex:outputpanel>
+												</p>
+										</li>
+									 </apex:outputpanel> 
+									 <apex:outputpanel rendered="{!IF(isNotIndividaullyBilled,true,false)}">   
+										<li class="Dgray" >
+											<h3>MINIMUM DUE</h3>
+											<p class="{!IF(totalMinDue>0 && objMemberInformation.IsOverdue__c!=null && objMemberInformation.IsOverdue__c>0,'text-error','')}">
+												<apex:outputpanel rendered="{!IF(totalMinDue==null,false,(If(totalMinDue == 0, false, true)))}" layout="none">
+													<apex:outputText value="${0, number,###,##0.00}">
+														<apex:param value="{!totalMinDue}"/>
+													</apex:outputText>
+												</apex:outputpanel>
+												<apex:outputpanel rendered="{!IF(totalMinDue==null,true,(If(totalMinDue == 0, true, false)))}" layout="none">
+													$0.00
+												</apex:outputpanel>
+											</p>
+										</li>
+									</apex:outputpanel>
+								</ul>
+							</div>
+							<apex:repeat value="{!lstBillingPolicyWrapper}" var="BP">
+								<div class="mobile-policy-container">
+									<ul>  
+										<li class="Lgray">
+											<h3>BILL NAME</h3>
+											<apex:outputPanel rendered="{!IF($Profile.Name == 'Pure Customer Community Login User', true, false)}">
+												<p><a href="/PolicyDetailPage?url={!BP.policyNumber}" target="_self">{!BP.policyDescription}</a></p>
+											</apex:outputPanel>
+											<apex:outputPanel rendered="{!IF($Profile.Name != 'Pure Customer Community Login User', true, false)}">
+												<p><a href="/BrokerView/PolicyDetailPage?url={!BP.policyNumber}&mId={$CurrentPage.parameters.mId}" target="_self">{!BP.policyDescription}</a></p>
+											</apex:outputPanel>
+										</li>
+										<li class="Dgray">
+											<h3>BILL TYPE</h3>
+											<p>Individual</p>
+										</li>
+										<li class="Lgray">
+											<h3>TOTAL CHARGES</h3>
+											<p>
+												<apex:outputpanel rendered="{!If(BP.policyTotalCharges == null, true,(If(BP.policyTotalCharges == 0, true, false)))}">
+													$0.00
+												</apex:outputpanel>
+												<apex:outputpanel rendered="{!If(BP.policyTotalCharges == null, false,(If(BP.policyTotalCharges == 0, false, true)))}">
+													<apex:outputText value="${0, number,###,##0.00}">
+														<apex:param value="{!BP.policyTotalCharges}"/>
+													</apex:outputText>
+												</apex:outputpanel>
+											</p>
+										</li>
+										<li class="Dgray">
+											<h3>BALANCE</h3>
+											<p>
+												<apex:outputpanel rendered="{!If(BP.Balance == null, true,(If(BP.Balance == 0, true, false)))}">
+													$0.00
+												</apex:outputpanel>
+												<apex:outputpanel rendered="{!If(BP.Balance == null, false,(If(BP.Balance == 0, false, true)))}">
+													<apex:outputText value="${0, number,###,##0.00}">
+														<apex:param value="{!BP.Balance}"/>
+													</apex:outputText>
+												</apex:outputpanel>
+											</p>
+										</li>
+										<li class="Dgray" >
+											<h3>MINIMUM DUE</h3>
+											<p style="color:{!IF(BP.policyIsOverdue,'red;','')}">
+												<apex:outputpanel rendered="{!If(BP.policyMinDue== null, true,(If(BP.policyMinDue == 0, true, false)))}">
+													$0.00
+												</apex:outputpanel>
+												<apex:outputpanel rendered="{!If(BP.policyMinDue == null, false,(If(BP.policyMinDue == 0, false, true)))}">
+													<apex:outputText value="${0, number,###,##0.00}">
+														<apex:param value="{!BP.policyMinDue}"/>
+													</apex:outputText>
+												</apex:outputpanel>
+											</p>
+										</li>
+									</ul>
+								</div>
+							</apex:repeat>
+						</div>	
+						
+						<!-- Extra Section Starts Here-->
+					<div class="row-fluid extra-section">
+						<div class="span6 paynow">
+							<p>Please note, you can only pay your primary account bill online. If you have individually billed polices, you can pay these with a check or by calling Member Services at (888)813-7873.</p>
+							<a href='{!payMyBillLink}' target="_blank" class="btn btn-pay" type="button">PAY NOW <i class="fa fa-caret-right"></i></a>
+						</div>
+						<div class="span6 enroll">
+							<strong>DELIVERY METHOD:</strong><br />
+							<apex:outputpanel rendered="{!If(objMemberInformation.Billing_Document_Delivery_Method__c == 'Paper',true,false)}">
+								<p>You are not enrolled in eDelivery. <br />
+								Your bills are currently mailed to: <br />
+									<div style="max-width: 70%;">
+										<strong ><apex:outputText value="{!PrimaryBillingAddrs}" escape="false"/></strong> 
+									</div>
+								</p>
+								<apex:outputPanel rendered="{!IF($Profile.Name == 'Pure Customer Community Login User', true, false)}">
+									<a href="/ProfileSettingPage#deliverySection" class="btn btn-pure" type="button">ENROLL <i class="fa fa-caret-right"></i></a>
+								</apex:outputPanel>
+								<div class="e-leaf">
+									<apex:image value="{!URLFOR($Resource.SL_PureInsuranceResources,'images/e-leaf.png')}" />
+								</div>
+							</apex:outputpanel>
+							<apex:outputpanel rendered="{!If(objMemberInformation.Billing_Document_Delivery_Method__c == 'Electronic' || objMemberInformation.Billing_Document_Delivery_Method__c == 'Both',true,false)}">
+								<p>You are enrolled in eDelivery. <br />
+								Your bills are currently mailed to: <br />
+								<strong>{!primaryEmail}</strong></p>
+							</apex:outputpanel>
+						</div>
+					</div>
+					</div>
+					
+				</div>
+			
+			<!-- End billing snapshot -->
+			
+			
+<!-- 			extra-bill-header -->
+			<!-- Begin Primary Billing Account  -->
+			<div class="bill-sum-full-container  row-fluid" style="border-bottom: 3px solid #DADBD6; display:{!IF(isNotIndividaullyBilled,'','none;')}">
+				<div class="table-header table-header-short  arrow-container" >
+					<h1 class="table-h1-title">Primary Billing Account</h1>
+					<apex:outputpanel rendered="{!isOverdue}">
+						<span class="account-error">
+							<img src="{!URLFOR($Resource.SL_PureInsuranceResources,'images/pure-triangle.png')}"  class="pure-triangle"/> 
+							<span class="table-warning text-error">YOUR ACCOUNT IS PAST DUE</span>
+						</span> 
+					</apex:outputpanel>
+					<div id="PrimaryBillingRotateDownId" class="rotate-caret"><i class="fa fa-caret-right fa-2x"></i></div>
+					
+				</div>        
+			
+				<div id="primaryIstDiv" class="bill-mega-div row-fluid desktop bill-sum-collapse" >
+					<div class="span12 unit-content">   
+			
+						<div class="row-fluid">
+							<div class="span12 bill-sum-section">
+								<div class="arrow-container bill-sum-title">
+									<h1>Account Summary</h1>
+									<div class="rotate-caret rotate-caret-down"><i class="fa fa-caret-right fa-2x"></i></div>
+								</div>
+			
+								<div class="bill-sum-div bill-sum-collapse">
+									<table class="table policies-desktop table-striped">
+										<thead>
+											<tr>
+												<th>Policy <br/>Description</th>
+												<th class="number">Policy Term</th>
+												<th class="type">Total <br/>Charges </th>
+												<th class="type">Payments/<br/>Credits</th>
+												<th class="type">Balance</th>
+												<th class="type">Minimum <br/>Due</th>
+											</tr>
+										</thead>
+										<tbody>
+											<apex:repeat value="{!lstActivePolicyWrapper}" var="allPolcies">
+											<apex:outputPanel rendered="{!if(allPolcies.isIndivisualBilled,false,true)}">
+											<tr>
+												<apex:outputPanel rendered="{!IF($Profile.Name == 'Pure Customer Community Login User', true, false)}">
+													<td><a href="PolicyDetailPage?url={!allPolcies.policyNumber}" ><strong>{!allPolcies.policyDescription}</strong></a></td>
+												</apex:outputPanel>
+												<apex:outputPanel rendered="{!IF($Profile.Name != 'Pure Customer Community Login User', true, false)}">
+													<td><a href="/BrokerView/PolicyDetailPage?url={!allPolcies.policyNumber}&mId={!$CurrentPage.parameters.mId}" ><strong>{!allPolcies.policyDescription}</strong></a></td>
+												</apex:outputPanel>
+<!-- 			                                    <td>{!allPolcies.policyEffectiveDate}</td> -->
+												<td>
+													<apex:outputText value="{0,date,MM/dd/yy}"><apex:param value="{!allPolcies.effectiveDate}" />
+													</apex:outputText>&nbsp;-&nbsp;<apex:outputText value="{0,date,MM/dd/yy}"><apex:param value="{!allPolcies.expirationDate}" />
+													</apex:outputText>
+												</td>
+												<td><apex:outputText value="${0, number,###,##0.00}"   >
+													<apex:param value="{!allPolcies.policyTotalCharges}"/>
+												</apex:outputText></td>
+												<td><apex:outputText value="${0, number,###,##0.00}"   >
+													<apex:param value="{!allPolcies.paymentsCredits}"/>
+												</apex:outputText></td>
+												<td><apex:outputText value="${0, number,###,##0.00}"   >
+													<apex:param value="{!allPolcies.Balance}"/>
+												</apex:outputText></td>
+												<td class="{!If(allPolcies.policyIsOverdue ,'text-error','')}" style="color:{!IF(allPolcies.policyIsOverdue,'red;','')}">
+<!-- 		                        					<apex:outputpanel rendered="{!If(!allPolcies.policyIsOverdue ,true,false)}"> -->
+													<apex:outputpanel rendered="{!If(allPolcies.policyMinDue ==null, true, (If(allPolcies.policyMinDue == 0, true, false)))}">
+														$0.00
+													</apex:outputpanel>
+													<apex:outputpanel rendered="{!If(allPolcies.policyMinDue ==null, false, (If(allPolcies.policyMinDue == 0, false, true)))}">
+														<apex:outputText value="${0, number,###,##0.00}"   >
+															<apex:param value="{!allPolcies.policyMinDue}"/>
+														</apex:outputText>
+													</apex:outputpanel>
+														
+<!-- 							                    	</apex:outputpanel> -->
+												</td>    
+											</tr>
+											</apex:outputPanel>
+											</apex:repeat>
+											
+											<tr>
+												<td></td>
+												<td><strong>TOTAL:</strong></td>
+												<td><strong><apex:outputText value="${0, number,###,##0.00}"   >
+													<apex:param value="{!totalCharges}"/>
+												</apex:outputText></strong></td>
+												<td><strong><apex:outputText value="${0, number,###,##0.00}"   >
+													<apex:param value="{!totalPaymentCredit}"/>
+												</apex:outputText></strong></td>
+												<td><strong><apex:outputText value="${0, number,###,##0.00}"   >
+													<apex:param value="{!totalBalance}"/>
+												</apex:outputText></strong></td>
+												<td><strong><apex:outputText value="${0, number,###,##0.00}"   >
+													<apex:param value="{!totalMinDue}"/>
+												</apex:outputText></strong></td>
+											</tr>
+										</tbody>
+									</table>
+								</div>
+			
+							</div>
+						</div>
+						<div class="row-fluid">
+							<div class="span6 bill-sum-section">
+								<div class="arrow-container bill-sum-title">
+									<h1>Recent Invoices</h1>
+									<div class="rotate-caret rotate-caret-down"><i class="fa fa-caret-right fa-2x"></i></div>
+								</div>
+								<div class="bill-sum-div bill-sum-collapse">
+									<table class="table policies-desktop table-striped">
+										<tbody>
+											<apex:repeat value="{!lstInvoicesPrimary}" var="invoices">
+												<tr>
+													<td><a target="_Blank" href="{!invoices.DocumentId}" ><strong>{!invoices.DisplayText}</strong></a></td>
+												</tr>
+											</apex:repeat>
+											<apex:outputpanel rendered="{!If(lstInvoicesPrimary.size == 0, true,false)}">
+												 <tr style="width:100%">
+													<td class="center-icon" colspan="5" style="width:100%;">
+														<span> You do not have any recent invoices</span>
+													</td>
+												</tr>
+											</apex:outputpanel>
+										</tbody>
+									</table>
+								</div>
+							</div>
+			
+							<div class="span6 bill-sum-section">
+								<div class="arrow-container bill-sum-title">
+									<h1>Future Payment Dates</h1>
+									<div class="rotate-caret rotate-caret-down"><i class="fa fa-caret-right fa-2x"></i></div>
+								</div>
+								<div class="bill-sum-div bill-sum-collapse">
+									<table class="table policies-desktop table-striped">
+										<tbody>
+											<apex:outputpanel rendered="{!if(lstFuturePaymentsPrimary.size > 0,true,false)}">
+												<tr>
+													<td><strong>Estimated Due Date</strong></td>
+													<td><strong>Minimum Due</strong></td>
+												</tr>
+											</apex:outputpanel>    
+											<apex:repeat value="{!lstFuturePaymentsPrimary}" var="futurePayments">
+												<tr>
+													<td><strong><apex:outputText value="{0,date,MM/dd/yy}"><apex:param value="{!futurePayments.EstimatedDate}" />
+													</apex:outputText></strong></td>
+													<td><apex:outputText value="${0, number,###,##0.00}"   >
+														<apex:param value="{!futurePayments.MinDue}"/>
+													</apex:outputText></td>
+												</tr>
+											</apex:repeat>
+											<tr style="width:100%">
+												<td class="center-icon" colspan="5" style="width:100%; display:{!If(lstFuturePaymentsPrimary.size != 0, 'none', '')}; ">
+													<span > You do not have any payments due at this time</span>
+												</td>
+											</tr>
+										</tbody>
+									</table>
+								</div>
+							</div>
+						</div>
+			
+					</div>
+				</div>
+			
+				<!-- Mobile table ("desktop" version is removed on mobile, this is displayed.) if none, hide.-->
+				<div class="mobile-expandable-div policies-mobile" id="MobileExpandedprimaryBill">
+					<div class="mobile-policy-container">
+						<ul>  
+							<li class="Tgray">
+								<h2>Account Summary</h2>
+							</li>
+						</ul></div>
+					<apex:repeat value="{!lstActivePolicyWrapper}" var="mAllPolcies">
+						<apex:outputPanel rendered="{!if(mAllPolcies.isIndivisualBilled,false,true)}">
+							<div class="mobile-policy-container">
+								<ul>  
+									<li class="Lgray">
+										<h3>POLICY DESCRIPTION</h3>
+										<p>{!mAllPolcies.policyDescription}</p>
+									</li>
+									<li class="Dgray">
+										<h3>POLICY TERM</h3>
+										<p><apex:outputText value="{0,date,MM/dd/yy}"><apex:param value="{!mAllPolcies.effectiveDate}" />
+										</apex:outputText>&nbsp;-&nbsp;<apex:outputText value="{0,date,MM/dd/yy}"><apex:param value="{!mAllPolcies.expirationDate}" />
+										</apex:outputText></p>
+									</li>
+									<li class="Lgray">
+										<h3>TOTAL CHARGES</h3>
+										<p><apex:outputText value="${0, number,###,##0.00}"   >
+											<apex:param value="{!mAllPolcies.policyTotalCharges}"/>
+										</apex:outputText></p>
+									</li>
+									<li class="Dgray">
+										<h3>PAYMENTS / CREDITS</h3>
+										<p><apex:outputText value="${0, number,###,##0.00}"   >
+											<apex:param value="{!mAllPolcies.paymentsCredits}"/>
+										</apex:outputText></p>
+									</li>
+									<li class="Lgray">
+										<h3>BALANCE</h3>
+										<p><apex:outputText value="${0, number,###,##0.00}"   >
+											<apex:param value="{!mAllPolcies.Balance}"/>
+										</apex:outputText></p>
+									</li>
+									<li class="Dgray">
+										<h3>MINIMUM DUE</h3>
+										<p class="{!If(mAllPolcies.policyIsOverdue ,'text-error','')}" >
+										<apex:outputpanel rendered="{!If(mAllPolcies.policyMinDue == null,true,(If(mAllPolcies.policyMinDue == 0, true, false)))}">
+											$0.00
+										</apex:outputpanel>
+										<apex:outputpanel rendered="{!If(mAllPolcies.policyMinDue == null,false,(If(mAllPolcies.policyMinDue == 0, false, true)))}">
+											<apex:outputText value="${0, number,###,##0.00}"   >
+												<apex:param value="{!mAllPolcies.policyMinDue}"/>
+											</apex:outputText>
+										</apex:outputpanel>
+											
+										</p>
+									</li>
+								</ul>
+							</div>
+						   </apex:outputPanel>	
+						</apex:repeat>
+						<div class="mobile-policy-container">
+						<ul>
+							<li class="account-total">
+								<h3>TOTAL CHARGES</h3>
+								<h3><apex:outputText value="${0, number,###,##0.00}"   >
+									<apex:param value="{!totalCharges}"/>
+								</apex:outputText></h3>
+							</li>
+							<li class="account-total">
+								<h3>PAYMENTS / CREDITS</h3>
+								<h3><apex:outputText value="${0, number,###,##0.00}"   >
+									<apex:param value="{!totalPaymentCredit}"/>
+								</apex:outputText></h3>
+							</li>
+							<li class="account-total">
+								<h3>BALANCE</h3>
+								<h3><apex:outputText value="${0, number,###,##0.00}"   >
+									<apex:param value="{!totalBalance}"/>
+								</apex:outputText></h3>
+							</li>
+							<li class="account-total">
+								<h3>MINIMUM DUE</h3>
+								<h3><apex:outputText value="${0, number,###,##0.00}"   >
+									<apex:param value="{!totalMinDue}"/>
+								</apex:outputText></h3>
+							</li>
+						</ul>
+					</div>
+					<div class="mobile-policy-container">
+					   <ul>  
+							<li class="Tgray">
+								<h2>Recent Invoices</h2>
+							</li>
+						</ul>
+					</div>
+					<apex:repeat value="{!lstInvoicesPrimary}" var="minvoices">
+							<div class="mobile-policy-container" >
+							   <ul>  
+									<li class="Lgray">
+										<h3><a target="_Blank" href="{!minvoices.DocumentId}" ><strong>{!minvoices.DisplayText}</strong></a></h3>
+									</li>
+								</ul>
+							</div>
+						</apex:repeat>
+					<apex:outputpanel rendered="{!If(lstInvoicesPrimary.size > 0 ,false,true)}">
+						<div class="mobile-policy-container">
+						   <ul>
+							<li class="Lgray" >
+								<span > You do not have any recent invoices</span>
+							</li>
+						</ul></div>
+					</apex:outputpanel>
+					<div class="mobile-policy-container">
+						<ul>  
+							<li class="Tgray">
+								<h2>Future Payment Dates</h2>
+							</li>
+						</ul>
+					</div>
+					<apex:repeat value="{!lstFuturePaymentsPrimary}" var="mFutPayments">
+						<div class="mobile-policy-container">
+							<ul>  
+								<li class="Lgray">
+									<h3>ESTIMATED DUE DATE</h3>
+									<p><apex:outputText value="{0,date,MM/dd/yy}"><apex:param value="{!mFutPayments.EstimatedDate}" />
+									</apex:outputText></p>
+								</li>
+								<li class="Dgray">
+									<h3>MINIMUM DUE</h3>
+									<p><apex:outputText value="${0, number,###,##0.00}"   >
+										<apex:param value="{!mFutPayments.MinDue}"/>
+									</apex:outputText></p>
+								</li>
+							</ul>
+						</div>
+					</apex:repeat>
+					<apex:outputpanel rendered="{!if(lstFuturePaymentsPrimary.size >0,false,true)}">
+						<div class="mobile-policy-container">
+							<ul>
+								<li class="Lgray" >
+									<h3>You do not have any payments due at this time</h3>
+								</li>
+							</ul>
+						</div>
+					</apex:outputpanel>
+				</div>
+			</div>
+			<!-- begining individual policies -->
+			<script>
+				function changeCollapsed()
+				{
+					 $('#MobileViewExpanded').removeClass('bill-sum-collapse');
+				}
+			</script>
+			<div class="bill-sum-full-container row-fluid" style="display:{!IF(isIndividaullyBilled,'','none;')}">
+				 <div class="extra-bill-header arrow-container">
+					<h1 onclick="changeCollapsed();">Individually Billed Policies </h1>
+					<div id="RotateCaretDownId" class="rotate-caret"><i class="fa fa-caret-right fa-2x"></i></div>
+				 </div>       
+		
+				<div class="bill-mega-div row-fluid desktop" id="IndividualPolicies">
+					<div class="span12 unit-content">   
+						<!--  individually Billed Policies  -->
+						<apex:repeat value="{!lstActivePolicyWrapper}" var="indPolicies">
+							<apex:outputPanel rendered="{!if(indPolicies.isIndivisualBilled,true,false)}">
+								<div class="row-fluid">
+									<div class="span12 bill-sum-section">
+										<div class="arrow-container bill-sum-title">
+											<h1>{!indPolicies.policyDescription}</h1>
+											<div class="rotate-caret"><i class="fa fa-caret-right fa-2x"></i></div>
+										</div>
+						
+										<div class="bill-sum-div">
+											<p>You have elected to have this policy billed to {!indPolicies.BillPayorName}</p>
+											<table class="table policies-desktop table-striped">
+												<thead>
+													<tr>
+														<th>Policy <br/>Description</th>
+														<th class="number">Policy Term</th>
+														<th class="type">Total <br/>Charges </th>
+														<th>Payments/<br/>Credits</th>
+														<th class="type">Balance</th>
+														<th class="type">Minimum <br/>Due</th>
+													</tr>
+												</thead>
+												<tbody>
+													<tr>
+														<apex:outputPanel rendered="{!IF($Profile.Name == 'Pure Customer Community Login User', true, false)}">
+															<td><strong><a href="PolicyDetailPage?url={!indPolicies.policyNumber}" >{!indPolicies.policyDescription}</a></strong></td>
+														</apex:outputPanel>
+														<apex:outputPanel rendered="{!IF($Profile.Name != 'Pure Customer Community Login User', true, false)}">
+															<td><strong><a href="/BrokerView/PolicyDetailPage?url={!indPolicies.policyNumber}&mId={!$CurrentPage.parameters.mId}" >{!indPolicies.policyDescription}</a></strong></td>
+														</apex:outputPanel>
+														<td>
+															<apex:outputText value="{0,date,MM/dd/yy}"><apex:param value="{!indPolicies.effectiveDate}" />
+															</apex:outputText>&nbsp;-&nbsp;<apex:outputText value="{0,date,MM/dd/yy}"><apex:param value="{!indPolicies.expirationDate}" />
+															</apex:outputText>
+														</td>
+														<td><apex:outputText value="${0, number,###,##0.00}"   >
+															<apex:param value="{!indPolicies.policyTotalCharges}"/>
+														</apex:outputText></td>
+														<td><apex:outputText value="${0, number,###,##0.00}"   >
+															<apex:param value="{!indPolicies.paymentsCredits}"/>
+														</apex:outputText></td>
+														<td><apex:outputText value="${0, number,###,##0.00}"   >
+															<apex:param value="{!indPolicies.Balance}"/>
+														</apex:outputText></td>
+														<td style="color:{!IF(indPolicies.policyIsOverdue,'red;','')}">
+															<apex:outputpanel rendered="{!If(indPolicies.policyMinDue== null, true,(If(indPolicies.policyMinDue == 0, true, false)))}">
+																$0.00
+															</apex:outputpanel>
+															<apex:outputpanel rendered="{!If(indPolicies.policyMinDue== null, false,(If(indPolicies.policyMinDue == 0, false, true)))}">
+																<apex:outputText value="${0, number,###,##0.00}"   >
+																	<apex:param value="{!indPolicies.policyMinDue}"/>
+																</apex:outputText>
+															</apex:outputpanel>
+														</td>
+													</tr>
+												</tbody>
+											</table>
+											<div class="row-fluid">
+												<div class="span6 bill-sum-section">
+													<div class="arrow-container bill-sum-title">
+														<h1>Recent Invoices</h1>
+														<div class="rotate-caret"><i class="fa fa-caret-right fa-2x"></i></div>
+													</div>
+					 
+													<div class="bill-sum-div">
+														<table class="table policies-desktop table-striped">
+															<tbody>
+																<apex:repeat value="{!lstInvoices}" var="indInvoices" >
+																	<apex:outputPanel rendered="{!if(indInvoices.PolicyId == indPolicies.policyId,true,false)}">
+																		<tr>
+																			<td><a target="_blank" href="{!indInvoices.DocumentID}" ><strong>{!indInvoices.DisplayText}  </strong></a></td>
+																		</tr>
+																	</apex:outputPanel>
+																</apex:repeat>
+																<tr style="width:100%">
+																	<td class="center-icon" style="width:100%; display:{!If(mapPolicyIdToRecentInvoicesCount[indPolicies.policyId] == 0, '', 'none;')}; ">
+																		<span > You do not have any recent invoices</span>
+																	</td>
+																</tr>
+															</tbody>
+														</table>
+													</div>
+												</div>
+					
+												<div class="span6 bill-sum-section">
+													<div class="arrow-container bill-sum-title">
+														<h1>Future Payment Dates</h1>
+														<div class="rotate-caret"><i class="fa fa-caret-right fa-2x"></i></div>
+													</div>
+													<div class="bill-sum-div">
+														<table class="table policies-desktop table-striped">
+															<tbody>
+																<apex:outputPanel rendered="{!if(mapPolicyIdToFuturePaymentDateCount[indPolicies.policyId] > 0,true,false)}"> 
+																	<tr>
+																		<td><strong>Estimated Due Date</strong></td>
+																		<td><strong>Minimum Due</strong></td>
+																	</tr>
+																</apex:outputPanel>
+																<apex:repeat value="{!lstFuturePayments}" var="indFutPays" >
+																	<apex:outputPanel rendered="{!if(indFutPays.PolicyId == indPolicies.policyId,true,false)}">
+																		<tr>
+																			<td><strong><apex:outputText value="{0,date,MM/dd/yy}"><apex:param value="{!indFutPays.EstimatedDate}" />
+																				</apex:outputText></strong></td>
+																			<td><apex:outputText value="${0, number,###,##0.00}"   >
+																				<apex:param value="{!indFutPays.MinDue}"/>
+																			</apex:outputText></td>
+																		</tr>
+																	</apex:outputPanel>
+																</apex:repeat>
+																<tr style="width:100%">
+																	<td class="center-icon" style="width:100%; display:{!If(mapPolicyIdToFuturePaymentDateCount[indPolicies.policyId] != 0, 'none', '')}; ">
+																		<span > You do not have any payments due at this time</span>
+																	</td>
+																</tr>
+															</tbody>
+														</table>
+													</div>
+												</div>
+											</div>
+					
+										</div>
+									</div>
+								</div>
+							</apex:outputPanel>    
+						</apex:repeat>
+			
+					</div>
+				</div>
+			
+				<!-- Mobile table ("desktop" version is removed on mobile, this is displayed.) if none, hide.-->
+				<div class="mobile-expandable-div policies-mobile" id="MobileViewExpanded">
+					<apex:repeat value="{!lstActivePolicyWrapper}" var="indPoliciesMob">
+						<apex:outputPanel rendered="{!if(indPoliciesMob.isIndivisualBilled,true,false)}">
+							<div class="mobile-policy-container">
+								<ul>  
+									<li class="Tgray">
+										<h2>{!indPoliciesMob.policyDescription}</h2>
+									</li>
+									<p>You have elected to have this policy billed to <em>{!indPoliciesMob.BillPayorName}</em></p>
+									<li class="Dgray">
+										<h3>POLICY DESCRIPTION</h3>
+										<p>{!indPoliciesMob.policyDescription}</p>
+									</li>
+									<li class="Lgray">
+										<h3>POLICY TERM</h3>
+										<p><apex:outputText value="{0,date,MM/dd/yy}"><apex:param value="{!indPoliciesMob.effectiveDate}" />
+												</apex:outputText>&nbsp;-&nbsp;<apex:outputText value="{0,date,MM/dd/yy}"><apex:param value="{!indPoliciesMob.expirationDate}" />
+											</apex:outputText>
+										</p>
+									</li>
+									<li class="Dgray">
+										<h3>TOTAL CHARGES</h3>
+										<p><apex:outputText value="${0, number,###,##0.00}"   >
+												<apex:param value="{!indPoliciesMob.policyTotalCharges}"/>
+											</apex:outputText></p>
+									</li>
+									<li class="Lgray">
+										<h3>PAYMENTS / CREDITS</h3>
+										<p><apex:outputText value="${0, number,###,##0.00}"   >
+												<apex:param value="{!indPoliciesMob.paymentsCredits}"/>
+											</apex:outputText></p>
+									</li>
+									<li class="Dgray">
+										<h3>BALANCE</h3>
+										<p><apex:outputText value="${0, number,###,##0.00}"   >
+												<apex:param value="{!indPoliciesMob.Balance}"/>
+											</apex:outputText></p>
+									</li>
+									<li class="Lgray">
+										<h3>MINIMUM DUE</h3>
+										<p style="color:{!IF(indPoliciesMob.policyIsOverdue,'red;','')}">
+											<apex:outputpanel rendered="{!If(indPoliciesMob.policyMinDue == null, true,(If(indPoliciesMob.policyMinDue == 0, true, false)))}">
+												$0.00
+											</apex:outputpanel>
+											<apex:outputpanel rendered="{!If(indPoliciesMob.policyMinDue == null, false,(If(indPoliciesMob.policyMinDue == 0, false, true)))}">
+												<apex:outputText value="${0, number,###,##0.00}"   >
+												<apex:param value="{!indPoliciesMob.policyMinDue}"/>
+											</apex:outputText>
+											</apex:outputpanel>
+											</p>
+									</li>
+								</ul>
+							</div>
+					
+					<div class="mobile-policy-container">
+						<ul>  
+							<li class="Tgray">
+								<h2>Recent Invoices</h2>
+							</li>
+						</ul>
+					</div>
+					
+					<apex:outputpanel rendered="{!If(lstInvoices.size > 0, true, false)}">
+						
+						<apex:repeat value="{!lstInvoices}" var="minvoices">
+							<apex:outputPanel rendered="{!if(minvoices.PolicyId == indPoliciesMob.policyId,true,false)}">
+							
+								<div class="mobile-policy-container" style="margin:0px;border-bottom:0px;">
+									<ul>  
+										<li class="Lgray">
+											<h3><a target="_Blank" href="{!minvoices.DocumentId}" ><strong>{!minvoices.DisplayText}</strong></a></h3>
+										</li>
+									</ul>
+								</div>
+							</apex:outputPanel>
+						</apex:repeat>
+					</apex:outputpanel>
+					
+					<apex:outputpanel rendered="{!If(mapPolicyIdToRecentInvoicesCount[indPoliciesMob.policyId] == 0, true,false)}">
+						<div class="mobile-policy-container">
+							<ul>
+								<li class="Lgray">
+									<p>You do not have any recent invoices</p>
+								</li>
+							</ul>
+						</div>
+					</apex:outputpanel>
+					
+					<div class="mobile-policy-container">
+					   <ul>  
+							<li class="Tgray">
+								<h2>Future Payment Dates</h2>
+							</li>
+						</ul>
+					</div>
+					
+					<apex:outputpanel rendered="{!if(lstFuturePayments.size > 0,true,false)}">
+						<apex:repeat value="{!lstFuturePayments}" var="mFutPayments">
+							<apex:outputPanel rendered="{!if(mFutPayments.PolicyId == indPoliciesMob.policyId,true,false)}">
+								<div class="mobile-policy-container">
+									<ul>  
+										<li class="Lgray">
+											<h3>ESTIMATED DUE DATE</h3>
+											<p><apex:outputText value="{0,date,MM/dd/yy}"><apex:param value="{!mFutPayments.EstimatedDate}" />
+											</apex:outputText></p>
+										</li>
+										<li class="Dgray">
+											<h3>MINIMUM DUE</h3>
+											<p><apex:outputText value="${0, number,###,##0.00}"   >
+												<apex:param value="{!mFutPayments.MinDue}"/>
+											</apex:outputText></p>
+										</li>
+								</ul>
+								</div>
+							</apex:outputpanel>
+						</apex:repeat>
+					</apex:outputpanel>
+					
+					<apex:outputpanel rendered="{!If(mapPolicyIdToFuturePaymentDateCount[indPoliciesMob.policyId] != 0, false, true)}" >
+						<div class="mobile-policy-container">
+							<ul> 
+								<li class="Lgray">
+									<h3>You do not have any payments due at this time</h3>
+								</li>
+							</ul>
+						</div>
+					</apex:outputpanel>
+					
+					
+				</apex:outputPanel>
+				</apex:repeat>
+				</div>
+			
+			</div>
+			
+			<!-- End Primary Billing Account  -->
+			
+			<!-- Begin Payments Credits History -->
+			<div class="default-full-table row-fluid">
+				<div class="span12">   
+					<div class="table-header arrow-container">
+						<h1 class="table-h1-title">Payments &amp; Credits History</h1>
+						<div class="rotate-caret mobile"><i class="fa fa-caret-right fa-2x"></i></div>
+					</div>
+			
+						<!-- Begin mobile table ("desktop" version is removed on mobile, this is displayed.) if none, hide.-->
+					
+						<div class="mobile-expandable-div policies-mobile">
+							
+							<apex:outputpanel rendered="{!If(lstPaymentCredits.size > 0, true, false)}">
+								<apex:repeat value="{!lstPaymentCredits}" var="MpaymentCredits">
+									<div class="mobile-policy-container">
+										<ul>   
+											<li class="Lgray">
+												<h3>PAYMENT TYPE</h3>
+												<p>{!MpaymentCredits.TransactionType}</p>
+											</li>
+											<li class="Dgray">
+												<h3>TRANSACTION</h3>
+												<p><apex:outputText value="{0,date,MM'/'dd'/'yy}">
+														<apex:param value="{!MpaymentCredits.TransactionDate}" /> 
+													</apex:outputText>
+												</p>
+											</li>
+											<li class="Lgray">
+												<h3>AMOUNT</h3>
+												<p><apex:outputText value="${0, number,###,##0.00}"   >
+													<apex:param value="{!MpaymentCredits.Amount}"/>
+												</apex:outputText></p>
+											</li>
+										</ul>
+									</div>
+								</apex:repeat>
+							</apex:outputpanel>
+							
+							<apex:outputpanel rendered="{!If(lstPaymentCredits.size > 0, false, true)}">
+								<div class="mobile-policy-container">
+									<ul>
+										<li class="Lgray" style="display:{!If(lstPaymentCredits.size != 0, 'none', '')}; ">
+											<h3>You do not have any payments credits at this time</h3>
+										</li>
+									</ul>
+								</div>
+							</apex:outputpanel>
+						</div>
+			
+						<table class="table policies-desktop table-striped">
+							<thead>
+								<apex:outputpanel rendered="{!if(lstPaymentCredits.size > 0,true,false)}">
+									<tr>
+										<th class="description">Payment Type</th>
+										<th class="number">Transaction Date</th>
+										<th>Amount</th>
+									</tr>
+								</apex:outputpanel>
+							</thead>
+							<tbody>
+								<apex:repeat value="{!lstPaymentCredits}" var="paymentCredits">
+									<tr>
+										<td><strong><apex:outputText value="{!if(paymentCredits.TransactionType == 'Check', paymentCredits.TransactionType+' '+paymentCredits.CheckNumber,paymentCredits.TransactionType)}"/> </strong></td>
+										<td><apex:outputText value="{0,date,MM'/'dd'/'yy}">
+												<apex:param value="{!paymentCredits.TransactionDate}" /> 
+											</apex:outputText>
+										</td>
+										<td><apex:outputText value="${0, number,###,##0.00}"   >
+											<apex:param value="{!paymentCredits.Amount}"/>
+										</apex:outputText></td>
+									</tr>             
+								</apex:repeat>
+								<tr style="width:100%">
+									<td class="center-icon" style="width:100%; display:{!If(lstPaymentCredits.size != 0, 'none', '')}; ">
+										<span > Your history is currently unavailable at this time</span>
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</div>
+			
+			<!-- End Payments Credits History -->
+					<c:SL_SiteFooterComponent />
+			</div>  <!-- main-content div End -->
+			
+			
+		</apex:define>
+		<!---------- End of Main section ----------------->
+		
+		<!----- Start of Right side  bar section --------->
+		<apex:define name="rightSideBar" >
+			<div id="sidebar" class="span3" style="display:{!If(isError == true, 'none', '')};">
+				<c:SL_SideBarComponents />
+			</div>
+		</apex:define>
+		<!----- End of Right side  bar section --------->
+		
+	</apex:composition>
+
+</apex:page>

@@ -1,0 +1,166 @@
+<apex:page controller="i.CtlGraphNodes" tabStyle="i__Email__c" sidebar="false" title="iHance Social Graph" rendered="{!renderOK}">
+<apex:stylesheet value="{!$Resource.i__aastyles}"/>
+<apex:stylesheet value="{!$Resource.i__main_css}"/>
+<apex:includeScript value="{!$Resource.i__excanvas_js}"/> <!-- ideally this would be a conditional include -->
+<apex:includeScript value="{!$Resource.i__jit_patched_js}"/>
+<apex:includeScript value="{!$Resource.i__dateformat_js}"/>
+<apex:includeScript value="{!$Resource.i__jquery_js}"/> <!-- load before prototype so prototype gets $ -->
+<apex:includeScript value="{!$Resource.i__prototype}"/>
+<apex:includeScript value="{!$Resource.i__md5_js}"/>
+<apex:includeScript value="{!$Resource.i__main_js}"/> <!-- contains the license for this page -->
+<script type="text/javascript">
+	var L2MAX = 10; // TODO: unify l2/l3 max vars
+	var jit, rootNode;
+	var rootType, leafType; // must cache for getAjaxParams()
+	
+	jQuery(document).ready(function(){
+		// cannot get this to work via CSS despite extreme selectivity, so doing it here...
+		$$('body div div div div.bPageBlock.apexDefaultPageBlock div.pbBody').each(function(i) { i.style.marginRight = "90px"; });
+
+		jit = init(restartFromNode);
+ 
+		// set globals from page args
+		rootNode = {!rootNodeJSON};
+		rootType = '{!rootType}';
+		leafType = '{!leafType}';
+		$('timespan').value = '{!timespan}'; 
+
+		loadNewRoot();
+		});
+
+	function loadNewRoot() {
+		jit.setRoot(rootNode, function() { loadChildren([rootNode], 2); } );
+		jQuery('#permalink').attr('href', 'https://' + window.location.hostname + window.location.pathname + '?' + Object.toQueryString(getAjaxParams([rootNode], 2)));
+		}
+	
+	
+	//-------------------------------------------------------------------------------
+	// ajax interactions & callbacks
+	//-------------------------------------------------------------------------------
+	function loadChildren(parents, level) {
+		if (level > 3 || parents.length == 0) {
+			jit.done();
+			Log.done();
+			return;
+			}
+
+		Log.write('Loading ' + level + (level == 2 ? 'nd' : 'rd') + ' level ...');
+
+		new Ajax.Request('aagraphnodes', {
+			method: 'get',
+			parameters: getAjaxParams(parents, level),
+			onSuccess:   function(ajax)    { gotAjaxChildren(ajax.responseJSON, level);                  },
+			onFailure:   function(ajax)    { alert('failure communicating with server: ' + ajax.status); },
+			onException: function(ajax, e) { alert('error: ' + e);                                       }
+			});
+		}
+	
+	function getAjaxParams(parents, level) {
+		// note root/leaf types swapped for third level
+		var rootP  = (level == 3 ? leafType : rootType);
+		var leafP  = (level == 3 ? rootType : leafType);
+		var skipId = (level == 3 ? rootNode.id : null);
+		return {
+			rootType: rootP,
+			leafType: leafP,
+			skipId:   skipId,
+			ids:      $A(parents).pluck('id').join(','),
+			timespan: $('timespan').value
+			};
+		}
+
+	// onSuccess callback from ajax JSON page
+	// cull children to max allowed, update JIT
+	function gotAjaxChildren(children, level) {
+		// remove root from children for L3 - unnecessary per skipId, but just in case of server bug
+		if (level == 3) children = children.findAll(function (n) { return !sameId(n.id, rootNode.id); });
+
+		if (level == 2 && children.length > L2MAX) children.length = L2MAX;
+
+		jit.addChildren(children, level, function() { loadChildren(children, level + 1); });
+		}
+
+	function sameId(id1, id2) {
+		return id1.substring(0,15) == id2.substring(0,15);
+		}
+
+	//-------------------------------------------------------------------------------
+	// status logging
+	//-------------------------------------------------------------------------------
+	var Log = {
+		elem: false,
+		done: function() { this.write('Mouse over a name to highlight its network.  Click on a name to restart the graph.'); },
+		write: function(text){
+			if (!this.elem) this.elem = get('log');
+			this.elem.innerHTML = text;
+			this.elem.style.left = (500 - this.elem.offsetWidth / 2) + 'px';
+			}
+		};
+
+	var Dbg = {
+		elem: false,
+		write: function(text){
+			if (!this.elem) this.elem = get('dbg');
+			this.elem.innerHTML += '\r\n<br/>' + text;
+			}
+		};
+
+	//-------------------------------------------------------------------------------
+	// 'start over' functions
+	//-------------------------------------------------------------------------------
+
+	// called when the user changes the Timespan
+	function restartFromMenu() {
+		loadNewRoot(); // starts new query cycle with new tiemspan value
+		}
+
+	// called on page load and when a user clicks on a new root within the UI
+	function restartFromNode(n) {
+		// set our globals
+		var newRootType = ucFirstOnly(n.data.type);
+		leafType = getNewLeafType(newRootType);
+		rootType = newRootType;
+		rootNode = n;
+
+		loadNewRoot();
+		}
+
+	function ucFirstOnly(str) {
+		return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+		}
+	
+	function getNewLeafType(newRootType) {
+		if (newRootType != 'User') return 'User'; // always 'User' for non-User roots
+		if (leafType != 'User') return leafType;  // keep current leafType if current rootType is 'User'
+		return rootType;                          // otherwise swap root/leaf types
+		}
+
+</script>
+<apex:outputText value="{!aaTabSet}" escape="false"/>
+
+<apex:pageBlock >
+
+<div id="rootHeader">
+<span class="menu">
+Timespan:
+<select id="timespan" name="timespan" onchange="restartFromMenu();">
+	<option value="d1">24 hours</option>
+	<option value="d7">7 days</option>
+	<option value="m1">Month</option>
+</select>
+</span>
+
+<span class="permalink"><a id="permalink" title="Link to the current graph, for sharing" href="#"><img src="{!$Resource.link_png}"/>Sharing link</a></span>
+
+</div>
+
+<div id="center-container">
+	<div id="log">&nbsp;</div>
+	<div id="infovis"></div>
+</div>
+
+<!-- div id="dbg">&nbsp;</div -->
+
+</apex:pageBlock>
+
+</apex:page>

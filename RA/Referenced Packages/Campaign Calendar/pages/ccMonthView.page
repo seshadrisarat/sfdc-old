@@ -1,0 +1,95 @@
+<apex:page controller="CAMPAIGNCAL.ccMonthViewController" title="Campaigns by Month" label="Campaign Calendar Monthly View" sidebar="false" tabstyle="Campaign_Calendar__tab">
+    <apex:styleSheet value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'jquery/jquery-ui-1.8.11.custom.css')}" />
+    <apex:styleSheet value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'fullcalendar/fullcalendar.css')}" />
+    <apex:styleSheet value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'calendar.css')}" />
+    <apex:includeScript value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'jquery/jquery-1.5.2.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'jquery/jquery-ui-1.8.11.custom.min.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'fullcalendar/fullcalendar.js')}" />
+    <apex:includeScript value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'jquery/plugins/jquery.loadmask-0.4.min.js')}" />   
+    <apex:includeScript value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'jquery/plugins/jquery.framedialog-1.1.2.min.js')}" />      
+    <apex:includeScript value="{!URLFOR($Resource.CAMPAIGNCAL__ccZipfile, 'jquery/plugins/jquery.cookie.js')}" />      
+    <!--[if IE 9]>  
+        <style type="text/css">
+        #blccCalendar .fc-event{
+            font-size: .8em !important; /* Attempt to style the font larger over FullCal, jQuery UI defaults */ 
+        }
+        </style>
+    <![endif]-->
+    <script type="text/javascript">
+        var calendarPage = '{!URLFOR($Page.ccMonthViewPrint)}';
+        var campaignNewPage = '{!URLFOR($Page.ccNew)}';
+        var campaignEditPage = '{!URLFOR($Page.ccEdit)}';
+        var colorSettingsPage = '{!URLFOR($Page.ccColorSettings)}';
+        var feedbackPage = '{!URLFOR($Page.ccFeedback)}';
+        var planningView = '{!URLFOR($Page.ccPlanningView)}';
+        var disableDragging = {!NOT($ObjectType.Campaign.Updateable)};
+        var blccStartOfWeek = {!startOfWeek};
+        var blccFilterId = '{!JSENCODE(filterId)}';
+        var blccErrors = '{!JSENCODE(errors)}';
+        if (blccErrors != '') {
+            alert(blccErrors);
+        }
+        // Get a reference to jQuery that we can work with 
+        var isPrintView = false;
+        var campaignCalendarIcon = '{!URLFOR($Resource.ccZipfile, 'images/calendar32.png')}';
+    </script>
+    <apex:includeScript value="{!URLFOR($Resource.CAMPAIGNCAL__ccMonthViewSharedJs)}" />
+    <apex:includeScript value="{!URLFOR($Resource.CAMPAIGNCAL__ccMonthViewJs)}" />
+    <apex:form id="campaignMonthForm" styleClass="campaignCalendarMonthView">
+        <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+                <td width="55%">
+                   <apex:sectionHeader id="pageTitleDate" title="Campaign Calendar" subtitle="{!currentDate}" />
+                </td>
+                <apex:outputPanel rendered="{$User.SobjectType.getDescribe().feedEnabled}"> <!-- outputPanel for rendering if chatter is enabled -Ken Hua--> <!-- Chatter -->             
+                <td width="45%" align="right">
+                    <table>
+                        <tr>
+                            <td><img src="{!URLFOR($Resource.cczipfile, 'images/chatter_icon.png')}" height="22" width="22" style="margin-top: 1px;"/></td>
+                            <td><input type="text" value="What are you working on?" id="campaignCalendarPublisherField" class="campaignCalendarPublisherField" name="status" size="40" maxlength="1000" autocomplete="off" style="color: #999;" onfocus="this.value = (this.value == 'What are you working on?') ? '' : this.value; this.style.color = '#000'" onblur="this.value = (this.value != '') ? this.value : 'What are you working on?'; this.style.color = '#999'" /></td>
+                            <td><apex:commandButton styleClass="btnPrimary publishersharebutton" value="Share" title="Update your chatter feed" onclick="updateChatterStatus(); return false;"/></td>
+                        </tr>
+                    </table>
+                </td>
+                </apex:outputPanel>
+            </tr>
+        </table>
+
+        <apex:toolbar id="campaignCalendarToolbar" styleClass="campaignCalendarToolbar">
+            <apex:toolbarGroup itemSeparator="none" id="toolbarFilter">
+                <apex:outputLabel value="View:" style="padding-right: 5px" />
+                <apex:selectList styleClass="campaignCalendarViewSelect" value="{!filterId}" size="1">
+                    <apex:actionSupport event="onchange" action="{!go}" reRender="pageTitleDate" onSubmit="updateCalendar(this.value);" />
+                    <apex:selectOptions value="{!listViewOptions}" />
+                </apex:selectList>
+            </apex:toolbarGroup>
+            <apex:toolbarGroup itemSeparator="none" style="padding: 0 0 0 4px;" id="toobarGroupFilters">
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                <apex:commandLink action="{!viewMonth}" styleClass="campaignCalendarMonthViewButton" id="viewMonth" title="Switch to the monthly view" />
+                <apex:commandLink action="{!viewList}" styleClass="campaignCalendarListViewButton" id="viewList" title="Switch to the planning view" />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            </apex:toolbarGroup>
+            <apex:toolbarGroup itemSeparator="none" style="padding: 0 0 0 0;" id="toobarGroupNavigation">
+                <apex:outputLink id="BtnPrevMonth" styleClass="campaignCalendarPrevButton" value="#" title="View the previous month's campaigns" />
+                <apex:outputLink id="BtnNextMonth" styleClass="campaignCalendarNextButton" value="#" title="View next month's campaigns" />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                <input id="campaignCalendarDateField" name="campaignCalendarDateField" type="hidden"></input>
+                <apex:outputLink id="BtnShowCalendar" styleClass="campaignCalendarShowCalendarButton" value="#" title="Select and view a specific date" onClick="DatePicker.pickDate(true, 'campaignCalendarDateField', false, this);DatePicker.datePicker.cancelHide(getEvent(event));return false;" />
+                &nbsp;&nbsp;&nbsp;
+                <apex:outputLink id="BtnThisMonth" styleClass="campaignCalendarThisMonthButton" value="#" title="Show the current month on the calendar">This Month</apex:outputLink>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                <apex:outputLink id="BtnPrintCalendar" styleClass="campaignCalendarPrintButton" title="Open the printable monthly view" />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                <apex:commandButton action="{!go}" value="Color Settings" id="colorSettingsButton" styleClass="colorSettingsButton" title="Setup color preferences" rendered="{!displayColorSettingsButton}"/>
+                &nbsp;&nbsp;&nbsp;
+                <apex:commandButton action="{!newCampaign}" value="New Campaign" id="newCampaignButton" styleClass="newCampaignButton" title="Create a new campaign" rendered="{!$ObjectType.Campaign.Createable}" /> <!-- Button hidden when user does not have create permission -Ken Hua -->
+            </apex:toolbarGroup>
+            <apex:toolbarGroup itemSeparator="none" style="padding: 0 2px 0 25px;" location="right" id="toobarStatusPublisher">
+                <apex:commandButton styleClass="btnImportant bracketLabsFeedbackButton" style="float: right;" value="Feedback" title="Submit feedback for the Campaign Calendar app" action="{!goFeedback}" />
+            </apex:toolbarGroup>
+        </apex:toolbar>
+
+        <div class="bPageBlock apexDefaultPageBlock secondaryPalette"></div>
+        <div id="blccCalendar"></div>
+    </apex:form>
+</apex:page>

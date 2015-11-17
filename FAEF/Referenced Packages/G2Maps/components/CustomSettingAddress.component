@@ -1,0 +1,342 @@
+<apex:component Controller="g2maps.CustomSettingMapController" allowDML="true" access="public" selfClosing="true">
+    <!-- CloudTrigger G2Maps, Copyright 2011, CloudTrigger, Inc. -->
+    <apex:stylesheet value="https://js.arcgis.com/3.8/js/esri/css/esri.css"/>
+    <apex:stylesheet value="https://js.arcgis.com/3.8/js/dojo/dijit/themes/tundra/tundra.css"/>
+    <apex:includeScript value="https://js.arcgis.com/3.8/"/>
+    <apex:includeScript value="{!URLFOR($Resource.g2maps__G2Maps, 'G2Locator.js')}"/>
+    
+    <apex:attribute name="Mobile" type="String" assignTo="{!Mobile}" required="false" description="" access="public"/>
+    <apex:attribute name="Embedded" type="String" assignTo="{!Embedded}" required="false" description="" access="public"/>
+    
+    <apex:attribute name="Width" type="String" assignTo="{!Width}" required="false" description="" access="public"/>
+    <apex:attribute name="Height" type="String" assignTo="{!Height}" required="false" description="" access="public"/>
+    <apex:attribute name="ObjRecId" type="String" assignTo="{!objId}" required="false" description="" access="public"/>
+    <apex:attribute name="LayerName" type="String" assignTo="{!LayerName}" required="false" description="" access="public"/>
+    
+    <apex:actionFunction action="{!saveAll}" name="jsSaveAll" rerender="MsgShow" status="showPrg">
+        <apex:param name="Latitude" assignTo="{!Latitude}" value="" />
+        <apex:param name="Longitude" assignTo="{!Longitude}" value="" />
+        <apex:param name="Street" assignTo="{!Street}" value="" />
+        <apex:param name="City" assignTo="{!City}" value="" />
+        <apex:param name="State" assignTo="{!State}" value="" />
+        <apex:param name="PostalCode" assignTo="{!PostalCode}" value="" />
+        <apex:param name="Country" assignTo="{!Country}" value="" />
+        <apex:param name="GeoCodeStatus" assignTo="{!GeoCodeStatus}" value="" />
+    </apex:actionFunction>
+    
+    <style type="text/css">
+        #addrBorderContainer { width:100%; height:100px; }
+        
+        td {
+            vertical-align: top;
+        }
+        
+        .g2_btn {
+            cursor: pointer;
+            display: block;
+            padding: 2px 6px 2px 6px;
+            border: 1px solid black !important;
+            font-size: 10px
+        }
+        
+        .g2_btn_over {
+            background-color: #E2EBF2;
+        }
+        
+        .missing {
+            background-color: #FFA07A !important;
+        }
+        
+        .corrected {
+            background-color: #F0FFF0 !important;
+        }
+        
+        .changed {
+            background-color: #FFFAF0 !important;
+        }
+    </style>
+    
+    <apex:pageMessages id="MsgShow"/>
+    
+    <table width="100%" cellpadding="1" cellspacing="0" border="0">
+        <thead>
+            <tr>
+                <th width="33%" colspan="3" style="display: none;">Original</th>
+                <th width="33%" colspan="3">
+                    Recommendation&nbsp;<span id="idxCounter">0</span>&nbsp;of&nbsp;<span id="totCounter">0</span>
+                    <div id="btnPrev" style="display: inline; opacity: 0.0;" onClick="changePage(selIndex - 1);" class="g2_btn">Previous</div>
+                    &nbsp;
+                    <div id="btnNext" style="display: inline; opacity: 0.0;" onClick="changePage(selIndex + 1);" class="g2_btn">Next</div>
+                </th>
+                <th width="33%" colspan="3" style="display: none;">Suggested</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td width="33%" id="originalStreet" colspan="3" style="white-space:pre; display: none;">{!HTMLEncode(Street)}</td>
+                <td width="33%" colspan="3" id="td_finalStreet"><div dojoType="dijit.InlineEditBox" editor="dijit.form.Textarea" width="100%" title="Street" id="finalStreet" style="white-space:pre;" onChange="reColor();">{!HTMLEncode(Street)}</div></td>
+                <td width="33%" id="recommendedStreet" colspan="3" style="white-space:pre; display: none;"></td>
+            </tr>
+            <tr>
+                <td id="originalCity" style="display: none;"><apex:outputText value="{!City}" escape="true" /></td>
+                <td id="originalState" style="display: none;"><apex:outputText value="{!State}" escape="true" /></td>
+                <td id="originalPostalCode" style="display: none;"><apex:outputText value="{!PostalCode}" escape="true" /></td>
+                
+                <td id="td_finalCity"><div dojoType="dijit.InlineEditBox" editor="dijit.form.TextBox" width="100%" title="City" id="finalCity" onChange="reColor();"><apex:outputText value="{!City}" escape="true" /></div></td>
+                <td id="td_finalState"><div dojoType="dijit.InlineEditBox" editor="dijit.form.TextBox" width="100%" title="State" id="finalState" onChange="reColor();"><apex:outputText value="{!State}" escape="true" /></div></td>
+                <td id="td_finalPostalCode"><div dojoType="dijit.InlineEditBox" editor="dijit.form.TextBox" width="100%" title="PostalCode" id="finalPostalCode" onChange="reColor();"><apex:outputText value="{!PostalCode}" escape="true" /></div></td>
+                
+                <td id="recommendedCity" style="display: none;"></td>
+                <td id="recommendedState" style="display: none;"></td>
+                <td id="recommendedPostalCode" style="display: none;"></td>
+            </tr>
+            <tr>
+                <td width="33%" id="originalCountry" colspan="3" style="display: none;"><apex:outputText value="{!Country}" escape="true" /></td>
+                <td colspan="2" id="td_finalCountry"><div dojoType="dijit.InlineEditBox" editor="dijit.form.TextBox" width="100%" title="Country" id="finalCountry" onChange="reColor();"><apex:outputText value="{!Country}" escape="true" /></div></td>
+                <td><div id="btnSelect" style="display: inline; float: right;" onClick="saveAddress();" class="g2_btn" onMouseOver="dojo.addClass('btnSelect', 'g2_btn_over');" onMouseOut="dojo.removeClass('btnSelect', 'g2_btn_over');">Save Changes</div></td>
+                <td width="33%" id="recommendedCountry" colspan="3" style="display: none;"></td>
+            </tr>
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="2">&nbsp;</td>
+                <td colspan="7" align="right"></td>
+            </tr>
+        </tfoot>
+    </table>
+        
+    <script type="text/javascript">
+      dojo.require("dijit.dijit"); // optimize: load dijit layer
+      dojo.require("esri.map");
+      dojo.require("esri.tasks.locator");
+      dojo.require("dijit.Dialog");
+      dojo.require("dijit.form.Form");
+      dojo.require("dijit.form.Button");
+      dojo.require("dijit.InlineEditBox");
+      dojo.require("dijit.form.TextBox");
+      dojo.require("dijit.form.Textarea");
+      
+      esri.config.defaults.io.proxyUrl = '{!JSENCODE(settings.URL_Proxy)}';
+      //esri.config.defaults.io.alwaysUseProxy = true;
+      
+        var locator;
+        var bShowDDL = false;
+        
+        var streetLines = [];
+        var candidates = [];
+        var selIndex = -1;
+        
+        function init() {
+            bShowDDL = false;
+
+            dojo.style(dojo.body(), "height", "100%");
+            dojo.style(dojo.query("html"), "height", "100%");
+            dojo.addClass(dojo.body(), "tundra");
+            dojo.parser.parse();
+        
+            var sStreet, sCity, sState, sZip, sCountry;
+            sStreet = "{!JSENCODE(Street)}";
+            sCity = "{!JSENCODE(City)}";
+            sState = "{!JSENCODE(State)}";
+            sZip = "{!JSENCODE(PostalCode)}";
+            sCountry = "{!JSENCODE(Country)}";
+
+            g2locator = new G2API.G2Locator();
+            // {
+              //  appID: "g2_{!$Organization.Id}"
+            //});
+          
+            streetLines = sStreet.split(/\n/gi);
+            
+            if (streetLines.length <= 0) return;
+            
+            var address = {
+                Address: streetLines[0],
+                City: sCity,
+                State: sState,   
+                //Region: sState,             
+                PostalCode: sZip,
+                Country: sCountry
+            }; 
+            //alert(address);    
+            g2locator.locateGeolocationsFromAddress(address);            
+            dojo.connect(g2locator, "onAddressToLocationsComplete", this, showResults);
+        }
+        
+        function showResults(myCandidates) {
+            //alert(myCandidates.length);
+            candidates = [];
+            if (myCandidates.length <= 0) return;
+            
+            for (var i = 0; i < myCandidates.length ; i++) {
+                var candidate = myCandidates[i];
+                
+                if (candidate.accuracy != 'rooftop') continue;
+                
+                candidates.push(candidate);
+            }
+            
+            if (candidates.length <= 0) return;
+            
+            dojo.byId("totCounter").innerHTML = candidates.length;
+            
+            if (candidates.length > 0) {
+                changePage(0);
+            }
+        }
+        
+        function reColor() {
+        
+            // Street
+           
+            var originalStreet = dojo.byId("originalStreet").innerHTML;
+            var finalStreet = dijit.byId("finalStreet").attr("value");
+            var recommendedStreet = dojo.byId("recommendedStreet").innerHTML;
+            
+            dojo.removeClass("td_finalStreet", "missing");
+            dojo.removeClass("td_finalStreet", "changed");
+            dojo.removeClass("td_finalStreet", "corrected");
+            if (finalStreet == '') {
+                dojo.addClass("td_finalStreet", "missing");
+            }
+            if (finalStreet != recommendedStreet) {
+                dojo.addClass("td_finalStreet", "changed");
+            }
+            else if (finalStreet == recommendedStreet && finalStreet != originalStreet) {
+                dojo.addClass("td_finalStreet", "corrected");
+            }
+                
+            // City
+            var originalCity = dojo.byId("originalCity").innerHTML;
+            var finalCity = dijit.byId("finalCity").attr("value");
+            var recommendedCity = dojo.byId("recommendedCity").innerHTML;
+            
+            dojo.removeClass("td_finalCity", "missing");
+            dojo.removeClass("td_finalCity", "changed");
+            dojo.removeClass("td_finalCity", "corrected");
+            if (finalCity == '') {
+                dojo.addClass("td_finalCity", "missing");
+            }
+            if (finalCity != recommendedCity) {
+                dojo.addClass("td_finalCity", "changed");
+            }
+            else if (finalCity == recommendedCity && finalCity != originalCity) {
+                dojo.addClass("td_finalCity", "corrected");
+            }
+                
+            // State
+            var originalState = dojo.byId("originalState").innerHTML;
+            var finalState = dijit.byId("finalState").attr("value");
+            var recommendedState = dojo.byId("recommendedState").innerHTML;
+            
+            dojo.removeClass("td_finalState", "missing");
+            dojo.removeClass("td_finalState", "changed");
+            dojo.removeClass("td_finalState", "corrected");
+            if (finalState == '') {
+                dojo.addClass("td_finalState", "missing");
+            }
+            if (finalState != recommendedState) {
+                dojo.addClass("td_finalState", "changed");
+            }
+            else if (finalState == recommendedState && finalState != originalState) {
+                dojo.addClass("td_finalState", "corrected");
+            }
+                
+            // PostalCode
+            var originalPostalCode = dojo.byId("originalPostalCode").innerHTML;
+            var finalPostalCode = dijit.byId("finalPostalCode").attr("value");
+            var recommendedPostalCode = dojo.byId("recommendedPostalCode").innerHTML;
+            
+            dojo.removeClass("td_finalPostalCode", "missing");
+            dojo.removeClass("td_finalPostalCode", "changed");
+            dojo.removeClass("td_finalPostalCode", "corrected");
+            if (finalPostalCode == '') {
+                dojo.addClass("td_finalPostalCode", "missing");
+            }
+            if (finalPostalCode != recommendedPostalCode) {
+                dojo.addClass("td_finalPostalCode", "changed");
+            }
+            else if (finalPostalCode == recommendedPostalCode && finalPostalCode != originalPostalCode) {
+                dojo.addClass("td_finalPostalCode", "corrected");
+            }
+                
+            // Country
+            var originalCountry = dojo.byId("originalCountry").innerHTML;
+            var finalCountry = dijit.byId("finalCountry").attr("value");
+            var recommendedCountry = dojo.byId("recommendedCountry").innerHTML;
+            
+            dojo.removeClass("td_finalCountry", "missing");
+            dojo.removeClass("td_finalCountry", "changed");
+            dojo.removeClass("td_finalCountry", "corrected");
+            if (finalCountry == '') {
+                dojo.addClass("td_finalCountry", "missing");
+            }
+            if (finalCountry != recommendedCountry) {
+                dojo.addClass("td_finalCountry", "changed");
+            }
+            else if (finalCountry == recommendedCountry && finalCountry != originalCountry) {
+                dojo.addClass("td_finalCountry", "corrected");
+            }
+        }
+        
+        function changePage(idx) {
+            selIndex = idx;
+            
+            if (selIndex < 0 || selIndex >= candidates.length) return;
+            
+            dojo.byId("idxCounter").innerHTML = selIndex + 1;
+            
+            var candidate = candidates[selIndex];
+            
+            if (streetLines.length > 1) {
+                dojo.byId("recommendedStreet").innerHTML = candidate.attributes.street + '\n' + streetLines.slice(1).join('\n');
+                dijit.byId("finalStreet").attr("value",candidate.attributes.street + '\n' + streetLines.slice(1).join('\n'));
+            }
+            else {
+                dojo.byId("recommendedStreet").innerHTML = candidate.attributes.street;
+                dijit.byId("finalStreet").attr("value",candidate.attributes.street);
+            }
+                
+            dijit.byId("finalCity").attr("value",candidate.attributes.city);
+            dijit.byId("finalState").attr("value",candidate.attributes.state);
+            dijit.byId("finalPostalCode").attr("value",candidate.attributes.postalcode);
+            dijit.byId("finalCountry").attr("value",candidate.attributes.country);
+            
+            dojo.byId("recommendedCity").innerHTML = candidate.attributes.city;
+            dojo.byId("recommendedState").innerHTML = candidate.attributes.state;
+            dojo.byId("recommendedPostalCode").innerHTML = candidate.attributes.postalcode;
+            dojo.byId("recommendedCountry").innerHTML = candidate.attributes.country;
+            
+            if (selIndex > 0) {
+                dojo.style("btnPrev", "opacity", 1.0);
+            }
+            else {
+                dojo.style("btnPrev", "opacity", 0.0);
+            }
+            
+            
+            if (selIndex < (candidates.length - 1) && selIndex >= 0) {
+                dojo.style("btnNext", "opacity", 1.0);
+            }
+            else {
+                dojo.style("btnNext", "opacity", 0.0);
+            }
+        }
+        
+        function saveAddress() {
+            if (selIndex < 0 || selIndex >= candidates.length) return;
+            
+            var candidate = candidates[selIndex];
+            jsSaveAll(  candidate.location.y,
+                        candidate.location.x,
+                        dijit.byId("finalStreet").attr("value"),
+                        dijit.byId("finalCity").attr("value"),
+                        dijit.byId("finalState").attr("value"),
+                        dijit.byId("finalPostalCode").attr("value"),
+                        dijit.byId("finalCountry").attr("value"),
+                        "Confirmed Address");
+        }
+        
+        dojo.addOnLoad(init);
+    </script>
+</apex:component>

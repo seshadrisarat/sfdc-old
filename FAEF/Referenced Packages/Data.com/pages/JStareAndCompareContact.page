@@ -1,0 +1,264 @@
+<apex:page label="JStareAndCompareContact" name="JStareAndCompareContact" title="Stare And Compare" standardController="Contact" 
+           showHeader="true" tabStyle="contact" extensions="jigsaw_clean.JStareAndCompareContactController" action="{!checkToken}">
+    <apex:form >
+        <apex:actionFunction action="{!doUpdate}" name="doUpdate" rerender="pageMessages,buttonGrp,loadingImg">
+            <apex:param name="firstParam" assignTo="{!jupdate}" value="" />
+        </apex:actionFunction>
+        <apex:actionFunction action="{!cancel}" name="cancel" />
+    </apex:form>
+    
+    <apex:includeScript value="{!URLFOR($Resource.jigsaw_clean__jquery, 'js/jquery-1.4.2.min.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.jigsaw_clean__jquery, 'js/xss.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.jigsaw_clean__jquery, 'js/jfs-utils.js')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.jigsaw_clean__jquery, 'css/searchjdf2sfdc.css')}"/>    
+    <style type="text/css">
+        table.cTable tr.cHeader td {
+            font-weight: bold;
+            font-size:14px;
+            padding-bottom: 10px;
+        }
+        table.cTable td.name {
+            font-weight: bold;
+        }
+        .cTable tbody td {
+            border-bottom:1px solid #DED7D7;
+            padding-bottom: 5px;
+            padding-top: 5px;
+        }
+        td.radio {
+            padding-top: 3px !important;
+        }
+        .different  {
+            background-color:#D9ECF9;
+            color:#333333;
+        }
+    </style>
+    <script type="text/javascript">
+        var jData = <apex:outputText value="{!json}" escape="false"/>;
+        var sUpdatedDate = "<apex:outputText value="{0,date,yyyy/MM/dd HH:mm:ss z}"><apex:param value="{!sUpdatedDate}"/></apex:outputText>";
+        
+        $(document).ready(function() {
+            if (jData == null) {
+                $("#syncBtn").hide();
+                return;
+            }
+            
+            var c = jData;
+            var title = (c.title && c.title.length > 80) ? c.title.substring(0, 80) : c.title;
+            $("#fname").text(c.fname);
+            $("#lname").text(c.lname);
+            $("#company").text(c.company);
+            $("#title").text(title);
+            $("#email").text(c.email);
+            $("#address").text(c.address);
+            $("#phone").text(c.phone);
+            $("#city").text(c.city);
+            $("#country").text(c.country);
+            $("#state").text(c.state);
+            $("#zip").text(c.zip);
+
+            /*Create radiobuttons*/
+            compareAndCreate("fname");
+            compareAndCreate("lname");
+            //ET-823
+            //compareAndCreate(XSS.htmlspecialchars(c.company),"company");
+            index++;
+            compareAndCreate("title");
+            compareAndCreate("email");
+            compareAndCreate("address");
+            compareAndCreate("phone");
+            compareAndCreate("city");
+            compareAndCreate("country");
+            compareAndCreate("state");
+            compareAndCreate("zip");
+            if (typeof c.updatedDate != 'undefined' ) {
+                var jDate = parseDate(c.updatedDate);
+                var sDate = new Date(sUpdatedDate);
+            
+                $("#jupdatedDate").text(jDate.toUTCString());
+                $("#supdatedDate").text(sDate.toUTCString());
+            }
+            
+            //3. if the records are in sync, hide the 'Cancel' button and change the text of the 'Update' button to 'Records are in sync'
+            if ($(".updateJ").length == 0) {
+                $("#cancelBtn").hide();
+                $("#syncBtn").val("Records are in sync");
+            }
+            //safari fix
+            $('.updateJ').attr('checked','checked');
+            
+        });
+        
+        function parseDate(str) {
+            return new Date(str.replace(/-/g,'/').replace(/T/,' '));
+        }
+        
+        var index = 0;
+        
+        function compareAndCreate(idRb) {
+        	var val1 = $.trim($("#"+idRb).text());
+            var val2 = $.trim($("#s"+idRb).text());
+            var notEqual = false;
+            // ET-986: Don't show radio buttons if Data.com side is blank.
+            if (val1 != null && val1 != "" && val2 != null) {
+                if (idRb == "employee" || idRb == "revenue" ) {
+                    notEqual = (parseInt(val1) != parseInt(val2));
+                } else if (idRb == "phone") {
+                	notEqual = !jfsPhoneNumberEquals(val1, val2);
+                } else {
+                    notEqual = ($.trim(val1.toLowerCase()) != $.trim(val2.toLowerCase()));
+                }
+            }
+            if (notEqual){
+                $('#jd'+XSS.htmlspecialchars(idRb)).append('<input type=\"radio\" checked=\"checked\" value=\"'+XSS.htmlspecialchars(val1)+'\" idx=\"'+XSS.htmlspecialchars(index)+'\" name=\"'+'d'+XSS.htmlspecialchars(idRb)+'\" class=\"updateJ\" />');
+                $('#sd'+XSS.htmlspecialchars(idRb)).append('<input type=\"radio\" value=\"false\" name=\"'+'d'+XSS.htmlspecialchars(idRb)+'\" />');
+                $('.c'+XSS.htmlspecialchars(idRb)).addClass('different');
+            }
+            index++;    
+        }
+        function update() {
+            var update = ['null','null','null','null','null','null','null','null','null','null','null'];
+            $(".updateJ:checked").each(function(index) {
+                 update[$(this).attr('idx')] = this.value;
+            });
+            var buttonGrp = document.getElementById("{!$Component.buttonGrp}");
+            if (buttonGrp) {
+                buttonGrp.style.display = "none";
+            }
+            var loadingImg = document.getElementById("{!$Component.loadingImg}");
+            if (loadingImg) {
+                loadingImg.style.display = "block";
+            }
+            var updateStr = update.join("|CDATA|");
+            doUpdate(updateStr);
+        }
+    </script>
+    
+    <apex:outputText value="{!Contact.jigsaw_clean__Jigsaw_Id__c}" rendered="false"/>
+    <apex:outputText value="{!Contact.AccountId}" rendered="false"/>
+    <apex:outputText value="{!Contact.LastModifiedDate}" rendered="false"/>
+    <apex:outputText value="{!Contact.Email}" rendered="false"/>
+    
+    <apex:pageMessages id="pageMessages" showDetail="true" />
+    
+                <div class="columnRight">
+                    <div class="bPageTitle">
+                        <div class="ptBody spSecondaryPalette">
+                            <div class="content">
+                                <img title="Account" class="pageTitleIcon" alt="Account" src="/s.gif" style="background-position:0 -1022px;"/>
+                                <h1><apex:outputField value="{!Contact.Name}"/><span class="titleSeparatingColon">:</span></h1>
+                                <h1 style="padding-top: 5px;">Clean Contact with Data.com</h1>
+                                <div class="blank"> </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--****************************-->
+                    <div id="jighsawSearchBlock" class="spbRelatedList">
+                            <div class="spBlock spSecondaryPalette"  style="border-top:3px solid #216DBD;">
+                                    <div class="pbHeader" style="text-align:center;">
+                                        <apex:outputPanel id="buttonGrp" layout="block">
+                                            <input type="button" value="Update" title="Update" onclick="update()" name="sync" class="btn" id="syncBtn"/>
+                                            <input type="button" value="Cancel" title="Cancel" onclick="cancel()" name="cancel" class="btn" id="cancelBtn" />
+                                        </apex:outputPanel>
+                                        <apex:outputPanel id="loadingImg" style="display:none;">
+                                            <img src="{!URLFOR($Resource.jigsaw_clean__jquery, 'img/loading.gif')}"/>
+                                        </apex:outputPanel>
+                                    </div>
+                                    <div class="pbBody">
+                                        <div class="dataTables_wrapper" id="searchResult_wrapper">
+                                        <table cellspacing="0" cellpadding="0" border="0" align="center" class="cTable">
+                                            <thead>
+                                                <tr class="cHeader">
+                                                    <td width="200"></td>
+                                                    <td width="30"></td>
+                                                    <td width="300">Data.com Has:<div id="jupdatedDate" style="font-size: 12px;"></div></td>
+                                                    <td width="30"></td>
+                                                    <td width="300">Salesforce Has:<div id="supdatedDate" style="font-size: 12px;"></div></td>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td class="name">First Name</td>
+                                                    <td id="jdfname" class="cfname radio"></td>
+                                                    <td id="fname" class="cfname"></td>
+                                                    <td id="sdfname" class="cfname radio"></td>
+                                                    <td id="sfname" class="cfname"><apex:outputField value="{!Contact.FirstName}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Last Name</td>
+                                                    <td id="jdlname" class="clname radio"></td>
+                                                    <td id="lname" class="clname"></td>
+                                                    <td id="sdlname" class="clname radio"></td>
+                                                    <td id="slname" class="clname"><apex:outputField value="{!Contact.LastName}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Company</td>
+                                                    <td id="jdcompany" class="ccompany radio"></td>
+                                                    <td id="company" class="ccompany"></td>
+                                                    <td id="sdcompany" class="ccompany radio"></td>
+                                                    <td id="scompany" class="ccompany"><apex:outputField value="{!a.Name}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Title</td>
+                                                    <td id="jdtitle" class="ctitle radio"></td>
+                                                    <td id="title" class="ctitle"></td>
+                                                    <td id="sdtitle" class="ctitle radio"></td>
+                                                    <td id="stitle" class="ctitle"><apex:outputField value="{!Contact.Title}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">E-mail Address</td>
+                                                    <td id="jdemail" class="cemail radio"></td>
+                                                    <td id="email" class="cemail"></td>
+                                                    <td id="sdemail" class="cemail radio"></td>
+                                                    <td id="semail" class="cemail"><apex:outputText value="{!email}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Phone</td>
+                                                    <td id="jdphone" class="cphone radio"></td>
+                                                    <td id="phone" class="cphone"></td>
+                                                    <td id="sdphone" class="cphone radio"></td>
+                                                    <td id="sphone" class="cphone"><apex:outputField value="{!Contact.Phone}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Address</td>
+                                                    <td id="jdaddress" class="caddress radio"></td>
+                                                    <td id="address" class="caddress"></td>
+                                                    <td id="sdaddress" class="caddress radio"></td>
+                                                    <td id="saddress" class="caddress"><apex:outputField value="{!Contact.MailingStreet}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">City</td>
+                                                    <td id="jdcity" class="ccity radio"></td>
+                                                    <td id="city" class="ccity"></td>
+                                                    <td id="sdcity" class="ccity radio"></td>
+                                                    <td id="scity" class="ccity"><apex:outputField value="{!Contact.MailingCity}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">State</td>
+                                                    <td id="jdstate" class="cstate radio"></td>
+                                                    <td id="state" class="cstate"></td>
+                                                    <td id="sdstate" class="cstate radio"></td>
+                                                    <td id="sstate" class="cstate"><apex:outputField value="{!Contact.MailingState}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Zip</td>
+                                                    <td id="jdzip" class="czip radio"></td>
+                                                    <td id="zip" class="czip"></td>
+                                                    <td id="sdzip" class="czip radio"></td>
+                                                    <td id="szip" class="czip"><apex:outputField value="{!Contact.MailingPostalCode}"/></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="name">Country</td>
+                                                    <td id="jdcountry" class="ccountry radio"></td>
+                                                    <td id="country" class="ccountry"></td>
+                                                    <td id="sdcountry" class="ccountry radio"></td>
+                                                    <td id="scountry" class="ccountry"><apex:outputField value="{!Contact.MailingCountry}"/></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                        </div>
+                                    </div>
+                            </div>
+                    </div>
+               </div>
+</apex:page>

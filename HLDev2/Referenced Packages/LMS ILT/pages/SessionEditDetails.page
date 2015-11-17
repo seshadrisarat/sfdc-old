@@ -1,0 +1,399 @@
+<apex:page standardController="lmsilt__Session__c" extensions="lmsilt.SessionEditExtension" Action="{!init}">
+	<apex:includeScript value="{!URLFOR($Resource.lmsilt__jquery, 'jquery-1.7.min.js')}" />
+	<apex:stylesheet value="{!URLFOR($Resource.lmsilt__devplan, 'css/lightbox.css')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.lmsilt__devplan, 'js/init.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.lmsilt__lmslightbox, 'js/init.js')}"/>
+
+
+	<!-- light box -->
+	<div class="b-overlay"></div>
+	<div class="b-lightbox">
+	<apex:outputpanel id="lightboxes" layout="block">
+		<div class="b-title-bar">
+			<div class="b-title">{!$Label.New} {!$ObjectType.lmsilt__Session_Location__c.label}</div>
+			<div class="b-close-btn"><a href="javascript:Closelightbox()">{!$Label.Close}</a></div>
+		</div>
+		<apex:outputpanel layout="block" styleclass="b-content">
+			<apex:outputpanel layout="block">
+				<div id="popup_content"></div>
+			</apex:outputpanel>
+		</apex:outputpanel>
+	</apex:outputPanel>
+	</div>
+
+	<style>
+		.dateFormat { display:none }
+	</style>
+	<apex:sectionHeader title="{!$ObjectType.lmsilt__Session__c.label}"  subtitle="{!lmsilt__Session__c.Name}" />
+
+	<apex:form >
+		<apex:inputHidden value="{!saveDate}" id="saveDate"/>
+		<apex:pageMessages id="msg"/>
+		<apex:pageBlock mode="edit" title="{!$ObjectType.lmsilt__Session__c.label} {!$Label.Edit}">
+			<apex:pageBlockButtons >
+				<apex:commandButton id="save_button" action="{!save}" value="{!$Label.Save}" onclick="setValueFields()" oncomplete="enable_button()" rerender=" msg, saveDate"/>
+				<apex:commandButton id="save_and_new_button" action="{!saveNew}" value="{!$Label.Save_New}" oncomplete="enable_button()" onclick="setValueFields()" rerender=" msg, saveDate"/>
+				<apex:commandButton id="cancel_button" action="{!cancel}" value="{!$Label.Cancel}"/>
+			</apex:pageBlockButtons>
+			<apex:pageBlockSection columns="1" title="{!$Label.Details}">
+				<apex:outputField value="{!lmsilt__Session__c.lmsilt__Class__c}" rendered="{!IF(ISNULL(lmsilt__Session__c.lmsilt__Class__c), false, true)}"/>
+				<apex:inputField value="{!lmsilt__Session__c.lmsilt__Class__c}" rendered="{!IF(ISNULL(lmsilt__Session__c.lmsilt__Class__c), true, false)}"/>
+				<apex:inputField value="{!lmsilt__Session__c.Name}" Required="true"/>
+
+				<!-- New timezones picklist -->
+				<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$Label.Time_Zone}" for="tz" />
+				<apex:outputPanel >
+					<div class="requiredInput"><div class="requiredBlock"></div>
+					<apex:selectList value="{!SelectedTimezone}" size="1" id="tz">
+						<apex:selectOptions value="{!TZPicklist}"  />
+					</apex:selectList>
+					</div>
+				</apex:outputPanel>
+				</apex:pageBlockSectionItem>
+				<!-- New timezones picklist -->
+
+				<!--
+				 <apex:inputField value="{!Session__c.Time_Zone__c}" id="tz" rendered="{!isInputTimezoneAccount}"/>
+				 <apex:outputField value="{!Session__c.Time_Zone__c}" id="tzoutPut" rendered="{!NOT(isInputTimezoneAccount)}"/>
+				-->
+				<!--
+				<apex:pageBlockSectionItem dataStyleClass="GTTData" labelStyleClass="GTTLabel" dataStyle="display:{!IF(AND(Session__c.ILT_vILT__c == 'vILT', Session__c.Meeting_Type__c == 'GoToTraining'), '', 'none')}" labelStyle="display:{!IF(AND(Session__c.ILT_vILT__c == 'vILT', Session__c.Meeting_Type__c == 'GoToTraining'), '', 'none')}" >
+					<apex:outputLabel value="GoToTraining {!$ObjectType.Session__c.fields.Time_Zone__c.label}" for="tx" />
+					<apex:selectList value="{!GTTTimezone}" size="1" id="tx" onclick="unifyPicklistValues('GTT')">
+						<apex:selectOptions value="{!TXs}"/>
+					</apex:selectList>
+				</apex:pageBlockSectionItem>
+
+				<apex:pageBlockSectionItem dataStyleClass="StandardPicklistData" labelStyleClass="StandardPicklistLabel" dataStyle="display:{!IF(Session__c.ILT_vILT__c != 'vILT', '', 'none')}" labelStyle="display:{!IF(Session__c.ILT_vILT__c != 'vILT', '', 'none')}" >
+					<apex:outputLabel value="{!$ObjectType.Session__c.fields.Time_Zone__c.label}" for="tz" />
+					<apex:selectList value="{!Session__c.Time_Zone__c}" size="1" id="tz" onclick="unifyPicklistValues('Standard')">
+						<apex:selectOptions value="{!TZs}"/>
+					</apex:selectList>
+				</apex:pageBlockSectionItem>
+
+				<apex:pageBlockSectionItem dataStyleClass="WebExData" labelStyleClass="WebExLabel" dataStyle="display:{!IF(AND(Session__c.ILT_vILT__c == 'vILT', Session__c.Meeting_Type__c == 'WebEx'), '', 'none')}" labelStyle="display:{!IF(AND(Session__c.ILT_vILT__c == 'vILT', Session__c.Meeting_Type__c == 'WebEx'), '', 'none')}"  >
+					<apex:outputLabel value="WebEx {!$ObjectType.Session__c.fields.Time_Zone__c.label}" for="tt" />
+					<apex:selectList value="{!WebExtimezone}" size="1" id="tt" onclick="unifyPicklistValues('WebEx')">
+						<apex:selectOptions value="{!TTs}"/>
+					</apex:selectList>
+				</apex:pageBlockSectionItem> -->
+
+
+				<apex:inputField value="{!lmsilt__Session__c.lmsilt__ILT_vILT__c}" required="true" onChange="showLocation(this)" id="TypeSess"/>
+
+				<apex:pageBlockSectionItem dataStyleClass="LocationData" labelStyleClass="LocationLabel"  dataStyle="display:{!IF(lmsilt__Session__c.lmsilt__ILT_vILT__c == 'ILT', '', 'none')}" labelStyle="display:{!IF(lmsilt__Session__c.lmsilt__ILT_vILT__c == 'ILT', '', 'none')}">
+					<apex:outputLabel value="{!$ObjectType.lmsilt__Session__c.fields.lmsilt__Session_Location__c.label}" for="Part_Location"/>
+					<apex:outputPanel >
+						<apex:inputField value="{!lmsilt__Session__c.lmsilt__Session_Location__c}" id="Part_Location"/>
+						<apex:outputLink value="javascript:OpenSessionLocationEdit()" id="SSessionLocationEdit" styleClass="btn" style="text-decoration:none">{!$Label.New} {!$ObjectType.lmsilt__Session_Location__c.label}</apex:outputLink>
+					</apex:outputPanel>
+				</apex:pageBlockSectionItem>
+				<apex:pageBlockSectionItem dataStyleClass="LocationDataWt" labelStyleClass="LocationLabelWt"  dataStyle="display:{!IF(lmsilt__Session__c.lmsilt__ILT_vILT__c == 'vILT', '', 'none')}" labelStyle="display:{!IF(lmsilt__Session__c.lmsilt__ILT_vILT__c == 'vILT', '', 'none')}">
+					<apex:outputLabel value="{!$ObjectType.lmsilt__Session__c.fields.lmsilt__Meeting_Type__c.label}" for="Meeting_Type"/>
+					<apex:outputPanel >
+						<div class="requiredInput"><div class="requiredBlock"></div>
+							<apex:inputField value="{!lmsilt__Session__c.lmsilt__Meeting_Type__c}" id="Meeting_Type" onChange="changePicklistValues(this)"/>
+						</div>
+					</apex:outputPanel>
+				</apex:pageBlockSectionItem>
+				<apex:pageBlockSectionItem dataStyleClass="LocationDataW" labelStyleClass="LocationLabelW"  dataStyle="display:{!IF(lmsilt__Session__c.lmsilt__ILT_vILT__c == 'ILT', '', 'none')}" labelStyle="display:{!IF(lmsilt__Session__c.lmsilt__ILT_vILT__c == 'ILT', '', 'none')}" rendered="{!isInputTimezoneAccount}">
+					<apex:outputLabel value="{!$ObjectType.lmsilt__Session__c.fields.lmsilt__vILT_Account__c.label}" for="vILT_Account__c"/>
+					<apex:outputPanel >
+						<apex:inputField value="{!lmsilt__Session__c.lmsilt__vILT_Account__c}" id="vILT_Account__c"/>
+					</apex:outputPanel>
+				</apex:pageBlockSectionItem>
+				<apex:outputField value="{!lmsilt__Session__c.lmsilt__vILT_Account__c}" id="Account" rendered="{!NOT(isInputTimezoneAccount)}"/>
+
+				<apex:pageBlockSectionItem dataStyleClass="LocationDataW" labelStyleClass="LocationLabelW"  dataStyle="display:{!IF(lmsilt__Session__c.lmsilt__ILT_vILT__c == 'ILT', '', 'none')}" labelStyle="display:{!IF(lmsilt__Session__c.lmsilt__ILT_vILT__c == 'ILT', '', 'none')}" >
+					<apex:outputLabel value="{!$ObjectType.lmsilt__Session__c.fields.lmsilt__Enable_Notification__c.label}" for="Enable_Notification__c"/>
+					<apex:outputPanel >
+						<apex:inputField value="{!lmsilt__Session__c.lmsilt__Enable_Notification__c}" id="Enable_Notification__c"/>
+					</apex:outputPanel>
+				</apex:pageBlockSectionItem>
+
+				<!--  <apex:inputHidden value="{!lmsilt__Session__c.lmsilt__Start_Date_Time__c}" id="Start_Date_Time"/>
+				<apex:inputHidden value="{!lmsilt__Session__c.lmsilt__End_Date_Time__c}" id="End_Date_Time"/> -->
+				<apex:pageBlockSectionItem dataStyle="display:none" labelStyle="display:none">
+					<apex:inputField value="{!lmsilt__Session__c.lmsilt__Start_Date_Time__c}" id="Start_Date_Time" />
+					<apex:inputField value="{!lmsilt__Session__c.lmsilt__End_Date_Time__c}" id="End_Date_Time" />
+				</apex:pageBlockSectionItem>
+				<apex:pageBlockSectionItem >
+					<apex:outputLabel value="{!$ObjectType.lmsilt__Session__c.fields.lmsilt__Start_Date_Time__c.label}" for="StartDate" />
+					<apex:outputPanel >
+						<div class="requiredInput"><div class="requiredBlock"></div>
+							<apex:inputField value="{!d1.lmscons__Completed_Date__c}" id="StartDate" onchange="setEndDate(this.value)"/>
+							<apex:selectList value="{!StartDateTime}" size="1" id="StartDateTime" >
+								<apex:selectOptions value="{!Times}"/>
+							</apex:selectList>
+						</div>
+					</apex:outputPanel>
+				</apex:pageBlockSectionItem>
+				<apex:pageBlockSectionItem >
+					<apex:outputLabel value="{!$ObjectType.lmsilt__Session__c.fields.lmsilt__End_Date_Time__c.label}" for="EndDate" />
+					<apex:outputPanel >
+						<div class="requiredInput"><div class="requiredBlock"></div>
+							<apex:inputField value="{!d2.lmscons__Completed_Date__c}" id="EndDate" />
+							<apex:selectList value="{!EndDateTime}" size="1" id="EndDateTime">
+								<apex:selectOptions value="{!Times}"/>
+							</apex:selectList>
+						</div>
+					</apex:outputPanel>
+				</apex:pageBlockSectionItem>
+
+
+				<apex:pageBlockSectionItem >
+					<apex:outputLabel value="{!$ObjectType.lmsilt__Instructor__c.fields.lmsilt__Instructor_User__c.label}" for="Instructor"/>
+					<apex:inputField value="{!Instructor.lmsilt__Instructor_User__c}" id="Instructor"/>
+				</apex:pageBlockSectionItem>
+
+			</apex:pageBlockSection>
+			<apex:pageBlockSection columns="1" id="WebeExBlock" title="WebEx {!$Label.Details}" >
+				<apex:pageBlockSectionItem >
+					<apex:outputLabel value="{!$ObjectType.lmsilt__Session__c.fields.lmsilt__Meeting_Password__c.label}" for="Meeting_Password"/>
+					<apex:outputPanel >
+						<div class="requiredInput"><div class="requiredBlock"></div>
+							<apex:inputField value="{!lmsilt__Session__c.lmsilt__Meeting_Password__c}" id="Meeting_Password"/>
+						</div>
+					</apex:outputPanel>
+				</apex:pageBlockSectionItem>
+				<apex:inputField value="{!lmsilt__Session__c.lmsilt__Listing_Type__c}" id="Listing_Type"/>
+				<apex:inputField value="{!lmsilt__Session__c.lmsilt__Telephony_Support__c}" id="Telephony_Support"/>
+				<apex:inputField value="{!lmsilt__Session__c.lmsilt__VoIP__c}" id="voip"/>
+			</apex:pageBlockSection>
+		</apex:pageBlock>
+	</apex:form>
+	<script type="text/javascript">
+
+		//jQuery.noConflict();
+
+
+		var overlay;
+		var lightbox;
+		var DefaulteTimeZone = '{!DefaulteTimeZoneGTT}';
+		var DefaultGttAccount = '{!gttAccount}';
+		var isDefaultAccount  = {!isGetDefault};
+		var isEnabledNotification = {!isEnabledNotification};
+		var TimeZoneSelectOption = document.getElementById(jQuery('[id$="tz"]').attr('id'));
+		var MeetingType = document.getElementById(jQuery('[id$="Meeting_Type"]').attr('id'));
+		var vILTAccountRecord = document.getElementById(jQuery('[id$="vILT_Account__c"]').attr('id'));
+		var EnableNotification = document.getElementById(jQuery('[id$="Enable_Notification__c"]').attr('id'));
+
+
+		function OpenSessionLocationEdit() {
+			jQuery('#popup_content').html('<iframe id="mytrainingframe" name="mytrainingframe" frameborder="0" height="400" src="{!$Page.SessionLocationEdit}?isPopup=false" width="100%"></iframe>');
+			Lightbox();
+		}
+
+
+		function Closelightbox() {
+			lightbox.fadeOut('fast');
+			overlay.fadeOut('fast');
+		}
+
+
+		jQuery(document).ready(function() {
+
+			//set default value for Telephony Support picklist
+			//jQuery('[id$="Telephony_Support"]').val('CALLIN');
+			//------------------------------------------------
+
+			console.log(jQuery(MeetingType).val());
+			var selectedItem = jQuery(MeetingType).val();
+			if(selectedItem != 'WebEx') {
+				jQuery('[id$="WebeExBlock"]').hide();
+			}
+			showLocation(document.getElementById(jQuery('[id$="TypeSess"]').attr('id')));
+			overlay = jQuery('.b-overlay');
+			lightbox = jQuery('.b-lightbox');
+			closelightbox = jQuery('.b-lightbox .b-close-btn');
+			closelightbox.click( function() {
+				lightbox.fadeOut('fast');
+				overlay.fadeOut('fast');
+			});
+		});
+
+
+		function unifyPicklistValues(o) {
+			if (o == 'Standard') {
+				jQuery("select[id$='tx']").val(jQuery("select[id$='tz']").val());
+				jQuery("select[id$='tt']").val(jQuery("select[id$='tz']").val());
+			}
+			if (o == 'WebEx')  {
+				jQuery("select[id$='tx']").val(jQuery("select[id$='tt']").val());
+				jQuery("select[id$='tz']").val(jQuery("select[id$='tt']").val());
+			}
+			if (o == 'GTT') {
+				jQuery("select[id$='tt']").val(jQuery("select[id$='tx']").val());
+				jQuery("select[id$='tz']").val(jQuery("select[id$='tx']").val());
+			}
+		}
+
+
+		function showGTTPicklist() {
+			jQuery("[class*=GTTLabel]").show();
+			jQuery("[class*=GTTData]").show();
+			jQuery("[class*=StandardPicklistLabel]").hide();
+			jQuery("[class*=StandardPicklistData]").hide();
+			jQuery("[class*=WebExLabel]").hide();
+			jQuery("[class*=WebExData]").hide();
+		}
+
+
+		function showWebExPicklist() {
+			jQuery("[class*=WebExLabel]").show();
+			jQuery("[class*=WebExData]").show();
+			jQuery("[class*=GTTLabel]").hide();
+			jQuery("[class*=GTTData]").hide();
+			jQuery("[class*=StandardPicklistLabel]").hide();
+			jQuery("[class*=StandardPicklistData]").hide();
+		}
+
+
+		function showStandardPicklist() {
+			jQuery("[class*=GTTLabel]").hide();
+			jQuery("[class*=GTTData]").hide();
+			jQuery("[class*=WebExLabel]").hide();
+			jQuery("[class*=WebExData]").hide();
+			jQuery("[class*=StandardPicklistLabel]").show();
+			jQuery("[class*=StandardPicklistData]").show();
+		}
+
+
+		function changePicklistValues(o) {
+			/*
+			console.log(jQuery(o).val());
+			var selectedItem = jQuery(o).val();
+			if (selectedItem == 'vILT') {
+				if (TimeZoneSelectOption && vILTAccountRecord && isDefaultAccount) {
+				//alert(DefaulteTimeZone);
+					for (var option = 0; option < TimeZoneSelectOption.options.length; option++ ){
+						if (TimeZoneSelectOption.options[option].text == DefaulteTimeZone) {
+							TimeZoneSelectOption.options[option].selected = true;
+							break;
+						}
+					}
+					TimeZoneSelectOption.disabled = true;
+					vILTAccountRecord.value = DefaultGttAccount;
+					vILTAccountRecord.disabled = true;
+					EnableNotification.checked = isEnabledNotification;
+					EnableNotification.disabled = true;
+					jQuery('[id$="vILT_Account__c_lkwgt"]').toggle();
+				}
+				jQuery('[id$="WebeExBlock"]').hide();
+			}
+			else {
+				if (TimeZoneSelectOption) {
+					TimeZoneSelectOption.disabled=false;
+					vILTAccountRecord.value = '';
+					vILTAccountRecord.disabled = false;
+					EnableNotification.disabled = false;
+					jQuery('[id$="vILT_Account__c_lkwgt"]').show();
+					jQuery('[id$="WebeExBlock"]').show();
+				}
+			}
+			*/
+
+			var meetingValue = o.options[o.selectedIndex].value;
+			if (meetingValue == 'WebEx') {
+				jQuery('[id$="WebeExBlock"]').show();
+			}
+			else if (meetingValue ='GoToTraining') {
+				jQuery('[id$="WebeExBlock"]').hide();
+			}
+			else {
+				jQuery('[id$="WebeExBlock"]').hide();
+			}
+
+		}
+
+
+		function showLocation(o) {
+			console.log('Selected Item == ' + jQuery(o).val());
+			var selectedItem = jQuery(o).val();
+			//webex block hide/show according ILT/vILT picklist
+			if(selectedItem == 'ILT' || selectedItem == ''){
+				jQuery('[id$="WebeExBlock"]').hide();
+			}else if(selectedItem == 'vILT' && jQuery('[id$="Meeting_Type"]').val() == 'WebEx'){
+				jQuery('[id$="WebeExBlock"]').show();
+			}
+			//----------------------------------
+			if (selectedItem == 'ILT') {
+				jQuery("[class*=LocationLabel]").show();
+				jQuery("[class*=LocationData]").show();
+				showStandardPicklist();
+			} else if (selectedItem == '') {
+				showStandardPicklist();
+			} else if(selectedItem == 'vILT') {
+				if(jQuery("select[id$='Meeting_Type']").val()=='') {
+					showStandardPicklist();
+				}
+				if(jQuery("select[id$='Meeting_Type']").val()=='WebEx') {
+					showWebExPicklist();
+				}
+				if(jQuery("select[id$='Meeting_Type']").val()=='GoToTraining') {
+					showGTTPicklist();
+				}
+				jQuery("[class*=LocationLabel]").hide();
+				jQuery("[class*=LocationData]").hide();
+			}
+			else {
+				jQuery("[class*=LocationLabel]").hide();
+				jQuery("[class*=LocationData]").hide();
+			}
+			if (TimeZoneSelectOption) {
+				TimeZoneSelectOption.disabled = false;
+			}
+			showWebExPass(o);
+		}
+
+
+		function showWebExPass(o) {
+			console.log(jQuery(o).val());
+			var selectedItem = jQuery(o).val();
+			if (selectedItem == 'vILT') {
+				jQuery("[class*=LocationLabelW]").show();
+				jQuery("[class*=LocationDataW]").show();
+			}
+			else {
+				jQuery("[class*=LocationLabelW]").hide();
+				jQuery("[class*=LocationDataW]").hide();
+			}
+
+		}
+
+
+		function setEndDate(t) {
+			jQuery("[id$='EndDate']").val(t);
+		}
+
+
+		function enable_button() {
+			jQuery("input[id*=save_button]").attr('class', 'btn').attr('value', '{!$Label.Save}').removeAttr("disabled");
+			jQuery("input[id*=save_and_new_button]").attr('class', 'btn').attr('value', '{!$Label.Save_New}').removeAttr("disabled");
+			jQuery("input[id*=cancel_button]").attr('class', 'btn').attr('value', '{!$Label.Cancel}').removeAttr("disabled");
+		}
+		
+		 function disable_buttons() {
+	         jQuery("input[id*=save_button]").attr('class', 'btnDisabled').attr('value', '{!$Label.Saving}').attr('disabled', 'disabled');
+	         jQuery("input[id*=save_and_new_button]").attr('class', 'btnDisabled').attr('value', '{!$Label.Saving}').attr('disabled', 'disabled');
+	         jQuery("input[id*=cancel_button]").attr('class', 'btnDisabled').attr('value', '{!$Label.Saving}').attr('disabled', 'disabled');
+        }
+
+		function setValueFields(){
+			disable_buttons();
+
+			jQuery('[id$=saveDate]').val('true');
+			jQuery('[id$=Start_Date_Time]').val(jQuery('[id$=StartDate]').val()+' '+jQuery('[id$=StartDateTime]').val());
+			jQuery('[id$=End_Date_Time]').val(jQuery('[id$=EndDate]').val()+' '+jQuery('[id$=EndDateTime]').val());
+		}
+
+		var SessionLocation = '';
+		var newwindow;
+
+
+		function fillSessionLocation() {
+			jQuery('[id$=Part_Location]').val(SessionLocation);
+		}
+	</script>
+</apex:page>

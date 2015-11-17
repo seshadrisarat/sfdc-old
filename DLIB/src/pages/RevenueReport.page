@@ -1,0 +1,157 @@
+<apex:page showHeader="true" sidebar="true" controller="RevenueReport" action="{!updateProjects}">
+	<script src="{!URLFOR($Resource.psaSelfAssignment, 'js/jquery-1.7.1.js')}"></script>
+	<script src="{!URLFOR($Resource.psaSelfAssignment, 'js/jquery-ui.js')}"></script>
+<style>
+.right {
+	text-align:right;
+}
+.highlight {
+	background-color: yellow;
+}
+th.totalRow {
+	text-align: right;
+}
+</style>
+	<apex:form >
+	<apex:pageBlock >
+		<apex:pageBlockButtons >
+			<apex:commandButton action="{!fullrefresh}" value="Refresh" rerender="result" status="status"/>
+			<apex:commandButton action="{!searchProjects}" value="Search" rerender="result" status="status"/>
+			<input type="button" class="btn" value="Print PDF" onclick="openReport('pdf')"/>
+			<input type="button" class="btn" value="Print .xls" onclick="openReport('xls')"/>
+		</apex:pageBlockButtons>
+		<apex:pageBlockSection columns="2">
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="Search"/>
+				<apex:pageBlockSectionItem >
+					<apex:inputText value="{!params.pse__Notes__c}" styleclass="search" />
+					<apex:outputText styleclass="searchresult" />
+				</apex:pageBlockSectionItem>
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="Effective Date"/>
+				<apex:inputField value="{!params.pse__End_Date__c}" styleclass="effdate"/>
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+		<apex:pageBlockSection columns="1" id="result">
+			<apex:pageBlockTable value="{!reportData}" var="item" >
+            	<apex:column styleclass="projectname">
+            		<apex:facet name="header">
+            				<apex:commandLink action="{!refresh}" status="status" rerender="result" value="Project Name{!IF(sortExpression=='Name',IF(sortDirection='ASC','▼','▲'),'')}">
+                                <apex:param value="Name" name="column" assignTo="{!sortExpression}" ></apex:param>
+                            </apex:commandLink>
+                    </apex:facet>
+            		{!item.project.Name}
+            		<apex:facet name="footer">Total</apex:facet>
+            	</apex:column>
+            	<apex:column styleclass="right">
+            		<apex:facet name="header">
+            				<apex:commandLink action="{!refresh}" status="status" rerender="result" value="Billable Amount{!IF(sortExpression=='tmpBillableAmount__c',IF(sortDirection='DESC','▼','▲'),'')}">
+                                <apex:param value="tmpBillableAmount__c" name="column" assignTo="{!sortExpression}" ></apex:param>
+                            </apex:commandLink>
+                    </apex:facet>
+            		<apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!item.BillableAmount}"/></apex:outputText>
+            		<apex:facet name="footer">
+            				<apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!totalBA}"/></apex:outputText>
+                    </apex:facet>
+            	</apex:column>
+            	<apex:column styleclass="right">
+            		<apex:facet name="header">
+            				<apex:commandLink action="{!refresh}" status="status" rerender="result" value="Outstanding Adjustments{!IF(sortExpression=='tmpInvoiceTotal__c',IF(sortDirection='DESC','▼','▲'),'')}">
+                                <apex:param value="tmpInvoiceTotal__c" name="column" assignTo="{!sortExpression}" ></apex:param>
+                            </apex:commandLink>
+                    </apex:facet>
+            		<apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!item.TotalInvoice}"/></apex:outputText>
+            		<apex:facet name="footer">
+            				<apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!totalAdj}"/></apex:outputText>
+                    </apex:facet>
+            	</apex:column>
+            	<apex:column styleclass="right">
+            		<apex:facet name="header">
+            				<apex:commandLink action="{!refresh}" status="status" rerender="result" value="Deferred Revenue{!IF(sortExpression=='tmpRevenue__c',IF(sortDirection='DESC','▼','▲'),'')}">
+                                <apex:param value="tmpRevenue__c" name="column" assignTo="{!sortExpression}" ></apex:param>
+                            </apex:commandLink>
+                    </apex:facet>
+            		<apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!item.Revenue}"/></apex:outputText>
+            		<apex:facet name="footer">
+            				<apex:outputText value="{0, number, #,###,##0.00}"><apex:param value="{!totalRev}"/></apex:outputText>
+                    </apex:facet>
+            	</apex:column>
+        	</apex:pageBlockTable>
+        	<apex:outputPanel >
+	        	Display&nbsp;
+	            <apex:selectList value="{!strRecPerPage}" size="1" onchange="refresh()">
+	                <apex:selectOptions value="{!NumRecords}"/>
+	            </apex:selectList>&nbsp;records per page
+	        	<apex:commandButton rerender="result" status="status" disabled="{!NOT(hasPrevious)}" value="<<" action="{!first}" />&nbsp;&nbsp;
+	            <apex:commandButton rerender="result" status="status" disabled="{!NOT(hasPrevious)}" value="< Previous" action="{!previous}" />&nbsp;&nbsp;
+	            <apex:outputText value=" Page {!pageNumber} of {!allPages} " /> &nbsp;&nbsp;
+	            <apex:commandButton rerender="result" status="status" disabled="{!NOT(hasNext)}" value="Next >" action="{!next}"/>&nbsp;&nbsp;
+	            <apex:commandButton rerender="result" status="status" disabled="{!NOT(hasNext)}" value=">>" action="{!last}"/>
+            </apex:outputPanel>
+		</apex:pageBlockSection>
+	</apex:pageBlock>
+	<apex:actionfunction name="refresh" action="{!refresh}" status="status" rerender="result"/>
+	</apex:form>
+	<apex:actionstatus id="status" startText="Refreshing">
+			<apex:facet name="start">
+				<div id="salesforceSource_blurybackground" style="position: absolute; left: 1px; z-index: 9999; top: 1px; width: 100%; height: 100%; text-align: center; vertical-align: top; background-color: #dcdcdc; opacity: 0.5; filter: alpha(opacity = 50)"></div>
+					<div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 80%; vertical-align: top; display: '';">
+						<br/><br/>
+						<img class="waitingImage" src="/img/loading.gif" /><span class="waitingDescription">Refreshing...</span>
+					</div>
+					<div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: '';"></div>
+				<script>
+					document.getElementById('ManageMembersViewport_loading').height = window.innerHeight * (3/4);
+				</script>
+			</apex:facet>
+			<apex:facet name="stop">
+			</apex:facet>
+		</apex:actionstatus>
+<script>
+
+/*$('.search').on('change keyup paste', function() {
+    var lastValue = '';
+    isChanged = false;
+	setInterval(function() {
+	    if ($('.search').val() != lastValue && !isChanged) {
+	        lastValue = $('.search').val();
+	        isChanged = true;
+	        findProjects(lastValue);
+	    }
+	}, 500);
+});*/
+
+function findProjects(searchword) {
+	var num = 0; 
+	if (searchword.length>2) {
+		$('.projectname').each(function(index) {
+		searchword = searchword.toLowerCase();
+		var text = $(this).text().toLowerCase();
+		   if (text.indexOf(searchword)>-1) {
+		     $(this).parent().css('background-color','yellow');
+		     num++;
+		   } else {
+		   	 $(this).parent().removeAttr('style');
+		   }
+		});
+	}
+	if (num>0) {
+		$('.searchresult').text('Found '+num+' project(s).');
+	} else {
+		$('.searchresult').text('');
+	}
+}
+
+function openReport(ext) {
+	var url = '/apex/RevenueReport'+ext+'?date=' + $('.effdate').val();
+	var myWin;
+	if (ext=='pdf') {
+	 	myWin = window.open(url);
+	} else {
+		myWin = window.open(url, "", "width=1, height=1");
+		setTimeout(function () { myWin.close();}, 5000);
+	}
+}
+</script>
+</apex:page>

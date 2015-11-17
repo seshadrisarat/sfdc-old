@@ -1,0 +1,223 @@
+<apex:page controller="ts2.ResumeAttachmentController" language="{!UserInfoLocale}" showHeader="false" cache="false">
+
+	<apex:composition template="{!$Site.Template}">
+	<apex:define name="body">
+
+<style>
+	#opaco {
+		left: 0;
+		-ms-filter:"progid:DXImageTransform.Microsoft.Alpha(Opacity=30)";/* IE8 */
+		filter:progid:DXImageTransform.Microsoft.Alpha(opacity = 30); /* IE5+ */
+		moz-opacity: 0.3; /* Mozilla */
+		-khtml-opacity: 0.3; /* Safari */
+		opacity: 0.3;  /* general CSS3 */
+		position: fixed;
+		top: 0;
+		width: 100%;
+		z-index: 10;
+		height:100%;
+		background:#D2CDCD;
+		visibility:hidden;
+	}
+
+	#opaco img {position:absolute; z-index:130;}
+	form.atsForm {margin-top:10px;}
+	form.atsForm .bPageBlock {-moz-border-radius:0; border:0;}
+	form.atsForm .apexp .bPageBlock.apexDefaultPageBlock .pbBody {padding:0;}
+	form.atsForm .apexp .bPageBlock.apexDefaultPageBlock .pbBody {margin:7px 0;}
+	.b-resume-attachments .pbBody a.atsButton, .b-resume-attachments .pbBody a.atsButton:hover {background-color:none !important; background:transparent;}
+</style>
+
+		<div id="opaco" ></div>
+
+		<apex:outputPanel rendered="{!HasFatalMessages}" layout="none">
+			<div id="atsErrorPageBox">
+				<apex:messages styleClass="atsErrorPageMessage" layout="table" />
+			</div>
+		</apex:outputPanel>
+
+		<apex:outputPanel rendered="{!NOT(HasFatalMessages)}" layout="none">
+			<apex:form id="atts_list" styleClass="atsForm" target="hidden_iframe">
+				<div style="" class="b-resume-attachments">
+					<div id="atsSearchTitle">
+						<apex:outputText value="{!$Label.ResumeAttachmentTitle}" />
+					</div>
+					<div id="atsRequirementPageBox">
+						<apex:outputText value="{!$Label.ResumeAttachmentsRequiredCustomMessage}" /><br/>
+						<apex:outputText value="{!RequiredAttachmentsLabel}" />
+					</div>
+					<div id="atsErrorPageBox">
+						<apex:messages styleClass="atsErrorPageMessage" layout="table" />
+					</div>
+
+					<apex:outputText value="{!$Label.ResumeAttachmentMaxAttachmentsNumber}" rendered="{!Config_MaxNumberOfAttachments > 0}">
+						<apex:param value="{!Config_MaxNumberOfAttachments}"/>
+					</apex:outputText>
+					<div class="m-extension-message">
+						<apex:outputText escape="true" value="{!AcceptedExtsLabel}" rendered="{!NOT(ISNULL(AcceptedExtsLabel))}" />
+						<apex:outputText escape="true" value="{!RejectedExtsLabel}" rendered="{!ISNULL(AcceptedExtsLabel) && NOT(ISNULL(RejectedExtsLabel))}"/>
+					</div>
+					<apex:pageBlock >
+						<apex:panelgroup >
+							<apex:pageBlockTable id="attachments_list" value="{!attachmentsList}" var="att" styleClass="m-attachments" style="{!IF(AttachmentsList.SIZE>0,'','display:none')}">
+								<apex:column headerValue="{!$Label.ResumeAttachmentFile}" styleClass="file_name_column">
+									<apex:outputText title="{!HTMLENCODE(att.Name)}" value="{!IF(LEN(att.Name) < 32, att.Name, LEFT(att.Name, 32) + '...')} ({!ROUND(att.BodyLength/1024,1)} KB)"/>
+								</apex:column>
+								<apex:column id="att_item" headerValue="{!$ObjectType.Attachment.Fields.Description.Label}" styleClass="file_description_column">
+									<div id="{!$Component.att_item}_view">
+										<apex:outputPanel id="edit" onclick="switchEditable('{!$Component.att_item}')">
+											<a href="javascript:void(0);" class="atsButton"><apex:outputText value="{!$Label.ResumeAttachmentEdit}" /></a>
+										</apex:outputPanel>&nbsp;
+										<apex:outputText title="{!HTMLENCODE(att.Description)}" id="description_text" value="{!att.Description}"/>
+									</div>
+									<div style="display:none" id="{!$Component.att_item}_edit">
+										<apex:outputPanel id="apply" onclick="updateDescription('{!att.Id}','{!$Component.description_input}','{!$Component.att_item}')">
+											<a href="javascript:void(0);" class="atsButton"><apex:outputText value="{!$Label.ResumeAttachmentApply}" /></a>
+										</apex:outputPanel>&nbsp;
+										<apex:inputText maxlength="64" id="description_input" value="{!att.Description}" rendered="{!$ObjectType.Attachment.Fields.Description.Updateable}" />
+									</div>
+									<apex:actionStatus id="update_attachments_status" startText="{!$Label.ResumeAttachmentSaving}" stopText="" />
+								</apex:column>
+								<apex:column styleClass="file_action_column">
+									<apex:outputPanel id="delete">
+										<a href="javascript:void(0);" class="atsButton"><apex:outputText value="{!$Label.ResumeAttachmentDelete}" /></a>
+										<apex:actionSupport event="onclick" action="{!deleteAttachment}" rerender="attachments_list,file_upload" status="delete_attachments_status">
+											<apex:param name="currentAttachmetId" value="{!att.Id}" assignTo="{!currentAttachmetId}"/>
+										</apex:actionSupport>
+									</apex:outputPanel>
+									<apex:actionStatus id="dlete_attachments_status" startText="{!$Label.ResumeAttachmentDeleting}" stopText="" />
+								</apex:column>
+							</apex:pageBlockTable>
+						</apex:panelgroup>
+					</apex:pageBlock>
+				</div>
+
+				<apex:actionFunction name="refreshAttachmentsList" action="{!refreshAttachmentsList}" rerender="attachments_list,file_upload" status="myStatus" />
+
+				<apex:actionFunction name="updateAttachmentDescription" action="{!updateAttachmentDescription}" rerender="attachments_list" status="myStatus">
+					<apex:param name="currentAttachmetId" value="" assignTo="{!currentAttachmetId}"/>
+					<apex:param name="descriptionForCurrentAttachment" value="" assignTo="{!descriptionForCurrentAttachment}"/>
+				</apex:actionFunction>
+			</apex:form>
+
+			<apex:form id="file_upload" target="hidden_iframe">
+				<apex:inputFile style="display:{!IF(AttachmentsList.SIZE < Config_MaxNumberOfAttachments, 'block', 'none')}" value="{!AttachmentBody}" filename="{!AttachmentName}" contentType="{!AttachmentContentType}" onchange="autoSubmit(this);" />
+				<apex:commandButton value="" action="{!appendAttachment}" style="display:none;"/>
+			</apex:form>
+
+			<br/>
+
+			<iframe name="hidden_iframe" id="hidden_iframe" style="display:none" ></iframe>
+
+			<apex:form >
+				<apex:commandButton styleClass="atsButton" value="{!$Label.Continue}" action="{!nextStep}" />
+			</apex:form>
+		</apex:outputPanel>
+
+	</apex:define>
+	</apex:composition>
+
+<script type="text/javascript">
+// js wrapper for apex-native updateAttachmentDescription method
+function updateDescription(attachmentId, valueContainerId, atachmentRow) {
+	updateAttachmentDescription(attachmentId, document.getElementById(valueContainerId).value);
+	refreshAttachmentsList();
+}
+
+function switchEditable(atachmentRow) {
+	var inputContainer = document.getElementById(atachmentRow + '_edit');
+	var showContainer = document.getElementById(atachmentRow + '_view');
+
+	if (showContainer.style.display.toLowerCase() == 'none') {
+		showContainer.style.display = 'block';
+		inputContainer.style.display = 'none';
+	}
+	else {
+		showContainer.style.display = 'none';
+		inputContainer.style.display = 'block';
+	}
+}
+
+onLoadFileHandler = function() {
+	refreshAttachmentsList();
+
+	// forvarding error messages from hidden iframe to the page
+	var errorMessageFromIframe = document.getElementById('hidden_iframe').contentWindow.document.getElementById('atsErrorPageBox');
+	if (errorMessageFromIframe) {
+		document.getElementById('atsErrorPageBox').innerHTML = errorMessageFromIframe.innerHTML;
+	}
+	else {
+		document.getElementById('atsErrorPageBox').innerHTML = 'Force.com server error. Please try again.';
+	}
+	document.getElementById('opaco').style.visibility = 'hidden';
+}
+
+function autoSubmit(el) {
+	var form = getParentForm(el);
+	var submitButton = getFormSubmit(form);
+
+	var hiddenInput = document.createElement('input');
+	hiddenInput.setAttribute('type', 'hidden');
+	hiddenInput.setAttribute('name', submitButton.getAttribute('name'));
+	hiddenInput.setAttribute('value', submitButton.getAttribute('value'));
+
+	form.appendChild(hiddenInput);
+
+	form.submit();
+	form.removeChild(hiddenInput);
+
+	// refresh attachment table after file completely loaded
+	var iframeObj = document.getElementById('hidden_iframe');
+	addEvent(iframeObj, 'load', onLoadFileHandler);
+
+	// hide input file and show spin-image during loading process this refresh when refreshAttachmentsList called
+	el.style.display = 'none';
+	var spinImage = document.createElement('img');
+	spinImage.src = '{!URLFOR($Resource.JobBoard, 'loading.gif')}';
+	document.getElementById('opaco').style.visibility = 'visible';
+	var loadingText = document.createElement('span');
+	loadingText.innerHTML = '<b>{!JSENCODE($Label.ResumeAttachmentLoadingFile)}</b> <i>' + getShortPath(el.value) + '...</i>';
+
+	el.parentNode.appendChild(spinImage);
+	el.parentNode.appendChild(loadingText);
+}
+
+function getShortPath(fullFilePath) {
+	return fullFilePath.match(/[^\/|^\\]*$/)[0];
+}
+
+function addEvent(el, type, fn) {
+	if (el.addEventListener) {
+		el.addEventListener(type, fn, false);
+	}
+	else if (el.attachEvent) {
+		el.attachEvent('on' + type, function() {
+			fn.call(el);
+		});
+	}
+	else {
+		throw new Error('not supported or DOM not loaded');
+	}
+}
+
+function getParentForm(el) {
+	var parent = el.parentNode;
+	if (parent.tagName.toLowerCase() == 'form') {
+		return el.parentNode;
+	}
+	else {
+		return getParentForm(parent);
+	}
+}
+
+function getFormSubmit(form)  {
+	var inputFields = form.getElementsByTagName('input');
+	for (i = 0; i < inputFields.length; i ++ ) {
+		if (inputFields[i].getAttribute('type').toLowerCase() == 'submit') {
+			return inputFields[i];
+		}
+	}
+}
+</script>
+
+</apex:page>

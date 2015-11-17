@@ -1,0 +1,321 @@
+<apex:page showHeader="true" controller="pca.SettingsController">
+    <apex:include pageName="pca__Component"/>
+    
+    <apex:sectionHeader title="Postcode Anywhere" subtitle="Account Management and Settings" help="{!$Page.pca__Instructions}"/>
+
+    <apex:form id="Management">
+        <apex:pageblock id="Settings" title="Settings" mode="edit">
+            <apex:pageMessages id="pageErrors"></apex:pageMessages>
+            <apex:pageBlockButtons >
+                <apex:commandButton action="{!UpdateSettings}" value="Save" id="btnUpdate" oncomplete="SaveMessage()"/>
+            </apex:pageBlockButtons>
+            <apex:pageblockSection id="Account" title="Account">
+                <apex:inputField value="{!Settings.pca__Click_License__c}" id="StandardKey"/>
+                <apex:pageblockSectionItem id="Credits">
+                    <apex:outputLabel id="Label" value="Credit" for="Field"/>
+                    <apex:panelGroup >
+                        <apex:outputText id="Field" value="None" />
+                        <a style="margin-left:20px;" href="https://account.postcodeanywhere.co.uk/" target="_blank">Buy</a>
+                    </apex:panelGroup>
+                </apex:pageblockSectionItem>
+                <apex:pageBlockSectionItem />
+                <apex:pageblockSectionItem id="Licenses">
+                    <apex:outputLabel id="Label" value="Other Balance" for="Field"/>
+                    <apex:panelGroup >
+                        <apex:outputText id="Field" value="None" />
+                        <a style="margin-left:20px;" href="https://account.postcodeanywhere.co.uk/" target="_blank">Buy</a>
+                    </apex:panelGroup>
+                </apex:pageblockSectionItem>
+            </apex:pageBlockSection>
+            <apex:pageBlockSection id="Country" columns="1" title="Countries">
+                <apex:inputField id="lstNameStyle" value="{!Settings.pca__Country_Name_Style__c}"/>
+                <apex:pageBlockSectionItem id="List">
+                    <apex:outputLabel value="Country List Contents"/>
+                    <apex:panelGrid columns="4">
+                        <apex:panelGrid columns="1">
+                            <apex:outputLabel value="Hidden" for="Available"/>
+                            <select style="width:200px" id="lstAvailable" size="10" multiple="multiple"/>
+                        </apex:panelGrid>
+                        <apex:panelGroup >
+                            <apex:panelGrid columns="1"><br/>
+                                <apex:outputText value="Fill"/>
+                                <apex:image value="/s.gif" styleClass="rightArrowIcon" style="cursor:pointer" onclick="fillList()"/> 
+                                <apex:outputText value="Add"/>
+                                <apex:image value="/s.gif" styleClass="rightArrowIcon" style="cursor:pointer" onclick="addOption()"/> 
+                                <apex:image value="/s.gif" styleClass="leftArrowIcon" style="cursor:pointer" onclick="removeOption()"/> 
+                                <apex:outputText value="Remove"/>
+                                <apex:image value="/s.gif" styleClass="leftArrowIcon" style="cursor:pointer" onclick="clearList()"/> 
+                                <apex:outputText value="Clear"/>
+                             </apex:panelGrid>
+                        </apex:panelGroup>
+                        <apex:panelGrid columns="1">
+                            <apex:outputLabel value="Displayed" for="Selected"/>
+                            <select style="width:200px" id="lstSelected" size="10" multiple="multiple"/>
+                        </apex:panelGrid>
+                        <apex:panelGroup >
+                            <apex:panelGrid columns="1"><br/>
+                                <apex:outputText value="Top"/>
+                                <apex:image value="/s.gif" styleClass="upArrowIcon" style="cursor:pointer" onclick="optionTop()"/> 
+                                <apex:outputText value="Up"/>
+                                <apex:image value="/s.gif" styleClass="upArrowIcon" style="cursor:pointer" onclick="optionUp()"/> 
+                                <apex:image value="/s.gif" styleClass="downArrowIcon" style="cursor:pointer" onclick="optionDown()"/> 
+                                <apex:outputText value="Down"/>
+                                <apex:image value="/s.gif" styleClass="downArrowIcon" style="cursor:pointer" onclick="optionBottom()"/> 
+                                <apex:outputText value="Bottom"/>
+                            </apex:panelGrid>
+                      </apex:panelGroup>
+                    </apex:panelGrid>
+                </apex:pageBlockSectionItem>
+                <apex:inputHidden id="Options" value="{!Settings.pca__Country_List__c}"/>
+            </apex:pageBlockSection>
+            <apex:pageBlockSection title="Additional Options">
+                <apex:inputField value="{!Settings.pca__BACS_Validation__c}"/>
+                <apex:inputField value="{!Settings.pca__Email_Validation__c}"/>
+                <apex:inputField value="{!Settings.pca__Hide_Sidebar_Component__c}"/>
+                <apex:inputField value="{!Settings.pca__Default_User_Country__c}"/>
+                <apex:inputField value="{!Settings.pca__Disable_Company_Search__c}"/>
+                <apex:inputField value="{!Settings.pca__Disable_Street_Search__c}"/>
+                <apex:inputField value="{!Settings.pca__Disable_City_Search__c}"/>
+                <apex:inputField value="{!Settings.pca__Disable_State_Search__c}"/>
+                <apex:inputField value="{!Settings.pca__Disable_Postcode_Search__c}"/>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+        
+        <apex:actionFunction action="{!UpdateSettings}" name="saveSettings" />
+    </apex:form>
+    <apex:relatedList list="Addresses__r" title="Address Integrations" subject="{!Settings.Id}"/>
+    <apex:relatedList list="Payments__r" title="Payment Integrations" subject="{!Settings.Id}"/>
+    <apex:relatedList list="Emails__r" title="Email Integrations" subject="{!Settings.Id}"/>
+    <apex:relatedList list="Actions__r" title="Custom Code" subject="{!Settings.Id}"/>
+    
+    <script type="text/javascript">
+        var keyfield = pca.getElement("{!$Component.Management.Settings.Account.StandardKey}"),
+            balancefield = pca.getElement("{!$Component.Management.Settings.Account.Credits.Field}"),
+            licensefield = pca.getElement("{!$Component.Management.Settings.Account.Licenses.Field}"),
+            licenselabel = pca.getElement("{!$Component.Management.Settings.Account.Licenses.Label}"),
+            namestylelist = pca.getElement("{!$Component.Management:Settings:Country:lstNameStyle}"),             
+            selectedfield = pca.getElement("{!$Component.Management:Settings:Country:Options}"),
+            availablelist = pca.getElement("lstAvailable"),
+            selectedlist = pca.getElement("lstSelected");
+
+        function SaveMessage() {
+            alert('Settings have been updated, browser cache will need to be cleared before settings take effect');
+        }
+
+        function getAccountBalance() {
+            if (!keyfield || !balancefield) return;
+            
+            function success(response) {
+                pca.setValue(balancefield, "None");
+                pca.setValue(licenselabel, "Other Balance");
+                pca.setValue(licensefield, "None");
+                
+                for (var i = 0; i < response.length; i++) {
+                    if (response[i].Type == "Flex")
+                         pca.setValue(balancefield, response[i].Remaining);
+                    else {
+                        pca.setValue(licenselabel, response[i].Name);
+                        pca.setValue(licensefield, pca.formatLine(response[i], "{Remaining}/{Purchased}"));
+                    }
+                }
+            }
+            
+            function fail() {
+                pca.setValue(licenselabel, "Unknown");
+                pca.setValue(balancefield, "Unknown");
+            }
+            
+            pca.fetch("Management/Balance/List/1.10", { Key: escape(keyfield.value) }, success, fail);
+        }
+
+        function showRegister() {
+            var modal = new pca.Modal({title: "Register for a free account" });
+           
+            function register(details) {
+                function success(response) {
+                    pca.setValue(keyfield, response[0].InternalKey);
+                    modal.hide();
+                    saveSettings();
+                }
+                
+                function fail(error) {
+                    alert(error);
+                }
+            
+                if (!details["Email"]) { alert("You must enter an email address."); return; }
+                if (!details["First Password"]) { alert("You must choose a password."); return; }
+                if (!details["Second Password"]) { alert("You must confirm your password by typing it again."); return; }
+                if (details["First Password"] != details["Second Password"]) { alert("The passwords do not match."); return; }
+               
+                pca.fetch("CapturePlus/Demos/AddAccountAndTrial/v1.00", { 
+                        key: "KT79-MT84-XR94-DK35", 
+                        Source: "Salesforce",
+                        InternalKeyName: "Salesforce Internal",
+                        ExternalKeyName: "Salesforce Public",
+                        Forename: details["First Name"],
+                        Surname: details["Second Name"],
+                        Email: details["Email"],
+                        Phone: details["Phone"],
+                        CompanyName: details["Company"],
+                        Password: details["First Password"]
+                    }, success, fail);
+            }
+            
+            modal.addField("Company", { value: "{!JSENCODE($User.CompanyName)}" });
+            modal.addHalfFields("Name", { value: "{!JSENCODE($User.FirstName)}" }, { value: "{!JSENCODE($User.LastName)}" });
+            modal.addField("Email", { value: "{!JSENCODE($User.Email)}", type: "email", required: true });
+            modal.addField("Phone", { value: "{!JSENCODE($User.Phone)}", type: "tel" });
+            modal.addHalfFields("Password", { type: "password", required: true }, { type: "password", required: true });
+            modal.addButton("Register", register);
+            modal.addButton("Skip", modal.hide, true);
+            modal.show();
+        } 
+
+        function initList() {
+            var selection = selectedfield.value.split(",");
+
+            selectedlist.options.length = 0;
+            availablelist.options.length = 0;
+
+            for (var i = 0; i < pca.countries.length; i++)
+                availablelist.options.add(new Option(pca.countries[i].name, pca.countries[i].iso3));
+
+            for (var s = 0; s < selection.length; s++) {
+                for (var i = 0; i < availablelist.options.length; i++) {
+                    if (selection[s] == availablelist.options[i].value)
+                        moveOption(i, availablelist, selectedlist);
+                }
+            }
+        }
+
+        function fillList() {
+            while (availablelist.options.length)
+                moveOption(0, availablelist, selectedlist);
+
+            updateSelectedOptions()
+        }
+
+        function clearList() {
+            selectedlist.options.length = 0;
+            availablelist.options.length = 0;
+
+            for (var i = 0; i < pca.countries.length; i++)
+                availablelist.options.add(new Option(pca.countries[i].name, pca.countries[i].iso3));
+
+            updateSelectedOptions()
+        }
+
+        function addOption() {
+            for (var i = 0; i < availablelist.options.length; i++) {
+                if (availablelist.options[i].selected) {
+                    moveOption(i, availablelist, selectedlist);
+                    i--;
+                }
+            }
+
+            updateSelectedOptions()
+        }
+
+        function removeOption() {
+            for (var i = 0; i < selectedlist.options.length; i++) {
+                if (selectedlist.options[i].selected) {
+                    moveOption(i, selectedlist, availablelist);
+                    i--;
+                }
+            }
+
+            updateSelectedOptions()
+        }
+
+        function moveOption(index, from, to) {
+            var source = from.options[index],
+                option = new Option(source.text, source.value);
+
+            to.options[to.options.length] = option;
+            from.remove(index);
+        }
+
+        function optionUp() {
+            var index = selectedlist.selectedIndex;
+
+            if (index > 0) {
+                swapOptions(selectedlist.options[index], selectedlist.options[index - 1]);
+                selectedlist.selectedIndex--;
+            }
+
+            updateSelectedOptions()
+        }
+
+        function optionDown() {
+            var index = selectedlist.selectedIndex;
+
+            if (index < (selectedlist.options.length - 1)) {
+                swapOptions(selectedlist.options[index], selectedlist.options[index + 1]);
+                selectedlist.selectedIndex++;
+            }
+
+            updateSelectedOptions()
+        }
+
+        function optionTop() {
+            var index = selectedlist.selectedIndex;
+
+            while (index > 0) {
+                swapOptions(selectedlist.options[index], selectedlist.options[index - 1]);
+                index--;
+            }
+
+            selectedlist.selectedIndex = 0;
+
+            updateSelectedOptions()
+        }
+
+        function optionBottom() {
+            var index = selectedlist.selectedIndex;
+
+            while (index < (selectedlist.options.length - 1)) {
+                swapOptions(selectedlist.options[index], selectedlist.options[index + 1]);
+                index++;
+            }
+
+            selectedlist.selectedIndex = selectedlist.options.length - 1;
+
+            updateSelectedOptions()
+        }
+
+        function swapOptions(x, y) {
+            var t = new Option(x.text, x.value);
+            x.text = y.text;
+            x.value = y.value;
+            y.text = t.text;
+            y.value = t.value;
+        }
+
+        function updateSelectedOptions() {
+            var items = [];
+
+            for (var i = 0; i < selectedlist.options.length; i++)
+                items.push(selectedlist.options[i].value);
+
+            selectedfield.value = items.join(",");
+        }
+
+        function managementInit() {
+            initList();
+    
+            if (keyfield && keyfield.value == "")
+                sfdcPage.appendToOnloadQueue(showRegister, "Postcode Anywhere Registration");
+    
+            if (keyfield) keyfield.onchange = getAccountBalance;
+    
+            getAccountBalance(); //Get credit balance
+            
+            if (namestylelist) {
+                if (namestylelist.options[0].text == "--None--")
+                    namestylelist.remove(0);
+            }
+        }
+        
+        sfdcPage.appendToOnloadQueue(managementInit);
+    </script>
+</apex:page>

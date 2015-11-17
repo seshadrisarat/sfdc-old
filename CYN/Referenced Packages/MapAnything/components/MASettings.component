@@ -1,0 +1,437 @@
+<apex:component >
+	
+	<script type='text/javascript'>
+	
+		$(function() 
+		{
+			//handle changing setting types
+			$('#bottomworkspace [data-pane="Settings"] .left-options-panel').on('click', '.settings-select', function()
+			{
+				var settingsType = $(this).text();
+				$(this).addClass('active');
+				$('.settings-select').not(this).removeClass('active');
+				$('#bottomworkspace [data-pane="Settings"] .right-options-panel .settings-header').text(settingsType);
+				$('#bottomworkspace [data-pane="Settings"] .right-options-panel [table-id="'+settingsType+'"]').show();
+				$('#bottomworkspace [data-pane="Settings"] .right-options-panel .setting-table:not(div[table-id="'+settingsType+'"])').hide();
+			});
+
+			//init the settings tabs
+			$( "#settings-tabs .tabs" ).tabs();
+
+			//LaunchPopupWindow($('#MASettings'), 350);
+		});
+
+		function resetSettings () {
+			var r = confirm("Are you sure?");
+			if (r == true) {
+				//reset general settings
+				$('#UnitType').val('mi');
+				$('#walkme-checkbox').attr('checked','checked');
+				$('#mapit-proximity-on').removeAttr('checked');
+				$('#InvertProximityCheckbox').removeAttr('checked');
+				$('#ProximityRadius').val('50');
+				$('#ProximityRadiusMeasurementType').val('MILES');
+
+				//reset route settings
+				$('#RouteMode').val('driving');
+				$('.timedefaults-startlocation, .timedefaults-endlocation').click();
+				$('.timedefaults-routetype').val('Standard');
+				$('.timedefaults-routestart').val('9:00 am');
+				$('.timedefaults-routeend').val('5:00 pm');
+				$('.timedefaults-appointmentduration').val('0 hr, 30 min');
+
+				//now save settings
+				saveSettings();
+
+			}
+			else {
+				//cancel
+			}
+		}
+
+		function LaunchSettings (options) {
+			var selectTab = 0;
+			switch(options.page) {
+				case 'general':
+					selectTab = 0;
+					break;
+				case 'routes':
+					selectTab = 1;
+					break;
+				case 'listview':
+					selectTab = 2;
+					break;
+				default:
+					selectTab = 0;
+			}
+			//select proper tab
+
+			$( "#settings-tabs .tabs" ).tabs("option", "active", selectTab);
+			LaunchPopupWindow($('#MASettings'), 800);
+		}
+        
+        function buildListViewColumnHTML()
+		{
+		    var AvailableListViewColumnsHTML = '';
+	        var VisibleListViewColumnsHTML = '';
+	        
+	        //clone the list view columns object so we don't manipulate the primary one
+	        var AvailableListViewColumns = jQuery.extend({}, MAListView.ListViewColumns);
+	        
+	        if(userSettings.PageSizeDefault) {
+	        	$('#PageSizeDefault').val(userSettings.PageSizeDefault);
+	        } else {
+	        	userSettings.PageSizeDefault = 10;
+	        	$('#PageSizeDefault').val(10);
+	        }
+
+		    if (userSettings.ListViewColumns)
+		    {
+		        //Has settings, no need to check the "visible" property
+		        
+		        $.each(userSettings.ListViewColumns, function( index, col ) {
+                
+                    if (MAListView.ListViewColumns[col.id].deprecated == false)
+                    {
+                    	//add an asterisk to selected-tab-only columns
+                    	var newLabel = jQuery.inArray(col.id, [ '4','5','23','24' ]) > -1 ? '*' + MAListView.ListViewColumns[col.id].label : MAListView.ListViewColumns[col.id].label;
+                    	//add an extra asterisk to the query name column
+                    	newLabel = col.id == '24' ? '*' + newLabel : newLabel;
+
+                        VisibleListViewColumnsHTML += '<li class="settings-listview-column ui-state-default"' 
+                        	+ ' id="' + col.id
+                        	+ '" label="' + MAListView.ListViewColumns[col.id].label
+                        	+ '" isRecordProperty="' + MAListView.ListViewColumns[col.id].isRecordProperty
+                        	+ '" sortColumn="' + MAListView.ListViewColumns[col.id].sortColumn + '" >' 
+                            + newLabel + '<span class="glyphicon glyphicon-resize-vertical"></span></li>';
+                            
+                        //remove from the AvailableListViewColumns array
+                        try { delete AvailableListViewColumns[col.id]; } catch(e) {}
+                    }
+                    
+                });
+		    }
+		    else
+		    {
+		        //doesn't have settings, so let's default them 
+		        userSettings.ListViewColumns = MAListView.ListViewColumns;
+		        
+		        $.each(userSettings.ListViewColumns, function( index, col ) {
+                    
+                    if (MAListView.ListViewColumns[col.id].visible == 'true' && MAListView.ListViewColumns[col.id].deprecated == false)
+                    {
+                    	//add an asterisk to selected-tab-only columns
+                    	var newLabel = jQuery.inArray(col.id, [ '4','5','23','24' ]) > -1 ? '*' + MAListView.ListViewColumns[col.id].label : MAListView.ListViewColumns[col.id].label;
+                    	//add an extra asterisk to the query name column
+                    	newLabel = col.id == '24' ? '*' + newLabel : newLabel;
+
+                        VisibleListViewColumnsHTML += '<li class="settings-listview-column ui-state-default"' 
+                        	+ ' id="' + col.id + '" label="' + MAListView.ListViewColumns[col.id].label + '" isRecordProperty="' + MAListView.ListViewColumns[col.id].isRecordProperty + '" sortColumn="' + MAListView.ListViewColumns[col.id].sortColumn + '" >' 
+                            + newLabel + '<span class="glyphicon glyphicon-resize-vertical"></span></li>';
+                            
+                        //remove from the AvailableListViewColumns array
+                        try { delete AvailableListViewColumns[col.id]; } catch(e) {}
+                    }
+                    
+                });
+		    }
+
+		    
+	        
+	        
+            
+            
+            $.each(AvailableListViewColumns, function( index, col ) {
+                
+                if (col.deprecated == false) {
+	                AvailableListViewColumnsHTML += '<li class="settings-listview-column ui-state-default"'
+	                	+ ' id="' + col.id + '" label="' + MAListView.ListViewColumns[col.id].label + '" isRecordProperty="' + MAListView.ListViewColumns[col.id].isRecordProperty + '" sortColumn="' + MAListView.ListViewColumns[col.id].sortColumn + '" >' 
+	                	+ MAListView.ListViewColumns[col.id].label + '<span class="glyphicon glyphicon-resize-vertical"></span></li>';
+                }
+            });
+            
+            $('#AvailableListViewColumns').html(AvailableListViewColumnsHTML);
+            $('#VisibleListViewColumns').html(VisibleListViewColumnsHTML);
+            
+		    
+		    $( "#AvailableListViewColumns, #VisibleListViewColumns" ).sortable({
+                connectWith: ".connectedListViewSortable",
+                placeholder: "ui-state-highlight"
+            }).disableSelection();
+		    
+		    
+		}
+        
+		function saveSettings () {
+			$('#MASettingsLoading, .loading-text').show();
+			var JSONObject = {};
+		    var PlotOnLoadQueries = [];
+		    
+		    $("#SQTree li").each(function(){
+		        if($(this).hasClass("jstree-star"))
+		        {
+		            PlotOnLoadQueries.push($(this).attr("id"));
+		        }
+		     });
+		      
+		     JSONObject.PlotOnLoadQueries = PlotOnLoadQueries;
+		     JSONObject.MapItProximityOn = $('#mapit-proximity-on').is(':checked');
+		     JSONObject.EnableWalkMe = $('#walkme-checkbox').is(':checked');
+		     
+		     //update the default proximity settings in the stored user settings
+		     try {
+		        userSettings.defaultProximitySettings.radius = parseInt($('#ProximityRadius').val());
+		        userSettings.defaultProximitySettings.unit = $('#ProximityRadiusMeasurementType').val();
+		     }
+		     catch (err) { }
+		     
+		     //route settings
+		     JSONObject.RouteDefaults = {
+		        mode                : $('#RouteMode').val(),
+		        unit                : $('#UnitType').val(),
+		        startLocationId     : $('.timedefaults-startlocation').attr('data-id'),
+		        startLocationLabel  : $('.timedefaults-startlocation').val(),
+		        endLocationId       : $('.timedefaults-endlocation').attr('data-id'),
+		        endLocationLabel    : $('.timedefaults-endlocation').val(),
+		        type                : $('.timedefaults-routetype').val(),
+		        start               : $('.timedefaults-routestart').val(),
+		        end                 : $('.timedefaults-routeend').val(),
+		        duration            : $('.timedefaults-appointmentduration').val()
+		     };
+		     
+		     JSONObject.ListViewColumns = {};
+		     var count = 0;
+		     
+		     $('#VisibleListViewColumns').find('.settings-listview-column').each(function(){
+
+            	JSONObject.ListViewColumns[count] = { id: $(this).attr('id') };
+            	count++;
+            	
+            	//JSONObject.ListViewColumns.push({id: $(this).attr('id')});
+            	
+            	//console.log('ColumnId: ' + ColumnId + ' IsVisible: ' + IsVisible);
+             });
+
+             JSONObject.PageSizeDefault = $('#PageSizeDefault').val();
+             userSettings.PageSizeDefault = JSONObject.PageSizeDefault;
+
+		     //Store settings
+		     console.log(JSONObject);
+		     userSettings.ListViewColumns = JSONObject.ListViewColumns;
+
+		     //redraw all open tabs
+		     if(MAListView.isShown) {
+		     	MAListView.ConstructAllTabs();
+		     }
+		     
+		     //console.log(UserId,JSON.stringify(JSONObject));
+		     $.getJSON(MA.resources.User,"action=store_ma_settings&id=" + UserId + "&jsonstring=" + JSON.stringify(JSONObject) + "&DefaultProximityRadius=" +$('#ProximityRadius').val()+ "&PreferredTypeOfMeasurement=" +$('#ProximityRadiusMeasurementType').val(),function(json)
+		        { 
+		            if(json.success)
+		            {
+		                //showSuccess($('#mapdiv').parent(), 'Settings Updated');
+
+		                //need to update all settings, but currently just updating unit to fix a bug
+		                userSettings.RouteDefaults.unit = $('#UnitType').val();
+		                $('#MASettingsLoading,.loading-text').hide();
+		                ClosePopupWindow();
+		            }
+		            else
+		            {
+		            	$('#MASettingsLoading,.loading-text').hide();
+		                NotifyError("Error Updating Map Anything Settings:",json.error);
+		                Debug("Error Updating Map Anything Settings: " + json.error);
+		            }
+		        })
+		        .error(function(jqXHR, textStatus, errorThrown) {        
+		            Debug("<b>Error Updating Map Anything Settings</b></br>&nbsp;&nbsp;Status: " + textStatus + "</br>&nbsp;&nbsp;Error: " + errorThrown);
+		            NotifyError("Error Updating Map Anything Settings",textStatus + " : " + errorThrown); 
+		            $('#MASettingsLoading,.loading-text').hide();
+		        });
+		}
+		
+	</script>
+
+	<!-- Favorite Location PopUP -->
+    <div id="MASettings"  class="popup_block" style='z-index: 10000; max-height: 620px; height: 700px;'>
+    	<!-- Loading Wrapper -->
+    	<div id="MASettingsLoading"></div>
+    	<div class='loadmask-wrapper' style="height:100%;">
+	    	<!-- Header -->
+	        <h3>{!$Label.MASettings_Settings}</h3>
+
+	        <div id="settings-tabs">
+	        	<div class="tabs">
+					<ul>
+						<li><a href="#general-tab">General</a></li>
+						<li><a href="#Routing-Settings">Routes</a></li>
+						<li><a href="#settings-listview">List View Options</a></li>
+					</ul>
+					<div id="general-tab">
+						<!-- UNITS -->
+						<div class="units-selection selection-row">
+	                        <div class="inline options-text">Units</div>
+	                        <div class="inline">
+	                            <select id="UnitType">
+	                                <option value="mi">{!$Label.MARoutes_Miles}</option>
+	                                <option value="km">{!$Label.MARoutes_Kilometers}</option>
+	                            </select>
+	                        </div>
+	                    </div>
+                        <div class='walkme-selection selection-row'>
+                        	<label for="walkme-checkbox" class="checkbox">
+                        		<div class="inline checkbox-text options-text">
+                        			<div>Enable WalkMe</div>
+                        			<div style="font-size: 11px; color: #A1A1A1;">(page refresh required)</div>
+                        		</div>
+						    	<input id="walkme-checkbox" name="walkme-checkbox" type="checkbox" checked="checked"/>
+						     </label>
+                        </div>
+
+                        <div class='mapItProx-selection selection-row'>
+                        	<label for="mapit-proximity-on" class="checkbox">
+                        		<div class="inline checkbox-text options-text">{!$Label.MASettings_MapIt_Proximity}</div>
+						    	<input id="mapit-proximity-on" class="mapit-proximity-on" name="mapit-proximity-on" type="checkbox" />
+						     </label>
+						</div>
+
+						<div class='mapItProx-selection selection-row'>
+							<label for="InvertProximityCheckbox" class="checkbox">
+								<div class="inline checkbox-text options-text">{!$Label.MASettings_Invert_Proximity}</div>
+								<input id="InvertProximityCheckbox" name="InvertProximityCheckbox" type="checkbox" onclick='ChangeVisibilityWhenCircleIsAdded();'/>
+							</label>
+						</div>
+
+						<!-- Defaults -->
+						<div class='mapItProx-selection selection-row'>
+							<div class="inline options-text">{!$Label.MASettings_Proximity} {!$Label.MASettings_Radius}:</div>
+							<div class="inline">
+								<input type="text" id="ProximityRadius" size="5" />
+								<select id="ProximityRadiusMeasurementType">
+									<option value="MILES">{!$Label.MARoutes_Miles}</option>
+									<option value="KM">{!$Label.MARoutes_Kilometers}</option>
+									<option value="METERS">{!$Label.MA_Meters}</option>
+									<option value="YARDS">{!$Label.MA_Yards}</option>
+									<option value="FEET">{!$Label.MA_Feet}</option>
+								</select>
+							</div>
+	                    </div>
+
+                        <div class='resetAll-selection selection-row' style="padding-top:30px;">
+                        	<a class="MAbutton icon-left ion-refresh button-small button-silver reset-settings" onclick="resetSettings();">Reset all settings to default</a>
+                        </div>
+					</div>
+
+
+					<div id="Routing-Settings">
+						<!-- Routing Options (this was just copied from the old UI and needs to be reworked) -->
+						<div class='selection-row routingdefaults'>
+							<div class='inline options-text'>{!$Label.MARoutes_Directions_Defaults}</div>
+							<select id="RouteMode">
+				                <option value="driving">Driving</option>
+				                <!-- <option value="driving">Quickest</option>-->
+				                <!-- <option value="driving">Shortest</option>-->
+				                <option value="walking">Walking</option>
+				                <option value="bicycling">Bicycling</option>
+				            </select>
+						</div>
+
+						<div class='selection-row'>
+							<div class='inline options-text'>Start Location</div>
+							<input type='text' class='timedefaults-startlocation autocomplete' />
+						</div>
+
+						<div class='selection-row'>
+							<div class='inline options-text'>End Location</div>
+							<input type='text' class='timedefaults-endlocation autocomplete' />
+						</div>
+						
+						<div class='selection-row'>
+							<div class='inline options-text'>Route Type</div>
+							<select class='timedefaults-routetype'><option value='Standard'>Standard</option><option value='TimeBased'>Time Based</option></select>
+						</div>
+						<div class='selection-row'>
+							<div class='inline options-text'>{!$Label.MARoutes_Route_Duration}</div>
+							<select class='timedefaults-routestart'></select> to <select class='timedefaults-routeend'></select>
+						</div>
+						<div class='selection-row'>
+							<div class='inline options-text'>{!$Label.MARoutes_Appointment_Duration}</div>
+							<select class='timedefaults-appointmentduration'></select>
+						</div>
+					</div>
+                    
+                    <div id="settings-listview">
+                        <div class="lvs-overflow-wrap">
+                        <table>
+                            <tr>
+                                <td style="padding-left:0;">
+                                    <table>
+                                        <tr>
+                                            <td colspan="3" class="lvs-instruction">
+                                            <label><b>Column Visibility and Order</b></label>
+                                            <br/><span style="font-size:12px;font-style:italic;">Drag and drop to add/remove from "visible" column</span>
+                                            </td>
+                                        </tr>
+                                         <tr>
+                                            <td>
+                                                <div class="lvs-cols-wrap">
+                                               <table>
+                                                   <tr>
+                                                        <td class="lvs-drag-col"><div style="font-weight:bold;font-size:13px;margin-bottom:7px;">Available</div><ul id="AvailableListViewColumns" class="connectedListViewSortable"></ul></td>
+                                                        <td class="lvs-icon-col" style="width: 14px;padding: 0;"><span class="glyphicon glyphicon-sort"></span></td>
+                                                        <td class="lvs-drag-col"><div style="font-weight:bold;font-size:13px;margin-bottom:7px;">Visible</div><ul id="VisibleListViewColumns" class="connectedListViewSortable"></ul></td>
+                                                   </tr>
+                                               </table>
+                                               </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="3" class="lvs-footnotes" style="font-size:12px;">
+                                                *These Columns will only appear in the Selected Tab.<br />**These columns only appear in the Selected Tab when multiple queries are plotted.
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                                <td style="vertical-align:top;">
+                                    Default Page Size 
+                                    <select id="PageSizeDefault" class="lvs-pagesize-default">
+                                    	<option value="10">10</option>
+                                    	<option value="20">20</option>
+                                    	<option value="30">30</option>
+                                    	<option value="40">40</option>
+                                    	<option value="50">50</option> 
+                                    </select>
+                                </td>
+                            </tr>
+                           
+                        </table>
+                        
+                        </div>
+                        
+
+                        
+            		
+            		</div>
+                    
+				</div>
+			</div>
+
+			<div class="footer">
+				<div class="inline button-wrapper">
+					<a class="MAbutton button-blue" onclick="saveSettings();">Save</a>
+		        	<a class="MAbutton button-silver" onclick="ClosePopupWindow();">Cancel</a>
+		        </div>
+		        <div class="inline loading-text" style="height: 30px;line-height: 30px;margin-left: 20px;font-weight: bold;font-size: 16px;color: #337AB7;display:none;">Saving, Please Wait...</div>
+		        <div class="inline info-wrapper">
+		        	<div class="inline setting-mapanything-version" style="margin-right:20px;"></div>
+		        	<div class="inline">
+		        		<a href="http://wiki.cloudbilt.com/mapanything" target="_blank" style="text-decoration:none; color:#337AB7">
+		        			Documentation
+			        		<span class="glyphicon glyphicon-new-window" aria-hidden="true"></span>
+			        	</a>
+		        	</div>
+		        </div>
+	        </div>
+		</div>
+    </div>
+</apex:component>

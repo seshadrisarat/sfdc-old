@@ -1,0 +1,159 @@
+<!--   
+*       BrokerDashboardPage VF page renders the Broker Dashboard section on the Broker/Broker Group detail page
+*   
+*       Author  :   Wilson Ng 
+*       Date    :   Feb 21, 2013
+*
+* update history
+* 04/14/13      Redkite         commented out inforce guage and resized CTYD WP Growth
+*  
+-->
+<apex:page standardController="Account" extensions="BrokerDashboardController" sidebar="false" showHeader="false" action="{!init}" readOnly="true">
+
+<script type='text/javascript' src="{!$Resource.justgage_min}" />
+<script type='text/javascript' src="{!$Resource.raphael_min}" />
+
+<style>
+    .metricsTableClass { font-size: 110%; }
+    .metricsTableHeader { font-weight: bold; }
+    .metricsColumn1 { text-align: left; white-space: nowrap; }
+    .metricsColumn2 { text-align: left; white-space: nowrap; padding-left: 1em; }
+    .vf-reset .vf-surface tspan { font-size: 75%; }
+    #inforceChart { font-size: 75%; }
+</style>
+
+       
+<apex:outputPanel rendered="{!NOT(ISBLANK(Account.Id))}" >
+
+    <!-- charts are rendered here -->
+    <table border="0" width="100%">
+    <tr>
+        <td width="40%" colspan="2"><div id="tripChart" /></td>
+        <td width="40%" colspan="1"><div id="bindsQuotesChart" /></td>
+        <td width="20%" colspan="1" valign="top"><div id="metrics1Table" >
+            <center>
+            <apex:dataTable value="{!metrics1Data}" var="metric" id="theMetrics1" cellspacing="5px" headerClass="metricsTableHeader" rowClasses="odd,even" styleClass="metricsTableClass">
+                <apex:column headerClass="metricsColumn1" styleClass="metricsColumn1" >
+                    <apex:facet name="header">Metric</apex:facet>
+                    <apex:outputText value="{!metric.name}"/>
+                </apex:column>
+                <apex:column headerClass="metricsColumn2" styleClass="metricsColumn2" >
+                    <apex:facet name="header">Value</apex:facet>
+                    <apex:outputText value="{0,number} {!CASE(metric.obj1type, 'CURRENCY', currencyScaleLabel3, 'PERCENT', '%', '' )}"><apex:param value="{!metric.obj1}"/></apex:outputText>
+                </apex:column>
+            </apex:dataTable>
+            </center>
+        </div></td>
+    </tr>
+    </table>
+    <table border="0" width="100%">
+    <tr>
+        <td width="50%" colspan="1" ><div id="wpChart" /></td>
+        <td width="25%" colspan="1" align="center"><div id="cytdwpChart" style="width:200px;height:160px;"  /></td>
+<!--       
+        <td width="20%" colspan="1" align="center"><div id="inforceChart" style="width:200px;height:160px;"  /></td>
+-->
+        <td width="25%" colspan="1" valign="top"><div id="metrics2Table" >
+            <center>
+            <apex:dataTable value="{!metrics2Data}" var="metric" id="theMetrics2" cellspacing="5px" headerClass="metricsTableHeader" rowClasses="odd,even" styleClass="metricsTableClass">
+                <apex:column headerClass="metricsColumn1" styleClass="metricsColumn1" >
+                    <apex:facet name="header">Metric</apex:facet>
+                    <apex:outputText value="{!metric.name}"/>
+                </apex:column>
+                <apex:column headerClass="metricsColumn2" styleClass="metricsColumn2" >
+                    <apex:facet name="header">Value</apex:facet>
+                    <apex:outputText value="{!IF(metric.obj1type='CURRENCY','$','')} {0,number} {!if(metric.obj1type='PERCENT', '%', '' )}">
+                        <apex:param value="{!metric.obj1}"/>
+                    </apex:outputText>
+                </apex:column>
+            </apex:dataTable>
+            </center>
+        </div></td>
+    </tr>
+    </table>
+    
+    
+    <!-- # of Trips YTD -->
+    <apex:chart height="175" width="100%" data="{!tripData}" renderTo="tripChart" resizable="true">
+        <apex:axis type="Numeric" position="left" fields="data1" title="# of Trips" grid="true" minimum="0" maximum="{!tripMax}" steps="4" />
+        <apex:axis type="Category" position="bottom" fields="name" title="Month of the Year"/>
+        <apex:lineSeries axis="left" fill="true" xField="name" yField="data1" markerType="cross" markerSize="4" markerFill="#FF0000"/>
+    </apex:chart>
+    
+        
+    <!-- # and $ of binds and quotes -->
+    <apex:chart height="175" width="100%" data="{!bindsQuotesData}" renderTo="bindsQuotesChart" resizable="true">
+        <apex:legend position="right"/>
+        <apex:axis type="Numeric" position="left" fields="data2,data4" title="Amount {!currencyScaleLabel2}"/>
+        <apex:axis type="Category" position="bottom" fields="name" title="Period (days)"/>
+        <apex:barSeries title="$ binds,$ quotes" orientation="vertical" axis="left" xField="name" yField="data2,data4" colorSet="#8080FF,#80FF80" groupGutter="0"/>
+    </apex:chart>
+    
+    
+    <!-- CYTD WP Premium YTD -->
+    <apex:chart height="175" width="100%" data="{!WPData}" renderTo="wpChart" resizable="true">
+        <apex:legend position="right"/>
+        <apex:axis type="Numeric" position="left" fields="data1,data2,data3" title="Amount {!currencyScaleLabel2}"/>
+        <apex:axis type="Category" position="bottom" fields="name" title="CYTD WP Premium"/>
+        <apex:lineSeries rendered="{!OR(NOT(ISBLANK(Account.WP_Year_End_Target__c)),AND(isBrokerGroup, targetRollUpValueIsNotNullOrZero))}" title="$ Year End Tgt." axis="left" fill="true" xField="name" yField="data3" markerType="cross" markerSize="4" markerFill="#FF0000"/>
+        <apex:barSeries title="$ New Bus.,$ Existing Bus." colorSet="#8080FF,#80FF80" orientation="vertical" axis="left" xField="name" yField="data1,data2" stacked="true"/>
+    </apex:chart>
+
+
+    <!-- inforce premium -->
+    <!-- VF version bad
+    <apex:chart height="175px" width="100%" animate="true" data="{!inforceData}" renderTo="inforceChart" resizable="true">
+        <apex:axis type="Gauge" position="gauge" title="Total Inforce {!currencyScaleLabel}" minimum="0" maximum="{!inforceMax}" steps="5"/>
+        <apex:gaugeSeries dataField="data1" highlight="true" tips="true" needle="false" donut="60" colorSet="{!gaugeColor},#ddd"/>
+    </apex:chart>-->
+    
+    <script>
+        <!-- using JustGage free JS library -->
+        var cytdwpData1 = {!cytdwpData[0].data1};
+        var cytdwpRounded = cytdwpData1.toFixed(1);
+        var jg1 = new JustGage({
+            id: "cytdwpChart", 
+            value: cytdwpRounded,
+            valueFontColor: "#444444", 
+            min: 0,
+            max: {!cytdwpData[0].data2},
+            title: "CYTD WP Growth",
+            titleFontColor: "#444444",
+            label: "%",
+            labelFontColor: "#444444",
+            levelColorsGradient: false,
+            levelColors: [
+                "#ff0000",
+                "#ffff00",
+                "#ffff00",
+                "#80FF80"
+            ],
+            params: { titleFontSize: 14}
+        });
+
+/*
+        var jg2 = new JustGage({
+            id: "inforceChart", 
+            value: {!inforceData[0].data1},
+            valueFontColor: "#444444", 
+            min: 0,
+            max: {!inforceMax},
+            title: "Total Inforce",
+            titleFontColor: "#444444",
+            label: "{!currencyScaleLabel}",
+            labelFontColor: "#444444",
+            levelColorsGradient: false,
+            levelColors: [
+                "#ff0000",
+                "#ffff00",
+                "#ffff00",
+                "#80FF80"
+            ],
+            params: { titleFontSize: 14}
+        });
+*/        
+    </script>
+    
+</apex:outputPanel>
+
+</apex:page>

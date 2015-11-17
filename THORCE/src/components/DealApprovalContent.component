@@ -1,0 +1,479 @@
+<apex:component >
+<script>
+	
+	// Survey deal object   
+	function SurveyResponse(recId, name,tenant, guarantor ){
+    	var self=this;
+		self.Id=recId;
+		self.Name = name;
+		self.Tenant = tenant; 
+		self.Guarantor = guarantor; 
+	}
+	
+	function AllAppRejDeals(Id, Name, status, actDate){
+		var self = this;
+		self.id = Id;
+		self.name = Name;
+		self.appstatus = status;
+		self.actionDate = actDate
+	}
+
+	function processInstanceObj( act,  com){
+		var self = this;
+		self.action = act;
+		self.comments = comment;
+	}
+	
+	//This function will highlight the selected row when the user clicks on a deal in the approval list
+	$( document ).on( "click", ".ui-btn-inner", function() {
+		$('.ui-btn-inner.current').removeClass('current');
+		$(this).addClass('current');
+	});
+          
+	//Main Model
+	function ApprovalViewModel(){
+	 	var self=this;
+	 	// initialise variables to default observables
+		self.survey_response=ko.observable(new SurveyResponse());
+		self.AllDeals = ko.observableArray();
+		self.AllPendingLO = ko.observableArray();
+		self.AllPendingLR = ko.observableArray();
+		self.AllAppRejDeals = ko.observableArray();
+		self.officeDeals = ko.observableArray();
+		self.allProcessed = ko.observable(false);
+		self.curId;
+		self.processInstanceObj = new ko.observable();
+		self.apprvMsg = ko.observable();
+		self.selecteditem = ko.observable();
+	   					
+		if (screen.width < 420) {
+			$(".ui-panel-content-wrap").hide();
+			$("#leftPanel").show();
+		}
+
+		self.homePage = function() {
+			
+			//$( "#leftPanel" ).panel( "open" , '' );
+
+			//reset all panels and components
+			$("#approval-list").hide();
+			$("#leftPanel").show().trigger('updatelayout');
+			document.getElementById("approve-button").style.visibility= 'hidden' ;
+			//$(".ui-panel-content-wrap").hide();  
+	   					
+			if (screen.width < 480) {
+				//alert("screen width:" + screen.width);
+				$("#approval-list").hide();
+				$(".ui-panel-content-wrap").hide();
+				$("#leftPanel").show();
+			}
+			else {
+		   		viewModel.DisplayPrevDeal();
+				$(".ui-panel-content-wrap").show();
+			} 
+		}
+
+		//Perform workflow approval for the selected deal; invoked by Approve button click
+		self.approveButtonCB = function() {
+
+			$('body').addClass('wait');
+		
+			var did = self.selecteditem().id;
+			var comments = self.apprvMsg();
+			if(self.apprvMsg()!=null)
+				comments = self.apprvMsg();
+			
+			DealApprovalCtrl.ApproveItems(did, comments, 'Approve', self.approveItemCB, {escape: true});
+			 
+			//Close the keyboard control; doesn't always close automatically when the popup is closed
+			document.activeElement.blur();
+			
+			//Popup does not close on first try on iOS; two close statements are used as a workaround
+			$( "#approval-popup" ).popup( "close" );
+			$( "#approval-popup" ).popup( "close" );  
+			
+			self.AllApprovals();
+			document.getElementById("approve-button").style.visibility= 'hidden' ;
+		}
+		
+		//Perform workflow rejection for the selected deal; invoked by Reject button click	
+		self.rejectButtonCB = function() {
+
+			$('body').addClass('wait');
+		
+			var did = self.selecteditem().id;
+			var comments = self.apprvMsg();
+			//alert(self.apprvMsg());
+			if(self.apprvMsg()!=null)
+				comments = self.apprvMsg();
+			
+			DealApprovalCtrl.ApproveItems(did,  comments, 'Reject', self.rejectItemCB, {escape: true}); 
+			
+			//Close the keyboard control; doesn't always close automatically when the popup is closed
+			document.activeElement.blur();
+			
+			//Popup does not close on first try on iOS; two close statements are used as a workaround
+			$( "#approval-popup" ).popup( "close" );
+			$( "#approval-popup" ).popup( "close" );
+
+			self.AllApprovals();
+			document.getElementById("approve-button").style.visibility= 'hidden' ;
+		}
+		
+		//Close the Approval popup with no action; invoked by Close button click	
+		self.closeButtonCB = function() {
+			//Close the keyboard control; doesn't always close automatically when the popup is closed
+			document.activeElement.blur();
+			
+			//Popup does not close on first try on iOS; two close statements are used as a workaround
+			$( "#approval-popup" ).popup( "close" );
+			$( "#approval-popup" ).popup( "close" );
+
+			self.AllApprovals();
+		}
+		
+		//Callback function for Approve button click		
+		self.approveItemCB = function(record, event) {
+			if ( (!event) || (event.status) ) {
+			}
+
+			$('body').removeClass('wait');
+		}
+	
+		//Callbackfunction for Reject button click	
+		self.rejectItemCB = function(record, event) {
+			if ( (!event) || (event.status) ) {
+			}
+
+			$('body').removeClass('wait');
+		}
+	
+		//Display the selected deal; update the previously viewed deal setting		
+		self.curDeal= function(item) {
+	        
+			self.selecteditem(item);
+			self.apprvMsg(null);
+			$('[name=dealfield]').val(item.id).change();
+			$("#maincontent").show();
+			
+			DealApprovalCtrl.setPreviouslyViewedId(item.id, self.responseSetPrevIdCB, {escape: true});
+
+			document.getElementById("approve-button").style.visibility= 'visible' ;			
+
+			if (screen.width < 480) {
+				$("#leftPanel").hide();
+				$(".ui-panel-content-wrap").show();
+			}
+	   	};
+	    	
+		//Callbackfunction for Reject button click	
+		self.setColumnsCB = function(record, event) {
+			if ( (!event) || (event.status) ) {
+			}
+		}
+   	
+		self.curDealForFirstTime= function(item){
+			if(item!=null){
+				$('[name=dealfield]').val(item).change();
+				//DealApprovalCtrl.getDeal(item.id, self.responseCB, {escape: true}); 
+				$("#maincontent").show();
+			}
+		};	
+			
+		//call back for set previous ID remote function
+		self.responseSetPrevIdCB = function(record, event) {
+			if ( (!event) || (event.status) ) {
+					//alert('Previously set function ran sucessfully');	
+				}	
+		}
+	
+		//Callback fuction for remote call to obtain historical approved/rejected deals
+		self.responseAppRej = function(record, event)
+		{
+			var deal;
+			self.AllAppRejDeals = new ko.observableArray();
+			if ( (!event) || (event.status) ) 
+			{
+				$.each(record,
+							function()
+							{
+								//alert(this.name + this.dealId + this.status);
+								if(this.status == "Approved") {
+									deal = new ko.observable(new AllAppRejDeals(this.dealId, this.name, true, this.actionDate));
+							   }		
+							    else {
+								    deal = new ko.observable(new AllAppRejDeals(this.dealId, this.name, false, this.actionDate));
+								}
+								self.AllAppRejDeals.push(deal);
+							});
+							
+							self.allAllApprovedList('AllAppRejDeals');
+			}
+
+			$("#approval-list").show();
+			$('body').removeClass('wait');
+		}
+			
+		//**callback for the JavaScript remoting call	
+		self.responseCB=function(record, event) {
+	 		if ( (!event) || (event.status) ) {
+				
+				// create new JS response object
+			    var resp=new SurveyResponse(record.Id, record.Name, record.Tenant__r.Name, record.Guarantor_Name__c);
+				
+				//add deal record to the observable
+				self.survey_response(resp);
+			}
+	 	}
+	 	
+		//Get all pending Leasing Office approvals for the current user; invoked by Leasing Office menu item click
+	 	self.AllApprovalsLO = function() {
+
+			$('body').addClass('wait');
+	 		
+	 		DealApprovalCtrl.getApprovalPending('Office', self.allApprovalsLOCB, {escape: true}); 
+	 		
+	  		viewModel.DisplayPrevDeal(); 
+	 	}
+		 	
+	 	//Callbackfunction for AllApprovalsLO - get all pending Leasing Office deal approvals
+	 	self.allApprovalsLOCB = function(record, event) {
+	 		if ( (!event) || (event.status) ) {
+				self.AllPendingLO = new ko.observableArray();
+				$.each(record,
+							function()
+							{
+								var	deal = new ko.observable(new AllAppRejDeals(this.dealId, this.name, true, this.actionDate));
+								self.AllPendingLO.push(deal);
+							});
+				
+			}
+			
+			self.addAllList('AllPendingLO');
+
+	 		$("#approval-list").show();
+	 		$("#maincontent").hide();  
+			$('body').removeClass('wait');
+	 	}
+	 	
+		//Get all pending Leasing Retail approvals for the current user; invoked by Leasing Retail menu item click
+	 	self.AllApprovalsLR = function() {
+
+			$('body').addClass('wait');
+	 		
+	 		DealApprovalCtrl.getApprovalPending('Retail', self.allApprovalsLRCB, {escape: true}); 
+	 		
+	  		viewModel.DisplayPrevDeal(); 
+	 	}
+	 	
+	 	//Callbackfunction for AllApprovalsLR - get all pending Leasing Retail deal approvals
+	 	self.allApprovalsLRCB = function(record, event) {
+	 		if ( (!event) || (event.status) ) {
+				self.AllPendingLR = new ko.observableArray();
+				$.each(record,
+							function()
+							{
+								var	deal = new ko.observable(new AllAppRejDeals(this.dealId, this.name, true, this.actionDate));
+								self.AllPendingLR.push(deal);
+							});
+				
+			}
+			
+			self.addAllList('AllPendingLR');
+
+	 		$("#approval-list").show();
+	 		$("#maincontent").hide();  
+			$('body').removeClass('wait');
+	 	}
+	 	
+		//Get all pending approvals for the current user; invoked by All menu item click
+		self.AllApprovals=function() {
+
+			$('body').addClass('wait');
+	
+			DealApprovalCtrl.getApprovalPending('All', self.allApprovalsCB, {escape: true}); 
+					
+  			viewModel.DisplayPrevDeal(); 
+		}
+		
+	 	//Callbackfunction for AllApprovals - get all pending deal approvals
+		self.allApprovalsCB=function(record, event) {
+			if ( (!event) || (event.status) ) {
+				self.AllDeals = new ko.observableArray();
+				$.each(record,
+							function()
+							{
+								var	deal = new ko.observable(new AllAppRejDeals(this.dealId, this.name, true, this.actionDate));
+								self.AllDeals.push(deal);
+							});
+				
+				self.addAllList('AllDeals');			
+			}
+
+			$("#approval-list").show();
+			$("#maincontent").hide();  
+			$('body').removeClass('wait');
+	 	}
+		 	
+		//Get all historical approvals/rejections for the current user; invoked by All menu item click
+		self.AllApprRej=function() {
+
+			$('body').addClass('wait');
+	
+			DealApprovalCtrl.getApprovedRejected('All', self.responseAppRej, {escape:true});  
+		}
+		
+		//Get all historical approvals/rejections for the current user; invoked by Leasing Office menu item click
+		self.AllLOApprRej=function() {
+
+			$('body').addClass('wait');
+	
+			DealApprovalCtrl. getApprovedRejected('Office', self.responseAppRej, {escape:true});  
+		}
+		
+		//Get all historical approvals/rejections for the current user; invoked by Leasing Retail menu item click
+		self.AllLRApprRej=function() {
+
+			$('body').addClass('wait');
+	
+			DealApprovalCtrl. getApprovedRejected('Retail', self.responseAppRej, {escape:true});  
+		}
+	 	
+	 	//Create unordered list HTML that is used to display deals pending approval
+	 	self.addAllList = function(typeOfDeal) {
+	 	
+	 		$('#deallist').html(
+	 			'<div id="newlist" class="deal-pending"> <ul data-role="listview" data-filter="true" class="ui-listview" data-bind="foreach: $root.' + typeOfDeal + '"> '+ 
+	                       '<li data-role="list-divider" role="heading" class="ui-li ui-li-divider ui-bar-d"  data-bind="visible: $index() === 0"> ' +
+	                          '<span data-bind="ifnot: $index() !== 0">Pending Approvals</span> '+  
+	                       '</li> '+
+	                      '<li class="ui-bar-c"> '+
+	                            '<a href="#" data-bind="click: $root.curDeal"> '+
+	                              	'(<span data-bind="text: actionDate"> </span>) '+
+	                              	'<span data-bind="text: name"> </span> '+
+	                            '</a> '+
+						'</li> </div>' +
+						'<div id="no-results">No results were found</div>');
+			
+			$('#no-results').hide();
+						
+			// bind the viewmodel to the markup
+			ko.applyBindings(viewModel, $('#newlist')[0]);
+			
+			$('#newlist').trigger('create');			
+			//document.getElementById("approve-button").style.visibility= 'visible' ;			
+	 	}
+		 	
+	 	//Create unordered list HTML that is used to display historical approvals / rejections
+	 	self.allAllApprovedList = function(typeOfDeal) {
+	 	
+	 		$('#deallist').html(
+	 			'<div id="newlist" class="deal-history"> <ul data-role="listview"  data-filter="true" class="ui-listview" data-bind="foreach: $root.' + typeOfDeal + '"> '+       
+	                       '<li data-role="list-divider" role="heading" class="ui-li ui-li-divider ui-bar-d" data-bind="visible: $index() === 0"> ' +
+	                          '<span data-bind="ifnot: $index() !== 0">Approval History</span> '+  
+	                       '</li> '+
+	                      '<li style="background:#80FF80 !important;" data-bind="visible: appstatus===true"> '+
+	                            '<a href="#" data-bind="click: $root.curDeal"> '+
+	                              	'(<span data-bind="text: actionDate"> </span>) '+
+	                              	'<span data-bind="text: name"> </span> '+
+	                            '</a> '+
+						'</li>' +
+	                      '<li style="background:#FF8080 !important;" data-bind="visible: appstatus===false"> '+
+	                            '<a href="#" data-bind="click: $root.curDeal"> '+
+	                              	'(<span data-bind="text: actionDate"> </span>) '+
+	                              	'<span data-bind="text: name"> </span> '+
+	                            '</a> '+
+						'</li>' +
+						'</ul> </div>' +
+						'<div id="no-results">No results were found</div>');
+			
+			$('#no-results').hide();
+						
+			// bind the viewmodel to the markup
+			ko.applyBindings(viewModel, $('#newlist')[0]);
+			
+			// trigger JQM to enhance the newly created checkbox div
+			$('#newlist').trigger('create');		
+	 	}
+		 	
+	 	self.DisplayPrevDeal = function() {
+
+	 		DealApprovalCtrl.getPreviouslyViewedId(self.prevDealCB, {escape: true})
+	 	}
+		 	
+	 	// callback from the JavaScript remoting to retrieve previous Id	
+		self.prevDealCB=function(record, event) {
+			if ( (!event) || (event.status) ) {
+				//alert('Previous ID: ' + record[0]);
+				self.curDealForFirstTime(record[0]);			
+			}
+	 	}
+	}
+
+	$( "#detailPage" ).on( "pageshow", function() {
+
+		$('body').addClass('wait');
+
+		//$.mobile.defaultPageTransition = "reveal";
+		$("#approval-list").hide(); 
+		$("#maincontent").hide();
+		
+		if (null==viewModel)
+		{         
+			//$.mobile.loading( 'show', { theme: "a", text: "loading survey", textVisible: true });
+		
+			viewModel=new ApprovalViewModel();
+		
+    		ko.applyBindings(viewModel);
+    		viewModel.DisplayPrevDeal(); 
+    		
+    	}
+    	//add else statement to make $(hidden field) = ""
+
+		$('body').removeClass('wait');
+		
+    });
+    
+    $( "#approval-list" ).on( "pageshow", function() {
+		//$.mobile.defaultPageTransition = "reveal"; 
+		$("#leftPanel").hide();
+		
+		if (null==viewModel)
+		{         
+			//$.mobile.loading( 'show', { theme: "a", text: "loading survey", textVisible: true });
+		
+			viewModel=new ApprovalViewModel();
+		
+    		ko.applyBindings(viewModel);
+    	}
+    	//add else statement to make $(hidden field) = ""
+    });
+    
+    $( "#homePage" ).on( "pageshow", function() {
+		
+		viewModel = null;
+		$('#deallist').html('');
+		//$("#leftPanel").hide();
+		$("#approval-list").hide();
+		$("#maincontent").hide();
+		$("#leftPanel").show();
+		
+    });
+    
+    $( "#detail-detail").on( "pageshow", function() {
+		//$.mobile.defaultPageTransition = "reveal";  
+		
+		if (null==viewModel)
+		{         
+			//$.mobile.loading( 'show', { theme: "a", text: "loading survey", textVisible: true });
+		
+			viewModel=new ApprovalViewModel();
+		
+    		ko.applyBindings(viewModel);
+    	}
+    });
+
+    var viewModel=null;
+
+</script>
+</apex:component>

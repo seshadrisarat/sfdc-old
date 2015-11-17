@@ -1,0 +1,374 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html>
+	<head>
+		<META NAME="keywords" CONTENT="SFDC Account Merger S-Control" />
+		<META NAME="description" CONTENT="S-control to merge a maximum of 2 accounts with a selected account." />
+		<META NAME="author" CONTENT="Salman Sheikh, Kimberly Jansen">
+		<link href="/sCSS/9.0/1179873921000/Theme2/default/elements.css" media="handheld,print,projection,screen,tty,tv"
+			rel="stylesheet" type="text/css" />
+		<link href="/sCSS/9.0/1179873921000/Theme2/default/common.css" media="handheld,print,projection,screen,tty,tv"
+			rel="stylesheet" type="text/css" />
+		<link href="/css/assistive.css" media="aural,braille,embossed" rel="stylesheet" type="text/css" />
+		<link href="/sCSS/9.0/1172698507000/Theme2/dStandard.css" media="handheld,print,projection,screen,tty,tv"
+			rel="stylesheet" type="text/css" />
+		<link href="/sCSS/9.0/1176735894000/Theme2/00D00000000hfMG/00530000000ze2n/dCustom.css"
+			media="handheld,print,projection,screen,tty,tv" rel="stylesheet" type="text/css" />
+		<link href="/sCSS/9.0/1179873921000/Theme2/default/extended.css" media="handheld,print,projection,screen,tty,tv"
+			rel="stylesheet" type="text/css" />
+		<script language="javascript" src="/js/functions.js" type="text/javascript"></script>
+		<script language="javascript" src="/soap/ajax/8.0/connection.js" type="text/javascript"></script>
+		<script language="javascript" src="/dJS/en/library.js" type="text/javascript"></script>
+		<script language="javascript" src="/desktop/desktopAjax.js" type="text/javascript"></script>
+		<script>
+		
+			var bSearchDone = false;
+			var bHasSearch = false;
+
+			// event handler for Form Submit
+			function onFormSubmit()
+			{
+				var frm = document.getElementById("stageForm");
+				var divErrMsg = document.getElementById("divErrorMsg");
+				
+				var cidArray = new Array();
+				cidArray = document.getElementsByName("cid");
+				
+				// check if NEXT button is pressed before the search is done
+				if(cidArray.length < 2)
+				{
+					divErrMsg.innerHTML = "Please perform search operation first.";
+					divErrMsg.style.visibility = "visible";
+					return false;
+				}
+				else
+				{
+					var bAccountSelectedCount = 0;
+				
+					// more than 1 search result exists. Check if any is selected
+					for(var i = 0; i < cidArray.length; i++)
+					{
+						var item = cidArray[i];
+						if(item.checked)
+						{
+							bAccountSelectedCount++;
+						}
+					}
+				
+					// check if any account selected	
+					if(bAccountSelectedCount > 0)
+					{
+						// check if more than the limit is selected
+						 if(bAccountSelectedCount > 2)
+						 {
+							// too many accounts selected
+							divErrMsg.innerHTML = "Please select a maximum of 2 accounts.";
+							divErrMsg.style.visibility = "visible";
+						 }
+						 else
+						 {
+							return true;
+						 }
+					}
+					else
+					{
+						// no account selected
+						divErrMsg.innerHTML = "Please select accounts to merge.";
+						divErrMsg.style.visibility = "visible";
+					}
+				}
+				
+				// cancel form submit due to error
+				return false;	
+			}
+
+			// event handler for Cancel button Click.
+			// return to the Account details page
+			function btnCancelClick()
+			{
+				window.location.href = "/{!Account.Id}";
+			}
+
+		
+			
+		</script>
+		
+		<script>
+		
+			// main entry function for Account Search
+			function findAccounts()
+			{
+				// get the search string
+				var searchString = 	document.getElementById("txtSearchString").value;
+				var divErrMsg = document.getElementById("divErrorMsg");
+				
+				var lstTable = document.getElementById("lstSearchResults");
+				var lstTableBody = lstTable.getElementsByTagName("TBODY")[0];
+				
+				lstTable.style.display = "none";
+				var rowLength = lstTableBody.rows.length;
+				
+				// cleanup the existing search data
+				for(var i = 1; i < rowLength; i++)
+				{
+					lstTableBody.deleteRow(1);
+				}
+				
+				// error: incorrect search criteria
+				if(searchString == null || searchString == "" || searchString.length < 2)
+				{
+					divErrMsg.innerHTML = "Please supply a search string of at least 2 characters.";
+					divErrMsg.style.visibility = "visible";
+				}
+				else
+				{
+					divErrMsg.style.visibility = "hidden";
+					divErrMsg.innerHTML = "";
+					
+					// perform search and display results
+					SOSLSearchAccounts(searchString);
+				}
+			}
+			
+			// function to perform SOSL search and display in table
+			function SOSLSearchAccounts(searchString)
+			{
+				// build the SOSL query
+				var searchQuery = "find {" + searchString +"} in Name fields RETURNING Account(name, id, Site)"
+				var divErrMsg = document.getElementById("divErrorMsg");
+				
+				try
+				{
+					// perform search
+					var result = sforce.connection.search(searchQuery);
+					
+					var baseAccountId = "{!Account.Id}";				
+				
+					if(result) 
+					{
+						var records = result.getArray("searchRecords");
+					
+						if(records.length > 0)
+						{ 
+							// data found
+							// create list table
+							var lstTable = document.getElementById("lstSearchResults");
+							var lstTableBody = lstTable.getElementsByTagName("TBODY")[0];
+							
+							lstTable.style.display = "block";
+				
+							// iterate through the result returned and create dynamic rows
+							for (var i=0; i<records.length; i++) 
+							{
+								var record = records[i].record;
+								var accountSite = "";
+								
+								if(record.Site != null && record.Site != "")
+								{
+									accountSite = record.Site;
+								}
+
+								var row = document.createElement("TR")
+								
+								var th = document.createElement("TD");
+								
+								// for the base account, disable the checkbox
+								if(baseAccountId.substring(0,15) == record.Id.substring(0,15))
+								{
+									th.innerHTML = "<input type='checkbox' id='cid' name='cid' value='" + record.Id + "' disabled>";
+								}
+								else
+								{
+									th.innerHTML = "<input type='checkbox' id='cid' name='cid' value='" + record.Id + "' >";
+								}
+														
+								// column: account name 
+								var td1 = document.createElement("TD");
+								td1.appendChild(document.createTextNode(record.Name));
+								td1.className = " dataCell  ";
+								
+								// column: account site
+								var td2 = document.createElement("TD")
+								td2.appendChild (document.createTextNode(accountSite));
+								td2.className = " dataCell  ";
+								
+								row.appendChild(th);
+								row.appendChild(td1);
+								row.appendChild(td2);
+								
+								row.className = "dataRow even first";
+								row.onblur="if (window.hiOff){hiOff(this);}";
+								row.onfocus="if (window.hiOn){hiOn(this);}";
+								row.onmouseout="if (window.hiOff){hiOff(this);}";
+								row.onmouseover="if (window.hiOn){hiOn(this);}";
+								
+								// add row to table
+								lstTableBody.appendChild(row);
+							}
+						}
+						
+					}
+					else
+					{
+						divErrMsg.innerHTML = "No results.";
+						divErrMsg.style.visibility = "visible";
+					}
+					
+				}
+				catch(ex)
+				{
+					divErrMsg.innerHTML = ex.faultstring;
+					divErrMsg.style.visibility = "visible";
+				}
+			}
+			
+
+		</script>
+		
+		<style type="text/css">
+			body {
+			font-family: 'Arial', 'Helvetica', sans-serif;
+			background-color: #E8E8E8;
+			margin:0;
+			font-size: 10px;
+			}
+			
+			.noSecondHeader
+			{
+				color:#fff;
+			}
+			.secondaryPalette
+			{
+			 	background-color:#236FBD;
+			}
+			.outer
+			{
+				 font-size: 12px;
+			}
+			.content
+			{
+				margin-left:12px;
+			}
+			.errorMsg
+			{
+				margin-top: 5px;
+				font-size: 90%;
+			}
+			.list td, .list th
+			{
+				font-size: 80%;
+			}
+			#divAccountNameSite
+			{
+				font-weight: bold;	
+				display:inline;
+			}
+			#divSearchHelp
+			{
+				font-size: 90%;
+				color: #666;
+				display: inline;
+				font-style: italic;
+			}
+			
+			
+		</style>
+
+	</head>
+
+	<body>	
+		<table class="outer" width="100%" id="bodyTable" border="0" cellspacing="0" cellpadding="0">
+			<!-- Start page content table -->
+			<tr>
+				<td id="bodyCell">
+					<!-- Start page content -->
+					<div class="bPageTitle">
+						<div class="ptBody secondaryPalette">
+							<div class="content">
+								<h1 class="pageType noSecondHeader">Merge Accounts with [Account : {!Account.Name}]</h1>
+							</div>
+						</div>
+					</div>
+					<br>
+					<form id="stageForm" method="POST" name="stageForm" action="/merge/accmergewizard.jsp" onsubmit="return onFormSubmit();">
+					<input type="hidden" name="cid" id="cid" value="{!Account.Id}" />
+					<input type="hidden" id="buttonPressed" name="buttonPressed" value="0">
+					<input type="hidden" id="currentStage" name="currentStage" value="0">
+                                         <input type="hidden" name="retURL" id="retURL" value="/001/o" />
+					<input type="hidden" id="visited_0" name="visited_0" value="1">
+					
+					<div class="bWizardBlock tertiaryPalette">
+						<div class="pbWizardTitle tertiaryPalette" style="background-color:#8A9EBE;font-size: 95%">
+							<div class="ptRightTitle">
+								Step 1 of 2
+							</div>
+							<h2>
+								Step 1. Select the records to merge.
+							</h2>
+						</div>
+						<div class="pbBody">
+							<div class="pbWizardHeader">
+								<div class="pbTopButtons" style="white-space: nowrap">
+									<input value=" Next " class="btn" name="goNext" title="Next" type="submit"  ID="Submit1"/>
+									<input value="Cancel" class="btnCancel" name="cancel" title="Cancel" type="button" onclick="btnCancelClick()" ID="Button1"/>
+								</div>
+							</div>
+							<div class="pbDescription" style="font-size:90%;">
+								Please select up to two records that you wish to merge with this Account: <div id="divAccountNameSite"> {!Account.Name} - {!Account.Site}</div></div>
+<div class="pbWizardBody" style="font-size:90%">Separate words with OR and AND to include multiple terms in your search. <br/><br/>
+Note that you must have appropriate permissions to merge accounts.<br/><br/>
+							</div>
+							<div class="pbWizardBody">
+								<input id="txtSearchString" maxlength="80" name="txtSearchString" size="20" title="Find Accounts"
+									type="text" /> &nbsp; <input value="Find Accounts" class="btn" name="srchbutton" title="Find Accounts" type="button"
+									ID="srchbutton" onclick="findAccounts()" /> <div id="divSearchHelp">(E.g. Ge*, G?a*, *Ge*, Ge* or Di*)</div> 
+								<div id="divErrorMsg" style="visibility:hidden" class="errorMsg">Error Messages</div>
+								<!-- Begin RelatedListElement -->
+								<div class="bRelatedList">
+									<!-- Begin ListElement -->
+									<!-- motif: Account -->
+									<div class="bNext">
+										<div class="withFilter">
+											<div class="clearingBox"></div>
+										</div>
+									</div>
+									<!-- WrappingClass -->
+									<div class="listRelatedObject accountBlock">
+										<div class="bPageBlock secondaryPalette">
+											<div class="pbHeader"></div>
+											<div class="pbBody">
+												<table class="list" border="0" cellspacing="0" cellpadding="0" ID="lstSearchResults" style="display:none">
+													<tr class="headerRow">
+														<th scope="col" class="booleanColumn" width="50px">&nbsp;</th>
+														<th scope="col" class="" width="500px;">Account</th>
+														<th scope="col" class="" width="200px;">Site</th>
+													</tr>
+												</table>
+											</div>
+											<div class="pbFooter secondaryPalette">
+												<div class="bg"></div>
+											</div>
+										</div>
+									</div>
+									<div class="listElementBottomNav"></div>
+									<!-- End ListElement -->
+									<!-- motif: Account -->
+									<!-- End ListElement -->
+								</div>
+								<!-- End RelatedListElement -->
+							</div>
+							<div class="pbWizardFooter">
+								<div class="pbBottomButtons">
+									<input value=" Next " class="btn" name="goNext" title="Next" type="submit" ID="Submit2"/>
+									<input value="Cancel" class="btnCancel" name="cancel" title="Cancel" type="button" onclick="btnCancelClick()" ID="Button2"/>
+								</div>
+							</div>
+						</div>
+					</div>
+					</form>
+					<!-- End page content -->
+				</td>
+			</tr>
+		</table>
+
+	</body>
+</html>

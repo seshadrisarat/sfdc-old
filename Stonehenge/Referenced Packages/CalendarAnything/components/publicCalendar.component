@@ -1,0 +1,347 @@
+<apex:component controller="SLCA2.CA_PublicCalendar_controller">
+
+<apex:stylesheet value="{!URLFOR($Resource.SLCA2__Calendar, 'fullcalendar/fullcalendar.css')}" />
+<apex:stylesheet value="{!URLFOR($Resource.SLCA2__Calendar, 'themes/smoothness/jquery-ui-1.8.16.custom.css')}" />
+<apex:stylesheet value="{!URLFOR($Resource.SLCA2__CalendarAnything, 'popFrames/popFramesStyles.css')}" />
+<apex:stylesheet value="{!URLFOR($Resource.SLCA2__Calendar, 'css/ui-hover-controller.css')}" />
+
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__Calendar, 'js/jquery-1.6.1.min.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__Calendar, 'js/jquery-ui-1.8.11.custom.min.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__Calendar, 'fullcalendar/fullcalendar.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__Calendar, 'js/jquery.qtip-1.0.0.min.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__Calendar, 'js/ui-hover-controller.js')}" />
+
+<apex:includeScript value="{!URLFOR($Resource.SLCA2__CalendarAnything, 'popFrames/popFramesScript.js')}"/>
+
+<style>
+    .errorClass {
+        text-align: center;
+        font-family: sans-serif;
+        font-size: 20px;
+        font-weight: bold;
+        color: #a00;
+    }
+    .errorClass img {
+        width: 500px;
+    }
+    #ui-more-content {
+        width: 100%;
+        height: 100%;
+        border: none;
+    }
+    
+    .popDiv .wrapper .mainPart .body {
+        padding: 15px;
+    }
+    .fc-more-link {
+        background: none;
+        border: none;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    .all_events_link {
+        display: block;
+        font-size: 16px;
+        color: #FFF !important;
+        padding: 0 2px;
+        text-decoration: none;
+        border-bottom-color: #888;
+        border-bottom-left-radius: 3px;
+        border-bottom-right-radius: 3px;
+        border-top-left-radius: 3px;
+        border-top-right-radius: 3px;
+        border: 1px solid #888;
+        background-color: {!CurrentCalendar.eventColor__c};
+    }
+    .all_events_link:hover {
+        text-decoration: underline;
+    }
+    
+    .fc-event{cursor: pointer;}
+    
+    .siteHoverDiv h2, .siteHoverDiv h3{
+        margin:0px;
+    }
+</style>
+
+<script>
+	
+    (function($){
+    jQuery(document).ready(function() {
+        
+        String.prototype.parseColor = function () {
+			var str = this;
+			var average = 0;
+			var revertColor = '#fff';
+			if (str.substr(0,1) == '#') {
+				var component = str.replace('#','');
+				average = Math.round((parseInt(component.substr(0,2),16) + parseInt(component.substr(2,16),10) + parseInt(component.substr(4,2),16)) / 3);
+				if (average > 88) {
+					revertColor = '#000';
+				}
+			} else if (str.substr(0,3) == 'rgb') {
+				var components = str.replace('rgb(','').replace(')','').split(', ');
+				average = Math.round((parseInt(components[0],10) + parseInt(components[1],10) + parseInt(components[2],10)) / 3);
+				if (average > 172) {
+					revertColor = '#000';
+				}
+			}
+			var res = {
+				average : average,
+				revertColor : revertColor
+			}
+			
+			return res;
+		}
+        
+        function serialize(data) {
+            var retStr = '';
+            for (var item in data) {
+                if (typeof(data[item]) == 'function') {
+                    retStr += 'function\n';
+                } else {
+                    retStr += item + ': ' + data[item] + '\n';
+                }
+            }
+            return retStr;
+        }
+        
+		var controller;
+		if ('CA_PublicCalendar_controller' in window) {
+			controller = CA_PublicCalendar_controller;
+		} else {
+			controller = SLCA2.CA_PublicCalendar_controller;
+		}
+		
+        var widgetHeight = $(window).height()-230;
+        if (widgetHeight < 520) widgetHeight = 520; //Change min height to 520 px
+        
+        jQuery('body').HoverController();
+        
+        var holder = null;
+        var holderBody = '';
+        
+        if (holder == null) {
+            holder = FramesController.generateFrame();
+            holderBody = jQuery(holder).find(".body")[0];
+            jQuery(holder).css('display','none');
+            document.body.appendChild(holder);
+        }
+        
+        var isElementMouseOver = false;
+        var isHolderMouseOver = false;
+        
+        function checkElements() {
+            setTimeout(function () {
+                if (!isElementMouseOver && !isHolderMouseOver) {
+                    $(holder).hide();
+                }
+            },100);
+        }
+        
+        $(holder).mouseout(function () {
+            //$(holder).hide();
+            isHolderMouseOver = false;
+            checkElements();
+        });
+        $(holder).mouseover(function () {
+            isHolderMouseOver = true;
+        });
+        
+        jQuery('#calendarWidget').fullCalendar({
+            header: {
+                left: 'prev,next',
+                center: 'title',
+                right: 'agendaDay,agendaWeek,month'
+            },
+            slotMinutes: 15,
+            editable: true,
+            events: {!CompileJsonStringForEvents},
+            height: widgetHeight,
+            theme: true,
+            eventAfterRender: function(event, element, view) {
+                /* ==== Controller of calendar hover window ==== */
+                //FramesController.AttachFramesToClass('fc-event');
+				
+				var cl = $(element).css('background-color');
+				
+                var colorInst = cl.parseColor();
+               	$(element).find('span').css('color',colorInst.revertColor);
+               	$(element).find('div').css('color',colorInst.revertColor);
+                $(element).click(function (moveEvent) {
+                    isElementMouseOver = true;
+                    if ($(holder).css('display') == 'none') {
+                        FramesController.setPosition(holder, FramesController.mousePageXY(moveEvent));
+                    }
+                    $(holderBody).html('Please wait...');
+                    var bgColor = $(this).css('background-color');
+                    var sId = $(this).attr('id'),
+                        aId = sId.split('_');
+                    if (aId[1] == undefined || aId[1] == 'undefined') {
+                        aId[1] =  '{!CurrentCalendar.id}';
+                        sId = aId[0] + '_' + aId[1];
+                    }
+                    
+                    controller.getEventHoverContent(sId, function (data) {
+                        try {
+                            var bodyhtml = '<table width="100%">';
+                            var values = data;
+                            if (values.length > 0) {
+                                for (var i=0; i<values.length; i++) {
+                                    var sLabel = values[i].Label != undefined 
+                                        ? values[i].Label 
+                                        : (values[i].valuesMap.label != undefined ? values[i].valuesMap.label : ''); 
+                                    var sValue = values[i].Value != undefined 
+                                        ? values[i].Value 
+                                        : (values[i].value_p != undefined ? values[i].value_p : ''); 
+                                    bodyhtml += '<tr>' +
+                                        '<td>' + sLabel + '</td>' +
+                                        '<td>' + sValue +
+                                        '</td>' +
+                                    '</tr>';
+                                }
+                            }
+                            bodyhtml += '</table>';
+                            var sHoverHTML = 
+                                '<div class="siteHoverDiv" style="background-color:' + bgColor + '; padding:5px; color:' + colorInst.revertColor + ';">'
+                                + '<h2 class="mainTitle calendarNameBox">{!HTMLENCODE(currentCalendar.Name)}</h2>'
+//                                + '<h3>{!calendarObjectLabel}</h3>'
+                                + '</div>'
+                                + bodyhtml;
+                                  
+                            $(holderBody).html(sHoverHTML);
+                        } catch (ex) {}
+                    });
+                    $(holder).show();
+                });
+                $(element).mouseout(function () {
+                    isElementMouseOver = false;
+                    checkElements();
+                });
+            }
+        });
+        
+        jQuery('#ui-more-window').dialog({
+            bgiframe: true,
+            autoOpen: false,
+            width: 400,
+            height: 400,
+            modal: true,
+            show: 'blind',
+            hide: 'blind',
+            zIndex: 75
+        });
+        
+        jQuery('.fc-more-link').live('click',function () 
+        {
+            var currDate = jQuery(this).attr('id');
+            var dateParts = currDate.split('-');
+            var dateInst = new Date(parseInt(dateParts[2],10),parseInt(dateParts[0],10) - 1,parseInt(dateParts[1],10));
+            jQuery('#ui-more-window').dialog('option','title','[' + dateInst.toLocaleDateString() + ']');
+            jQuery('#ui-more-content').html("Please, wait...");
+            
+            controller.getEventsContent(currDate, '{!CurrentCalendar.Id}', function(data) 
+            {
+                var bodyhtml = '<table width="100%">';
+                if (data) 
+                {
+                    for (var i=0; i<data.length; i++) 
+                    {
+                        bodyhtml += '<tr>' +
+                            '<td class="fc-event-cell" id="' + data[i].Id + '_{!CurrentCalendar.Id}">' +
+                                '<a class="all_events_link">' + 
+                                (data[i].Name == 'null' || data[i].Name == 'undefined' || data[i].Name == undefined ? 'No name' : data[i].Name) + '</a>' +
+                            '</td>' +
+                        '</tr>';
+                    }
+                }
+                else
+                {
+                    bodyhtml += '<tr><td><p>Calendar does not exists.</p></td></tr>';
+                }
+                bodyhtml += '</table>';
+                jQuery('#ui-more-content').html(bodyhtml);
+            });
+
+            //jQuery('#ui-more-content').attr('src','/apex/AllEvents?date='+currDate+'&cid={!currentCalendar.Id}');
+            jQuery('#ui-more-window').dialog('open');
+            
+            
+            
+            
+            $('.fc-event-cell').live('click',function (moveEvent) {
+                isElementMouseOver = true;
+                if ($(holder).css('display') == 'none') {
+                    FramesController.setPosition(holder, FramesController.mousePageXY(moveEvent));
+                }
+                $(holderBody).html('Please wait...');
+                var sId = $(this).attr('id'),
+                    aId = sId.split('_');
+                if (aId[1] == undefined || aId[1] == 'undefined') {
+                    aId[1] =  '{!CurrentCalendar.id}';
+                    sId = aId[0] + '_' + aId[1];
+                }
+                
+                controller.getEventHoverContent(sId, function (data) {
+                    try {
+                        var bodyhtml = '<table width="100%">';
+                        var values = data;
+                        if (values.length > 0) {
+                            for (var i=0; i<values.length; i++) {
+                                var sLabel = values[i].Label != undefined 
+                                    ? values[i].Label 
+                                    : (values[i].valuesMap.label != undefined ? values[i].valuesMap.label : ''); 
+                                var sValue = values[i].Value != undefined 
+                                    ? values[i].Value 
+                                    : (values[i].value_p != undefined ? values[i].value_p : '');                             
+                                bodyhtml += '<tr>' +
+                                    '<td>' + sLabel + 
+//                                        values[i].valuesMap.label +
+                                    '</td>' +
+                                    '<td>' + sValue + 
+//                                        (values[i].valuesMap.value ? values[i].valuesMap.value : '') +
+                                    '</td>' +
+                                '</tr>';
+                            }
+                        }
+                        bodyhtml += '</table>';
+                        $(holderBody).html('<h3>{!currentCalendar.targetObjectName__c}</h3>' + bodyhtml);
+                    } catch (ex) {}
+                });
+                $(holder).show();
+            });
+            $('.fc-event-cell').live('mouseout',function () {
+                isElementMouseOver = false;
+                checkElements();
+            });
+            
+        });
+        
+        });
+    })(jQuery);
+</script>
+
+<style type='text/css'>
+
+    #calendar {
+        width: 100%;
+        margin: 0 auto;
+    }
+
+</style>
+<div id='testDiv'></div>
+<div id='errorMessage' class="errorClass" style="display:{!IF(errorMessage != '','block','none')};">
+    <b style="color:#f00;">Error: </b>{!errorMessage}<br /><br />
+    <img src="{!URLFOR($Resource.calendar_logo)}" />
+</div>
+<div id='calendar' style="display:{!IF(errorMessage != '','none','block')};">
+    <div id='calendarWidget'></div>
+</div>
+
+<div id="ui-more-window" style="display:none;">
+    <div id="ui-more-content"></div>
+    <!--<iframe id="ui-more-content"></iframe>-->
+</div>
+<div id="hoverContainer"></div>
+{!testStr}
+</apex:component>

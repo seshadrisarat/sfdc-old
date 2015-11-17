@@ -1,0 +1,468 @@
+<apex:page controller="i.CtlPendingAddrs" tabStyle="i__Email__c" sidebar="false" title="Emails: My Pending Contacts and Leads" action="{!checkForCustomPage}" rendered="{!renderOK}">
+<apex:stylesheet value="{!$Resource.i__aastyles}"/>
+<apex:stylesheet value="{!$Resource.i__container}"/>
+<apex:includeScript value="{!$Resource.i__prototype}"/>
+<apex:includeScript value="{!$Resource.i__effects}"/>
+<apex:includeScript value="{!$Resource.i__yahoo_dom_event}"/>
+<apex:includeScript value="{!$Resource.i__animation_min}"/>
+<apex:includeScript value="{!$Resource.i__container_min}"/>
+
+<apex:outputText value="{!aaTabSet}" escape="false"/>
+<apex:outputText rendered="{!isAAUser}">
+
+<apex:form >
+
+<apex:actionFunction name="ajaxNextPage" action="{!nextPage}" immediate="true" rerender="NewEmailAddrs" onbeforedomupdate="hideWaitPanel();" oncomplete="i__aapendingaddrsLoad(true);"/>
+<apex:actionFunction name="ajaxPrevPage" action="{!prevPage}" immediate="true" rerender="NewEmailAddrs" onbeforedomupdate="hideWaitPanel();" oncomplete="i__aapendingaddrsLoad(true);"/>
+<apex:actionFunction name="ajaxMorePage" action="{!morePage}" immediate="true" rerender="NewEmailAddrs" onbeforedomupdate="hideWaitPanel();" oncomplete="i__aapendingaddrsLoad(true);"/>
+<apex:actionFunction name="ajaxLessPage" action="{!lessPage}" immediate="true" rerender="NewEmailAddrs" onbeforedomupdate="hideWaitPanel();" oncomplete="i__aapendingaddrsLoad(true);"/>
+<apex:actionFunction name="ajaxMboxAll" action="{!mboxAll}" immediate="true" rerender="NewEmailAddrs" onbeforedomupdate="hideWaitPanel();" oncomplete="i__aapendingaddrsLoad(true);"/>
+<apex:actionFunction name="ajaxMboxOut" action="{!mboxOut}" immediate="true" rerender="NewEmailAddrs" onbeforedomupdate="hideWaitPanel();" oncomplete="i__aapendingaddrsLoad(true);"/>
+<apex:actionFunction name="ajaxMboxIn"  action="{!mboxIn}"  immediate="true" rerender="NewEmailAddrs" onbeforedomupdate="hideWaitPanel();" oncomplete="i__aapendingaddrsLoad(true);"/>
+<script type="text/javascript">
+var i__aapendingaddrs_onload_cached = window.onload; window.onload = function() { i__aapendingaddrsLoad(true); if (i__aapendingaddrs_onload_cached != null) i__aapendingaddrs_onload_cached(); }
+
+//-------------------------------------------------------------------------------
+// Event Handlers
+//-------------------------------------------------------------------------------
+function i__aapendingaddrsLoad(reset_actions) {
+	if (reset_actions) getSelects('').each(resetSelectActions);
+	getSelects('').each(onSelectChanged); // hide all rows in input field tables
+	getSelects('one').each(setDefaultAccount);
+	$$('body')[0].addClassName('yui-skin-sam');
+	}
+
+function onSelectChanged(select) {
+  if (select.value == 'xx' && select.selectedIndex != 0) resetSelectActions(select); // twiddle the blank padding actions back to 'Do Nothing'
+  var all = $$(getFieldRowSelector(select));
+  var on = $$(getFieldRowSelector(select, select.value));
+	var tbl = getFieldTable(select);
+	var tblViz = tbl.style.display != 'none';
+	
+	if (on.length == 0 && tblViz) hideFieldTable(tbl);		// fully hide visible table
+	else {
+	  all.each(hide); 																		// hide all fieldrows
+	  on.each(function(i) { show(i, 'table-row'); }); 		// show the relevant ones
+		if (on.length > 0 && !tblViz) showFieldTable(tbl);	// expose invisible table
+		}
+  }
+
+function onSuggestChange(suggest) {
+	var aName = suggest.value == '-' ? '' : suggest.options[suggest.selectedIndex].text;
+	var aId = suggest.value == '-' ? '' : suggest.options[suggest.selectedIndex].value;
+	setSuggestedAccount('#' + suggest.id.replace(/s_suggestmany/,'f_many'), aName, aId); // .replace() xforms the suggest drop-down ID to the ID of the entire row for this pending addr
+	}
+
+
+//-------------------------------------------------------------------------------
+// initial window load
+//-------------------------------------------------------------------------------
+function resetSelectActions(select) {
+	select.value = 'xx'; // set action to "Do Nothing"
+	// bug 915: hide unsupported actions (eg, if User doesn't have Lead creation rights)
+	if (!hasInput(firstSingleTypeRow(select,'nl'))) hideActions(select, ['nl','ol']);
+	if (!hasInput(firstSingleTypeRow(select,'nc'))) {
+		hideActions(select, ['nc','oc']);
+		$$('span.massSetContact').each(hide);
+		}
+	}
+
+// first field row of a single type (contact/lead) vs. both-contacts-and-leads (first,last)
+function firstSingleTypeRow(select, rowtype) {
+	return $$(getFieldRowSelector(select, rowtype)).find(function (i) { return i.className == 'if ' + rowtype; } );
+	}
+
+// does the given element have an <input> or <select> descendant?
+function hasInput(e) {
+	return e.select('input').size() > 0 || e.select('select').size() > 0 || e.select('textarea').size() > 0;
+	}
+
+function hideActions(select, actions) {
+	var opts = $A(select.options).clone();
+	select.options.length = 1; // always keep first option ("Do Nothing")
+	for (var i=1; i < opts.length; i++) if (!actions.include(opts[i].value)) select.options[select.options.length] = opts[i];
+	}
+
+//-------------------------------------------------------------------------------
+// field table show/hide effects
+//-------------------------------------------------------------------------------
+
+function hideFieldTable(tbl) {
+	new Effect.BlindUp(Element.up(tbl), {duration:0.25});
+	var hideTable = function() { tbl.style.display = 'none'; };
+	setTimeout(hideTable, 250);
+	}
+
+function showFieldTable(tbl) {
+	hide(Element.up(tbl)); // hide the wrapper div
+	show(tbl,'table');     // show the table, but it's invisible per above
+	new Effect.BlindDown(Element.up(tbl), {duration:0.25}); // now show the wrapper div
+	}		
+
+//-------------------------------------------------------------------------------
+// Called from links on page
+//-------------------------------------------------------------------------------
+function setSelects(matchtype, value) {
+	getSelects(matchtype).each(function(i) { i.value = value; onSelectChanged(i); });
+	}
+
+function hideNewUserInfo() {
+	new Effect.BlindUp('newUserInfo', {duration:0.25});
+	ajaxHideUserInfo();
+	}
+
+function nextPage() { showWaitPanel(); ajaxNextPage(); }
+function prevPage() { showWaitPanel(); ajaxPrevPage(); }
+function morePage() { showWaitPanel(); ajaxMorePage(); }
+function lessPage() { showWaitPanel(); ajaxLessPage(); }
+
+function mboxAll() { showWaitPanel(); ajaxMboxAll(); }
+function mboxOut() { showWaitPanel(); ajaxMboxOut(); }
+function mboxIn()  { showWaitPanel(); ajaxMboxIn(); }
+
+
+//-------------------------------------------------------------------------------
+// modal 'Loading...' popup
+//-------------------------------------------------------------------------------
+var waitPanel;
+function showWaitPanel(msg) {
+	if (!waitPanel) waitPanel = newWaitPanel();
+	if (!msg) msg = 'Loading...';
+	$('waitPanelHeaderText').innerHTML = msg;
+	waitPanel.show();
+	}
+function hideWaitPanel() {
+	if (waitPanel != null) waitPanel.hide();
+	}
+
+function newWaitPanel() {
+	var ret = new YAHOO.widget.Panel("waitPanelDiv",  {
+		 width:"240px"
+		,fixedcenter: true
+		,underlay:"matte"
+	  ,draggable:false 
+	  ,zindex:4
+	  ,modal:true
+	  ,visible:false
+		,effect:{effect:YAHOO.widget.ContainerEffect.FADE, duration:0.25}
+		});
+	ret.render($$('body')[0]); // render to body prevents IE bug wherein panel is below mask
+	return ret;
+	}
+
+//-------------------------------------------------------------------------------
+// Saving contacts/leads
+//-------------------------------------------------------------------------------
+
+function startSave() {
+	showWaitPanel('Saving...');
+	window.scrollTo(0,0); // case 882: scroll to top so bottom-scroll screen doesn't go blank when fieldtables collapse
+	getSelects('').each(showSaveStatus);
+	$$('input.btnSaveAddrs').each(hide);
+	$$('div.btnSavingText').each(function(i) { i.style.display = 'block'; });
+	hideOldResults();
+	}
+
+function showSaveStatus(select) {
+	if (select.value == 'xx') return;
+	hideFieldTable(getFieldTable(select));
+	hide(Element.up(select));
+	getStatusDiv(select).style.display = 'block';
+	}
+
+// find all rows that hold old results ('Created new Contact' etc) and blind 'em up - slowish
+function hideOldResults() {
+	$$('div.actionResult').each(function(div) {
+		var id = div.id.replace(/^actionResult_/,''); // extract the addr ID from the div ID
+		$$('div.rollup_' + id).each(function(i) { new Effect.BlindUp(i, {duration:0.5}); });
+		});
+	}
+
+//-------------------------------------------------------------------------------
+// Utility Functions
+//-------------------------------------------------------------------------------
+function setDefaultAccount(select) {
+	var suggestedName = $$(getFieldRowSelector(select) + ' td.suggestedAcct').first();
+	var suggestedId = $$(getFieldRowSelector(select) + ' td.suggestedAcctId').first();
+	setSuggestedAccount(getFieldRowSelector(select), unescapeHTML(suggestedName.innerHTML), unescapeHTML(suggestedId.innerHTML));
+	}
+
+// Need to set the account name input (visible), plus the hidden account Id and "old account name" hidden field
+// (this is what SFDC does on ambiguous-typed-name error, which makes the account name field a drop-down)
+function setSuggestedAccount(addrRowId, aName, aId) {
+	var create = $$(addrRowId + ' td.createInAcct span.lookupInput').first(); // the 'create in account' input field
+	if (create == null) return; // happens if user doesn't have contact creation rights
+	var aNameField = create.firstDescendant();    // visible account name field
+	var aOldField = $(aNameField.id + '_lkold');  // hidden old name input has same ID as name field plus '_lkold' suffix
+	var aIdField = $(aNameField.id + '_lkid');    // hidden ID input has same ID as name field plus '_lkid' suffix
+	aNameField.value = aName;
+	aOldField.value = aName;
+	aIdField.value = aId;
+	}
+
+function getFieldRowSelector(select, rowtype) {
+  if (rowtype == null) rowtype = 'if'; // all rows
+  var id = Element.up(select).id.replace(/^s/, 'f'); /* s_<type>_<id> -> f_<type>_<id> */
+  return '#' + id + ' tr.' + rowtype;
+  }
+
+function getFieldTable(select) { return $(Element.up(select).id.replace(/^s/, 'f')); } 			// s_<type>_<id> -> f_<type>_<id>
+function getStatusDiv(select)  { return $(Element.up(select).id.replace(/^s/, 'status')); } // s_<type>_<id> -> status_<type>_<id>
+function getErrorDiv(select)   { return $(Element.up(select).id.replace(/^s/, 'error')); } 	// s_<type>_<id> -> error_<type>_<id>
+
+function getSelects(matchtype) {
+	return $$('span.select').findAll(function(i) { return i.id.indexOf('s_' + matchtype) == 0; }).collect(function(i) { return Element.firstDescendant(i); });
+	}
+
+// Visibility Toggles
+function hide(e) {
+	e = $(e);
+	if (e == null) return;
+  e.style.visibility = 'hidden';
+  e.style.display = 'none';
+  }
+
+function show(e, display) { /* note 'display' is ignored to use stylesheet value instead; as IE doesn't recognize 'table-row' */
+	e = $(e);
+	if (e == null) return;
+  e.style.display = '';
+  e.style.visibility = 'visible';
+  }
+</script>
+
+<br/>
+<apex:pageBlock title="New Email Addresses" id="NewEmailAddrs">
+<apex:pageBlockButtons >
+<apex:outputPanel >
+<input class="btn btnSaveAddrs" type="submit" style="margin:2px;" onclick="return false;" value="Save"/>
+<div style="margin:3px;" class="saveStatus btnSavingText">Saving...</div>
+<apex:actionSupport event="onclick" action="{!saveActions}" rerender="NewEmailAddrs" onsubmit="startSave();" onbeforedomupdate="hideWaitPanel();" oncomplete="i__aapendingaddrsLoad(false);"/>
+</apex:outputPanel>
+</apex:pageBlockButtons>
+
+<span style="display:none;visibility:hidden;">Account Query: {!pendingPager.acctQueryRows} / {!pendingPager.acctQueryLimit}</span>
+
+<apex:outputText escape="false" rendered="{!userHasManyAddrs}">
+	<span style="font-size:91%;padding-right:10px;">Show mail for:&nbsp;&nbsp;
+		<apex:selectList size="1" value="{!selectedUserAddr}" style="font-size:11px;font-family:'Arial','Helvetica',sans-serif;">
+			<apex:selectOptions value="{!userAddrs}"/>
+			<apex:actionSupport event="onchange" action="{!refreshPager}" rerender="NewEmailAddrs" onsubmit="showWaitPanel();" onbeforedomupdate="hideWaitPanel();" oncomplete="i__aapendingaddrsLoad(true);"/>
+		</apex:selectList>
+	</span>
+</apex:outputText>
+
+<apex:outputText escape="false" value="{!mailBoxChooser}"/>
+
+<div style="height:10px;"/>
+
+<apex:outputText escape="false" value="{!pendingPager.pagerLinks}"/>
+
+<apex:outputText rendered="{!pendingPager.hasMatchOne}">
+
+<div class="aaTableHdr matchOneHdr">Addresses that match one Account</div>
+
+<apex:dataTable value="{!pendingPager.matchOne}" var="each" cellPadding="4" width="100%" styleClass="list aaPending" headerClass="headerRow" rowClasses="dataRow odd, dataRow even">
+<apex:column style="vertical-align:top;">
+	<apex:facet name="header">Address</apex:facet>
+	<div class="rollup_{!each.proxyaddr.Id}"><a href="mailto:{!each.proxyaddr.FullAddr}">{!each.proxyaddr.FullAddr}</a></div>
+</apex:column>
+<apex:column styleClass="col{!each.fromTo}" style="vertical-align:top;padding-left:13px;">
+	<apex:facet name="header">Last email...</apex:facet>
+	<div class="rollup_{!each.proxyaddr.Id}"><a href="/{!each.Msg.Id}?retURL={!returl}">{!each.subject}</a><apex:outputText rendered="{!each.hasCase}"><span class="case">[<a href="/{!each.msg.i__Case__c}">Case</a>]</span></apex:outputText></div>
+</apex:column>
+<apex:column style="vertical-align:top;">
+	<apex:facet name="header">Sent</apex:facet>
+	<div class="rollup_{!each.proxyaddr.Id}">{!each.msgDate}</div>
+</apex:column>
+<apex:column style="vertical-align:top;">
+	<apex:facet name="header">Action<span class="massSetContact">(<a href="#" onclick="setSelects('one','nc');return false;">Set these to "Create Contact</a>")</span></apex:facet>
+	<div class="rollup_{!each.proxyaddr.Id}">
+	<apex:outputText rendered="{!each.hasActionResult}"><div style="font-style:italic;" class="actionResult" id="actionResult_{!each.proxyaddr.Id}"><apex:outputText escape="false" value="{!each.actionResult}"/></div></apex:outputText>
+	<div id="status_one_{!each.proxyaddr.Id}" class="saveStatus">Saving...</div>
+	<apex:outputText rendered="{!NOT(each.hasActionResult)}">
+		<span id="s_one_{!each.proxyaddr.Id}" class="select"> <!-- can't stick this ID on the selectlist w/o apex getting mad -->
+		<apex:selectList size="1" value="{!each.action}" onchange="onSelectChanged(this);">
+			<apex:selectOptions value="{!actions}"/>
+		</apex:selectList>
+		</span>
+	</apex:outputText>
+</div></apex:column>
+
+<apex:column style="vertical-align:top;padding:0px;width:310px;"><div class="rollup_{!each.proxyaddr.Id}">
+	<apex:outputText rendered="{!NOT(each.hasActionResult)}">
+		<apex:outputText rendered="{!each.hasActionError}"><div id="error_one_{!each.proxyaddr.id}" class="actionError" style="visibility:visible;display:block;">Error: {!each.actionError}</div></apex:outputText>
+		<table class="list aaPendingFields" style="display:none;" cellPadding="2" id="f_one_{!each.proxyaddr.Id}">
+			<tr class="if nc nl np"><td>First Name</td><td><apex:inputText value="{!each.proxyaddr.FirstName}"/></td></tr>
+			<tr class="if nc nl np"><td>Last Name</td><td class="required"><apex:inputText value="{!each.proxyaddr.LastName}"/></td></tr>
+			<tr class="if np"><td>Record Type</td><td class="required"><apex:selectList size="1" value="{!each.paRecordType}"><apex:selectOptions value="{!paTypes}"/></apex:selectList></td></tr>
+			<tr class="if"><td>Suggested Account</td><td class="suggestedAcct">{!each.firstAccount.Name}</td></tr> <!-- never visible, but needed to set DefaultAcct -->
+			<tr class="if"><td>Suggested Account Id</td><td class="suggestedAcctId">{!each.firstAccount.Id}</td></tr> <!-- never visible, but needed to set DefaultAcct -->
+			<tr class="if nc"><td>Create in Account</td><td class="createInAcct"><apex:inputField value="{!each.newcontact.AccountId}"/></td></tr>
+			<tr class="if nc"><td><span class="helptext">Need a new Account?</span></td><td><span class="helptext"><a href="/001/e" target="_new_acct">Click here</a></span></td></tr>
+			<tr class="if nc np"><td>Notes</td><td><apex:inputField value="{!each.newcontact.Description}"/></td></tr>
+			<tr class="if nl"><td>Company</td><td class="required"><apex:inputField value="{!each.newlead.Company}" required="false"/></td></tr>
+			<tr class="if nl"><td>Lead Source</td><td><apex:inputField value="{!each.newlead.LeadSource}"/></td></tr>
+			<tr class="if nl"><td>Notes</td><td><apex:inputField value="{!each.newlead.Description}"/></td></tr>
+			<tr class="if oc"><td>Contact</td><td class="required"><apex:inputField value="{!each.oldcontact.i__Contact__c}" required="false"/></td></tr>
+			<tr class="if ol"><td>Lead</td><td class="required"><apex:inputField value="{!each.oldlead.i__Lead__c}" required="false"/></td></tr>
+		</table>
+	</apex:outputText>
+</div><div class="rollup_{!each.proxyaddr.Id}" style="height:0px;">&nbsp;</div></apex:column> <!-- 2nd div is so IE shows the cell border, which it won't if cell is empty -->
+</apex:dataTable>
+<br/>
+</apex:outputText>
+
+
+<apex:outputText rendered="{!pendingPager.hasMatchMany}">
+
+<div class="aaTableHdr matchManyHdr">Addresses that match multiple Accounts</div>
+
+<apex:dataTable value="{!pendingPager.matchMany}" var="each" cellPadding="4" width="100%" styleClass="list aaPending" headerClass="headerRow" rowClasses="dataRow odd, dataRow even">
+<apex:column style="vertical-align:top;">
+	<apex:facet name="header">Address</apex:facet>
+	<div class="rollup_{!each.proxyaddr.Id}"><a href="mailto:{!each.proxyaddr.FullAddr}">{!each.proxyaddr.FullAddr}</a></div>
+</apex:column>
+<apex:column styleClass="col{!each.fromTo}" style="vertical-align:top;padding-left:13px;">
+	<apex:facet name="header">Last email...</apex:facet>
+	<div class="rollup_{!each.proxyaddr.Id}"><a href="/{!each.Msg.Id}?retURL={!returl}">{!each.subject}</a><apex:outputText rendered="{!each.hasCase}"><span class="case">[<a href="/{!each.msg.i__Case__c}">Case</a>]</span></apex:outputText></div>
+</apex:column>
+<apex:column style="vertical-align:top;">
+	<apex:facet name="header">Sent</apex:facet>
+	<div class="rollup_{!each.proxyaddr.Id}">{!each.msgDate}</div>
+</apex:column>
+<apex:column style="vertical-align:top;">
+	<apex:facet name="header">Action<span class="massSetContact">(<a href="#" onclick="setSelects('many','nc');return false;">Set these to "Create Contact</a>")</span></apex:facet>
+	<div class="rollup_{!each.proxyaddr.Id}">
+	<apex:outputText rendered="{!each.hasActionResult}"><div style="font-style:italic;" class="actionResult" id="actionResult_{!each.proxyaddr.Id}"><apex:outputText escape="false" value="{!each.actionResult}"/></div></apex:outputText>
+	<div id="status_many_{!each.proxyaddr.Id}" class="saveStatus">Saving...</div>
+	<apex:outputText rendered="{!NOT(each.hasActionResult)}">
+		<span id="s_many_{!each.proxyaddr.Id}" class="select"> <!-- can't stick this ID on the selectlist w/o apex getting mad -->
+		<apex:selectList size="1" value="{!each.action}" onchange="onSelectChanged(this);">
+			<apex:selectOptions value="{!actions}"/>
+		</apex:selectList>
+		</span>
+	</apex:outputText>
+</div></apex:column>
+
+<apex:column style="vertical-align:top;padding:0px;width:330px;"><div class="rollup_{!each.proxyaddr.Id}">
+	<apex:outputText rendered="{!NOT(each.hasActionResult)}">
+		<apex:outputText rendered="{!each.hasActionError}"><div id="error_many_{!each.proxyaddr.id}" class="actionError" style="visibility:visible;display:block;">Error: {!each.actionError}</div></apex:outputText>
+		<table class="list aaPendingFields" style="display:none;" cellPadding="2" id="f_many_{!each.proxyaddr.Id}">
+			<!-- use 'styleclass' to specify which rows should be visible -->
+			<tr class="if nc nl np"><td>First Name</td><td><apex:inputText value="{!each.proxyaddr.FirstName}"/></td></tr>
+			<tr class="if nc nl np"><td>Last Name</td><td class="required"><apex:inputText value="{!each.proxyaddr.LastName}"/></td></tr>
+			<tr class="if np"><td>Record Type</td><td class="required"><apex:selectList size="1" value="{!each.paRecordType}"><apex:selectOptions value="{!paTypes}"/></apex:selectList></td></tr>
+			<tr class="if nc suggestList"> <td class="suggestedAcct">Suggested Accounts</td><td> <!-- must add 'suggestList' so this row isn't found in firstSingleTypeRow (for bug 915 detection) -->
+				<select onchange="onSuggestChange(this);" id="s_suggestmany_{!each.proxyaddr.Id}">
+					<option value="-" selected="selected">-- choose one --</option>
+					<apex:repeat value="{!each.accounts}" var="acct">
+						<option value="{!acct.Id}">{!acct.Name}</option>
+					</apex:repeat>
+				</select>
+			</td></tr>
+			<tr class="if nc"><td>Create in Account</td><td class="createInAcct"><apex:inputField value="{!each.newcontact.AccountId}"/></td></tr>
+			<tr class="if nc"><td><span class="helptext">Need a new Account?</span></td><td><span class="helptext"><a href="/001/e" target="_new_acct">Click here</a></span></td></tr>
+			<tr class="if nc np"><td>Notes</td><td><apex:inputField value="{!each.newcontact.Description}"/></td></tr>
+			<tr class="if nl"><td>Company</td><td class="required"><apex:inputField value="{!each.newlead.Company}" required="false"/></td></tr>
+			<tr class="if nl"><td>Lead Source</td><td><apex:inputField value="{!each.newlead.LeadSource}"/></td></tr>
+			<tr class="if nl"><td>Notes</td><td><apex:inputField value="{!each.newlead.Description}"/></td></tr>
+			<tr class="if oc"><td>Contact</td><td class="required"><apex:inputField value="{!each.oldcontact.i__Contact__c}" required="false"/></td></tr>
+			<tr class="if ol"><td>Lead</td><td class="required"><apex:inputField value="{!each.oldlead.i__Lead__c}" required="false"/></td></tr>
+		</table>
+	</apex:outputText>
+</div><div class="rollup_{!each.proxyaddr.Id}" style="height:0px;">&nbsp;</div></apex:column> <!-- 2nd div is so IE shows the cell border, which it won't if cell is empty -->
+</apex:dataTable>
+<br/>
+</apex:outputText>
+
+
+
+<apex:outputText rendered="{!pendingPager.hasMatchNone}">
+
+<div class="aaTableHdr matchNoneHdr">Addresses that do not match any Accounts</div>
+
+<apex:dataTable value="{!pendingPager.matchNone}" var="each" cellPadding="4" width="100%" styleClass="list aaPending" headerClass="headerRow" rowClasses="dataRow odd, dataRow even">
+<apex:column style="vertical-align:top;">
+	<apex:facet name="header">Address</apex:facet>
+	<div class="rollup_{!each.proxyaddr.Id}"><a href="mailto:{!each.proxyaddr.FullAddr}">{!each.proxyaddr.FullAddr}</a></div>
+</apex:column>
+<apex:column styleClass="col{!each.fromTo}" style="vertical-align:top;padding-left:13px;">
+	<apex:facet name="header">Last email...</apex:facet>
+	<div class="rollup_{!each.proxyaddr.Id}"><a href="/{!each.Msg.Id}?retURL={!returl}">{!each.subject}</a><apex:outputText rendered="{!each.hasCase}"><span class="case">[<a href="/{!each.msg.i__Case__c}">Case</a>]</span></apex:outputText></div>
+</apex:column>
+<apex:column style="vertical-align:top;">
+	<apex:facet name="header">Sent</apex:facet>
+	<div class="rollup_{!each.proxyaddr.Id}">{!each.msgDate}</div>
+</apex:column>
+<apex:column style="vertical-align:top;">
+	<apex:facet name="header">Action<span>(<a href="#" onclick="setSelects('none','de');return false;">Set these to "Delete</a>" or "<a href="#" onclick="setSelects('none','ig');return false;">Ignore</a>")</span></apex:facet>
+	<div class="rollup_{!each.proxyaddr.Id}">
+	<apex:outputText rendered="{!each.hasActionResult}"><div style="font-style:italic;" class="actionResult" id="actionResult_{!each.proxyaddr.Id}"><apex:outputText escape="false" value="{!each.actionResult}"/></div></apex:outputText>
+	<div id="status_none_{!each.proxyaddr.Id}" class="saveStatus">Saving...</div>
+	<apex:outputText rendered="{!NOT(each.hasActionResult)}">
+		<span id="s_none_{!each.proxyaddr.Id}" class="select"> <!-- can't stick this ID on the selectlist w/o apex getting mad -->
+		<apex:selectList size="1" value="{!each.action}" onchange="onSelectChanged(this);">
+			<apex:selectOptions value="{!actions}"/>
+		</apex:selectList>
+		</span>
+	</apex:outputText>
+</div></apex:column>
+
+<apex:column style="vertical-align:top;padding:0px;width:310px;"><div class="rollup_{!each.proxyaddr.Id}">
+	<apex:outputText rendered="{!NOT(each.hasActionResult)}">
+		<apex:outputText rendered="{!each.hasActionError}"><div id="error_none_{!each.proxyaddr.id}" class="actionError" style="visibility:visible;display:block;">Error: {!each.actionError}</div></apex:outputText>
+		<table class="list aaPendingFields" style="display:none;" cellPadding="2" id="f_none_{!each.proxyaddr.Id}">
+			<!-- use 'styleclass' to specify which rows should be visible -->
+			<tr class="if nc nl np"><td>First Name</td><td><apex:inputText value="{!each.proxyaddr.FirstName}"/></td></tr>
+			<tr class="if nc nl np"><td>Last Name</td><td class="required"><apex:inputText value="{!each.proxyaddr.LastName}"/></td></tr>
+			<tr class="if np"><td>Record Type</td><td class="required"><apex:selectList size="1" value="{!each.paRecordType}"><apex:selectOptions value="{!paTypes}"/></apex:selectList></td></tr>
+			<tr class="if nc"><td>Create in Account</td><td><apex:inputField value="{!each.newcontact.AccountId}"/></td></tr>
+			<tr class="if nc"><td><span class="helptext">Need a new Account?</span></td><td><span class="helptext"><a href="/001/e" target="_new_acct">Click here</a></span></td></tr>
+			<tr class="if nc np"><td>Notes</td><td><apex:inputField value="{!each.newcontact.Description}"/></td></tr>
+			<tr class="if nl"><td>Company</td><td class="required"><apex:inputField value="{!each.newlead.Company}" required="false"/></td></tr>
+			<tr class="if nl"><td>Lead Source</td><td><apex:inputField value="{!each.newlead.LeadSource}"/></td></tr>
+			<tr class="if nl"><td>Notes</td><td><apex:inputField value="{!each.newlead.Description}"/></td></tr>
+			<tr class="if oc"><td>Contact</td><td class="required"><apex:inputField value="{!each.oldcontact.i__Contact__c}" required="false"/></td></tr>
+			<tr class="if ol"><td>Lead</td><td class="required"><apex:inputField value="{!each.oldlead.i__Lead__c}" required="false"/></td></tr>
+		</table>
+	</apex:outputText>
+</div><div class="rollup_{!each.proxyaddr.Id}" style="height:0px;">&nbsp;</div></apex:column> <!-- 2nd div is so IE shows the cell border, which it won't if cell is empty -->
+</apex:dataTable>
+<br/>
+</apex:outputText>
+
+
+
+<apex:outputText escape="false" value="{!pendingPager.resizeLinks}"/>
+<br/>
+
+<apex:outputText rendered="{!pendingPager.isEmpty}">
+<br/>
+<span style="font-style:italic;">No new email addresses</span><br/><br/>
+</apex:outputText>
+
+</apex:pageBlock>
+
+<br/>
+
+<apex:pageBlock title="Options">
+<apex:pageBlockButtons ><apex:commandButton action="{!savePrefs}" value="Save Options" style="margin:2px;"/></apex:pageBlockButtons>
+
+<!-- using "p" tags leads to an ugly thick line below the form.  don't know why -->
+<apex:inputCheckbox style="margin-bottom: -1px;" value="{!proxyprefs.AutoCreateContacts}"/>Automatically create Contacts when there is one suggested Account
+<br/><br/>
+<span class="helptext">
+When checked, addresses that match one Account will be turned into Contacts automatically and will not appear on this page.
+<br/><br/>
+You can also edit this setting on your <a href="/apex/i__aaprefs">Preferences</a> tab.
+<br/><br/>
+</span>
+</apex:pageBlock>
+
+</apex:form>
+</apex:outputText>
+
+<!-- the "Loading..." div -->
+<div id="waitPanelDiv" style="visibility:hidden;"><div class="hd" id="waitPanelHeader"><span id="waitPanelHeaderText">Loading...</span></div></div>
+
+</apex:page>

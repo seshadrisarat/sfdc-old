@@ -1,0 +1,177 @@
+<apex:page standardController="LStore__Stored_Document__c" extensions="LStore.showVersionsController" sidebar="false" title="Versions: {!HTMLENCODE(LStore__Stored_Document__c.LStore__File_Name_Calc__c)}">
+	<style type="text/css">
+		.panel {
+			position: relative;
+			min-height: 60px;
+		}
+		.overlay {
+			height: 100%;
+			width: 100%;
+			top: 0;
+			left: 0;
+			position: absolute;
+			background-color: #FFF;
+			border: 1px solid #CACACA;
+		}
+		.msg {
+			position: absolute;
+			width: 100%;
+			text-align: center;
+			font-weight: bold;
+			font-size: 1.10em;
+			white-space: nowrap;
+			top: 50%;
+			margin-top: -8px;
+		}
+		.msg img {
+			vertical-align: middle;
+		}
+		.msg .msgText {
+			padding-left: 10px;
+			vertical-align: middle;
+			color: #666;
+			font-size: 95%;
+		}
+		.bPageHeader, .bPageFooter {
+			display: none;
+		}
+		#contentWrapper {
+			min-width: auto;
+		}
+	</style>
+	<script type="text/javascript" src="{!URLFOR($Resource.LStore__LibraryJS, 'browserDetect-1.0.0.js')}"></script>
+	<script type="text/javascript" src="{!URLFOR($Resource.LStore__LibraryJS, 'jquery-1.7.1.min.js')}"></script>
+	<script type="text/javascript">
+		function getDomain(loopurl) {
+			var allowed = { dev: 0, staging: 1, local: 2 },
+				subdomain = loopurl in allowed ? loopurl : 'apps';
+			return 'https://' + subdomain + '.drawloop.com';
+		};
+		function generateUrl(action, recordId, versionId, versionKey, contentType, isJsonP) {
+			var loopurl = '{!$Request.loopurl}';
+			//var loopurl = 'local';
+			var params = {
+				version: '2.1',
+				//next: '/lss/handler.aspx',
+				//auto: 'true',
+				sessionid: '{!sessionid}',
+				location: '{!$Api.Partner_Server_URL_250}',
+				act: action,
+				eid: recordId,
+				versionId: versionId,
+				versionKey: versionKey,
+				contentType: contentType
+			};
+			if (isJsonP) params['callback'] = '?';
+			var qs = [];
+			for (var i in params) {
+				qs.push(i + '=' + encodeURIComponent(params[i]));
+			}
+			return getDomain(loopurl) + '/lss/handler.aspx?' + qs.join('&');
+			//return getDomain(loopurl) + '/sflogin.aspx?' + /*'/lss/handler.aspx?' +*/ qs.join('&');
+		};
+		function $getMessageContainer() {
+			var $msgs = jQuery('[id$=":mainPanel"] .msgs');
+			if (!$msgs.length) $msgs = jQuery('<div class="msgs" />').prependTo(jQuery('[id$=":mainPanel"]'));
+			return $msgs;
+		};
+		function clearMessages() {
+			$getMessageContainer().html('');
+		}
+		function addMessage(msg, severity, delay) {
+			var levels = { error: 'errorM3', warning: 'warningM3', info: 'infoM3' };
+			severity = severity in levels ? severity : 'error';
+			var $msgs = $getMessageContainer();
+			var $msg = jQuery('<div class="message ' + levels[severity] + '" />')
+					.append('<table border="0" cellpadding="0" cellspacing="0" class="messageTable">'
+						+ '<tr valign="top"><td><img alt="' + severity + '" title="' + severity + '" class="msgIcon" src="/s.gif" /></td><td class="messageCell"><div class="messageText" /></td></tr>'
+						+ '<tr><td></td><td></td></tr></table>')
+					.find('.messageText').text(msg).end();
+			$msgs.append($msg);
+			if (delay !== undefined)
+				setTimeout(function() { $msg.slideUp(400); }, delay);
+		};
+		function downloadVersion(elem, recordId, versionId, versionKey) {
+			elem.href = generateUrl('downloadVersion', recordId, versionId, versionKey, 'redirect');
+			return true;
+		};
+		function deleteVersion(elem, recordId, versionId, versionKey) {
+			jQuery(elem).closest('tr').find('td').fadeTo(200, .3);
+			jQuery.ajax(generateUrl('deleteVersion', recordId, versionId, versionKey, 'jsonp'), {
+				dataType: 'jsonp',
+				success: function(data, textStatus, xhr) {
+					jQuery(elem).closest('tr').find('td').fadeTo(0, 1);
+					if (data.status == 'success')
+						fetchVersions();
+					else {
+						clearMessages();
+						addMessage(data.message);
+					}
+				}
+			});
+		};
+		function restoreVersion(elem, recordId, versionId, versionKey) {
+			jQuery(elem).closest('tr').find('td').fadeTo(200, .3);
+			jQuery.ajax(generateUrl('restoreVersion', recordId, versionId, versionKey, 'jsonp'), {
+				dataType: 'jsonp',
+				success: function(data, textStatus, xhr) {
+					jQuery(elem).closest('tr').find('td').fadeTo(0, 1);
+					if (data.status == 'success')
+						fetchVersions();
+					else {
+						clearMessages();
+						addMessage(data.message);
+					}
+				}
+			});
+		};
+	</script>
+	<apex:form >
+		<apex:actionFunction action="{!fetchVersions}" name="fetchVersions" rerender="mainPanel" status="overlay" />
+		<!--<apex:actionFunction action="{!deleteVersion}" name="deleteVersion" rerender="mainPanel" status="overlay">
+			<apex:param name="versionId" assignTo="{!VersionId}" value="" />
+		</apex:actionFunction>
+		<apex:actionFunction action="{!downloadVersion}" name="downloadVersion" rerender="mainPanel" status="overlay">
+			<apex:param name="versionId" assignTo="{!VersionId}" value="" />
+		</apex:actionFunction>
+		<apex:actionFunction action="{!restoreVersion}" name="restoreVersion" rerender="mainPanel" status="overlay">
+			<apex:param name="versionId" assignTo="{!VersionId}" value="" />
+		</apex:actionFunction>-->
+		<apex:pageBlock id="mainBlock">
+			<apex:facet name="header">
+				<table border="0" cellpadding="0" cellspacing="0">
+					<tr><td><h2>Versions: {!HTMLENCODE(LStore__Stored_Document__c.LStore__File_Name_Calc__c)}</h2></td></tr>
+				</table>
+			</apex:facet>
+			<apex:outputPanel id="mainPanel" styleClass="panel" layout="block">
+				<apex:pageMessages />
+				<apex:actionStatus id="overlay">
+					<apex:facet name="start">
+						<div class="overlay">&nbsp;</div>
+						<div class="msg">
+							<img src="https://login.salesforce.com/img/loading.gif" />
+							<span class="msgText">Loading...</span>
+						</div>
+					</apex:facet>
+				</apex:actionStatus>
+				<apex:pageBlockTable value="{!Versions}" var="item">
+					<apex:column headerValue="Actions">
+						<apex:outputPanel rendered="{!AND(item.AllowRestore, !item.IsDeleteMarker)}">
+							<a onclick="return restoreVersion(this, '{!Stored_Document__c.Id}', '{!item.VersionId}', '{!item.Key}');" href="#">Restore</a>&nbsp;|&nbsp;</apex:outputPanel>
+						<apex:outputPanel rendered="{!item.AllowDelete}">
+							<!--<apex:commandLink onclick="deleteVersion('{!item.VersionId}'); return false;" value="Del">
+								<apex:param name="versionId" value="{!item.VersionId}" />
+							</apex:commandLink>-->
+							<a onclick="return confirm('Are you sure?') && deleteVersion(this, '{!Stored_Document__c.Id}', '{!item.VersionId}', '{!item.Key}');" href="#">Del</a>&nbsp;|&nbsp;</apex:outputPanel>
+						<apex:outputPanel rendered="{!!item.IsDeleteMarker}">
+							<a onclick="return downloadVersion(this, '{!Stored_Document__c.Id}', '{!item.VersionId}', '{!item.Key}');" href="#">View</a></apex:outputPanel>						 
+					</apex:column>
+					<apex:column value="{!item.Name}" headerValue="Name" />
+					<apex:column value="{!item.FormattedLastMod}" headerValue="Last Modified" />
+					<apex:column value="{!item.FormattedSize}" headerValue="Size" />
+				</apex:pageBlockTable>
+			</apex:outputPanel>
+		</apex:pageBlock>
+	</apex:form>
+	<script type="text/javascript">setTimeout(fetchVersions, 0);</script>
+</apex:page>

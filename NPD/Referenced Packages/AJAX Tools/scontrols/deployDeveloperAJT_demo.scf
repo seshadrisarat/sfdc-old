@@ -1,0 +1,161 @@
+<html>
+<!--
+Developed using by AJAX tools
+Date : Fri Jan 12 2007 15:35:18 GMT-0800 (Pacific Standard Time)
+Template : simple.html
+Author : cheenath
+-->
+<head>
+<script src="/soap/ajax/14.0/connection.js"></script>
+<script src="/js/dojo/0.4.1/dojo.js"></script>
+
+<style type="text/css">
+    body {
+        font-family: Arial, Tahoma, Verdana;
+        font-size: 12px;
+    }
+
+    TABLE {
+        border-collapse: collapse;
+        border: 5px solid yellow;
+        font-size: 12px;
+    }
+
+    *#col1 {
+        border: 3px solid black;
+    }
+
+    TD {
+        border: 1px dotted red;
+        padding: 0em;
+    }
+
+    TD.solid-blue {
+        border: 5px dashed blue;
+    }
+
+    TD.solid-green {
+        border: 5px solid green;
+    }
+</style>
+
+
+<script>
+    dojo.require("dojo.widget.Dialog");
+
+    function init() {
+        var dlg = dojo.widget.byId("welcome-pane");
+        dlg.show();
+        setTimeout(initView, 1);
+    }
+
+    function closeDlg() {
+        var dlg = dojo.widget.byId("welcome-pane");
+        dlg.hide();
+    }
+
+    dojo.addOnLoad(init);
+
+    var describe = [];
+    function initView() {
+        var result = sforce.connection.describeGlobal();
+        var sb = new sforce.StringBuffer();
+        var tabs = result.getArray("types");
+        for (var tab in tabs) {
+            sb.append(link(tabs[tab])).append(" | ");
+        }
+        document.getElementById("tabs").innerHTML = sb.toString();
+        setTimeout(closeDlg, 1000);
+    }
+
+    function displayListView(type) {
+        if (getDescribe(type) == null) {
+            document.getElementById("listview").innerHTML = "Nothing to display";
+            return;
+        }
+
+        var start = new Date().getTime();
+        document.getElementById("statuspane").innerHTML = "Loading data, please wait ...";
+
+        var result = sforce.connection.query(
+                "Select " + describe[type].join(",") + " From " + type + " Limit 200");
+
+        document.getElementById("statuspane").innerHTML =
+           "Query completed in " + ((new Date().getTime() - start) / 1000.0) + " sec."
+
+        var sb = new sforce.StringBuffer();
+        sb.append("<table x:str border=0 cellpadding=0 cellspacing=0><th>");
+
+        var des = describe[type];
+        for (field in des) {
+            sb.append("<td>").append(des[field]).append("</td>");
+        }
+        sb.append("</th>");
+
+        while (true) {
+            if (result.size > 0) {
+                for (i = 0; i < result.records.length; i++) {
+                    var account = result.records[i];
+                    sb.append("<tr>");
+                    sb.append("<td>").append(i).append("</td>");
+                    for (var field in des) {
+                        sb.append("<td>");
+                        sb.append(cut(account[des[field]]));
+                        sb.append("</td>");
+                    }
+                    sb.append("</tr>");
+                }
+            }
+            if (result.done == "true") {
+                break;
+            } else {
+                result = sforce.connection.queryMore(result.queryLocator);
+            }
+        }
+        sb.append("</table>");
+        document.getElementById("listview").innerHTML = sb.toString();
+    }
+
+    function cut(str) {
+        if (!str) return "..";
+        if (str.join) str = str.join(",");
+        if (str.length > 20) {
+            str = str.substring(0, 18) + "..";
+        }
+        return str;
+    }
+
+    function getDescribe(sobj) {
+        if (describe[sobj] != null) {
+            return describe[sobj];
+        }
+
+        var result = sforce.connection.describeSObject(sobj);
+        if (result.fields) {
+            var fields = [];
+            for (var i = 0; i < result.fields.length; i++) {
+                fields.push(result.fields[i].name);
+            }
+            describe[sobj] = fields;
+        }
+        return describe[sobj];
+    }
+    function link(tab) {
+        return "<a href='javascript: displayListView(\"" + tab + "\")'>" + tab + "</a>";
+    }
+</script>
+</head>
+<body>
+<div align="left" id="tabs" name="tabs"
+     style="font-family:Arial; font-size:16px; border:#000000 solid 1px; padding:3px; "></div>
+<p>
+
+<div id="statuspane" style="background:#dcdcdc; color:#191970;">...</div>
+<p></p>
+
+<div align="left" id="listview" name="tabs"></div>
+<div dojoType="Dialog" id="welcome-pane" executeScripts="true" bgColor="white" bgOpacity="0.8" toggle="fade"
+     toggleDuration="250" style="display:none"><b>AJAX Tools Demo</b> <br><br> Loaging ...
+</div>
+</body>
+</html>

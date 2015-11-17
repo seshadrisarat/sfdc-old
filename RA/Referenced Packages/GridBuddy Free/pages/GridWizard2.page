@@ -1,0 +1,284 @@
+<apex:page controller="GBFree.GridWizardController" title="{!lang.GW2Title}" action="{!init}" sidebar="false" tabStyle="Grid_Wizard__tab">
+	<div class="gbwPage gb{!lang.langCode}">
+		<c:EmptyComponent rendered="{!errors.showErrorMessages}">
+			<div class="msgBox warningMsg gbwMsg">
+				<apex:repeat value="{!errors.errorMessagesFromMap}" var="error">
+					{!error}<br/>
+				</apex:repeat>
+				<apex:repeat value="{!errors.apexWarningMessages}" var="error">
+					<apex:outputText value="{!error.summary}" escape="{!error.detail != 'noescape'}" /><br/>
+				</apex:repeat>
+			</div>
+		</c:EmptyComponent>
+		
+		<c:EmptyComponent rendered="{!errors.showInfoMessages}">
+			<div class="msgBox infoMsg">
+				<apex:repeat value="{!errors.apexInfoMessages}" var="infoMsg">
+					<apex:outputText value="{!infoMsg.summary}" escape="true"/><br/>
+				</apex:repeat>
+				
+				<div class="messageTime">{!currentDateTime}</div>
+			</div>
+		</c:EmptyComponent>
+			
+		<div class="msgBox warningMsg boxShadow" id="vldWarning">
+			<div class="closeX">{!lang.CloseWarningBoxLbl}&nbsp;&nbsp;<b>X</b></div>
+			<div class="msgBody"></div>
+		</div>
+	
+		<apex:form styleClass="gbwForm" onsubmit="save()" rendered="{!pageIsValid}">
+			<div class="gbwSteps">
+				<span class="gbwOtherStep">{!lang.CreateGridLabel}&nbsp;&nbsp;&gt;&nbsp;</span>
+				<span>{!lang.SelectFieldsLabel}</span>
+				<span class="gbwOtherStep">&nbsp;&gt;&nbsp;&nbsp;{!lang.DefineFiltersLabel}</span>
+			</div>
+			<apex:pageblock title="{!wrapper.gridConfig.SelectFieldsLbl}">
+				
+				<apex:pageBlockButtons >
+					<!-- do not change buttons to be on separate lines - this is done to avoid extra space between the buttons -->
+					<apex:commandButton value="{!lang.SaveBtnLbl}" action="{!saveAndRefreshPage2}" styleClass="saveBtn"/><input 
+						type="button" class="btnDisabled none" value="{!lang.SaveBtnLbl}" disabled="disabled" />
+					<apex:commandButton value="{!lang.BackBtnLabel}" action="{!saveAndBackPage2}" styleClass="saveBtn"/><input 
+						type="button" class="btnDisabled none" value="{!lang.BackBtnLabel}" disabled="disabled" />
+					<apex:commandButton value="{!lang.NextBtnLabel}" action="{!saveAndNextPage2}" rendered="{!gridHasValidObjects}" styleClass="saveBtn"/><c:EmptyComponent rendered="{!gridHasValidObjects}"><input 
+						type="button" class="btnDisabled none" value="{!lang.NextBtnLabel}" disabled="disabled" /></c:EmptyComponent>
+					<apex:commandButton action="{!resetForm}" value="{!lang.RefreshBtnLbl}" immediate="true"/><input 
+						type="button" class="btnDisabled none" value="{!lang.RefreshBtnLbl}" disabled="disabled" />
+					<apex:commandbutton action="{!goToManageActionsPage}" value="{!lang.ManageActionsLbl}" styleClass="btn" immediate="true" rendered="{!actionsEnabled}"/><input 
+						type="button" class="btnDisabled none" value="{!lang.ManageActionsLbl}" disabled="disabled" />
+					<c:EmptyComponent rendered="{!hasSelectedFields && gridHasValidObjects}">
+						<a href="{!launchGridURL}" class="launchGridLink" target="_blank" title="{!lang.LaunchGridTitle}">{!lang.LaunchGridLabel}</a>
+					</c:EmptyComponent>
+				</apex:pageBlockButtons>
+	
+				<apex:inputHidden id="selectedObjectDotFields" value="{!wrapper.javascriptSelectedValues}"/>
+	    		<script>var objectDotFieldsHidden = document.getElementById("{!$Component.selectedObjectDotFields}");</script>
+	
+				<div class="instr">
+					<c:EmptyComponent rendered="{!showUpgradeMessage}">
+						<div class="upgradeMsg">
+							<span class="checkmark">&nbsp;</span>
+							Upgrade to <span class="upgradeApp">GridBuddy Unlimited</span> to manage up to 40 fields per object and grid. 
+							<a href="/apex/UpgradeGridBuddy" target="_blank">Learn more &raquo;</a>
+						</div><br/>
+					</c:EmptyComponent>
+				
+					<apex:outputText value="{!lang.ClickInstr}" escape="false"/><br/>
+					<apex:outputText value="{!lang.SelectInstr}" escape="false"/>
+					<apex:outputText value="{!lang.LimitInstr}" escape="false"/><br/> 
+					<apex:outputText value="{!lang.SortInstr}" escape="false"/>
+				</div>
+	
+				<div class="sectionHeader firstHeader">
+					<h3><span class="ui-icon ui-icon-white ui-icon-triangle-1-s">&nbsp;</span>{!lang.selectFieldsLbl}</h3>
+				</div>
+				<div class="sectionContent">
+					<table border="0" cellpadding="0" cellspacing="0" id="gbSelectFields">
+					<tr>
+						<td><h2>{!lang.AvailableFieldsLbl}</h2></td>
+						<td><h2>{!lang.SelectedFieldsLbl}</h2></td>
+					</tr>
+					<tr>
+						<td valign="top">
+							<div class="roundBox">
+								<div id="parentChildFields" class="availableFields roundBody">
+									<h3 class="objectHeading">{!lang.ParentLabel}</h3>
+									<div class="bold toggleData collapsed" id="{!parentObject.objectName & parentObject.foreignKeyToParent}Toggle">
+										<span>
+											<span class="toggleCtrl">&nbsp;</span>
+											<apex:commandLink action="{!populateParentFields}" value="{!parentObject.objectLabel}" 
+													reRender="parentFields" onclick="toggleObject(this);" />
+										</span>
+									</div>
+									<div id="{!parentObject.objectName & parentObject.foreignKeyToParent}ParentFieldsDiv">
+										<apex:outputPanel id="parentFields">
+											<div id="{!(parentObject.objectName & 'FieldsDiv')}">
+												<div class="loadingFields none">{!lang.LoadTxt}</div>
+												<ul id="{!(parentObject.objectName & parentObject.foreignKeyToParent & 'AvailableFields')}">
+													<apex:repeat value="{!parentObjectFields}" var="field">
+														<li onmouseover="enableAvailableFieldsSortable(this)"> 
+															<!-- do not put space between the first two spans -->
+															<span class="gbAddBullet" title="{!lang.AddFieldLbl}" onclick="addFieldToSelectedList(jq(this).parent())">&nbsp;</span><span class="labelName">{!field.displayLabel}</span>
+															<span class="parentName" style="display:none;">{!field.parentName}</span> 
+															<span class="fieldName" style="display:none;">{!field.name}</span> 
+															<span class="fkName" style="display:none;">{!field.foreignKeyRelName}</span> 
+														</li>
+													</apex:repeat>
+												</ul>
+											</div>
+										</apex:outputPanel>
+									</div>
+									<br/>
+	
+									<c:EmptyComponent rendered="{!IF(parentObjectChildren.size == 0, false, true)}">
+										<h3 class="objectHeading">{!lang.ChildLbl}</h3>
+										<apex:repeat value="{!parentObjectChildren}" var="childField">
+											<div class="bold toggleData collapsed" id="{!childField.parentName & childField.foreignKeyRelName}Toggle">
+												<span>
+													<span class="toggleCtrl">&nbsp;</span>
+													<apex:commandLink action="{!generatefieldsForTree}" value="{!childField.parentLabel} {!BLANKVALUE(childField.childRelName, '')}" 
+															reRender="childFields" onclick="toggleObject(this);">
+														<apex:param assignTo="{!clickedChildObject}" name="objectUniqueId" value="{!childField.configName}" />
+													</apex:commandLink>
+											  		
+											  	</span>
+											</div>
+											
+											<div id="{!childField.parentName & childField.foreignKeyRelName}ParentFieldsDiv">
+												<apex:outputPanel id="childFields" >
+													<div id="{!(childField.parentName & childField.foreignKeyRelName & 'FieldsDiv')}">
+														<div class="loadingFields none">{!lang.LoadTxt}</div>
+														<ul id="{!(childField.parentName & childField.foreignKeyRelName & 'AvailableFields')}">
+															<apex:repeat value="{!childField.childGridObject.childFields}" var="field">
+																<li onmouseover="enableAvailableFieldsSortable(this)">
+																	<!-- do not put space between the first two spans -->
+																	<span class="gbAddBullet" title="{!lang.AddFieldLbl}" onclick="addFieldToSelectedList(jq(this).parent())">&nbsp;</span><span class="labelName">{!field.displayLabel}</span> 
+																	<span class="parentName" style="display:none;">{!field.parentName}</span> 
+																	<span class="fieldName" style="display:none;">{!field.name}</span>
+																	<span class="fkName" style="display:none;">{!field.foreignKeyRelName}</span>  
+																</li>
+															</apex:repeat>
+														</ul>
+													</div>
+												</apex:outputPanel>	
+											</div>						
+										</apex:repeat>
+									</c:EmptyComponent>
+								</div>
+							</div>
+						</td>
+						<td valign="top">
+							<div class="roundBox">
+								<div id="selectedFieldsDiv" class="selectedFieldsDiv roundBody" >
+									<div class="loadingFields">{!lang.LoadTxt}</div>
+									<apex:repeat value="{!wrapper.selectedFieldObjects}" var="selectedFieldObject">
+										<div>
+											<span class="labelName" style="display:none">{!selectedFieldObject.displayLabel}</span> 
+											<span class="parentName" style="display:none">{!selectedFieldObject.parentName}</span> 
+											<span class="fieldName" style="display:none">{!selectedFieldObject.name}</span>
+											<span class="fkName" style="display:none">{!selectedFieldObject.foreignKeyRelName}</span>
+										</div>
+									</apex:repeat>
+								</div>
+							</div>
+						</td>
+					</tr>
+					</table>
+				</div>
+				
+				<div class="sectionHeader">
+					<h3><span class="ui-icon ui-icon-white ui-icon-triangle-1-s">&nbsp;</span>{!lang.SelectActionsLbl}</h3>
+				</div>
+				<div class="sectionContent">
+					<c:EmptyComponent rendered="{!actionsEnabled==false}">
+						<div class="instr"><apex:outputText value="{!lang.actionsUpgradeText}" escape="false" /></div>
+					</c:EmptyComponent>
+					<c:EmptyComponent rendered="{!actionsEnabled==true}">
+						<div class="instr"><apex:outputText value="{!lang.CreateActionInstr}" escape="false"/></div>
+						
+						<c:EmptyComponent rendered="{!IF(actionWrappers.size == 0, false, true)}">
+							<table border="0" cellpadding="0" cellspacing="0" id="gbActions">
+								<tr class="gradientHeader gbForm">
+									<td>&nbsp;</td>
+				           		<td title="{!lang.objectFieldHelp}">{!lang.objectLbl}<span class="sortasc">&nbsp;</span></td>
+				           		<td title="{!lang.actionNameFieldHelp}">{!lang.actionNameLbl}</td>
+				           		<td title="{!lang.contentSourceFieldHelp}">{!lang.contentSourceLbl}</td>
+				           		<td title="{!lang.execBehaviorFieldHelp}">{!lang.executionBehaviorLbl}</td>
+				           		<td title="{!lang.actionTypeFieldHelp}">{!lang.actionTypeLbl}</td>
+				           		<td title="{!lang.descrFieldHelp}">{!lang.actionDescrLbl}</td>
+								</tr>
+								<apex:repeat value="{!actionWrappers}" var="act">   
+									<tr id="{!act.meta.Id}"> 
+					            	<td><apex:inputCheckBox value="{!act.isSelected}"/></td>
+					           		<td><apex:outputText value="{!act.attrMap['objDisplName']}"/></td>
+					            	<td><apex:outputText value="{!act.attrMap['actionLabel']}"/></td>
+					           		<td><apex:outputText value="{!act.attrMap['contentSource']}"/></td>
+					           		<td><apex:outputText value="{!act.attrMap['displayBehavior']}"/></td>
+					           		<td><apex:outputText value="{!act.attrMap['actionType']}"/></td>
+					           		<td><apex:outputText value="{!act.attrMap['descr']}"/></td>
+									</tr>
+								</apex:repeat>
+							</table>
+						</c:EmptyComponent>
+					</c:EmptyComponent>
+				</div>
+				
+				<div id="allAvailableObjects" >
+					<input type="hidden" value="{!allObjects}" />
+				</div>				
+				
+			</apex:pageblock>
+			
+			<apex:inputHidden value="{!fieldPropsJson}" id="fieldPropsJson"/>
+			
+			<apex:actionFunction action="{!getNativeFieldProperties}" name="getNativeFieldProperties" rerender="nativeFieldPropertiesPanel" immediate="true">
+			    <apex:param name="nativeFieldObjectName" assignTo="{!nativeFieldObjectName}" value="" />
+		        <apex:param name="nativeFieldFieldName" assignTo="{!nativeFieldFieldName}" value="" />
+		        <apex:param name="newLiId" assignTo="{!newLiId}" value="" />
+			</apex:actionFunction>	
+			
+			<apex:outputPanel id="nativeFieldPropertiesPanel">
+				<script type="text/javascript">
+					var nativePropTempMap = [{!nativeFieldPropsJSON}];
+					
+					if (nativePropTempMap.length > 0) {
+						GBFieldProps.addNativeFieldProperties('{!nativeFieldObjectName}', '{!nativeFieldFieldName}', nativePropTempMap[0]);
+						GBFieldProps.showPropsWidget('{!newLiId}', true);
+					}
+				</script>
+			</apex:outputPanel>	
+			
+			<div class="gbFieldPropPopup msgBox boxShadow" id="gbFieldPropPopup">
+				<div class="header">
+					<span class="title">Field Properties</span>
+				</div>
+				<div id="fpBody">
+					<div id="fpContent">
+						<div id="propFieldLabel"></div>
+						<div class="popupRow">
+							<label class="popupLabel" for="readOnlyChk">Read-only</label>
+							<input id="readOnlyChk" type="checkbox" />
+							<input id="readOnlyRd" type="radio" name="prop" />
+						</div>
+						<div class="popupRow">
+							<label class="popupLabel" for="rqrdChk">Required</label>
+							<input id="rqrdChk" type="checkbox" />
+							<input id="rqrdRd" type="radio" name="prop" />
+						</div>				
+						<div>
+							<label class="popupLabel" for="colWidthInput">Column width</label>
+							<input id="colWidthInput" type="text" size="3" maxlength="3" />
+						</div>
+						<div class="popupRow"><label>(pixels)</label></div> 					
+						<div class="fpButtons">
+							<input type="button" value="{!lang.okBtnLbl}" class="okPopupBtn btn" /> 
+							<input type="button" value="{!lang.cancelBtnLbl}" class="cancelPopupBtn btn" />
+						</div>
+					</div>
+				</div>	
+				<input type="hidden" id="liId" value="" />
+			</div> 	
+		</apex:form>
+	
+		<c:LangJSComponent lang="{!lang}"/>
+		<!-- this must come before the js includes because the js references these vars -->
+		<script type="text/javascript">
+			var maxFieldsPerGrid = {!maxFieldsPerGrid},
+				maxFieldsPerObject = {!maxFieldsPerObject};
+		</script>
+		<!--  do not use includeScript for the jquery include, as this will add the javascript to the <head> tag and slow down the page load -->
+		<apex:repeat value="{!JSFileNames}" var="fName">
+	    	<script type="text/javascript" src="{!URLFOR($Resource.GBFree__gb_resources, fName)}"></script>
+	    </apex:repeat>
+	    <apex:repeat value="{!CSSFileNames}" var="fName">
+	    	<apex:stylesheet value="{!URLFOR($Resource.GBFree__gb_resources, fName)}"/>
+	    </apex:repeat>
+	    
+		<script type="text/javascript">
+			var parentObjectName = '{!gridParentObjectName}';
+		</script> 
+		
+		<div class="gbCopyright">{!lang.CopyrightTxt}</div>
+	</div>
+	<div id="gbOverlay">&nbsp;</div>
+</apex:page>

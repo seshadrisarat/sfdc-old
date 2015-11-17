@@ -1,0 +1,246 @@
+<apex:page showHeader="false" sidebar="false" controller="SL_ctrl_VendorOpportunityDetail">
+    <style type="text/css">
+        .container-detail{
+            padding-top: 25px;
+            padding-bottom: 25px;
+            width: 85%;
+        }
+        .container-detail .row{
+            margin-left: 0px;
+            margin-right: 0px;
+        }
+        #requestContainer{
+            width: 100%;
+            text-align: center;
+        }
+        .page-btn{
+            padding: 6px 12px;
+            margin-top: 10px;
+            font-size: 14px;
+            font-weight: normal;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            background-image: none;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            border-color: {!buttoncolor};
+            color: {!buttonFontColor};
+            background-color: {!buttoncolor};
+        }
+        .sl-label{
+            text-align: right;
+            padding-right: 0px;
+        }
+        .sl-output{
+            text-align: left;
+        }
+        .attachment-list-section{
+            padding-bottom: 5px;
+            width: 66%;
+        }
+        #showUploadWrapper{
+            text-align: center;
+        }
+    </style>
+    <script src="/soap/ajax/32.0/connection.js" type="text/javascript"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.8.3/moment.min.js" type="text/javascript"></script>
+    <apex:includeScript value="{!URLFOR($Resource.SL_VendorCommunity,'js/jquery.min.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.SL_VendorCommunity, 'js/jquery.dataTables.min.js')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.SL_VendorCommunity,'css/tableStyle.css')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.SL_VendorCommunity,'css/customTableStyle.css')}"/>
+    <script>
+        jQuery( function ($) {
+            $(document).ready( function() { 
+                $('.currency').each(function(){
+                    var n = Number($(this).html());
+                    $(this).html("$" + n.toFixed(2).replace(/(\d)(?=(\d{3})+\.)/g, "$1,"));
+                });
+                $('.alert').hide();
+                $('.bRelatedList').find('.pbButton').html('<input value="Attach File" class="btn" name="attachFile" onclick="showUploadForm();" title="Attach File" type="button">');
+                var vDocTable,
+                    vDocs = {!vendorDocsJson},
+                    columns= [
+                        {"data":"anchor", "className":"nameCell"},
+                        {"data":"createdBy", "className":"ownerCell"},
+                        {"data":"createdDate", "className":"dateCell"}
+                    ];
+ 
+                for(var i = 0; i < vDocs.length; i++){
+                    var d = moment(vDocs[i]['createdDate']);
+                    vDocs[i]['createdDate'] = (d.month() + 1) + '/' + d.date() + '/' + d.year();
+                }
+
+                //initialize datatables
+                vDocTable = $('#vendorDocList').dataTable( {
+                    "data": vDocs,
+                    "columns":columns,
+                    "order":[[2, "desc"]]
+                } );
+            });
+            $('#showUploadButton').one('click', function(event){
+                showUploadForm();
+            });
+        });
+
+        function showUploadForm()
+        {
+            $('#uploadFormContainer').css({'display':'block'});
+            $('#showUploadButton').html('Cancel');
+            $('#showUploadButton').one('click', function(event){
+                hideUploadForm();
+            });
+        }
+
+        function hideUploadForm()
+        {
+            $('#uploadFormContainer').css({'display':'none'});
+            $('#showUploadButton').html('Add Attachment');
+            $('#showUploadButton').one('click', function(event){
+                showUploadForm();
+            });
+        }
+
+        function performUpdates() 
+        { 
+            $('#header').prepend('<div id="jsbutton_overlay" style="width: 100%;height: 100%;position: absolute;background-color: rgba(197, 197, 197,.5);z-index: 999999999;"><img src="/img/loading32.gif" style="position:absolute;top:50%;left:50%"/></div>');
+            
+            SL_ctrl_VendorOpportunityDetail.setProposalDate(
+                "{!opportunity.Id}",
+                function(results, event) {
+                    if(event.type === 'exception'){
+                        console.log("exception");
+                        console.log(event);
+                    }else if(event.status){
+                        if(results == true){
+                            $('#thankYouMsg').show();
+                            $('#jsbutton_overlay').remove();
+                        }
+                        else{
+                            $('#alreadySentMsg').show();
+                            $('#jsbutton_overlay').remove();
+                        }
+                    }else{
+                        console.log(event.message);
+                    }
+                }
+            );
+        }
+    </script>
+    <apex:composition template="SL_VendorTemplate">
+        <apex:define name="mainSection">
+            <div class="container container-detail">
+                <span class="detail-header h2 col-md-offset-2">{!opportunity.Name}</span>
+                <apex:pageMessages />
+                <div id="requestContainer"><button id="requestProposal" class="page-btn" onclick="performUpdates();">Request Proposal</button></div>
+                <div class="alert alert-warning alert-dismissible fade in" role="alert" id="alreadySentMsg">
+                    <button type="button" class="close" data-dismiss="alert">
+                        <span aria-hidden="true">x</span>
+                        <span class="sr-only">Close</span>
+                    </button>
+                    A request has already been made for this opportunity.
+                </div>
+                <div class="alert alert-success alert-dismissible fade in" role="alert" id="thankYouMsg">
+                    <button type="button" class="close" data-dismiss="alert">
+                        <span aria-hidden="true">x</span>
+                        <span class="sr-only">Close</span>
+                    </button>
+                    Your request for a proposal has been received.  You will be contacted by your Program Manager.
+                </div>
+                <hr/>
+                <span class="section-header h3 col-md-offset-2">Opportunity Detail</span><br/><br/>
+                <apex:variable value="0" var="num"/> 
+                <apex:variable value="</div>" var="close"/>
+                <apex:variable value="<div class=row>" var="open"/>
+                <div class="container detail-section">
+                    <apex:repeat value="{!$ObjectType.Opportunity.FieldSets.FAEF_Vendor_Opportunity_Detail}" var="o"> 
+                        <apex:outputText value="{! IF(ROUND(VALUE(num)/2, 0) > VALUE(num)/2, '', open) }" escape="false" />
+                            <span class="col-md-3 sl-label"><apex:outputLabel value="{!o.Label}:"/></span>
+                            <span class="col-md-3 sl-output {! IF(o.Type == 'date', 'date', IF(o.Type == 'currency', 'currency', '')) }"><apex:outputText value="{! IF(opportunity[o] ==  null, '', IF(o.Type == 'date', TEXT(opportunity[o]), opportunity[o])) }" /></span>
+                        <apex:outputText value="{! IF(ROUND(VALUE(num)/2, 0) > VALUE(num)/2, close, '') }" escape="false" />
+                        <apex:outputText value="{! IF( AND((ROUND($ObjectType.Opportunity.FieldSets.FAEF_Vendor_Opportunity_Detail.size/2, 0) > $ObjectType.Opportunity.FieldSets.FAEF_Vendor_Opportunity_Detail.size/2), ($ObjectType.Opportunity.FieldSets.FAEF_Vendor_Opportunity_Detail.size == (VALUE(num) + 1))) , close, '') }" escape="false" />
+                        <apex:variable var="num" value="{!VALUE(num) + 1}"/>
+                    </apex:repeat>  
+                </div>
+                <hr/>
+                <span class="section-header h3 col-md-offset-2">Proposal Options</span><br/><br/>
+                <apex:variable value="0" var="num"/> 
+                <div class="container detail-section">
+                    <apex:repeat value="{!$ObjectType.Opportunity.FieldSets.FAEF_Vendor_Opportunity_Proposal_Options}" var="o"> 
+                        <apex:outputText value="{! IF(ROUND(VALUE(num)/2, 0) > VALUE(num)/2, '', open) }" escape="false" />
+                            <span class="col-md-3 sl-label"><apex:outputLabel value="{!o.Label}:"/></span>
+                            <span class="col-md-3 sl-output {! IF(o.Type == 'date', 'date', IF(o.Type == 'currency', 'currency', '')) }"><apex:outputText value="{! IF(opportunity[o] ==  null, '', IF(o.Type == 'date', TEXT(opportunity[o]), opportunity[o])) }" /></span>
+                        <apex:outputText value="{! IF(ROUND(VALUE(num)/2, 0) > VALUE(num)/2, close, '') }" escape="false" />
+                        <apex:outputText value="{! IF( AND((ROUND($ObjectType.Opportunity.FieldSets.FAEF_Vendor_Opportunity_Proposal_Options.size/2, 0) > $ObjectType.Opportunity.FieldSets.FAEF_Vendor_Opportunity_Proposal_Options.size/2), ($ObjectType.Opportunity.FieldSets.FAEF_Vendor_Opportunity_Proposal_Options.size == (VALUE(num) + 1))) , close, '') }" escape="false" />
+                        <apex:variable var="num" value="{!VALUE(num) + 1}"/>
+                    </apex:repeat>
+                </div>
+                <hr/>
+                <span class="section-header h3 col-md-offset-2">Additional Information</span><br/><br/>
+                <apex:variable value="0" var="num"/> 
+                <div class="container detail-section">
+                    <apex:repeat value="{!$ObjectType.Opportunity.FieldSets.FAEF_Vendor_Opportunity_Additional_Info}" var="o"> 
+                        <apex:outputText value="{! IF(ROUND(VALUE(num)/2, 0) > VALUE(num)/2, '', open) }" escape="false" />
+                            <span class="col-md-3 sl-label"><apex:outputLabel value="{!o.Label}:"/></span>
+                            <span class="col-md-3 sl-output {! IF(o.Type == 'date', 'date', IF(o.Type == 'currency', 'currency', '')) }"><apex:outputText value="{! IF(opportunity[o] ==  null, '', IF(o.Type == 'date', TEXT(opportunity[o]), opportunity[o])) }" /></span>
+                        <apex:outputText value="{! IF(ROUND(VALUE(num)/2, 0) > VALUE(num)/2, close, '') }" escape="false" />
+                        <apex:outputText value="{! IF( AND((ROUND($ObjectType.Opportunity.FieldSets.FAEF_Vendor_Opportunity_Additional_Info.size/2, 0) > $ObjectType.Opportunity.FieldSets.FAEF_Vendor_Opportunity_Additional_Info.size/2), ($ObjectType.Opportunity.FieldSets.FAEF_Vendor_Opportunity_Additional_Info.size == (VALUE(num) + 1))) , close, '') }" escape="false" />
+                        <apex:variable var="num" value="{!VALUE(num) + 1}"/>
+                    </apex:repeat>
+                </div>
+            </div>
+            <div class="container attachment-list-section">
+                <div id="showUploadWrapper"><button class="page-btn" id="showUploadButton">Add Attachment</button></div>
+                <div id='uploadFormContainer' style='display:none;'>
+                    <apex:form enctype="multipart/form-data">
+                        <apex:pageBlock title="Upload an Attachment">
+
+                            <apex:pageBlockButtons >
+                                <apex:commandButton action="{!upload}" value="Save"/>
+                            </apex:pageBlockButtons>
+
+                            <apex:pageBlockSection showHeader="false" columns="2" id="block1">
+
+                                <apex:pageBlockSectionItem >
+                                <apex:outputLabel value="File Name" for="fileName"/>
+                                    <apex:inputText value="{!attachment.name}" id="fileName"/>
+                                </apex:pageBlockSectionItem>
+
+                                <apex:pageBlockSectionItem >
+                                    <apex:outputLabel value="File" for="file"/>
+                                    <apex:inputFile value="{!attachment.body}" filename="{!attachment.name}" id="file"/>
+                                </apex:pageBlockSectionItem>
+
+                                <apex:pageBlockSectionItem >
+                                    <apex:outputLabel value="Description" for="description"/>
+                                    <apex:inputTextarea value="{!attachment.description}" id="description"/>
+                                </apex:pageBlockSectionItem>
+
+                            </apex:pageBlockSection>
+
+                        </apex:pageBlock>
+                    </apex:form>
+                </div>
+                <table id="vendorDocList" class="display" cellspacing="0" width="100%">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th></th>
+                            <th></th>    
+                        </tr>
+                    </thead>
+             
+                    <tfoot>
+                        <tr>
+                            <th></th>
+                            <th></th>
+                            <th></th>    
+                        </tr>
+                    </tfoot>
+                </table>
+                <!-- <apex:relatedList title="Attachments" subject="{!opportunity}" list="Vendor_Documents__r" /> -->
+            </div>
+        </apex:define>
+    </apex:composition>
+</apex:page>

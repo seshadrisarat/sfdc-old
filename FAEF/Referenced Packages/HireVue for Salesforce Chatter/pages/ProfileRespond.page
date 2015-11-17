@@ -1,0 +1,115 @@
+<apex:page showHeader="false" controller="IV4SF.ProfileRespondController" action="{!initPage}">
+
+<style>
+.shadow {
+    box-shadow: 2px 2px 10px #DDDDDD;
+    padding: 15px 10px;
+}
+</style>
+
+<apex:form id="form">
+
+<div style="margin-top: 10px; margin-bottom: 20px; font-size: 15px; font-weight: bold;">
+    <a href="{!URLFOR($Page.ProfileHome + '?sfdc.userId=' + $User.Id)}">&laquo; Back to HireVue Home</a>
+</div>
+
+<apex:outputPanel layout="block" style="text-align: center; border: 1px solid #999; background-color: #fff; padding: 20px;" styleClass="shadow" rendered="{!response.CreatedById == null || response.CreatedById == $User.Id}">
+    <div style="font-size: 15px; font-weight: bold; color: #333;">Question</div>
+    <div style="font-size: 20px; font-weight: bold; color: #333; margin-bottom: 15px;">{!question.Text__c}</div>
+
+    <div id="hv-recorder"></div><br/>
+
+    <script id="hv-recorder-script" type="text/javascript" src="{!apiHost}/integrations/widgets/recorder.js"></script>
+    <script type="text/javascript">
+        HvWidgets.Recorder.init({
+            sessionId: '{!sessionKey}',
+            targetId: 'hv-recorder',
+            name: '{!LEFT($User.Id, 15)}{!response.Id}',
+            maxSeconds: {!maxSeconds},
+            readOnly: false,
+            width: '320px',
+            height: '293px'
+        });
+    </script>
+
+    <span id="responseContent">
+        <span>You will have {!timeToRespond} to answer</span><br/><br/>
+
+        <span id="recordingError" style="color: red; font-weight: bold; display: none;">Please finish recording your video<br/><br/></span>
+
+        <span id="doneLink" style="color: #015BA7; font-size: 15px; font-weight: bold; cursor: pointer;">Once you have stopped recording,<br/>click here to go to the next step</span>
+    </span>
+
+    <span id="confirmContent" style="display: none;">
+        <!--input id="useChatterPreview" type="checkbox"/><label for="useChatterPreview">Use Chatter profile image as video thumbnail</label><br/><br/-->
+
+        <!--<input id="postToChatter" type="checkbox"/><label for="postToChatter">Post to Chatter to allow comments and likes</label><br/><br/> -->
+
+        <img id="saveButton" src="{!URLFOR($Resource.Assets, '/btn_save-video.png')}" border="0" width="172" height="45" style="cursor: pointer;"/><br/><br/>
+
+        <span id="cancelLink" style="color: #015BA7; font-size: 15px; font-weight: bold; cursor: pointer;">Cancel</span>
+    </span>
+</apex:outputPanel>
+
+<apex:outputPanel layout="block" style="font-size: 20px; font-weight: bold; color: red; margin-bottom: 15px;" rendered="{!response.CreatedById != null && response.CreatedById != $User.Id}">
+    Invalid response.
+</apex:outputPanel>
+
+<br/><br/>
+<div style="text-align: center;">
+   <a href="https://hirevue.com/?source=IntroVue" target="_blank"><img src="{!URLFOR($Resource.Assets, '/logo.png')}" width="130" height="51" border="0"/></a>
+</div>
+
+</apex:form>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+<script>
+    jQuery(function() {
+
+        jQuery(document).on('click', '#doneLink', function(e) {
+            jQuery('#recordingError').hide();
+
+            Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.ProfileRespondController.wasVideoCreated}', '{!response.Id}', function(result, event) {
+                if (event.status) {
+                    if (event.result == true) {
+                        // Hide the response content and show the confirm content.
+                        jQuery('#responseContent').hide();
+                        jQuery('#confirmContent').show();
+                    } else {
+                        jQuery('#recordingError').show();
+                    }
+                } else {
+                    jQuery('#recordingError').show();
+                }
+            });
+        });
+
+        jQuery(document).on('click', '#saveButton', function(e) {
+            //var useChatterPreview = jQuery('#useChatterPreview').is(':checked');
+            // Temporarily disabled until widget can support using this.
+            var useChatterPreview = false;
+            var postToChatter = jQuery('#postToChatter').is(':checked');
+
+            Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.ProfileRespondController.save}', '{!JSENCODE(currentResponseId)}', '{!response.Id}', postToChatter, useChatterPreview, function(result, event) {
+                if (event.status) {
+                    location.href = '{!URLFOR($Page.ProfileHome + '?sfdc.userId=' + $User.Id)}';
+                } else {
+                    alert('Error saving video.');
+                }
+            });
+        });
+
+        jQuery(document).on('click', '#cancelLink', function(e) {
+            Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.ProfileRespondController.cancel}', '{!response.Id}', function(result, event) {
+                if (event.status) {
+                    location.href = '{!URLFOR($Page.ProfileHome + '?sfdc.userId=' + $User.Id)}';
+                } else {
+                    alert('Error cancelling response.');
+                }
+            });
+        });
+
+    });
+</script>
+
+</apex:page>

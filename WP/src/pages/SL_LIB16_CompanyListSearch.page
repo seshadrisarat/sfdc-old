@@ -1,0 +1,768 @@
+<apex:page id="thePage" Controller="SL_LIB16_ctrl_CompanyListSearch" tabStyle="Company_List__c" action="{!checkUserPermission}">
+	<apex:sectionHeader title="Search for Companies/Contacts to add to List" subtitle="{!CompanyList.Name}"/>
+
+	<apex:stylesheet value="{!URLFOR($Resource.SL_LIB16_jQuerySFFiltres, 'css/redmond/jquery-ui-1.8.4.custom.css')}"/>
+<!-- WP-126
+	<apex:includeScript value="{!URLFOR($Resource.SL_LIB16_jQuerySFFiltres, 'js/jquery-1.4.2.min.js')}"/>
+-->	
+	<apex:includeScript value="{!URLFOR($Resource.SL_LIB16_jQuerySFFiltres, 'js/jquery-1.8.3.min.js')}"/>
+
+	<apex:includeScript value="{!URLFOR($Resource.SL_LIB16_jQuerySFFiltres, 'js/jquery-ui-1.8.4.custom.min.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.SL_LIB16_jQuerySFFiltres, 'js/ui.timepicker.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.SL_LIB16_jQuerySFFiltres, 'js/jquery.ui.sf.filters.102.js')}"/>
+	
+	<script>
+		if('{!isReadWriteAccess}'== 'true') 
+		{
+			alert('You have insufficient access.');
+			window.location.href = '/'+'{!listId}';
+		}
+			 
+		function css_browser_selector(u){var ua=u.toLowerCase(),is=function(t){return ua.indexOf(t)>-1},g='gecko',w='webkit',s='safari',o='opera',m='mobile',h=document.documentElement,b=[(!(/opera|webtv/i.test(ua))&&/msie\s(\d)/.test(ua))?('ie ie'+RegExp.$1):is('firefox/2')?g+' ff2':is('firefox/3.5')?g+' ff3 ff3_5':is('firefox/3.6')?g+' ff3 ff3_6':is('firefox/3')?g+' ff3':is('gecko/')?g:is('opera')?o+(/version\/(\d+)/.test(ua)?' '+o+RegExp.$1:(/opera(\s|\/)(\d+)/.test(ua)?' '+o+RegExp.$2:'')):is('konqueror')?'konqueror':is('blackberry')?m+' blackberry':is('android')?m+' android':is('chrome')?w+' chrome':is('iron')?w+' iron':is('applewebkit/')?w+' '+s+(/version\/(\d+)/.test(ua)?' '+s+RegExp.$1:''):is('mozilla/')?g:'',is('j2me')?SLm+' j2me':is('iphone')?m+' iphone':is('ipod')?m+' ipod':is('ipad')?m+' ipad':is('mac')?'mac':is('darwin')?'mac':is('webtv')?'webtv':is('win')?'win'+(is('windows nt 6.0')?' vista':''):is('freebsd')?'freebsd':(is('x11')||is('linux'))?'linux':'','js']; c = b.join(' '); h.className += ' '+c; return c;}; css_browser_selector(navigator.userAgent);
+	</script>
+	<style>
+
+		.ui-widget {  font-size: 1.0em; }
+		.ui-widget-content { font-size:1.0em; padding: 2px; 2px; 2px; 2px;}
+		.ui-button { font-size:0.8em; }
+		.ui-advanced{ font-size: 0.9em; }
+		h3 {
+		    display:block !important;
+		    font-size:1.17em !important;
+		    font-weight:bold !important;
+		    margin-bottom:0 !important;
+		    margin-left:0 !important;
+		    margin-right:0 !important;
+		    margin-top:1em !important;
+		    text-align:left !important;
+		}
+
+		.ie .lookupInput input 
+		{
+		    top: -1px;
+		}
+		.ie8 .lookupInput input 
+		{
+		    top: -2px;
+		}
+		.win.gecko .lookupInput input, .gecko .lookupInput input, .linux.gecko .lookupInput input
+		{
+		    -moz-border-radius:5px 5px 5px 5px;
+		    top: -11px;
+		}
+		.lookupInput
+		{
+		    position: relative;
+		}
+		.lookupInput input
+		{
+		    -moz-border-radius:5px 5px 5px 5px;
+		    -webkit-border-bottom-right-radius: 5px;
+		    -webkit-border-bottom-left-radius: 5px;
+		    -webkit-border-top-right-radius: 5px;
+		    -webkit-border-top-left-radius: 5px;
+		    background:url("images/ui-bg_inset-hard_100_fcfdfd_1x100.png") repeat-x scroll 50% bottom #FCFDFD;
+		    border:1px solid #A6C9E2;
+		    color:#222222;
+		    width:163px; 
+		    height:17px; 
+		    position: absolute;
+		    top: -5px;
+		}
+		.ie .lookupIcon,.ie .lookupIconOn
+		{
+		    top: -1px;
+		}
+		.ie8 .lookupIcon,.ie8 .lookupIconOn
+		{
+		    top: -2px;
+		}
+		.win.gecko .lookupIcon, .gecko .lookupIcon, .linux.gecko .lookupIcon, .win.gecko .lookupIconOn, .gecko .lookupIconOn, .linux.gecko .lookupIconOn
+		{
+		    top: -11px;
+		}
+		.lookupIcon,.lookupIconOn
+		{
+		    position: absolute;
+		    top: -4px;
+		    left: 167px;
+		}
+
+	</style>    
+	<script>
+			
+		jQuery.noConflict();    
+		(function($) {
+		    $(document).ready(function() {
+		        /*window.location = "/apex/Deal_CompanySearch?" + 
+		            "event=search" + 
+		            "&target=" + target + 
+		            "&events=" + events +
+		            "&advenced=" + advenced;
+		        */
+		        
+		        $( "#accordion" ).accordion({ autoHeight: false });
+		        var target;
+		        if('{!isOutlookSync}' == 'true')
+		        	target = '1';
+		        else
+		        	target = '2';
+		        
+		        var event = 'load';
+		        
+		        function initFilterWidget(p_event, p_target) {
+		        
+		            var location = "/apex/SL_LIB16_CompanyListSearch_JSON?event=" + p_event + "&target=" + p_target;
+		            $("#sf_filters").html("Loading. Please wait...");
+		            $("#sf_filters").sfFilters({
+		                debug : false,
+		                sourceFieldData: location,
+		                source : location,
+		                calcMargin : function(width) {
+		                    var res = (width == 0)? 390 : width-160;
+		                    if ($.browser.msie && $.browser.version=="7.0") res /= 2;
+		                    return res;
+		                },
+		                goalTargetID: p_target,
+		                firstFilter : false,
+		                safeValue : false,
+		                change : function(event, widget) {
+		                    disableLKF();
+		                },
+		                load : function(p_widget) {
+		                    p_widget.Load();
+		                    p_widget.options.filterset = [{ name: 'name', operator: 'equal', value: ''}];
+		                }
+		            });
+		        }
+		         
+		        function changeSource(p_event, p_target) {
+		            jQuery("#sf_filters").html("Loading. Please wait...");
+		            var location = "/apex/SL_LIB16_CompanyListSearch_JSON?event=" + p_event + "&target=" + p_target;
+		            jQuery("#sf_filters").sfFilters("Source", location);
+		            //$("#sf_filters").sfFilters("Reinit", undefined,[{ name: 'name', operator: 'equal', value: ''}]);
+		            $("#sf_filters").sfFilters( "option", "goalTargetID", p_target );           
+		        }
+
+		        initFilterWidget(event, target);
+		        
+		        $('#search_btn').button();
+		        $('#search_btn').bind("click", function(event){
+		            var events = $("#sf_filters").sfFilters("Serialize");
+		            var advanced = $("#sf_filters").sfFilters("AdvancedFilter");
+		            
+		            oSearchParamId.value = advanced;
+		            re = /\|/gi;
+		            oSearchQId.value = events.replace(re, "___");
+		            oSearchObjId.value = target;
+		            
+		            //alert('ok!');
+		            doClSearchFun();
+		            
+		            event.preventDefault();
+		            event.stopImmediatePropagation();
+		        });
+		         
+		        $('#target_1').bind('click', function(){
+		            target = '1';
+		            $('#checkboxId').show();
+		            changeSource('load', target);
+		        });
+		        $('#target_2').bind('click', function(){
+		            target = '2';
+		            $('#checkboxId').hide();
+		            changeSource('load', target);
+		        });
+		        $('#target_3').bind('click', function(){
+		            target = '3';
+		            changeSource('load', target);
+		        });     
+
+		        // WP-126 pint 4 for IE11
+		        if(getInternetExplorerVersion() > '10' && $('#d1')!=null)
+		        {
+		        	$('#d1').css({'display' : 'block', 'padding-top' : '11px'});
+		        }
+
+		    })
+		})(jQuery);
+		// WP-126
+		function getInternetExplorerVersion()
+		{
+		  var rv = -1;
+		  if (navigator.appName == 'Microsoft Internet Explorer')
+		  {
+		    var ua = navigator.userAgent;
+		    var re  = new RegExp("MSIE ([0-9]{1,}[\.0-9]{0,})");
+		    if (re.exec(ua) != null)
+		      rv = parseFloat( RegExp.$1 );
+		  }
+		  else if (navigator.appName == 'Netscape')
+		  {
+		    var ua = navigator.userAgent;
+		    var re  = new RegExp("Trident/.*rv:([0-9]{1,}[\.0-9]{0,})");
+		    if (re.exec(ua) != null)
+		      rv = parseFloat( RegExp.$1 );
+		  }
+		  return rv;
+		}			
+
+		/*global function*/
+		function setResetCheckboxes() {
+		    var isIE = (navigator.userAgent.indexOf('MSIE') != -1);
+		    var elem;
+		    var counter = 0;
+		    var checkAll = document.getElementById("thePage:theForm:pbResult:tickTable:checkAll");
+		    var inputArr = document.getElementsByTagName('input');
+		    for (var i=0; i < inputArr.length; i++) {
+		        if (inputArr[i].type == "checkbox" && !inputArr[i].disabled && inputArr[i].id.length > 34 && inputArr[i].id.substring(0,34) == "thePage:theForm:pbResult:tickTable")
+		                inputArr[i].checked = checkAll.checked;
+		    }
+		
+		}
+		
+		/*This is added by sandeep*/
+		function callCheckIfAllCheckBoxChecked()
+        {
+            var count = 0;
+            var noOfChkBox = 0;
+            var arrayInput = document.getElementById('{!$Component.theForm3.pbCL:PB2ID}').getElementsByTagName('input');
+            for(var i=0 ; i < arrayInput.length ; i++) 
+            {
+                if(arrayInput[i].type == 'checkbox' && arrayInput[i].checked && arrayInput[i].title == 'check')
+                {
+                    count++;
+                }
+                if(arrayInput[i].type == 'checkbox' && arrayInput[i].title == 'check')
+                {
+                    noOfChkBox++;
+                }
+            }
+            if(count == noOfChkBox && noOfChkBox > 0)
+                document.getElementById('{!$Component.theForm3.pbCL.PB2ID:checkAll}').checked = true;
+            else
+                document.getElementById('{!$Component.theForm3.pbCL.PB2ID:checkAll}').checked = false;
+        }
+        
+        /*This is added by sandeep*/
+		function callCheckIfAllCheckBoxCheckedForStandard()
+        {
+            var count = 0;
+            var noOfChkBox = 0;
+//            var arrayInput = document.getElementById('{!$Component.theForm3.pbResult:tickTable}').getElementsByTagName('input'); 
+            var arrayInput0 = document.getElementById('{!$Component.theForm3.pbResult:tickTable}'); 
+            var arrayInput = (arrayInput0 != null ? arrayInput0.getElementsByTagName('input') : new Array() );
+            //var arrayInput = document.getElementById('{!$Component.theForm3.pbResult.tickTable}').getElementsByTagName('input'); 
+            for(var i=0 ; i < arrayInput.length ; i++) 
+            {
+            	
+                if(arrayInput[i].type == 'checkbox' && arrayInput[i].checked && arrayInput[i].title == 'check')
+                {
+                    count++;
+                }
+                if(arrayInput[i].type == 'checkbox' && arrayInput[i].title == 'check')
+                {
+                    noOfChkBox++;
+                }
+            }
+            var set_checkAll = document.getElementById('{!$Component.theForm3.pbResult.tickTable:checkAll}');
+            if(count == noOfChkBox && noOfChkBox > 0) {
+                if(set_checkAll != null) set_checkAll.checked = true; //document.getElementById('{!$Component.theForm3.pbResult.tickTable:checkAll}').checked = true;
+            } else {
+                if(set_checkAll != null) set_checkAll.checked = false; //document.getElementById('{!$Component.theForm3.pbResult.tickTable:checkAll}').checked = false;
+            }
+        }
+		
+		function disComp()
+		{
+		    /*jQuery('#sf_filters').sfFilters('Enable', false);
+		    oAddTargetObjId1 = document.getElementById('target_1');
+		    oAddTargetObjId2 = document.getElementById('target_2');
+		    oAddTargetObjId3 = document.getElementById('target_3');
+		    cl_obj = document.getElementById('dcl1');
+		    cl_obj2 = document.getElementById('dcl2');
+		    oAddTargetObjId1.disabled=true;
+		    oAddTargetObjId2.disabled=true;
+		    oAddTargetObjId3.disabled=true;
+		    cl_obj.style.display = 'none';
+		    cl_obj2.style.display = 'block';*/
+		    //changeSource('load', '1');
+		    jQuery('#addContener4 > table > tbody > tr > td > div > input:first').val("");
+		    jQuery('#addContener4 > table > tbody > tr > td > div > span > input').val("");
+		}
+		
+		function disCL()
+		{
+		    /*jQuery('#sf_filters').sfFilters('Enable', false);
+		    oAddTargetObjId1 = document.getElementById('target_1');
+		    oAddTargetObjId2 = document.getElementById('target_2');
+		    oAddTargetObjId3 = document.getElementById('target_3');
+		    d_obj = document.getElementById('d1');
+		    d_obj2 = document.getElementById('d2');
+		    oAddTargetObjId1.disabled=true;
+		    oAddTargetObjId2.disabled=true;
+		    oAddTargetObjId3.disabled=true;
+		    d_obj.style.display = 'none';
+		    d_obj2.style.display = 'block';*/
+		    //changeSource('load', '1');
+		    jQuery('#addContener2 > table > tbody > tr > td > div > input:first').val("");
+		    jQuery('#addContener2 > table > tbody > tr > td > div > span > input').val("");
+		}
+		
+		
+		function objOn(obj)
+		{
+		    try
+		    {
+		        obj.style.display = "block";
+		        obj.style.visibility = "visible";
+		    }
+		    catch(Exception){}
+		}   
+		
+		function objOff(obj)
+		{
+		    try
+		    {
+		        obj.style.visibility = "hidden";
+		        obj.style.display = "none";
+		    }
+		    catch(Exception){}
+		}
+		
+		function disableLKF()
+		{
+		    /*oAddDealObjId1 = document.getElementById('addContener1');
+		    oAddDealObjId2 = document.getElementById('addContener2');
+		    oAddDealObjId3 = document.getElementById('addContener3');
+		    oAddDealObjId4 = document.getElementById('addContener4');
+		    objOff(oAddDealObjId1);
+		    objOff(oAddDealObjId2);
+		    objOff(oAddDealObjId3);
+		    objOff(oAddDealObjId4);*/
+		    jQuery('#addContener2 > table > tbody > tr > td > div > input:first').val("");
+		    jQuery('#addContener2 > table > tbody > tr > td > div > span > input').val("");
+		    jQuery('#addContener4 > table > tbody > tr > td > div > input:first').val("");
+		    jQuery('#addContener4 > table > tbody > tr > td > div > span > input').val("");
+		}
+		
+		function setSearchSection(param)
+		{
+		    try {
+		    		if(param == 'F')
+		    		{
+		    			if(!document.getElementById('target_1').checked)
+		    			{
+		    				document.getElementById('checkboxId').style.display='none';
+		    			}	
+		    		}
+		    		
+		        var oSearchSection = document.getElementById("thePage:theForm:oSearchSection");
+		        oSearchSection.value = param;
+		        //alert(oSearchSection.value);
+		    } catch (Exception) {}
+		}
+
+	</script>
+	<apex:form id="theForm2">
+		<apex:actionFunction name="doResetFun" action="{!doReset}" />
+		<apex:actionFunction name="doCancelFun" action="{!doCancel}" />
+		<apex:actionFunction name="doClSearchFun" action="{!clSearch}" rerender="mainPanel4" status="MCSub"/>
+	</apex:form>
+
+	<apex:outputPanel id="mainPanel4">
+		<script>
+		    try{
+		        doSearchFun();
+		    } catch (e) {}
+		</script>
+	</apex:outputPanel>
+
+	<apex:form id="theForm">
+		<apex:inputHidden id="oSearchParam" value="{!SearchParam}" />
+		<script> var oSearchParamId = document.getElementById("{!$Component.oSearchParam}");</script>
+		<apex:inputHidden id="oSearchQ" value="{!SearchQ}" />
+		<script> var oSearchQId = document.getElementById("{!$Component.oSearchQ}");</script>
+		<apex:inputHidden id="oSearchObj" value="{!SearchObj}" />
+		<script> var oSearchObjId = document.getElementById("{!$Component.oSearchObj}");</script>
+		<apex:inputHidden id="oSearchSection" value="{!SearchSection}" />
+	 
+		<!--apex:actionFunction name="doSearchFun" action="{!doSearch}" rerender="mainPanel2" status="MCSub" /-->
+		<apex:actionFunction name="doSearchFun" action="{!doSearch}" status="MCSub" rerender="mainPanel2"/>
+		<apex:actionFunction action="{!updateIECheckbox}" name="updateIECheckbox" reRender="mainPanel2" status="MCSub"/> 
+<!-- 		<apex:actionFunction name="callCalculatePaginationMetrics" action="{!calculatePaginationMetrics}" /> -->
+		
+		<apex:outputPanel id="pnlDummy" />
+		
+		<div id="accordion">
+	    	<h3 onclick="setSearchSection('F');"><a href="javascript:setSearchSection('F');" onclick="setSearchSection('F');">Filter</a></h3>
+	    	<div>
+	        	<table border="0" cellpadding="0" cellspacing="0" style="text-align:left;">
+	            	<tr>
+	                	<td>
+	                		<apex:outputpanel rendered="{!Not(isOutlookSync)}">
+		                    	<input id="target_2" name="target" type="radio" value="2" checked="checked" /><label for="target_2"><b>Companies</b></label>
+		                    	<input id="target_1" name="target" type="radio" value="1"/><label for="target_1"><b>Contacts</b></label> 
+		                    	<div style="text-align:center;display: none;" id="checkboxId" >
+		        					<b>Include Employees</b><input  type="checkbox" id="checkbox_btn" onclick="updateIECheckbox();" />
+		        				</div> 
+	                    	</apex:outputpanel>
+	                    
+		                    <apex:outputpanel rendered="{!isOutlookSync}">
+		                    	<input id="target_1" name="target" type="radio" value="1" checked="checked"/><label for="target_1"><b>Contacts</b></label>  
+		                    </apex:outputpanel>
+	                    
+	                    	<!-- <input id="target_3" name="target" type="radio" value="3"/><label for="target_3"><b>Call Logs</b></label>   -->
+	                	</td>
+	            	</tr>
+	            	<tr>
+		                <td>
+		                    <div id="sf_filters" style="width:685px; margin-top:10px;" class="ui-widget-content ui-corner-all">Component Place</div>
+		                </td>
+	            	</tr>
+	        	</table>
+	    	</div>
+	    	<h3 onclick="setSearchSection('CL');"><a href="javascript:setSearchSection('CL');" onclick="setSearchSection('CL');">Get list member from existing list</a></h3>
+		    <div>
+		        <div id="addContener2" style="margin-left:20px;">
+		            <table>
+		                <tr><td width="250px"><apex:outputLabel for="deal__addObj"><b>Contact List: </b></apex:outputLabel></td>
+			                <td>
+			                    <div id="d1" style="display:block;"><apex:inputField required="false" onchange="disComp();" value="{!addCLObj.Company_List__c}" id="deal__addObj"/></div>
+			                    <div id="d2" style="display:none;"><apex:inputText id="deal__addObj2" disabled="true"/></div>
+			                </td></tr>
+		            </table>
+		        </div>
+		    </div>
+		</div>
+	
+		<table border="0" cellpadding="0" cellspacing="0" width="75%">
+		<tr>    
+		    <td>
+<!-- 		    		<div style="margin-top:25px; text-align:center;display: none;" id="checkboxId" > -->
+<!-- 		        		<b>Include Employee</b><input  type="checkbox" id="checkbox_btn" onclick="updateIECheckbox();" /> -->
+<!-- 		        	</div> -->
+		        <div style="margin-top:25px; text-align:center;">
+		        	
+		            <input class="btn" type="button" id="search_btn" name="event" value="Search"/>
+		<!--            <input class="btn" onclick="doResetFun()" type="button" id="reset_btn" value="Reset"/>-->
+		<!--            <input class="btn" onclick="doClSearchFun()" type="button" id="clSearch_btn" value="clSearch"/>-->
+		            <input class="btn" onclick="doCancelFun()" type="button" id="cancel_btn" value="Done"/>
+		        </div>
+		    </td>   
+		</tr>
+		</table>
+	</apex:form>
+	<br clear="all"/>
+	<script>
+	
+	    /*var input = $("form input:checkbox").wrap('<span></span>').parent().css({background:"yellow", border:"3px red solid"});
+	    $("div").text("For this type jQuery found " + input.length + ".")
+	            .css("color", "red");
+	    $("form").submit(function () { return false; }); // so it won't submit*/
+	
+	</script>
+
+	<apex:form id="theForm3">
+		<apex:outputPanel id="mainPanel2" >
+			
+			<apex:pageMessages />
+			<br clear="all"/>
+			<div style="display: none;"><pre>{!trace}</pre></div> 
+			<apex:outputPanel id="mainPanel2Sub" rendered="{!IF(SearchSection == 'F',true,false)}">
+			<apex:outputPanel rendered="{!isOnLoad}">
+				<apex:pageBlock id="pbNoResult" title="Search result" rendered="{!IF(pageSize==0, true, false)}">
+					<center><b>All Companies and Contacts matching this search are already on the current list.</b></center>
+				</apex:pageBlock>
+			</apex:outputPanel>
+				<script>
+					function addSelectedCompanies()
+					{
+					    
+					    if (confirm("Are you sure you want to add the selected members to your list?") ) 
+					    {
+					        //document.getElementById('thePage:theForm:add_btn1').click();
+					        //setTimeout(document.getElementById('search_btn').click(), 55000);
+					        add_btn1();
+					    }
+					    else
+					    {
+					        return null;
+					        //add_btn2();
+					        //document.getElementById('thePage:theForm:add_btn2').click();
+					    }
+					}
+					
+				</script>
+				<apex:actionFunction action="{!doAddContinue}" name="add_btn1" reRender="mainPanel2"  status="MCSub"/>
+<!-- 				<apex:actionFunction action="{!doAddContactCompanyContinue}" name="add_btn3" reRender="mainPanel2"  status="MCSub" oncomplete="alert('done');"/> -->
+				<!-- <apex:actionFunction action="{!doReset}" name="add_btn2" reRender="mainPanel2"  status="MCSub"/> -->
+				<apex:pageBlock id="pbResult" title="Search result" rendered="{!IF(pageSize>0, true, false)}">
+					<apex:pageBlockButtons location="top">
+<!-- 					<apex:commandButton action="{!doAdd}" value="Add Selected Companies To {!CompanyList.Name}"/> -->
+			
+						<input class="btn" type="button" id="add_btn" onclick="addSelectedCompanies();" value="Add Selected Companies/Contacts To {!CompanyList.Name}"/>
+					</apex:pageBlockButtons>
+		 			<br/>
+			        <apex:pageBlockTable id="tickTable" value="{!accounts}" var="c" rows="{!tickTableRows}" >
+				        <apex:column >
+				                    <apex:facet name="header"><apex:inputCheckbox id="checkAll" onClick="jQuery('.selectionCheckbox').attr('checked', this.checked);" /></apex:facet>
+				                    <apex:inputCheckbox styleClass="selectionCheckbox" id="myCheckbox" value="{!c.checked}" title="check" onclick="callCheckIfAllCheckBoxCheckedForStandard();"/>
+				         </apex:column>
+			         
+				         <apex:repeat value="{!aSearchColumns}" var="column" >
+				         	<apex:column rendered="{!(isAccount) || (isAccountAndContact)}">
+				         		<apex:facet name="header"> 
+					         		<apex:commandLink rerender="mainPanel2" status="MCSub" action="{!doSearch}" value="{! IF ( column.Label__c != null, column.Label__c, column.Name ) } {! IF ( sortExpression == column.Name, IF ( sortDirection='ASC','▼','▲' ), '' ) }">
+					                    <apex:param value="{! column.Name }" name="column" assignTo="{!sortExpression}" ></apex:param>
+					                </apex:commandLink>
+					            </apex:facet>
+				                <apex:outputText value="{! c.Item[ column.Name ] }" rendered="{! column.Name != 'Name' }" />
+				                <apex:outputLink value="/{!c.Item.ID}" rendered="{! column.Name == 'Name' }" >{! c.Item[ column.Name ] }</apex:outputLink>
+				                &nbsp;
+				         	</apex:column>
+				         </apex:repeat>
+			         
+				          <apex:repeat value="{!lstContactSearchColumns}" var="col" >
+				         	<apex:column rendered="{!(Not(isAccount)) || (isAccountAndContact)}">
+				         		<apex:facet name="header">
+					         		<apex:commandLink rerender="mainPanel2" status="MCSub" action="{!doSearch}" value="{! IF ( col.Label__c != null, col.Label__c, col.Name ) } {! IF ( sortExpression == col.Name, IF ( sortDirection='ASC','▼','▲' ), '' ) }">
+					                    <apex:param value="{! col.Name }" name="col" assignTo="{!sortExpression}" ></apex:param>
+					                </apex:commandLink>
+					            </apex:facet>
+				                <apex:outputText value="{! c.objContact[ col.Name ] }" rendered="{!col.Name != 'Name' }" /> 
+				                <apex:outputLink value="/{!c.objContact.ID}" rendered="{! col.Name == 'Name' }" >{! c.objContact[ col.Name ] }</apex:outputLink>
+				                &nbsp;
+				         	</apex:column>
+				         </apex:repeat>
+			         
+			        </apex:pageBlockTable>    
+		        	<br/>
+		        	<div width="100%" align="right" >
+				    	<apex:outputPanel rendered="{!IF( pageSize > 1, true, false )}" >
+						   <apex:panelGrid columns="4">
+						   		<div style="width:100% height:20px;" align="right" >
+	                               <div style="margin:0 auto; width:auto;" align="right">
+	                               <apex:outputText rendered="{!!hasPrevious}">
+	                                   <font color="#A8A8A8"> « </font>
+	                                  &nbsp;
+	                                   <span class="prevNext">
+	                                   <font color="#A8A8A8"> &lt; </font>
+	                                   <font color="#A8A8A8">Previous</font>
+	                                   </span>
+	                                   &nbsp;
+	                               </apex:outputText>                        
+	                               <apex:outputText rendered="{!hasPrevious}" >
+	                                  <apex:commandLink action="{!first}" status="MCSub" style="text-decoration:none;" rerender="mainPanel2">
+	                                      <font color="#000000"> « </font>
+	                                  </apex:commandLink>
+	                                  &nbsp;
+	                                   <apex:commandLink action="{!previous}" status="MCSub" style="text-decoration:none;" rerender="mainPanel2">
+	                                   <font color="#000000"> &lt; </font>
+	                                   <font color="#000000">Previous</font>
+	                                   </apex:commandLink>
+	                                   &nbsp;
+	                               </apex:outputText>
+	                               <apex:outputText rendered="{!!hasNext}">
+	                                   <span>
+	                                   <font color="#A8A8A8">Next</font>
+	                                   <font color="#A8A8A8"> > </font>
+	                                   </span>
+	                                  &nbsp;
+	                                  <font color="#A8A8A8"> » </font>
+	                               </apex:outputText>
+	                               <apex:outputtext rendered="{!hasNext}">
+	                                   <apex:commandLink action="{!next}" status="MCSub" style="text-decoration:none;" rerender="mainPanel2">
+	                                   <font style="color:#000000">Next</font>
+	                                   <font color="#000000"> > </font>
+	                                   </apex:commandLink>
+	                                  &nbsp;
+	                                  <apex:commandLink action="{!last}" status="MCSub" style="text-decoration:none;" rerender="mainPanel2">
+	                                      <font color="#000000"> » </font>
+	                                  </apex:commandLink>
+	                               </apex:outputtext>
+	                               </div>
+	                           </div>
+	                           <div style="clear:both"></div>
+						   </apex:panelGrid>
+				   		</apex:outputPanel>
+				   	</div>
+				</apex:pageBlock>
+				<script>
+				
+					callCheckIfAllCheckBoxCheckedForStandard();
+				</script>
+			</apex:outputPanel>
+			<apex:outputPanel id="contactListSearchPanelId" rendered="{!IF(SearchSection == 'CL',true,false)}">
+				<apex:outputpanel rendered="{!IF(lstWrapper.size <=0 ,true,false)}">
+						<center><b>All Companies and Contacts matching this search are already on the current list.</b></center>
+					</apex:outputpanel>
+				<apex:pageblock id="pbCL" >
+					<apex:outputpanel rendered="{!IF(lstWrapper.size >0 ,true,false)}">
+						<!-- PageBlockTable repeating lstWrapper contains items of both the object types (  List<CompanyExtend>  ) -->
+						
+						<apex:commandButton style="margin-left: 360px" status="saveSatus" onclick="confirmFromUser();" value="Add Selected Companies/Contacts To {!CompanyList.Name}"  rerender="pnlDummy"/>
+<!-- 						// action="{!doAddContactCompanyContinue}" -->
+						
+						<apex:outputPanel id="pnlDummy" />
+						<script>
+							function confirmFromUser()
+							{
+								var v = confirm("Are you sure you want to add the selected members to your list?");
+								if ( v ) 
+							    {
+							        callAFdoAddContactCompanyContinue();
+							    }
+							    else
+							    {
+							        return null;
+							    }
+							}
+						</script>
+						<apex:actionFunction name="callAFdoAddContactCompanyContinue" action="{!doAddContactCompanyContinue}" rerender="mainPanel2"  />
+						
+<!-- 							<input type="button" cls="btn" value="Add Selected Companies/Contacts To {!CompanyList.Name}" onclick="addSelectedCompanyContact();"/> -->
+						<apex:pageMessages />
+						<apex:actionstatus id="saveSatus">
+					        <apex:facet name="start">
+					            <div id="salesforceSource_blurybackground" style="position:absolute; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.4;filter:alpha(opacity=40)"></div>
+					            <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 80%; display: ''; ">
+					                <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+					                    <table align="center" valign="middle" style="width: 100%; height: 30%">
+					                        <tr align="center" valign="middle" style="width: 100%; height: 30%">
+					                            <td valign="middle"><img src="/img/loading.gif"/><span class="waitingDescription"><b>Loading...</b></span></td>
+					                        </tr>
+					                    </table>
+					                </div>
+					            </div>
+					            <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; "></div>
+					        </apex:facet>
+    					</apex:actionstatus>
+						<apex:pageblocktable value="{!lstWrapper}" var="contactListSearch" first="{!FirstPage}" rows="{!CurrentPageSize}" id="PB2ID">
+							<apex:column >
+			                    <apex:facet name="header"><apex:inputCheckbox id="checkAll" onClick="jQuery('.selectionCheckbox').attr('checked', this.checked);" /></apex:facet>
+			                    <apex:inputCheckbox styleClass="selectionCheckbox" id="myCheckbox" value="{!contactListSearch.checked}" title="check" onclick="callCheckIfAllCheckBoxChecked();"/>
+					         </apex:column>
+					         
+					        <!--  Repeat for Companies(Account)  List<SearchColumns__c> --> 
+					         
+							<apex:repeat value="{!aSearchColumns}" var="column" >
+					         	<apex:column rendered="{!(isAccount) || (isAccountAndContact)}">
+					         		<apex:facet name="header"> 
+						         		<apex:commandLink rerender="mainPanel2" status="MCSub" action="{!doSearchForCompanies}" value="{! IF ( column.Label__c != null, column.Label__c, column.Name ) } {! IF ( sortExpression == column.Name, IF ( sortDirection='ASC','▼','▲' ), '' ) }">
+						                    <apex:param value="{! column.Name }" name="column" assignTo="{!sortExpression}" ></apex:param>
+						                    <apex:param value="Account" name="acc" assignTo="{!strClickedFromAccountOrContact}" />
+						                </apex:commandLink>
+						            </apex:facet>
+					                <apex:outputText value="{! contactListSearch.Item[ column.Name ] }" rendered="{! column.Name != 'Name' }" />
+					                <apex:outputLink value="/{!contactListSearch.Item.ID}" rendered="{! column.Name == 'Name' }" >{! contactListSearch.Item[ column.Name ] }</apex:outputLink>
+					                &nbsp;
+					         	</apex:column>
+			         		</apex:repeat>
+			         		
+			         		 <!--  Repeat for Companies(Account) --> 
+			         		 
+			         		 
+			         	 <!--  Repeat for Contact (List<ContactSearchColumns__c>) --> 	 
+			         		
+				          <apex:repeat value="{!lstContactSearchColumns}" var="col" >
+				         	<apex:column rendered="{!(Not(isAccount)) || (isAccountAndContact)}">
+				         		<apex:facet name="header">
+					         		<apex:commandLink rerender="mainPanel2" status="MCSub" action="{!doSearchForContacts}" value="{! IF ( col.Label__c != null, 'Contact ' + col.Label__c, col.Name ) } {! IF ( sortExpression == col.Name, IF ( sortDirection='ASC','▼','▲' ), '' ) }">
+					                    <apex:param value="{! col.Name }" name="col" assignTo="{!sortExpression}" ></apex:param>
+					                	<apex:param value="Contact" name="con" assignTo="{!strClickedFromAccountOrContact}" />
+					                </apex:commandLink>
+					            </apex:facet>
+				                <apex:outputText value="{! contactListSearch.objContact[ col.Name ] }" rendered="{!col.Name != 'Name' }" /> 
+				                <apex:outputLink value="/{!contactListSearch.objContact.ID}" rendered="{! col.Name == 'Name' }" >{! contactListSearch.objContact[ col.Name ] }</apex:outputLink>
+				                &nbsp;
+				         	</apex:column>
+				         </apex:repeat>
+				         
+				          <!--  Repeat for Contact --> 
+					         		
+						</apex:pageblocktable>
+					</apex:outputpanel>
+					
+					<!----------------- Pagination Logic ------------------->
+					
+					
+					<apex:outputPanel id="pnlPaginatorLinks">
+                          <apex:outputPanel rendered="{!IF(lstWrapper.size > 2, true , false)}">
+                          
+                           <div style="width:100% height:20px;" align="right" >
+                               <div style="margin:0 auto; width:auto;" align="right">
+                               <apex:outputText rendered="{!firstPage/CurrentPageSize == 0}">
+                                   <font color="#A8A8A8"> « </font>
+                                  &nbsp;
+                                   <span class="prevNext">
+                                   <font color="#A8A8A8"> &lt; </font>
+                                   <font color="#A8A8A8">Previous</font>
+                                   </span>
+                                   &nbsp;
+                               </apex:outputText>                        
+                               <apex:outputText rendered="{!firstPage/CurrentPageSize != 0}" >
+                                  <apex:commandLink action="{!firstPage}" status="MCSub" style="text-decoration:none;" rerender="pbCL,pnlPaginatorLinks">
+                                      <font color="#000000"> « </font>
+                                  </apex:commandLink>
+                                  &nbsp;
+                                   <apex:commandLink action="{!previousPage}" status="MCSub" style="text-decoration:none;" rerender="pbCL,pnlPaginatorLinks">
+                                   <font color="#000000"> &lt; </font>
+                                   <font color="#000000">Previous</font>
+                                   </apex:commandLink>
+                                   &nbsp;
+                               </apex:outputText>
+                               <apex:outputText rendered="{!(FirstPage/CurrentPageSize + 1) == lastPage}">
+                                   <span>
+                                   <font color="#A8A8A8">Next</font>
+                                   <font color="#A8A8A8"> > </font>
+                                   </span>
+                                  &nbsp;
+                                  <font color="#A8A8A8"> » </font>
+                               </apex:outputText>
+                               <apex:outputtext rendered="{!(FirstPage/CurrentPageSize + 1) != lastPage}">
+                                   <apex:commandLink action="{!nextPage}" status="MCSub" style="text-decoration:none;" rerender="pbCL,pnlPaginatorLinks">
+                                   <font style="color:#000000">Next</font>
+                                   <font color="#000000"> > </font>
+                                   </apex:commandLink>
+                                  &nbsp;
+                                  <apex:commandLink action="{!lastPage}" status="MCSub" style="text-decoration:none;" rerender="pbCL,pnlPaginatorLinks">
+                                      <font color="#000000"> » </font>
+                                  </apex:commandLink>
+                               </apex:outputtext>
+                               </div>
+                           </div>
+                           <div style="clear:both"></div>
+						
+                          </apex:outputPanel>
+                      </apex:outputPanel>
+						<script>
+							
+							callCheckIfAllCheckBoxChecked();
+						</script>
+					<!----------------- Pagination Logic ------------------->
+				</apex:pageblock>	
+				
+			</apex:outputPanel>
+		</apex:outputPanel>
+	
+	</apex:form>
+    <apex:actionstatus id="MCSub" startText="Processing...">
+        <apex:facet name="start">
+            <div id="salesforceSource_blurybackground" style="position:absolute; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.6;filter:alpha(opacity=60)"></div>
+            <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 80%; display: ''; ">
+                <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+                <table align="center" valign="top" style="width: 100%; height: 30%">
+                <tr align="center" valign="top" style="width: 100%; height: 30%">
+                    <td valign="top"><img class="waitingImage" src="/img/loading.gif"/><span class="waitingDescription">Processing......</span></td>
+                </tr>
+                </table>
+                </div>
+            </div>
+            <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; "/>
+            <script>document.getElementById('ManageMembersViewport_loading').height = window.innerHeight * (3/4);</script>
+        </apex:facet>
+        <apex:facet name="stop"></apex:facet>
+     </apex:actionstatus> 
+     
+</apex:page>

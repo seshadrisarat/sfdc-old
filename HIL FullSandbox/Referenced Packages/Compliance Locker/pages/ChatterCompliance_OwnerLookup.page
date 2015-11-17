@@ -1,0 +1,155 @@
+<!-- 
+    Chatter Compliance System (all classes, triggers and pages that start with ChatterCompliance)
+    @author     Arkus Dev Team
+ -->
+<apex:page controller="chatcomp.ChatterCompliance_OwnerLookup" standardStylesheets="true" showHeader="false" id="searchPage" >
+    <apex:includeScript value="{!URLFOR($Resource.chatcomp__ChatterCompliance,'ChatterCompliance/jquery15.js')}"></apex:includeScript>
+    <apex:includeScript value="{!URLFOR($Resource.chatcomp__ChatterCompliance,'ChatterCompliance/jquery18.js')}"></apex:includeScript>    
+    <link class="user" href="{!URLFOR($Resource.ChatterCompliance,'ChatterCompliance/jquerycss.css')}" rel="stylesheet" type="text/css" />
+    
+    <style>
+    
+        body {
+            margin-left: 20px;
+            margin-right: 20px;
+            background: url("/img/alohaSkin/lookup_bg.png") repeat-x scroll 0 0 #FFFFFF;
+        }
+        
+        .ui-widget-header{
+            background-color:#8BBEC1;
+            border:1px solid #8BBEC1;
+        }
+        
+        body .bPageTitle{
+            padding: 0 0 0;
+            margin:0px;
+        }
+        
+        div.invitee, .popup {
+            padding: 0 10px 0;
+        }
+        
+        .pageTitleIcon {
+            margin-right: 0;
+        }
+        
+        .lookup .bPageTitle {
+            margin-bottom: 0;
+        }
+        
+        body .pbBody table.list tr.headerRow td, body .pbBody table.list tr.headerRow th{
+            font-size: 1em;
+            text-decoration: none;
+        }
+        
+        .rich-tab-active, .rich-tab-inactive{
+            font-weight: bold;
+        }
+        
+        body .pbBody table.list tr th, body .pbBody table.list tr td{
+            text-decoration: underline;
+        }
+        
+    </style>
+    
+    <script>
+        
+        /**
+        *   Validates that the search text does not have more than 50 characters
+        */
+        function validateLength(input){
+            if(input.value.length > 50){
+                alert('You can enter up to 50 characters for your search text.');
+                input.value = input.value.substring(0, 50);
+            }
+        }
+        
+    </script>
+    
+    <div id="dialog">
+        <h1 style="float:left;margin-left: 11px;margin-top: 16px;">Loading...</h1><img style="float:right;margin-right: 17px;margin-top: 9px;" src="{!URLFOR($Resource.ChatterCompliance,'ChatterCompliance/loadingGif.gif')}"/>
+    </div>
+    
+    <div class="lookupTab LookupSearchFrame">
+        <div class="lookup" style="padding-left:0px;">
+            <div class="bPageTitle">
+                <div class="ptBody secondaryPalette">
+                    <div class="content">
+                        <img title="Lookup users & queues" class="pageTitleIcon" alt="Lookup users & queues" src="/s.gif"/>
+                        <h1 style="color: #333435;font-size: 1.8em;margin:0px; padding-top: 5px; padding-left: 12px;">Lookup</h1>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <apex:form id="searchForm">
+        <label style="color: #4A4A56;font-size: 0.9em;margin: 0 5px 0 0;font-weight: bold;">Search</label>
+        <apex:inputText value="{!textToSearch}" id="SearchInput" onkeyup="validateLength(this); return noenter(event);" onkeydown="validateLength(this); return noenter(event);" style="margin-right: 9px;"/><apex:commandButton onClick="load();" action="{!find}" onComplete="closeLoad();" rerender="theTable,Queues" value="Go!"/>
+        <div style="font-size: 0.9em;margin: 0;padding-left: 43px;">You can use "*" to retrieve all records</div>
+        <apex:actionFunction name="doSearchAF" action="{!find}" rerender="theTable,Queues" onComplete="closeLoad();"/>
+        <br/>
+        <br/>
+        <apex:commandLink value="Clear Search Results" action="{!clear}"></apex:commandLink>
+    
+    
+        <div class="srch" style="font-family: 'Arial','Helvetica',sans-serif;font-size: 118%;font-weight: bold;padding: 4px 3px;">Search Results</div>
+        <apex:tabPanel switchType="client" selectedTab="name1" >
+            <apex:tab label="Users" name="name1" id="tabOne">
+                <apex:pageBlock id="theTable" >
+                    <apex:pageBlockTable value="{!foundUsers}" var="item">
+                        <apex:column value="{!item.name}" style="cursor: pointer;" onClick="window.opener.setIdValue('{!item.id}');window.opener.setIdNameValue('{!JSENCODE(item.name)}');window.close()"/> 
+                        <apex:column value="{!item.id}" style="cursor: pointer;" onClick="window.opener.setIdValue('{!item.id}');window.opener.setIdNameValue('{!JSENCODE(item.name)}');window.close()"/> 
+                    </apex:pageBlockTable> 
+                </apex:pageBlock>
+            </apex:tab>
+            <apex:tab label="Queues" name="name2" id="tabTwo">
+                <apex:pageBlock id="Queues" >
+                    <apex:pageBlockTable value="{!foundQueues}" var="itemQ">
+                        <apex:column value="{!itemQ.name}" style="cursor: pointer;" onClick="window.opener.setIdValue('{!itemQ.id}');window.opener.setIdNameValue('{!JSENCODE(itemQ.name)}');window.close()"/> 
+                        <apex:column value="{!itemQ.id}" style="cursor: pointer;" onClick="window.opener.setIdValue('{!itemQ.id}');window.opener.setIdNameValue('{!JSENCODE(itemQ.name)}');window.close()"/> 
+                    </apex:pageBlockTable> 
+                </apex:pageBlock> 
+            </apex:tab>
+        </apex:tabPanel>
+    </apex:form>
+    <script type='text/javascript'>
+    
+    
+        var $j = jQuery.noConflict();
+        function noenter(ev)  {
+            if (window.event && window.event.keyCode == 13 || ev.which == 13) {
+                load();
+                doSearchAF();
+                return false;
+             } else {
+                  return true;
+             }
+         }
+         
+        $j(document).ready(function(){
+            dialog = $j('#dialog').dialog({
+            autoOpen: false,
+            modal: true,
+            resizable: false,
+            show: 'fade',
+            width: 170,
+            height: 100,
+            draggable: false,
+            zIndex: 12000
+            });
+            
+            $j(".ui-dialog-titlebar-close").hide();
+        }); 
+        
+         function load(){
+            $j("#dialog").dialog('open'); 
+         }
+         
+         function closeLoad(){
+            $j("#dialog").dialog('close'); 
+         }
+         
+    </script>
+    
+</apex:page>

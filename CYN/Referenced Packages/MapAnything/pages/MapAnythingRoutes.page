@@ -1,0 +1,632 @@
+<apex:page controller="sma.MapAnythingRoutes" doctype="html-5.0" sidebar="false" showHeader="false" standardStylesheets="false">
+    <meta charset="utf-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+    <!-- jQuery -->
+    <script src="{!URLFOR($Resource.MapAnythingRoutes, 'jquery-1.9.1.min.js')}"></script>
+    
+    <!-- CSS -->
+    <style type="text/css">
+        html, body {
+            padding: 0; margin: 0;
+        }
+        
+        /* Loadmask */
+        #loadmask-wrapper {
+            display: none;
+            width: 100%; height: 100%;
+            position: absolute;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 9999;
+        }
+        .errormsg {
+            color: #BF0101;
+            padding: 5px;
+        }
+        #loadmask {
+            width: 300px; height: 40px;
+            background-color: #dddddd;
+            position: absolute; top: 50%; left: 50%;
+            margin: -40px -150px;
+            border-radius: 100px;
+            box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.55);
+        }
+        #loadmask:after {
+            border-radius: 100px;
+            content: "";
+            position: absolute;
+            background-color: #EC8525;
+            left: 2px;
+            top: 2px;
+            bottom: 2px;
+            right: 260px;
+            /*box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.55);*/
+            -webkit-animation: slide 2s ease-in-out infinite -0.2s;
+        }
+        @-webkit-keyframes slide {
+            0% { right: 260px; left: 2px; }
+            5% { left: 2px; }
+            50% { right: 2px; left: 260px; }
+            55% { right: 2px; }
+            100% { right: 260px; left: 2px; }
+        }
+        
+        #Page-Header { 
+            background: #3684c5;
+            color: white;
+            font-weight: 700;
+            padding: .5em 15px;
+            font-size: 24px;
+            text-shadow: none;
+        }
+        .saved-waypoint .timedetails {
+        	color: #757575; font-size: 14px;
+        	{! IF(selectedRouteIsTimeBased, '', 'display: none;') }
+        }
+        .Route-Name, .saved-waypoint, .disposition-type-row {
+            border-bottom: 1px solid #ccc;
+            background: #eee;
+            font-weight: 700;
+            color: #222;
+            text-shadow: 0 1px 0 #fff;
+            background-image: -webkit-gradient(linear,left top,left bottom,from(#fff),to(#f1f1f1));
+            background-image: -webkit-linear-gradient(#fff,#f1f1f1);
+            background-image: -moz-linear-gradient(#fff,#f1f1f1);
+            background-image: -ms-linear-gradient(#fff,#f1f1f1);
+            background-image: -o-linear-gradient(#fff,#f1f1f1);
+            background-image: linear-gradient(#fff,#f1f1f1);
+            padding: 0.7em 15px;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        .Route-Name.selected, .saved-waypoint.selected, .disposition-type-row.selected {
+            border-bottom: 1px solid #bbb;
+            background-image: -webkit-gradient(linear,left top,left bottom,from(#F5F5F5),to(#E0E0E0));
+            background-image: -webkit-linear-gradient(#F5F5F5,#E0E0E0);
+            background-image: -moz-linear-gradient(#F5F5F5,#E0E0E0);
+            background-image: -ms-linear-gradient(#F5F5F5,#E0E0E0);
+            background-image: -o-linear-gradient(#F5F5F5,#E0E0E0);
+            background-image: linear-gradient(#F5F5F5,#E0E0E0);
+        }
+        .cancel-disposition.selected {
+            background-image: none;
+        }
+        .waypoints-header {
+            font-size: 18px;
+            padding: .5em 15px;
+            font-weight: 700;
+            background: black;
+            color: white;
+            text-shadow: none;
+        }
+        .back-saved-routes {
+            position: absolute;
+            right: 10px;
+            top: 16px;
+            width: 30px;
+            height: 30px;
+            border: 3px solid white;
+            border-radius: 30px;
+            background: url('{!URLFOR($Resource.MapAnythingRoutes, '/images/icons-36-white.png')}') no-repeat -794px -2px;
+        }
+        .back-saved-routes.selected {
+            background-color: #8F8F8F;
+        }
+        .nav-to-record {
+            position: absolute;
+            right: 10px;
+            top: 15px;
+            width: 30px;
+            height: 36px;
+            background: url('{!URLFOR($Resource.MapAnythingRoutes, '/images/icons-36-white.png')}') no-repeat -1654px 0px;
+        }
+        .header-name {
+            font-size:10px;
+        }
+        .waypoint-info-row {
+            padding: .7em 15px;
+            border-bottom: 1px solid #ccc;
+            background: #eee;
+            font-weight: 700;
+            color: #222;
+            text-shadow: 0 1px 0 #fff;
+        }
+        .info-row {
+            padding: .7em 15px;
+            border-bottom: 1px solid #ccc;
+            background: #eee;
+            font-weight: 700;
+            color: #222;
+            text-shadow: 0 1px 0 #fff;
+            font-size: 18px;
+        }
+        .additionalinfo table td {
+            font-weight: bold;
+            font-size: 10px;
+        }
+        .additionalinfo table td:last-child {
+            font-weight: normal;
+        }
+        .waypoint-button {
+            font-size: 18px;
+            padding: .6em 20px;
+            min-width: .75em;
+            display: block;
+            position: relative;
+            text-overflow: ellipsis;
+            overflow: hidden;
+            white-space: nowrap;
+            zoom: 1;
+            text-align: center;
+            margin-bottom: 5px;
+            border-radius: 10px;
+        }
+        .button-orange {
+            border: 1px solid #f4c63f;
+            background: #fadb4e;
+            font-weight: 700;
+            color: #222;
+            text-shadow: 0 1px 0 #fff;
+            background-image: -webkit-gradient(linear,left top,left bottom,from(#ffefaa),to(#ffe155));
+            background-image: -webkit-linear-gradient(#ffefaa,#ffe155);
+            background-image: -moz-linear-gradient(#ffefaa,#ffe155);
+            background-image: -ms-linear-gradient(#ffefaa,#ffe155);
+            background-image: -o-linear-gradient(#ffefaa,#ffe155);
+            background-image: linear-gradient(#ffefaa,#ffe155);
+        }
+        .button-orange:hover {
+            border: 1px solid #f2c43d;
+            background: #fbe26f;
+            font-weight: 700;
+            color: #111;
+            text-shadow: 0 1px 0 #fff;
+            background-image: -webkit-gradient(linear,left top,left bottom,from(#fff5ba),to(#fbdd52));
+            background-image: -webkit-linear-gradient(#fff5ba,#fbdd52);
+            background-image: -moz-linear-gradient(#fff5ba,#fbdd52);
+            background-image: -ms-linear-gradient(#fff5ba,#fbdd52);
+            background-image: -o-linear-gradient(#fff5ba,#fbdd52);
+            background-image: linear-gradient(#fff5ba,#fbdd52);
+            text-decoration: underline;
+        }
+        .button-blue {
+            border: 1px solid #044062;
+            background: #396b9e;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 1px 0 #194b7e;
+            background-image: -webkit-gradient(linear,left top,left bottom,from(#5f9cc5),to(#396b9e));
+            background-image: -webkit-linear-gradient(#5f9cc5,#396b9e);
+            background-image: -moz-linear-gradient(#5f9cc5,#396b9e);
+            background-image: -ms-linear-gradient(#5f9cc5,#396b9e);
+            background-image: -o-linear-gradient(#5f9cc5,#396b9e);
+            background-image: linear-gradient(#5f9cc5,#396b9e);
+        }
+        .button-blue:hover{
+            border: 1px solid #00415e;
+            background: #4b88b6;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 1px 0 #194b7e;
+            background-image: -webkit-gradient(linear,left top,left bottom,from(#6facd5),to(#4272a4));
+            background-image: -webkit-linear-gradient(#6facd5,#4272a4);
+            background-image: -moz-linear-gradient(#6facd5,#4272a4);
+            background-image: -ms-linear-gradient(#6facd5,#4272a4);
+            background-image: -o-linear-gradient(#6facd5,#4272a4);
+            background-image: linear-gradient(#6facd5,#4272a4);
+            text-decoration: underline;
+        }
+        .button-white {
+            border: 1px solid #ccc;
+            background: #eee;
+            font-weight: 700;
+            color: #222;
+            text-shadow: 0 1px 0 #fff;
+            background-image: -webkit-gradient(linear,left top,left bottom,from(#fff),to(#f1f1f1));
+            background-image: -webkit-linear-gradient(#fff,#f1f1f1);
+            background-image: -moz-linear-gradient(#fff,#f1f1f1);
+            background-image: -ms-linear-gradient(#fff,#f1f1f1);
+            background-image: -o-linear-gradient(#fff,#f1f1f1);
+            background-image: linear-gradient(#fff,#f1f1f1);
+        }
+        .button-white:hover {
+            border: 1px solid #bbb;
+            background: #dfdfdf;
+            font-weight: 700;
+            color: #222;
+            text-shadow: 0 1px 0 #fff;
+            background-image: -webkit-gradient(linear,left top,left bottom,from(#f6f6f6),to(#e0e0e0));
+            background-image: -webkit-linear-gradient(#f6f6f6,#e0e0e0);
+            background-image: -moz-linear-gradient(#f6f6f6,#e0e0e0);
+            background-image: -ms-linear-gradient(#f6f6f6,#e0e0e0);
+            background-image: -o-linear-gradient(#f6f6f6,#e0e0e0);
+            background-image: linear-gradient(#f6f6f6,#e0e0e0);
+            text-decoration: underline;
+        }
+        .info-row.cancel-disposition {
+            border: 1px solid #111;
+            background: #333;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 1px 0 #111;
+            background-image: -webkit-gradient(linear,left top,left bottom,from(#444),to(#2d2d2d));
+            background-image: -webkit-linear-gradient(#444,#2d2d2d);
+            background-image: -moz-linear-gradient(#444,#2d2d2d);
+            background-image: -ms-linear-gradient(#444,#2d2d2d);
+            background-image: -o-linear-gradient(#444,#2d2d2d);
+            background-image: linear-gradient(#444,#2d2d2d);
+        }
+        .alert-body {
+            font-weight: 700;
+            color: #222;
+            text-shadow: 0 1px 0 #fff;
+            background: #eee;
+            border-bottom: 1px solid #ccc;
+            padding: 0.7em 15px;
+            cursor: pointer;
+            font-size: 18px;
+            text-shadow: 0 1px 0 #fff; 
+        }
+        .waypoints-counters {
+            font-size: 10px;
+            position: absolute;
+            right: 60px;
+            top: 5px;
+        }
+        .waypoints-counters table {
+            border-spacing: 0;
+        }
+        .waypoints-counters tr td {
+            color: white;
+        }
+        .waypoints-counters td:first-child {
+            padding-right: 4px;
+        }
+    
+        body 
+        { 
+            {! IF ( state = 'Disposition', 'padding-bottom: 70px;', '') }
+        }
+        select
+        {
+            display: block;
+            width: 100%;
+            height: 34px;
+            padding: 6px 12px;
+            font-size: 14px;
+            line-height: 1.42857143;
+            color: #555;
+            background-color: #fff;
+            background-image: none;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            -webkit-box-shadow: inset 0 1px 1px rgba(0,0,0,.075);
+            box-shadow: inset 0 1px 1px rgba(0,0,0,.075);
+            -webkit-transition: border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+            transition: border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+        }
+    </style>
+    
+    <!-- JavaScript -->
+    <script type='text/javascript'>
+        $(function () {
+        
+            //on route click
+            $('.Route-Name').on('click', function() {
+                $(this).addClass('selected');
+                $('[id$=":routeId"]').val($(this).attr('data-id'));
+                $('#loadmask-wrapper').show();
+                getWaypoints();
+            });
+            
+            //on waypoint click
+            $('.saved-waypoint').on('click', function() {
+                $(this).addClass('selected');
+                $('[id$=":waypointId"]').val($(this).attr('data-id'));
+                $('[id$=":accountId"]').val($(this).attr('data-account'));
+                $('#loadmask-wrapper').show();
+                getWaypointOptions();
+            });
+            
+            //return to routes
+            $('.back-saved-routes').on('click', function() {
+                $(this).addClass('selected');
+                $('#loadmask-wrapper').show();
+                getRoutes();
+            });
+            
+            //return to waypoints
+            $('.back-waypoints').on('click', function() {
+                $('#loadmask-wrapper').show();
+                getWaypoints();
+            });
+            
+            //Various button navigation
+            $('.waypoint-button.add-dispostion, .add-notes, .back-waypoints, .disposition-back').on('click', function() {
+                $('#loadmask-wrapper').show();
+                
+                var $button = $(this);
+                if ($button.is('.add-dispostion')) {
+                    $(this).addClass('selected');
+                    $('[id$=":waypointSelectionType"]').val('createDisposition');
+                }
+                else if ($button.is('.add-notes')) {
+                    $(this).addClass('selected');
+                    $('[id$=":waypointSelectionType"]').val('createNote');
+                }
+                else if ($button.is('.back-waypoints')) {
+                    $(this).addClass('selected');
+                    $('[id$=":waypointSelectionType"]').val('return');
+                }
+                else if ($button.is('.back-waypoints') || $button.is('.dispostion-no')) {
+                    $(this).addClass('selected');
+                    $('[id$=":waypointSelectionType"]').val('returnDisposition');
+                }
+                else if ($button.is('.disposition-back')) {
+                    $(this).addClass('selected');
+                    $('[id$=":waypointSelectionType"]').val('returnDisposition');
+                }
+                waypointSelectionType();
+            });
+            
+            //add note
+            $('.SaveNote-Account, .SaveNote-Waypoints').on('click', function() {
+                var $button = $(this);
+            
+                //validation
+                if ($('#addnote-title').val() == '' || $('#addnote-body').val() == '') {
+                    DialogAlert_Show('Validation Error', 'Please enter a title and body before proceeding');
+                    return;
+                }
+                
+                //serialze note 
+                var serializedNote = JSON.stringify({
+                    ParentId                    : $('[id$=":accountId"]').val(),
+                    Title                       : $('#addnote-title').val(),
+                    Body                        : $('#addnote-body').val()
+                });
+                
+                //store info to build record
+                $('[id$=":serializedNote"]').val(serializedNote);
+                
+                //return to the waypoints/waypoint page depending on the button that was clicked
+                if ($button.is('.SaveNote-Account')) {
+                    $('[id$=":saveType"]').val('AccountReturn');
+                }
+                else {
+                    $('[id$=":saveType"]').val('WaypointReturn');
+                }
+                
+                //save note 
+                addNote();
+                
+            });
+      
+        });
+        
+        function nativeGPSNavigation (lat,lng)
+        {
+            //figure out which iOS version this is
+            var versions;
+            var address;
+            if (/iP(hone|od|ad)/.test(navigator.platform)) 
+            {
+                // supports iOS 2.0 and later: http://bit.ly/TJjs1V
+                var v = (navigator.appVersion).match(/OS (\d+)_(\d+)_?(\d+)?/);
+                versions = [parseInt(v[1], 10), parseInt(v[2], 10), parseInt(v[3] || 0, 10)];
+            }
+
+            //open the proper link depending on version
+            if (versions && versions[0] <= 5) {
+                address = 'http://maps.google.com/maps?daddr=' + encodeURIComponent(lat+','+lng); //native google maps
+            }
+            else if (versions) {
+                //address = 'http://maps.apple.com/?daddr=' + encodeURIComponent(lat+','+lng);  //native apple maps
+                address = 'comgooglemaps://?saddr=&daddr=' + encodeURIComponent(lat+','+lng);  //google maps app
+            }
+            else {
+                address = 'http://maps.google.com/maps?daddr=' + encodeURIComponent(lat+','+lng); //not iOS
+            }
+                return address;
+            }
+
+            function populateLocation (callback) {
+                $('#loadmask-wrapper').show();
+                navigator.geolocation.getCurrentPosition(function (response) {
+                    $('[id$=":accuracy"]').val(response.coords.accuracy);
+                    $('[id$=":latitude"]').val(response.coords.latitude);
+                    $('[id$=":longitude"]').val(response.coords.longitude);
+                    // var distance = google.maps.geometry.spherical.computeDistanceBetween(new google.maps.LatLng(response.coords.latitude, response.coords.longitude), pMarker.getPosition());
+                    callback(); 
+                });
+            }
+        
+    </script>
+    
+    <apex:form >
+
+        <!-- Loadmask -->
+        <div id='loadmask-wrapper'>
+            <div id='loadmask'></div>
+        </div>
+        
+        <!-- apex functions -->
+        <apex:actionFunction name="addNote" action="{! addNote }"/>
+        <apex:actionFunction name="getWaypoints" action="{! getWaypoints }"/>
+        <apex:actionFunction name="getRoutes" action="{! getRoutes }"/>
+        <apex:actionFunction name="getWaypointOptions" action="{! getWaypointOptions }"/>
+        <apex:actionFunction name="waypointSelectionType" action="{! waypointSelectionType }"/>
+        <apex:actionFunction name="checkIn" action="{! checkIn }"/>
+        <apex:actionFunction name="checkOut" action="{! checkOut }"/>
+        <apex:inputHidden id="routeId" value="{! routeId }"/>
+        <apex:inputHidden id="checkInSuccess" value="{! checkInSuccess }"/>
+        <apex:inputHidden id="waypointId" value="{! waypointId }"/>
+        <apex:inputHidden id="serializedNote" value="{! serializedNote }"/>
+        <apex:inputHidden id="saveType" value="{! saveType }"/>
+        <apex:inputHidden id="waypointSelectionType" value="{! waypointSelectionType }"/>
+        <apex:inputHidden id="accuracy" value="{!accuracy}" />
+        <apex:inputHidden id="latitude" value="{!latitude}" />
+        <apex:inputHidden id="longitude" value="{!longitude}" />
+        <apex:inputHidden id="errorDetails" value="{!errorDetails}" />
+        
+        <!-- Error View -->
+        <apex:outputPanel rendered="{! state == 'Error'}">
+            <div id='Page-Header'>Error</div>
+            <div style='padding: 15px; font-size: 24px; font-weight: bold; color: #8D8D8D; font-style: italic;'>{!error}</div>
+        </apex:outputPanel>
+        
+        <!-- My Routes View -->
+        <apex:outputPanel rendered="{! state == 'MyRoutes'}">
+            <div id='Page-Header'>My Routes</div>
+            <apex:repeat value="{! routes }" var="r">
+                <div class='Route-Name' data-id='{! r.Id }'>
+                    <div>{!r.Name}</div>
+                    <div><apex:outputField value="{!r.sma__Date__c}"></apex:outputField></div>
+                </div>
+            </apex:repeat>
+        </apex:outputPanel>
+        
+        <!-- Waypoints View -->
+        <apex:outputPanel rendered="{! state == 'Waypoints'}">
+            <div id='Page-Header'>
+                <div class='header-name'>Waypoints</div>
+                <div>{!selectedRoute.Name}</div>
+                <div class='back-saved-routes'></div>
+                <div class="waypoints-counters">
+                    <table>
+                        <tr>
+                        </tr>
+                            <td class="waypoints-counters-checkedin"></td>
+                            <td>Checked In</td>
+                        <tr>
+                            <td class="waypoints-counters-remaining"></td>
+                            <td>Remaining</td>
+                        </tr>
+                        <tr>
+                            <td class="waypoints-counters-checkedout"></td>
+                            <td>Checked Out</td>
+                        </tr>
+                        <tr>
+                            <td class="waypoints-counters-total"></td>
+                            <td>Total</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <div class='waypoints-header'>Checked In</div>
+            <apex:repeat value="{! checkedInWaypoints }" var="w">
+                <div data-account='{! w.waypoint.LinkId__c }'  data-id='{! w.waypoint.Id }' class='checkedin saved-waypoint'>
+                	<div class='name'>{!w.waypoint.Name}</div>
+                	<div class='timedetails'>{!w.timeDetails}</div>
+                </div>
+            </apex:repeat>
+            <div class='waypoints-header'>Remaining</div>
+            <apex:repeat value="{! remainingWaypoints }" var="w">
+                <div data-account='{! w.waypoint.LinkId__c }'  data-id='{! w.waypoint.Id }' class='remaining saved-waypoint'>
+                	<div class='name'>{!w.waypoint.Name}</div>
+                	<div class='timedetails'>{!w.timeDetails}</div>
+                </div>
+            </apex:repeat>
+            <div class='waypoints-header'>Checked Out</div>
+            <apex:repeat value="{! checkedOutWaypoints }" var="w">
+                <div data-account='{! w.waypoint.LinkId__c }' data-id='{! w.waypoint.Id }' class='checkedout saved-waypoint'>
+                	<div class='name'>{!w.waypoint.Name}</div>
+                	<div class='timedetails'>{!w.timeDetails}</div>
+                </div>
+            </apex:repeat>
+            
+            <script type='text/javascript'>
+                var checkedInLength = $('.checkedin.saved-waypoint').length;
+                var remainingLength = $('.remaining.saved-waypoint').length;
+                var checkedOutLength = $('.checkedout.saved-waypoint').length;
+
+                $('.waypoints-counters-checkedin').text(checkedInLength);
+                $('.waypoints-counters-remaining').text(remainingLength);
+                $('.waypoints-counters-checkedout').text(checkedOutLength);
+                $('.waypoints-counters-total').text(checkedInLength + remainingLength + checkedOutLength);
+            </script>
+        </apex:outputPanel>
+        
+        <!-- Waypoint More Info View -->
+        <apex:outputPanel rendered="{! state == 'modifyWaypoint'}">
+            <div id='Page-Header'>
+                <div class='header-name'>Details</div>
+                <div>{!waypointInfo.Name}</div>
+                <div class='nav-to-record' onclick="try { sforce.one.navigateToSObject('{!waypointInfo.LinkId__c}'); } catch (err) { }" style="{!IF(waypointInfo.LinkId__c = NULL, 'display: none;', '')}"></div>
+            </div>
+            <div class='waypoint-info-row'>
+              <div>Address:</div>
+              <div class='address'><a style='cursor: pointer; font-weight: bold; color: #3684C5; text-decoration: none;'>{! waypointInfo.Address__c}</a></div>
+            </div>
+            <div class='waypoint-info-row'>
+              <div>Additional Info:</div>
+              <div class='additionalinfo'>
+                <apex:outputLabel escape="false" value="{! tooltipTable}"></apex:outputLabel>
+              </div>
+            </div>
+            <div class='waypoint-info-row' style='display: none;'>
+              <div>Notes:</div>
+              <div class="notes" style="font-weight: normal;">{! waypointInfo.Notes__c}</div>
+            </div>
+            <div class='waypoint-info-row'>
+              <div class='waypoint-button-wrapper'>
+                <div class="errormsg" style="{! IF(checkInSuccess, 'display: none;', '') }">{! checkInError }</div>
+                <div class='waypoint-button button-blue checkin' style="{! IF(OR(NOT(selectedWaypointSupportsCheckin), checkInObj != NULL), 'display: none;', '') }" onclick="populateLocation(function () { checkIn(); });">Check In</div>
+                <div class='waypoint-button button-orange checkout' style="{! IF(OR(NOT(selectedWaypointSupportsCheckin), checkInObj = NULL), 'display: none;', '') }" onclick="$('#loadmask-wrapper').show(); checkOut();">Check Out</div>
+                <div class='waypoint-button button-blue add-notes' style='display: none;'>Add Notes</div>
+                <div class='waypoint-button button-white back-waypoints'>Back</div>
+              </div>
+            </div>
+            
+            <!-- Update Address URL -->
+            <script type='text/javascript'>
+            $('.address a').attr('href', nativeGPSNavigation('{!waypointInfo.Latitude__c}', '{!waypointInfo.Longitude__c}'));
+            </script>
+        </apex:outputPanel>
+        
+        <!-- Alert Dialog -->
+        <apex:outputPanel rendered="{! state == 'alertDialog'}">
+            <div id='Page-Header'>
+                <div class='header-name'>{! waypointInfo.Name}</div>
+                <div>Confirm</div>
+            </div>
+            <div class='alert-body'></div>
+            <div class='info-row' style='text-align: center;'>
+                <div class='disposition-yes waypoint-button button-blue' >Yes</div>
+                <div class='dispostion-no waypoint-button button-white'>No</div>
+            </div>
+            <script type='text/javascript'>
+                var $info = $('<div/>');
+                var type = $('[id$=":dispostionSubType"]').val();
+                $info.text('This will result in a 6 month period before the next visit. Are you sure you want to select ' + type + '?');
+                $('.alert-body').append($info);
+            </script>
+        </apex:outputPanel>
+        
+        <!-- Disposition Next Visit View -->
+        <apex:outputPanel rendered="{! state == 'CreateNote'}">
+          <div id='Page-Header'>
+                <div class='header-name'>{! waypointInfo.Name}</div>
+                <div>Add Note</div>
+            </div>
+            <div class='info-row'>
+              <div>Title:</div>
+                <div class='input-wrapper'>
+                  <input type='text' id='addnote-title' name='addnote-title' />
+              </div>
+            </div>
+            <div class='info-row'>
+              <div>Body:</div>
+                <div class='input-wrapper'>
+                  <textarea id='addnote-body' name='addnote-body'></textarea>
+              </div>
+            </div>
+            <div class='info-row'>
+              <div class='SaveNote-Account waypoint-button button-blue'>Finish &amp; Return to Account</div>
+                <div class='SaveNote-Waypoints waypoint-button button-blue'>Finish &amp; Return to Waypoints</div>
+                <div class='disposition-back waypoint-button button-white' >Back</div>
+            </div>
+        </apex:outputPanel>
+        
+    </apex:form>
+</apex:page>

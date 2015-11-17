@@ -1,0 +1,256 @@
+<apex:page controller="SL_TimeTracking_Ctrl" action="{!addTimeEntryForCurrentWeek}">
+    <apex:form styleClass="fontStyle">
+        <apex:stylesheet value="{!URLFOR($Resource.SL_TimeTracking, '/css/sl-bs-bootstrap.min.css')}"/>
+        <apex:stylesheet value="{!URLFOR($Resource.SL_TimeTracking, '/css/jquery-ui.css')}"/>
+        <apex:includeScript value="{!URLFOR($Resource.SL_TimeTracking, '/js/jquery-1.10.2.js')}"/>
+        <apex:includeScript value="{!URLFOR($Resource.SL_TimeTracking, '/js/jquery-ui.js')}"/> 
+        <head>
+            <style>
+                .fontStyle {
+                    font:normal 12px arial;
+                }
+                .ui-menu{width:100px;}
+            	.lookupHoverDetail{display:none;}
+                .inmobile{width:30%;}
+                .tablealign{float:right;}
+                @media all and (max-width: 640px) and (min-width: 320px) {
+        	        .inmobile{
+                     width:100%;	  
+        	        }
+        	        .tablealign{
+                        float:left;
+        	        }
+    	        }
+            </style>
+        </head>
+        <apex:pageBlock id="pb">
+            <apex:pageMessages id="pgm"/>
+    
+            <apex:actionFunction name="editTimeCardEntryAF" rerender="pb,pgm" action="{!editTimeCardEntry}" status="loading" oncomplete="focusOnInput('{!idSelectedProject}_{!intIndexNo}')">
+                <apex:param name="editAssignTCId" value="" assignTo="{!idSelectedTimeCardId}"/>
+            </apex:actionFunction>
+    
+            <apex:actionFunction name="saveTimeCardAF" rerender="pb,pgm" action="{!saveTimeCard}" status="loading" oncomplete="focusOnInput('{!idSelectedProject}_{!intIndexNo}'); clearInput();">
+                <apex:param name="save" value="" assignTo="{!idSelectedTimeCardId}"/>
+                <apex:param name="saveIndexNo" value="" assignTo="{!intIndexNo}"/>
+            </apex:actionFunction>
+    
+            <apex:actionFunction name="newTimeCardAF1" rerender="pb,pgm" action="{!newTimeCardEntry}" status="loading" oncomplete="focusOnInput('{!idSelectedProject}_{!intIndexNo}'); clearInput();">
+                <apex:param name="selectedProject" value="" assignTo="{!idSelectedProject}"/>
+            </apex:actionFunction>
+    
+            <apex:actionFunction name="selectedPartnerOrMDAF" rerender="pb,pgm" action="{!fetchTimeCards}" status="loading" oncomplete="clearInput()">
+                <apex:param name="selectedPartnerOrMD" value="" assignTo="{!strParterOrMDsId}"/>
+            </apex:actionFunction>
+    
+            <apex:actionFunction name="changeTimeInAF" rerender="pb,pgm" action="{!changeTimeIn}" status="loading" oncomplete="clearInput()"/>
+    
+            <div class="sl-bs">
+                <div style="width:100%;" onclick="saveTimeCard();">
+            		<div class="col-lg-6 col-md-6 col-sm-12 col-xs-12 test">    
+            		    <table style="display : {!IF(isCurrentWeek, 'none', '')}">
+            		        <tr>
+            		            <td style="padding-top:4px; text-align:right;font-size: 14px;">New Time Entry:</td>
+            		            <td style="padding-left:4px;">
+            		                <apex:inputText id="projectTextId" html-placeholder="Select a project..." styleclass="form-control input-sm" style="width:200px">
+                			            <c:SL_AutoComplete objectname="Opportunity-TimeTracking" sObjectFieldName="Name" selectedUsers="{!lstParterOrMDsIds}" 
+                			            autocomplete_textbox="{!$Component.projectTextId}" isInlineVF="false" bgColor="#aaa" fontSize="12"/>
+                			        </apex:inputText>
+                			        <script>
+        					            function clearInput(){
+        					                document.getElementById('{!$Component.projectTextId}').value = '';
+        					            }
+        					        </script>
+            		            </td>
+            		        </tr>
+            		    </table>
+            		</div>
+                    <div class="col-lg-6 col-md-6 col-sm-6 col-xs-12 ">
+                        <table class="tablealign">
+                            <tr>
+                                <td style="padding-top:4px; text-align:right;font-size: 14px;">Log Time in:</td>
+                                <td style="padding-left:5px;font-size: 12px;font-weight:normal;">
+                                    <apex:selectRadio value="{!strLogTimeIn}" layout="PageDirection" onchange="changeTimeInAF();" >
+                                        <apex:selectOptions value="{!lstTimeLoginItems}"/>
+                                    </apex:selectRadio>
+                                </td>
+                            </tr>
+                            <tr style="display : {!IF(isAdminUser, '', 'none')}">
+                                <td style="padding-top:5px; text-align:right;font-size: 14px;">View Time Entry as:</td>
+                                <td style="padding-left:4px;">
+                                    <apex:inputText id="inputTxtId" html-placeholder="Choose a Partner, MD, or Director" styleclass="form-control input-sm" style="width:200px">
+                			            <c:SL_AutoComplete objectname="User-TimeTracking" sObjectFieldName="Name" selectedUsers="{!lstParterOrMDsIds}" 
+                			            autocomplete_textbox="{!$Component.inputTxtId}" isInlineVF="false" bgColor="#aaa" fontSize="12"/>
+                			        </apex:inputText>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                <apex:variable var="k" value="{!0}" rendered="{!isAdminUser}">
+                    <br clear="all" />
+                </apex:variable>
+                
+                <div style="width:100%;" onclick="saveTimeCard();">
+                    <hr style="float:left; width:100%; height:1px; border:none; color:#333; background-color:#333;"/>
+                    <div style="width:100%; float:left; margin-bottom:10px;">
+                        <h4>Existing Time Entries</h4> 
+                    </div>
+                    <div style="width:100%; float:left; margin-bottom:10px;">
+                        <font style="font-size: 16px;">
+                            <apex:commandLink action="{!prevWeekTimeCard}" status="loading" rerender="pb" oncomplete="clearInput()">
+                                <span class="glyphicon glyphicon-chevron-left" style="font-size: 15px;"></span>
+                            </apex:commandLink> Week: 
+                            <apex:outputText value="{0, date, yyyy-MM-dd}">
+                                <apex:param value="{!dtWeekStart}" /> 
+                            </apex:outputText> to 
+                            <apex:outputText value="{0, date, yyyy-MM-dd}">
+                                <apex:param value="{!dtWeekEnd}" />
+                            </apex:outputText>
+                            <apex:commandLink action="{!nxtWeekTimeCard}" status="loading" rerender="pb" rendered="{!(intWeekCount != 0)}" oncomplete="clearInput()">
+                                <span class="glyphicon glyphicon-chevron-right" style="font-size: 15px;"></span>
+                            </apex:commandLink>
+                        </font>    
+                    </div>
+                    <div style="width:100%;float:left;display:{!IF(isValidHrsPercentage, 'none', '')}"> 
+                        <div class="alert alert-danger">
+                            <strong>Warning! </strong>Please enter valid hours or percentage worked.
+                        </div>
+                    </div>
+                    <div style="width:100%;float:left;display:{!IF(isEditPermission, 'none', '')}"> 
+                        <div class="alert alert-danger">
+                            This Time Card is locked for Time Entry. If you need to make an update, contact a Staffer.
+                        </div>
+                    </div>
+                </div>
+                <br/>
+        
+                <div id="inputBoxes"> 
+                    <apex:variable var="i" value="{!0}"/>
+                    <apex:pageBlockTable value="{!lstWrapperTimeCard}" var="wraptEntry" id="pbt" styleClass="table table-hover" rendered="{!(lstWrapperTimeCard.size != 0)}">
+                        <apex:column width="85%" headerValue="Project:" footerValue="Total:" onClick="editTimeCardEntryJS('{!wraptEntry.objTimeCard.Id}', {!wraptEntry.isEditable}, {!i}); return false;">
+                            <apex:variable var="i" value="{!i+1}"/>
+                            <apex:outputPanel id="op1">
+                                <apex:outputText value="{!mapIdToProject[wraptEntry.objTimeCard.Project__c].Name}"/>
+                            </apex:outputPanel> 
+                        </apex:column>
+                        
+                        <apex:column rendered="{!(strLogTimeIn == 'Hours')}" onClick="editTimeCardEntryJS('{!wraptEntry.objTimeCard.Id}', {!wraptEntry.isEditable}, {!i}); return false;">
+                            <apex:facet name="header">Hours Worked</apex:facet>
+                            <apex:facet name="footer">{!decTotalHrs}</apex:facet>
+                            <apex:outputPanel id="op2">
+                                <apex:outputField value="{!wraptEntry.objTimeCard.Worked_Hours__c}" rendered="{!!wraptEntry.isEditable}"/>
+                                <div id="{!wraptEntry.objTimeCard.Project__c}_{!i}" class="arabic">
+                                    <apex:inputField value="{!wraptEntry.objTimeCard.Worked_Hours__c}" html-autofoucus="autofoucus" onkeypress="return isNumber(event, '{!wraptEntry.objTimeCard.id}', '{!i}'); return false;" onblur="saveTimeCardJS('{!wraptEntry.objTimeCard.id}', '{!i}'); return false;" rendered="{!wraptEntry.isEditable}" styleClass="form-control input-sm" style="width:70px;text-align:right;" onfocus="this.value = this.value;"/>
+                                </div>
+                            </apex:outputPanel>
+                        </apex:column>
+                        
+                        <apex:column rendered="{!(strLogTimeIn == 'Percentages')}" onClick="editTimeCardEntryJS('{!wraptEntry.objTimeCard.Id}', {!wraptEntry.isEditable}, {!i});">
+                            <apex:facet name="header">Percentage Worked</apex:facet>
+                            <apex:facet name="footer">{!decTotalPerc}%</apex:facet>
+                            <apex:outputPanel id="op3">
+                                <apex:outputField value="{!wraptEntry.objTimeCard.Percentage_Worked__c}" rendered="{!!wraptEntry.isEditable}"/>
+                                <div id="{!wraptEntry.objTimeCard.Project__c}_{!i}" class="arabic">
+                                    <apex:inputField value="{!wraptEntry.objTimeCard.Percentage_Worked__c}" html-autofoucus="autofoucus" onkeypress="return isNumber(event, '{!wraptEntry.objTimeCard.id}', '{!i}'); return false;" onblur="saveTimeCardJS('{!wraptEntry.objTimeCard.id}', '{!i}'); return false;" rendered="{!wraptEntry.isEditable}" styleClass="form-control input-sm" style="width:70px;text-align:right;" onfocus="this.value = this.value;"/>
+                                </div>
+                            </apex:outputPanel>
+                        </apex:column>
+                    </apex:pageBlockTable>
+                </div>
+                <br/>
+                <apex:pageBlockTable value="{!lstWrapperTimeCard}" var="wraptEntry1" id="pbt1" styleClass="table table-hover" rendered="{!(lstWrapperTimeCard.size == 0)}">
+                    <apex:facet name="header">No time entries exist for the current week</apex:facet>
+                </apex:pageBlockTable>
+            </div>
+            <apex:actionstatus id="loading" startText="Requesting...">
+                <apex:facet name="start">
+                    <div id="salesforceSource_blurybackground" style="position:absolute; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: white; opacity:0.7; filter-alpha(opacity:60)"></div>
+                    <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; ">
+                        <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+                            <table  style="width: 100%; height: 30%">
+                                <tr align="center" valign="top" style="width: 100%; height: 30%">
+                                    <td valign="top"><img src="{!URLFOR($Resource.SL_TimeTracking, '/img/big-loading.gif')}"/><span class="waitingDescription"><b>Loading...</b></span></td>
+                                </tr>
+                            </table>
+                        </div>
+                </div>
+                    <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display:''; "></div>
+                    <script>document.getElementById('ManageMembersViewport_loading').height = window.innerHeight * (3/4);</script>
+                </apex:facet>
+                <apex:facet name="stop"></apex:facet>
+            </apex:actionstatus>
+    
+            <script>
+                var isFirstCall = true;
+                var timeCardId;
+                var timeCardIndex;
+                var isEditMode = false;
+                
+                function newTimeCardAF(projectId)
+                {
+                    var size = '{!lstWrapperTimeCard.size}';
+                    timeCardIndex = parseInt(size)+1;
+                    newTimeCardAF1(projectId, parseInt(size)+1);  
+                }
+                
+                function focusOnInput(recordId)
+                {
+                    // $('input[type="text"]').focus(function() {
+                    //       alert( "Handler for .focus() called." );
+                    //     });
+                    document.getElementById(recordId).getElementsByTagName('input')[0].focus();
+                    // $("#"+recordId).focus();
+                    // console.log('here',$("#"+recordId).is(':focus'));
+                    // if($("#"+recordId).is(':focus')) {
+                    //     alert("focus");
+                    // }
+                }
+                
+                //funtion used to allow only numbers or decimals
+                function isNumber(evt, recordId, intIndex) 
+                {
+                    evt = (evt) ? evt : window.event;
+                    var charCode = (evt.which) ? evt.which : evt.keyCode;
+                    if(charCode == 13 && isFirstCall)
+                    {
+                        saveTimeCardAF(recordId, intIndex);
+                        isFirstCall = false;
+                    }    
+                    if(charCode != 13 && charCode != 46 && (charCode < 48 || charCode > 57))
+                    	return false;
+                    return true;
+                }
+                
+                function saveTimeCardJS(recordId, intIndex)
+                {
+                    if(isFirstCall)
+                    {
+                        saveTimeCardAF(recordId, intIndex);
+                        isFirstCall = false;
+                    }    
+                }
+                
+                function editTimeCardEntryJS(recordId, isEditable, index) 
+                {
+                    if(!isEditable)
+                    {
+                        editTimeCardEntryAF(recordId);
+                        isEditMode = true;
+                        timeCardId = recordId;
+                        timeCardIndex = index+1;
+                    }
+                }
+                
+                function saveTimeCard()
+                {
+                    if(document.getElementById('inputBoxes').getElementsByTagName('input').length > 0)
+                    {
+                        saveTimeCardAF(timeCardId, timeCardIndex);    
+                        isFirstCall = false;
+                    }    
+                }
+            </script>
+        </apex:pageBlock>
+    </apex:form>
+</apex:page>

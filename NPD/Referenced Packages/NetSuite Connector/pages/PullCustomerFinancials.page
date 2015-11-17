@@ -1,0 +1,67 @@
+<apex:page id="account_financial_sync" controller="netsuite_conn.PullCustomerFinancials" tabStyle="Account" showHeader="false">
+
+    <apex:form id="formid" >
+        <apex:actionStatus id="status" onStart="document.body.style.cursor = 'wait'; return true;" onStop="document.body.style.cursor = 'default'; return true;"/>
+        
+        <apex:actionFunction name="passStringToController" action="{!fieldValues}" status="status" onComplete="startSync()">
+            <apex:param id="p1" name="p1" value="{!$CurrentPage.parameters.id}" assignTo="{!accountId}"/>
+            <apex:param id="p2" name="p2" value="{!$CurrentPage.parameters.nsId}" assignTo="{!nsCustomerId}"/>
+        </apex:actionFunction>
+        <apex:actionFunction name="startSync" action="{!startFinancialSync}" rerender="syncContent" oncomplete="checkSyncStatus()"/>    
+        <apex:PageBlock id="syncContent">                 
+           <center>
+            <apex:outputLabel id="syncInProgress" value="Sync in progress. Please keep this window open until the sync has been completed." rendered="{!!renderSyncComplete}"/>
+            <apex:outputLabel id="syncDone" value="Sync has been completed. Please refresh the window if you do not see updates." rendered="{!renderSyncComplete && !!syncSuccessful}"/>
+            <apex:outputText id="syncFail" value="Sync wasn't successful. Error while querying Netsuite. error : {!message}" rendered="{!renderSyncComplete && !syncSuccessful}"/> 
+          </center>
+        </apex:PageBlock>      
+    </apex:form>
+      
+    <style>
+        h1 {
+            color: #205d8b;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 0 0 5px 0;
+            padding: 10px 0 0 0;
+        }
+        
+        img.loader {
+            padding-top: 5px;
+            margin: 0em;
+            align: middle;
+        } 
+        
+        div.background {
+            border-style: none; 
+            padding-left: 20px;  
+            margin: 40px 20px;
+        }
+    </style>
+    
+    <script>    
+        var checkSyncStatus = function() {
+            var isSyncComplete = '{!renderSyncComplete}';            
+            if (isSyncComplete) {                
+                setTimeout(function(){                    
+                    window.close();
+                },2500);
+            }
+        };
+        var confirmClose = function () {
+            return "The sync process will stop if this window is closed.";
+        }
+
+       setInterval(function() {
+            var syncDoneElement = document.getElementById('{!$Component.formid.syncContent.syncDone}');
+            if (syncDoneElement && syncDoneElement.innerHTML !== "Sync in progress. Please keep this window open until the sync has been completed.") {
+                  window.clearInterval();
+                  window.onbeforeunload = null;                                   
+            } else {
+                window.onbeforeunload = confirmClose;
+            }
+        },1000);
+        
+        passStringToController(); 
+    </script>
+</apex:page>

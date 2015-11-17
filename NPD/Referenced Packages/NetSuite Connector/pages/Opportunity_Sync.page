@@ -1,0 +1,74 @@
+<apex:page id="opportunity_sync" controller="netsuite_conn.OpportunitySync" tabStyle="Account" showHeader="false">    
+    <style>
+        h1 {
+            color: #205d8b;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 0 0 5px 0;
+            padding: 10px 0 0 0;
+        }
+        
+        img.loader {
+            padding-top: 5px;
+            margin: 0em;
+            align: middle;
+        } 
+        
+        div.background {
+            border-style: none; 
+            padding-left: 20px;  
+            margin: 40px 20px;
+        }
+    </style>
+    
+    <script>
+        var checkSyncStatus = function() {
+            var isSyncComplete = '{!renderSyncComplete}';
+            if (isSyncComplete) {
+                window.location.href = window.location.href;
+            }
+        };      
+        
+        var confirmClose = function () {
+            return "The sync process will stop if this window is closed.";
+        }
+
+        setInterval(function() {
+            var syncDoneElement = document.getElementById('{!$Component.formid.syncContent.syncDone}');
+            if (syncDoneElement && syncDoneElement.innerHTML == 'Sync has been completed, you can close this window.') {
+                window.onbeforeunload = null;
+            } else {
+                window.onbeforeunload = confirmClose;
+            }
+        },2000);
+    </script>
+    
+    <apex:form id="formid" >
+        <apex:actionStatus id="status"
+            onStart="document.body.style.cursor = 'wait'; return true;" 
+            onStop="document.body.style.cursor = 'default'; return true;">
+        </apex:actionStatus>
+        
+        <apex:actionPoller action="{!startOpportunitySync}" rerender="syncContent" status="status" interval="5" timeout="60000"/>
+        <apex:PageBlock id="syncContent">
+            <center>
+            <apex:outputLabel value="Sync in progress. Please keep this window open until the sync has been completed." rendered="{!AND(!renderSyncComplete, !!renderPageBlockTable)}"/>
+            <apex:outputLabel value="Sync has been completed, you can close this window." rendered="{!renderSyncComplete}" id="syncDone"/>
+            <apex:outputLabel value="Please wait while sync is starting..." rendered="{!!renderPageBlockTable}"/>
+            </center>
+            <hr></hr>
+            <apex:outputText value="Contact Sync initiated for:" rendered="{!AND(OR(AND(!renderSyncComplete, !!renderPageBlockTable), !!renderSyncComplete), contactsToSync.size>0)}"/>
+            <apex:dataList Title="Contact Sync initiated" value="{!contactsToSync}" var="contact" rendered="{!OR(AND(!renderSyncComplete, !!renderPageBlockTable), !!renderSyncComplete)}">
+                <apex:outputText value="{!contact.Name}"/>
+            </apex:dataList>
+            <apex:PageBlockTable title="Sync Status" value="{!syncDSList}" var="syncDS" rendered="{!renderPageBlockTable}">
+                <apex:column value="{!syncDS.recordType}" headerValue="Record Type"/>
+                <apex:column value="{!syncDS.recordName}" headerValue="Record Name"/>
+                <apex:column value="{!syncDS.jobStatus}" headerValue="Sync Status"/>
+                <apex:column value="{!syncDS.syncError}" headerValue="Messages"/>
+            </apex:PageBlockTable>
+            
+        </apex:PageBlock>
+    </apex:form>
+
+</apex:page>

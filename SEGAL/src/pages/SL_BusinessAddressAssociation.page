@@ -1,0 +1,204 @@
+<apex:page standardcontroller="Contact" extensions="SL_BusinessAddressAssociationController" showHeader="false" sidebar="false">
+	<apex:form id="formId">
+		<apex:pagemessages />
+		<style>
+			.headerrow{ text-align:center; }
+			#j_id0:formId:tabTwo_lbl { cursor:pointer; }
+		</style>
+		<script>
+			function reloadIfPrimaryAddressUpdated(isPrimaryUpdated)
+			{
+				if(isPrimaryUpdated == 'true')
+					window.top.location.href='../{!Contact.Id}'
+			}
+		</script>
+<!-- 		Including resource files -->
+		<apex:includeScript value="{!URLFOR($Resource.SL_BusinessAddress, '/BusinessAddress.js')}"/>
+		<apex:stylesheet value="{!URLFOR($Resource.SL_BusinessAddress, '/BusinessAddress.css')}"/>
+		<apex:actionFunction id="setState" action="{!saveAddress}" name="saveAddr" status="processing" oncomplete="displayMessage('{!$Component.hiddenId}','{!isSuccessfullSave}','{!contact.Id}','{!strSaveOrSaveNew}')" rerender="formId">
+      		<apex:param name="state" assignTo="{!strSaveOrSaveNew}" value=""/>
+		</apex:actionFunction>
+		<apex:actionfunction name="callOnDelete" action="{!deleteAddress}" rerender="PBContactAddrListing,PBAddrListing" status="processing">
+			<apex:param name="removeparam" value="" assignTo="{!strAddressIdToRemove}"/>
+			<apex:param name="removeparam1" value="" assignTo="{!strContactAddressIdToRemove}"/>
+		</apex:actionfunction>	
+		<apex:actionFunction id="testAct" action="{!searchAddresses}" name="callOnEdit" status="processing" rerender="formId">
+      		<apex:param name="state" assignTo="{!strEntityId}" value=""/>
+		</apex:actionFunction>
+		<apex:actionFunction id="changePrimary" action="{!updatedPrimaryContactAddress}" name="changePrimary" status="processing" rerender="formId" oncomplete="window.top.location.href='../{!Contact.Id}'">
+      		<apex:param name="addrId" assignTo="{!strUpdatedPrimaryAddressId}" value=""/>
+		</apex:actionFunction>
+		<apex:inputhidden value="{!isSuccessfullSave}" id="hiddenId"/>
+
+		<apex:tabPanel switchType="server" immediate="true" value="{!strSelectedTab}" id="theTabPanel" activeTabClass="activeTab" inactiveTabClass="inactiveTab"> 
+	        <apex:tab label="Contact Address Associations" name="tab1" id="tabOne">
+	        	<apex:pageblock id="contactAddrBlockId">
+	        		<div id="tableId" style="width:100%;overflow:auto;height:340px;">
+	        			<apex:outputpanel rendered="{!IF(lstContactAddrAssociatedWithContact.Size == 0,true,false)}">
+	                    	<span style="font-size:11px;"><b>No Contact Addresses Found</b></span>
+		             	</apex:outputpanel>
+			        	<apex:pageblocktable value="{!lstContactAddrAssociatedWithContact}" var="ContactAddr" id="PBContactAddrListing" rendered="{!(lstContactAddrAssociatedWithContact.size != 0)}" >
+		        			<apex:column headerValue="Action" style="text-align:center;"> 
+							    <apex:outputpanel rendered="{!ContactAddr.isEditRecord}">
+				           			<apex:commandlink value="Edit" style="color:blue;" rerender="PBContactAddrListing" status="processing" rendered="{!ContactAddr.isEditToBeDisplayed}">
+				           				<apex:param name="editparam" value="false" assignTo="{!ContactAddr.isEditRecord}"/>
+				           			</apex:commandlink><span style="display:{!IF(ContactAddr.isEditToBeDisplayed,'','none;')}"> &nbsp;|&nbsp;</span>
+			           				<a style="cursor: pointer;text-decoration: underline; color:blue;" onclick="confirmDelete('{!ContactAddr.objAddress.Id}','{!ContactAddr.idContactAddress}','{!strPrimaryContactAddressId}')" >Del</a>
+			           			</apex:outputpanel>
+			           			<apex:outputpanel rendered="{!NOT(ContactAddr.isEditRecord)}">  
+			           				<apex:commandlink value="Save" action="{!saveUpdatedAddressRecord}" style="color:blue;" rerender="PBContactAddrListing" status="processing" oncomplete="reloadIfPrimaryAddressUpdated('{!isPrimaryAddressUpdated}')">
+			           					<apex:param name="saveparam" value="false" assignTo="{!ContactAddr.isEditRecord}"/>
+			           					<apex:param name="saveparam1" value="true" assignTo="{!ContactAddr.isSaveRecord}"/>
+			           					<apex:param name="saveparam2" value="{!ContactAddr.intRowIndex}" assignTo="{!intSaveOrCancelAddressIndex}"/>
+			           			    </apex:commandlink>&nbsp;|&nbsp;
+			           			    <apex:commandlink value="Cancel" action="{!cancelUpdatedAddressRecord}" style="color:blue;" immediate="true" rerender="PBContactAddrListing" status="processing">
+			           			    	<apex:param name="cancelparam" value="true" assignTo="{!ContactAddr.isEditRecord}"/>
+			           			    	<apex:param name="cancelparam1" value="true" assignTo="{!ContactAddr.isCancelRecord}"/>
+			           			    	<apex:param name="cancelparam2" value="{!ContactAddr.intRowIndex}" assignTo="{!intSaveOrCancelAddressIndex}"/>
+			           			    </apex:commandlink>  
+			           			</apex:outputpanel>
+			            	</apex:column>  
+			            	<apex:column headervalue="Default" style="text-align:center;">
+			            		<apex:inputcheckbox styleclass="Primary" value="{!ContactAddr.isPrimaryAddr}" onchange="displayPrimaryAddrChangeAlert(this,'{!isPrimaryContactAddressExists}','{!ContactAddr.objAddress.Id}')"/>
+			            	</apex:column>
+			            	<apex:repeat value="{!$ObjectType.Address__c.Fieldsets.SL_AddressFieldsToDisplayInContactAddres}" var="fieldValue" id="repeat"> 
+		                    	<apex:column headerValue="{!fieldValue.Label}" rendered="{!IF(AND(fieldValue.Label != 'Record Type ID',fieldValue.FieldPath != 'Entity__c'),true,false)}">
+		                    		<apex:outputpanel rendered="{!NOT(ContactAddr.isEditRecord)}">
+		                    			<apex:inputfield value="{!ContactAddr.objAddress[fieldValue]}" style="width:80px;" required="{!OR(fieldValue.required, fieldValue.dbrequired)}"/>
+		                    		</apex:outputpanel>
+		                    		<apex:outputpanel rendered="{!ContactAddr.isEditRecord}">
+		                    			<apex:outputfield value="{!ContactAddr.objAddress[fieldValue]}" style="width:15%;text-align:center;"/>
+		                    		</apex:outputpanel>
+		                    	</apex:column>
+		                    	<apex:column headerValue="Record Type" rendered="{!IF(fieldValue.Label == 'Record Type ID',true,false)}">
+		                    		<apex:facet name="header">Record Type</apex:facet> 
+		                    		<apex:outputfield value="{!ContactAddr.objAddress[fieldValue]}" style="width:15%;text-align:center;"/>
+		                    	</apex:column>
+		                    	<apex:column rendered="{!IF(fieldValue.FieldPath == 'Entity__c',true,false)}">
+		                    		<apex:facet name="header">Entity</apex:facet>
+		                    			<a href="/{!ContactAddr.objAddress.Entity__c}" target="_blank" style="display:{!IF(ContactAddr.objAddress.RecordType.DeveloperName != 'Contact_Address','','none;')}">
+	                            			<apex:outputtext value="{!ContactAddr.objAddress.Entity__r.Name}"/> 
+	                       				</a>
+		                    	</apex:column>
+		                    </apex:repeat>	  
+				         </apex:pageblocktable>
+			         </div>  
+		          </apex:pageblock> 	 
+	        </apex:tab>
+	        <apex:tab label="New Contact Address" name="tab2" id="tabTwo">
+	        	<apex:pageBlock id="pblock0" title="New Address Edit" mode="Edit">
+           	   		<apex:pageBlockButtons >
+		                <apex:commandButton title="Save" value="Save" onclick="saveAddress('Save'); return false;" rerender="formId"/>
+		                <apex:commandButton title="Save & New" value="Save & New" onclick="saveAddress('SaveAndNew'); return false;" rerender="formId"/>
+            		</apex:pageBlockButtons>
+<!--             		<apex:pageBlockSection id="pbsec1" title="Information" collapsible="false" columns="2"> -->
+						<div class="pbSubheader brandTertiaryBgr first tertiaryPalette"><span class="pbSubExtra"><span class="requiredLegend"><span class="requiredExampleOuter"><span class="requiredExample">&nbsp;</span></span><span class="requiredText"></span></span></span><h3>Information</h3></div>
+            			<table style="width:100%;">
+            				<tr>
+            					<td style="float:left;width:100%;margin-left:27%;">
+            						<table>
+       									<apex:repeat value="{!$ObjectType.Address__c.fieldsets.SL_Address_CreateNew_Section1}" var="fieldValueSection1">
+       										<tr style="line-height:23px;">
+       											<td>
+       												<span style="font-weight: bold;color:#4a4a56;font-size: 9px;display:{!IF(fieldValueSection1.Label != 'Record Type ID','','none;')}">
+       													{!fieldValueSection1.Label}&nbsp;&nbsp;
+       												</span>
+       											</td>
+       											<td id="{!fieldValueSection1.FieldPath}">
+       												<apex:inputField style="width:70%;" value="{!objAddress[fieldValueSection1]}" rendered="{!IF(fieldValueSection1.Label != 'Record Type ID',true,false)}" required="{!OR(fieldValueSection1.required, fieldValueSection1.dbrequired)}"/>
+       											</td>
+       										</tr>
+       									</apex:repeat>
+         							</table>
+            					</td>
+            				    <td style="vertical-align:top;margin-left:30%;">
+            				    	<table>
+            				    		<tr>
+            				    			<td style="font-weight:bold;color:#4a4a56;font-size: 9px;">
+            				    				RecordType &nbsp;&nbsp;
+            				    			</td>
+            				    			<td>
+            				    				<apex:inputField value="{!objAddress['RecordTypeId']}" />
+            				    			</td>
+            				    		</tr>
+            				    	</table>
+            				    </td>
+            				 </tr>   
+            			</table>
+<!--             		</apex:pageBlockSection>	 -->
+            		<apex:pageBlockSection id="pbsec0" title="Address Information" collapsible="false" columns="2">
+            			<apex:repeat value="{!$ObjectType.Address__c.fieldsets.SL_Address_CreateNew_Section2}" var="fieldValueSection2">
+            				<apex:inputField style="margin-left:10%;width:39%;font: normal normal normal 13.3333330154419px/normal Arial;" value="{!objAddress[fieldValueSection2]}" rendered="{!IF(fieldValueSection2 != 'RecordTypeId',true,false)}" required="{!OR(fieldValueSection2.required, fieldValueSection2.dbrequired)}"/>
+            			</apex:repeat>	
+            		</apex:pageBlockSection>
+            	</apex:pageBlock>
+	        </apex:tab>
+	        <apex:tab label="Entity Address Search" name="tab3" id="tabthree"> 
+	        	<table>
+	        		<tr>
+	        			<td style="padding-left:50px;width:300px;">
+	        				<span>Entity</span>&nbsp;&nbsp; <apex:inputText style="width:170px;" value="{!strEntityName}"/>
+	        				<span style="vertical-align:-webkit-baseline-middle;">
+							    <a href ="" style="cursor: pointer;text-decoration:none;" onclick="return openMemoPopup(this.parentNode.parentNode);">
+									<img src="/s.gif" alt="Entity Lookup (New Window)" class="lookupIcon" onblur="this.className = 'lookupIcon';" 
+									onfocus="this.className = 'lookupIconOn';" onmouseout="this.className = 'lookupIcon';this.className = 'lookupIcon';" 
+									onmouseover="this.className = 'lookupIconOn';this.className = 'lookupIconOn';" title="Entity Lookup" />
+							    </a>
+							</span>
+	        			</td>
+	        		</tr>
+	        	</table><br/><br/>
+	       		<apex:pageblock id="pageBlockId">
+	       			<apex:pageblockbuttons location="top">  
+	       				<apex:commandButton rendered="{!IF(lstBusinessAddrAssociatedWithContactEntity.Size != 0,true,false)}" style="margin-left:20%;" value="Save" action="{!createContactAddressAssociation}" status="processing" rerender="formId" oncomplete="validateAddressSelection('{!Contact.Id}','{!isSuccessfullSave}','{!isAddressSelected}');"/><br/><br/>
+	       			</apex:pageblockbuttons>
+	        		<apex:pageblocktable value="{!lstBusinessAddrAssociatedWithContactEntity}" var="Addr" id="PBAddrListing" width="120%" rendered="{!(lstBusinessAddrAssociatedWithContactEntity.size != 0)}" first="{!FirstPage}" rows="{!PageSize}">
+	        			<apex:column headerValue="Select" style="text-align:center;">
+	        				<apex:inputCheckBox value="{!Addr.isSelected}" rendered="{!Addr.isSelectionEnabled}"/>
+		                </apex:column> 
+		                <apex:repeat value="{!$ObjectType.Address__c.Fieldsets.SL_AddressFieldsToDisplay}" var="fieldValue" id="repeat"> 
+	                    	<apex:column headerValue="{!fieldValue.Label}">
+	                    		<apex:outputfield value="{!Addr.objAddress[fieldValue]}" style="width:15%;"/>  
+	                    	</apex:column>  
+		            	</apex:repeat>   
+	        		</apex:pageblocktable><br/><br/>  
+	        		 <apex:outputpanel rendered="{!IF(lstBusinessAddrAssociatedWithContactEntity.Size == 0,true,false)}">  
+	                    <span style="font-size:11px;"><b>No Addresses found</b></span>  
+		             </apex:outputpanel>
+		             <apex:outputPanel id="paginationPanel" rendered="{!IF(lstBusinessAddrAssociatedWithContactEntity.size> 5,true,false)}">
+                        Page &nbsp;{!page} of {!noOfPages}  
+                        <apex:outputpanel rendered="{!(page == 1)}">
+                            <apex:commandLink action="{!previousPage}" value="Previous" style="margin-left:50px;text-decoration:none;cursor:not-allowed;color:blue;" rerender="paginationPanel,pageBlockId,PBAddrListing"/>&nbsp;&nbsp;| 
+                        </apex:outputpanel>
+                        <apex:outputpanel rendered="{!(page != 1)}">
+                            <apex:commandLink action="{!previousPage}" value="Previous" style="margin-left:50px;color:blue;" rerender="paginationPanel,pageBlockId,PBAddrListing"/>&nbsp;&nbsp;| 
+                        </apex:outputpanel>
+                        <apex:outputpanel rendered="{!(page == noOfPages)}">
+                            &nbsp;&nbsp;<apex:commandLink action="{!nextPage}" value="Next" style="color:blue;text-decoration:none;cursor:not-allowed;" rerender="paginationPanel,pageBlockId,PBAddrListing"/> 
+                        </apex:outputpanel>
+                        <apex:outputPanel rendered="{!(page != noOfPages)}">
+                            &nbsp;&nbsp;<apex:commandLink action="{!nextPage}" value="Next" style="color:blue;" rerender="paginationPanel,pageBlockId,PBAddrListing"/> 
+                        </apex:outputPanel>
+	                </apex:outputPanel><br/><br/> 
+	        	</apex:pageblock>
+	        </apex:tab>
+	    </apex:tabPanel> 
+	    <apex:actionstatus id="processing" startText="Requesting...">
+            <apex:facet name="start">
+               <div id="popUpBack" class="popupBackground" style="height:100%;width:100%; display: block;"></div>
+               <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; ">
+                   <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+                   <table align="center" valign="top" style="width: 100%; height: 30%">
+                   <tr align="center" valign="top" style="width: 100%; height: 30%">
+                       <td valign="top"><img src="/img/loading.gif"/><span class="waitingDescription">Loading...</span></td>
+                   </tr>
+                   </table>
+                   </div> 
+               </div>
+               <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; "> </div>
+               <script>document.getElementById('ManageMembersViewport_loading').height = window.innerHeight * (3/4);</script>
+            </apex:facet>
+            <apex:facet name="stop"></apex:facet>
+     	</apex:actionstatus>
+    </apex:form>
+</apex:page>

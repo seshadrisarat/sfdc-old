@@ -1,0 +1,179 @@
+<apex:page controller="ts2.candidateBulkAction" action="{!LinkedInPeopleSearch}" showHeader="false" sidebar="false">
+
+<script type="text/javascript" src="https://platform.linkedin.com/in.js">
+api_key: {!JSENCODE(SocialSettings_ORG.LinkedIn_PeopleSearch_API_Key__c)}
+authorize: true
+</script>
+
+<apex:includeScript value="{!URLFOR($Resource.ts2__jQuery, 'jquery-1.8.2.min.js')}" />
+
+<script type="text/javascript">
+
+function loadData() {
+	var contactsCount = {!SocialSettings_ORG.LinkedIn_PeopleSearch_Count__c};
+
+	jQuery('.IN-widget').css('width', 0).css('margin', 0);
+	jQuery('body').css('background-color', '#ccc');
+
+	if (contactsCount == null || contactsCount == 0) {
+		contactsCount = 1;
+	}
+
+	IN.API.PeopleSearch()
+		.fields("firstName", "lastName", "publicProfileUrl", "summary", "pictureUrl", "specialties", "positions", "location", "industry", "headline")
+		.params({"first-name": "{!JSENCODE(firstName)}", "last-name": "{!JSENCODE(lastName)}", "count": contactsCount})
+		.result(function(result) {
+			var profHTML =
+				'<div class="inSearchHead">' +
+				'<h1>People search results for keyword "{!JSENCODE(firstName)} {!JSENCODE(lastName)}":</h1>' +
+				'</div>';
+
+			for (var i in result.people.values) {
+				var profile = result.people.values[i];
+				var imageHTML = '';
+				var headlineHTML = '';
+				var positionsHTML = '';
+				var summaryHTML = '';
+
+//				console.log(JSON.stringify(profile));
+
+				// HeadLine
+				if (profile.headline != undefined) {
+					headlineHTML = '<p><h2>' + profile.headline + '</h2><br/>';
+					if (profile.location.name != undefined && profile.industry != undefined) {
+						headlineHTML += profile.location.name + ' | ' + profile.industry;
+					}
+					headlineHTML += '</p>';
+				}
+
+				// Prepare avatar HTML
+				if (profile.pictureUrl != undefined) {
+					imageHTML = profile.pictureUrl;
+				} else {
+					imageHTML = "{!URLFOR($Resource.s_yui, 'img/icon_no_photo_60x60.png')}";
+				}
+				imageHTML = '<a href="' + profile.publicProfileUrl + '"><img class=img_border height=80 align="left" src="' + imageHTML + '"></a>';
+
+				// Prepare positions
+				if (profile.positions.values != undefined) {
+					positionsHTML = '';
+
+					for (var ii in profile.positions.values) {
+						var position = profile.positions.values[ii];
+
+						positionsHTML +=
+							'<p>' +
+							'<h3>' + position.title + '</h3><br/>' +
+							'Company: ' + position.company.name + ' | Industry: ' + position.company.industry +
+							'</p>';
+					}
+				}
+
+				// Prepare summary
+				if (profile.summary != undefined) {
+					summaryHTML = "<p><h4>Summary:</h4><br/>" + profile.summary + "</p>";
+				}
+
+				profHTML +=
+					'<div class="inCard">' +
+						'<div class="inImage">' + imageHTML + '</div>' +
+						'<div class="inHead">' +
+							'<a href="' + profile.publicProfileUrl + '"><h2>' + profile.firstName + ' ' + profile.lastName + '</h2></a>' +
+							headlineHTML +
+						'</div>';
+				if (positionsHTML != '' || summaryHTML != '') {
+					profHTML +=
+						'<div class="inData">' +
+							positionsHTML +
+							summaryHTML +
+						'</div>';
+				}
+				profHTML += '</div>';
+			}
+			$("#search").html(profHTML);
+		});
+}
+</script>
+<style type="text/css">
+body {
+	overflow: auto;
+	background-color: #fff;
+	font-family: Arial,Helvetica,sans-serif;
+	font-size: 12px;
+}
+.inSearchHead {
+	margin: 10px;
+/*	border: 1px solid #999;*/
+	background-color: #fff;
+	height: 20px;
+	text-align: center;
+}
+.inSearchHead h1 {
+	font-size: 13pt;
+}
+.inCard {
+	clear: left;
+	margin: 10px;
+/*	border: 1px solid #999;*/
+	background-color: #fff;
+	overflow: hidden;
+}
+a {
+	color: #006699;
+	text-decoration: none;
+}
+a:hover {
+	color: #006699;
+	text-decoration: underline;
+}
+.inImage {
+	float: left;
+	margin: 10px;
+	border: 1px solid #999;
+}
+.inImage img {
+	padding: 3px;
+}
+.inHead {
+	margin: 10px;
+	line-height: 140%;
+	text-align: justify;
+}
+.inData {
+	margin: 10px;
+	line-height: 140%;
+	text-align: justify;
+	border-top: 1px #999 dotted;
+	clear: left;
+}
+h1, h2, h3, h4 {
+	color: #666;
+	display: inline;
+}
+h2 {
+	font-size: 12pt;
+}
+a h2 {
+	color: #006699;
+}
+h3 {
+	font-size: 11pt;
+}
+h4 {
+	font-size: 9pt;
+	line-height: 120%;
+}
+.IN-widget {
+	width: 100%;
+	/*height: 480px;*/
+	margin-top: 220px;
+	text-align: center;
+	background-color: #fff;
+}
+</style>
+<body id="body">
+<div id="search"></div>
+<script type="IN/Login" data-onAuth="loadData">
+</script>
+</body>
+</apex:page>

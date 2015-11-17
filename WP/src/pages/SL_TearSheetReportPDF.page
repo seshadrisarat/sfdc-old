@@ -1,0 +1,359 @@
+<apex:page renderAs="pdf" applyHtmlTag="false" showHeader="false" readOnly="true" controller="SL_TearSheetReportPDFController">
+    <head>
+        <style>
+            html
+            {
+                margin:0px;
+                padding:0px;
+            }
+             
+            body
+            {
+                font-family:Serif;
+                font-weight: normal;
+                padding:0px;
+                margin:0px; 
+            }
+             
+            @page
+            {
+                size: portrait; /* ISO/JIS A4 (210mm×297mm) */              
+                margin-bottom : 15mm;
+                margin-top : 1mm;
+                @bottom-right {
+                    content: element(footer);
+                }                
+            }
+             
+            div.footer {               
+                display: block;            
+                position: running(footer);
+                font-size: 10pt;
+            }
+             
+            .pagenumber:before
+            {               
+                content: counter(page);            
+            }                      
+             
+            .pagecount:before
+            {            
+                content: counter(pages);           
+            }  
+     
+            table
+            {
+                page-break-inside: auto;             
+            }
+             
+            .tableStyle
+            {
+                width: 100%;             
+                -fs-table-paginate: paginate;                
+            }
+            
+            td
+            {
+                padding-left:5px;
+            } 
+                        
+            .FundAndAdvisor
+            {
+                padding-left:0;
+            } 
+            
+            .justifyalignment
+            {
+                text-align:justify;
+            }
+            
+            .tablecss
+            {
+            	width:97%;
+            	margin-left:10px;
+            	margin-top:5px;
+             	border:solid 0.5px #8FAADB; 
+            	font-size:11pt;
+            }
+            
+            .tablecss td
+            {
+            	border:solid 0.5px #8FAADB; 
+            }
+        </style>
+    </head>
+    <apex:outputPanel rendered="{!(strWhatId!=null)}">
+        <body>
+            
+            <p style="border-style:solid;background-color:#F2F2F2;border-color:#8FAADB;font-size:15pt;border-width:1px;font-weight:bold;"><span style="padding-left:5px;">Profile: {!objAccount.Name}</span></p>        
+            
+            <table cellspacing="0" cellpadding="0" style="border-style:solid;background-color:#F2F2F2;border-color:#8FAADB;width:100%;border-width:1px;font-size:11pt;">
+                <tr>
+                    <td>
+                        Date &amp; Time:
+                    </td>
+                    <td>
+                        <apex:outputText value="{0,date,MM'/'dd'/'yyyy 'at' HH:mm} {1}">
+                            <apex:param value="{!objEvent.StartDateTime}"/>
+                            <apex:param value="{!TimeZoneCode}"/>
+                        </apex:outputText>
+                    </td>
+                </tr>
+                <tr style="{!IF(objEvent.Location == null, 'display:none','')}">
+                    <td >
+                        Location:
+                    </td>
+                    <td>
+                        {!objEvent.Location}
+                    </td>
+                </tr>
+                <tr style="{!IF(objAccount.Website == null, 'display:none','')}">
+                    <td>
+                        Website:
+                    </td>
+                    <td>
+                        {!objAccount.Website}
+                    </td>
+                </tr>
+                <tr style="{!IF(strIntenalContacts == '', 'display:none','')}">
+                    <td>
+                        WP Attendees:
+                    </td>
+                    <td>
+                        {!strIntenalContacts}
+                    </td>
+                </tr>
+            </table>
+            
+            <apex:outputPanel >
+                <br/>
+                <span style="font-weight:bold;margin-left:10px;">Agenda:</span>
+                
+                <table class="tablecss" cellspacing="0" cellpadding="0">
+                    <tr>
+                        <td>
+                            Time
+                        </td>
+                        <td>
+                            Topic
+                        </td>
+                        <td>
+                            External Attendees
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <apex:outputText value="{0,time,HH:mm} - {1,time,HH:mm}">
+                                <apex:param value="{!objEvent.StartDateTime}"/>
+                                <apex:param value="{!objEvent.EndDateTime}"/>
+                            </apex:outputText>
+                        </td>
+                        <td>
+                            {!objEvent.Subject}
+                        </td>
+                        <td>
+                            <apex:repeat value="{!lstContact}" var="objContact">
+                                {!objContact.Name} {!IF(objContact.Title!=null, '('+objContact.Title+')','')}<br/>
+                            </apex:repeat>
+                        </td>
+                    </tr>
+                </table>
+            </apex:outputPanel>
+            <apex:outputPanel rendered="{!(objAccount.Description!=null)}">
+                <br/>
+                <span style="font-weight:bold;margin-left:10px;">Firm Overview:</span>
+                <p style="margin-top:5px;margin-left:10px;font-size:11pt;text-align:justify;"><apex:outputText value="{!objAccount.Description}" escape="false"/></p>
+            </apex:outputPanel>
+            
+            <apex:outputPanel rendered="{!AssociatedCommitment.size > 0}">
+            <br/>
+            <span style="font-weight:bold;margin-left:10px;">WP Investment History:</span>
+            <table class="tablecss" cellspacing="0" cellpadding="0">
+                <tr style="font-weight:bold;">
+                    <td>
+                        Fund/Co<span>-</span>Invest
+                    </td>
+                    <td >
+                        Commitment
+                    </td>
+                    <apex:repeat value="{!$ObjectType.Associated_Commitment__c.FieldSets.AssociatedCommitmentFieldSet}" var="field">
+                        <td>
+                            {!field.Label}
+                        </td>
+                    </apex:repeat>
+                </tr>
+                <apex:repeat value="{!AssociatedCommitment}" var="objAssCommitment">
+                    <tr>
+                        <td >
+                            {!objAssCommitment['Fund__r.Acronym__c']}
+                        </td>
+                        <td style="text-align:right;padding-right:5px;">
+                            {!currencySymbol}{!IF(objAssCommitment['Commitment_Amount__c']!=null && objAssCommitment['Commitment_Amount__c'] >= 100000, TEXT(objAssCommitment['Commitment_Amount__c']/1000000) + 'MM', objAssCommitment['Commitment_Amount__c'])}
+                        </td>
+                        <apex:repeat value="{!$ObjectType.Associated_Commitment__c.FieldSets.AssociatedCommitmentFieldSet}" var="field">
+                            <td>
+                                <apex:outputField value="{!objAssCommitment[field.fieldpath]}"/>
+                            </td>
+                        </apex:repeat>
+                    </tr>
+                </apex:repeat>
+                    <tr>
+                        <td style="font-weight:bold;" width="40%">
+							Total<br/>Exposure
+						</td>
+                        <td style="font-weight:bold;vertical-align:top;text-align:right;padding-right:5px;">
+                            {!currencySymbol}{!IF(decAggregateSum >= 100000, TEXT(decAggregateSum/1000000) + 'MM', decAggregateSum)}
+                        </td> 
+                        <apex:repeat value="{!$ObjectType.Associated_Commitment__c.FieldSets.AssociatedCommitmentFieldSet}" var="field">
+                            <td>
+                                
+                            </td>
+                        </apex:repeat>
+                    </tr>
+            </table>
+            </apex:outputPanel>
+            
+            <apex:outputPanel rendered="{!MostRecentFundName!=null}">
+                <br/>
+                <span style="font-weight:bold;margin-left:10px;">{!MostRecentFundName} Tracking:</span>
+                <br/>
+                <table style="margin-left:10px;width:100%;font-size:11pt;">
+                    <tr>
+                        <td class="FundAndAdvisor">
+                            Potential commitment:
+                        </td>
+                        <td class="FundAndAdvisor">
+                            {!currencySymbol}{!IF(FundRaisingOpportunity['Target_Amount__c']!=null && FundRaisingOpportunity['Target_Amount__c'] >= 1000000, TEXT(ROUND(FundRaisingOpportunity['Target_Amount__c']/1000000,2))+'MM',ROUND(FundRaisingOpportunity['Target_Amount__c'],2))}
+                        </td>
+                        <td class="FundAndAdvisor">
+                            <apex:outputText value="{0,number,0}%">
+                                Probability:<apex:param value="{!IF(FundRaisingOpportunity['Probability__c']!=null, FundRaisingOpportunity['Probability__c'], 0)}"/>
+                            </apex:outputText>
+                        </td>
+                        <td class="FundAndAdvisor">
+                            Binary Yes/No: {!IF(FundRaisingOpportunity['Binary__c'] == true, 'Yes', 'No')}
+                        </td>
+                    </tr>
+                </table>
+            </apex:outputPanel>
+            
+            <apex:outputPanel rendered="{!FundRaisingOpprtunities.size > 0}">
+            	<br/>
+                <span style="font-weight:bold;margin-left:10px;text-decoration:underline;">Associated Opportunities</span>
+                <br/>
+                <table class="tablecss" cellspacing="0" cellpadding="0">
+                    <tr style="font-weight:bold;">
+                        <td >
+                           Investor
+                        </td>
+                        <td>
+                            Stage
+                        </td>
+                        <td>
+                            Probability
+                        </td>
+                        <td>
+                            Binary Y/N
+                        </td>
+                        <td>
+                            Target Amount
+                        </td>
+                    </tr>
+                    <apex:repeat value="{!FundRaisingOpprtunities}" var="objFundRaisingOppWrapper">
+                    	<tr>
+	                    	<td style="font-weight:bold;">{!objFundRaisingOppWrapper.objAssociatedEntity.Fundraising_Opportunity__r.Investor__r.Short_Name__c}</td>
+	                    	<td>{!objFundRaisingOppWrapper.objAssociatedEntity.Fundraising_Opportunity__r.Stage__c}</td>
+	                    	<td>
+	                    		 <div style="text-align:center;">
+		                    		 <apex:outputText value="{0,number,0}%">
+		                    		 	<apex:param value="{!IF(objFundRaisingOppWrapper.objAssociatedEntity.Fundraising_Opportunity__r.Probability__c!=null, objFundRaisingOppWrapper.objAssociatedEntity.Fundraising_Opportunity__r.Probability__c, 0)}"/>
+		                    		 </apex:outputText>
+	                    		 </div>
+	                    	</td>
+	                    	<td>
+	                    		<div style="text-align:center;">{!IF(objFundRaisingOppWrapper.objAssociatedEntity.Fundraising_Opportunity__r.Binary__c, 'Y', 'N')}</div>
+	                    	</td>
+	                    	<td style="text-align:right;padding-right:5px;">
+	                    		{!currencySymbol}{!IF(objFundRaisingOppWrapper.targetAmount >= 1000000, TEXT(ROUND(objFundRaisingOppWrapper.targetAmount/1000000,2))+'MM',ROUND(objFundRaisingOppWrapper.targetAmount,2))}
+	                    	</td>
+                    	</tr>
+                    </apex:repeat>
+                    <tr>
+                    	<td style="font-weight:bold;">Total</td>
+                    	<td></td>
+                    	<td></td>
+                    	<td></td>
+                    	<td style="text-align:right;padding-right:5px;">
+	                    		{!currencySymbol}{!IF(decAggregateFundraisingAmount >= 1000000, TEXT(ROUND(decAggregateFundraisingAmount/1000000,2))+'MM',ROUND(decAggregateFundraisingAmount,2))}
+	                    </td>
+                    </tr>
+                </table>
+            </apex:outputPanel>
+            
+            <apex:outputPanel rendered="{!(objAccount.AUM__c!=null || objAccount.PE_Allocation__c!=null)}">
+                <br/>
+                <span style="font-weight:bold;margin-left:10px;">AUM &amp; Allocation to PE:</span>
+                <br/>
+                <table style="width:97%;margin-left:10px;border: 1px solid #8FAADB;font-size:11pt;">
+                    <tr>
+                        <td style="border-right:1px solid #8FAADB;border-bottom:1px solid #8FAADB;">
+                            Total Funds under Management (USD):
+                        </td>
+                        <td style="border-bottom:1px solid #8FAADB;">
+                           ${!IF(objAccount.AUM__c!=null && objAccount.AUM__c >= 1000000, TEXT(objAccount.AUM__c/1000000)+'MM',objAccount.AUM__c)}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border-right:1px solid #8FAADB;">
+                            Current Allocation to Private Equity:
+                        </td>
+                        <td style="{!IF(objAccount.PE_Allocation__c==null,'display:none;','')}">
+                            <apex:outputText value="{0,number,0}%"> 
+                                <apex:param value="{!objAccount.PE_Allocation__c}"/>
+                            </apex:outputText>
+                        </td>
+                    </tr>
+                </table>
+            </apex:outputPanel>
+            
+            <apex:outputPanel rendered="{!AssociatedEntities.size > 0}">
+                <br/>
+                <span style="font-weight:bold;margin-left:10px;">Advisor/Consultant:</span>
+                <br/>
+                <table style="width:97%;margin-left:10px;font-size:11pt;">
+                    <apex:repeat value="{!AssociatedEntities}" var="objAssociatedEntity">
+                        <tr>
+                            <td class="FundAndAdvisor">
+                                {!objAssociatedEntity['Contact__r.Name']}/{!objAssociatedEntity['Company__r.Name']}
+                            </td>
+                            <apex:repeat value="{!$ObjectType.Associated_Entity__c.FieldSets.AssociatedEntityFieldSet}" var="field">
+                                <td style="{!IF(field.fieldpath != 'Contact__r.Name' && field.fieldpath != 'Company__r.Name' && field.fieldpath!='Key_Decision_Maker__c','','display:none;')}">
+                                    {!objAssociatedEntity[field.fieldpath]}
+                                </td>
+                            </apex:repeat>
+                            <td>
+                                {!IF(objAssociatedEntity['Key_Decision_Maker__c'] == true, 'Yes', 'No')}
+                            </td>
+                        </tr>
+                    </apex:repeat>
+                </table>
+            </apex:outputPanel>
+            <apex:outputPanel rendered="{!PreviousEvents.size > 0}">
+                <br/>
+                <span style="font-weight:bold;margin-left:10px;">Meeting Notes:</span>
+                <br/>
+                <div style="margin-left:10px;font-size:11pt;">
+                    <apex:repeat value="{!PreviousEvents}" var="objEvent">
+                        <apex:outputText value="{0,date,MM'/'dd'/'yyyy} - {1}" style="text-decoration: underline;">
+                            <apex:param value="{!objEvent.StartDateTime}"/>
+                            <apex:param value="{!objEvent.Subject}"/>
+                        </apex:outputText>
+                        <br/><br/>
+                        <apex:outputText value="{!objEvent.Description}" escape="false" styleClass="justifyalignment"/>
+                        <br/><br/>
+                    </apex:repeat>
+                </div>
+           </apex:outputPanel>
+       </body>
+    </apex:outputPanel>
+</apex:page>

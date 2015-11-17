@@ -1,0 +1,248 @@
+<apex:page controller="ts2extams.AMSSingleActionController" showHeader="false" sideBar="false">
+	<apex:includeScript value="{!URLFOR($Resource.ts2extams__UIRes, 'res/js/jquery-1.6.min.js')}" />
+	<apex:stylesheet value="{!URLFOR($Resource.ts2extams__UIRes, 'res/css/std_style.css')}"/>
+	<!--<script src="/jslibrary/Calendar.js" type="text/javascript"></script>-->
+	<script src="/jslibrary/labels/1243380977000/en_US.js" type="text/javascript"></script>
+	<script src="/jslibrary/Activity.js" type="text/javascript"></script>
+
+
+<script>
+	function closeWin(refresh) {
+		parent.window.opener = self;
+		parent.window.close();
+	}
+	var dateMin = new Date();
+</script>
+
+<style>
+	td.pbTitle {width:40% !important;}
+</style>
+
+<body width="100%" style="margin:10px;">
+<apex:form id="frm">
+	<apex:pageMessages />
+	<apex:pageBlock title="{!$Label.AMS_LABEL_Schedule}" rendered="{!(NOT(ShowAddInvitee) && NOT(Completed))}">
+		<apex:pageBlockButtons id="pbbsMainButtons" style="text-align: right;" location="bottom">
+			<span id="pbsMainButtons_spinner" class="spinner_indicator">&nbsp;</span>
+			<apex:commandButton value="{!$Label.AMS_BTN_Save}" title="{!$Label.AMS_BTN_Save}" onclick="return validateSave();" action="{!SaveEventCandidate}"/>
+			<apex:commandButton value="{!$Label.AMS_BTN_AddInvitees}" title="{!$Label.AMS_BTN_AddInvitees}" action="{!AddInvitees}" immediate="false"/>
+			<apex:commandButton value="{!$Label.AMS_BTN_Cancel}" title="{!$Label.AMS_BTN_Cancel}" onclick="closeWin(false);return(false);"/>
+		</apex:pageBlockButtons>
+
+		<apex:pageBlockSection columns="1">
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$Label.AMS_LABEL_ScheduleAssign}"/>
+				<apex:outputPanel >
+					<apex:inputField value="{!eventCC.ownerId}" >
+						<apex:actionSupport event="onclick"
+							rerender="ischedule" status="StatusChange" action="{!iWantMyJSValues}" >
+							<apex:actionStatus startText="{!$Label.AMS_LABEL_ScheduleUpdatePage}" id="StatusChange"/>
+						</apex:actionSupport>
+					</apex:inputField>
+				<apex:inputCheckbox value="{!InviteCandidate}"/>&nbsp;{!$Label.AMS_LABEL_ScheduleInvite}
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$ObjectType.Event.Fields.Subject.Label}"/>
+				<apex:inputField value="{!eventCC.Subject}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$Label.AMS_LABEL_ScheduleStart}"/>
+				<apex:outputPanel id="thePanel" styleClass="lookupInput" >
+					<!-- <apex:inputText id="StartDateTime" value="{!displaycurrentDate}" onfocus="DatePicker.pickDate(true, '{!$Component.StartDateTime}', false);" size="10"  />&nbsp; -->
+					<apex:inputfield id="StartDateTime" value="{!eventTime.ActivityDate}">
+						<apex:param value="{!eventTime.ActivityDate}" assignTo="{!$Component.StartDateTime}"/>
+					</apex:inputfield>&nbsp;
+					<apex:inputText id="StartDateTime_time" size="8" value="{!startTime}" onfocus="ActivityFunction.showTimePicker('{!$Component.StartDateTime_time}');" />
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$Label.AMS_LABEL_ScheduleEnd}"/>
+				<apex:outputPanel id="thePanel" styleClass="lookupInput" >
+					<!-- <apex:inputText id="EndDateTime" value="{!displaycurrentDate}" onfocus="DatePicker.pickDate(true, '{!$Component.EndDateTime}', false);" size="10"  />&nbsp; -->
+					<apex:inputfield id="EndDateTime" value="{!eventTimee.ActivityDate}">
+						<apex:param value="{!eventTimee.ActivityDate}" assignTo="{!$Component.EndDateTime}"/>
+					</apex:inputfield>&nbsp;
+					<apex:inputText id="EndDateTime_time" size="8" value="{!endTime}" onfocus="ActivityFunction.showTimePicker('{!$Component.EndDateTime_time}');"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$ObjectType.Event.Fields.Location.Label}"/>
+				<apex:inputField value="{!eventCC.Location}" />
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel value="{!$ObjectType.Event.Fields.Description.Label}"/>
+				<apex:inputField value="{!eventCC.Description}" style="width:350px;height:30px;margin-bottom:20px;" />
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+	</apex:pageBlock>
+
+	<apex:outputPanel rendered="{!ShowAddInvitee}">
+		&nbsp;<apex:outputLabel value="{!$Label.AMS_LABEL_ScheduleSearch}" />&nbsp;
+			<apex:selectList value="{!SelectedSearchOption}" multiselect="false" size="1">
+				<apex:selectOptions value="{!SearchOptions}"/>
+			</apex:selectList>&nbsp;
+			<apex:outputLabel value="{!$Label.AMS_LABEL_For}" />&nbsp;
+			<apex:inputText value="{!SearchText}" />&nbsp;
+			<apex:commandButton value="{!$Label.AMS_BTN_Go}" action="{!DoSearch}" />
+			<br/>
+			<br/>
+		&nbsp;<apex:outputLabel value="{!$Label.AMS_LABEL_ScheduleSearchHelp}" />
+		<br/><br/>
+		<apex:pageBlock title="Search Results" >
+			<apex:pageBlockButtons location="top">
+				<apex:commandButton value="Insert Selected" action="{!InsertSelected}" />
+			</apex:pageBlockButtons>
+			<apex:pageMessage summary="{!$Label.AMS_LABEL_ScheduleWarningRecords}" severity="warning" strength="1" rendered="{!ShowWarningCount}"/>
+			<apex:pageBlockTable value="{!listUserContact}" var="uc" rendered="{!IF(listUserContact.size != 0, true, false)}">
+				<apex:column >
+					<apex:facet name="header"></apex:facet>
+					<apex:inputCheckbox value="{!uc.IsChecked}" rendered="{!uc.IsSelectable}"/>
+				</apex:column>
+				<apex:column >
+					<apex:facet name="header"> {!$Label.AMS_LABEL_Name} </apex:facet>
+					<apex:outputText value="{!uc.RecordName}" />
+				</apex:column>
+				<apex:column >
+					<apex:facet name="header"> {!$Label.AMS_LABEL_Type} </apex:facet>
+					<apex:outputText value="{!uc.UserContactType}" />
+				</apex:column>
+				<apex:column >
+					<apex:facet name="header"> {!$Label.AMS_LABEL_Owner} </apex:facet>
+					<apex:outputText value="{!uc.RecordOwner}" />
+				</apex:column>
+			</apex:pageBlockTable>
+			<apex:outputLabel rendered="{!IF(listUserContact.size = 0, true, false) && NOT(ShowWarningCount)}" ><br/>{!$Label.AMS_LABEL_ScheduleHelpText}<br/><br/></apex:outputLabel>
+			<apex:pageMessage summary="{!$Label.AMS_LABEL_ScheduleWarningRecords}" severity="warning" strength="1" rendered="{!ShowWarningCount}"/>
+		</apex:pageBlock>
+	</apex:outputPanel>
+
+	<apex:pageBlock title="Invitees Schedule" rendered="{!(NOT(ShowAddInvitee) && NOT(Completed))}" >
+		<apex:outputPanel id="ischedule" layout="block">
+			<apex:pageBlockTable value="{!eventList}" var="e"  rendered="{!IF(eventList.size != 0, true, false)}" >
+				<apex:column >
+					<apex:facet name="header"> {!$Label.AMS_LABEL_Name} </apex:facet>
+					<apex:outputText value="{!e.Owner.Name}" />
+				</apex:column>
+				<apex:column >
+					<apex:facet name="header"> {!$Label.AMS_LABEL_Type} </apex:facet>
+					<apex:outputText value="{!e.subject}" />
+				</apex:column>
+				<apex:column >
+					<apex:facet name="header"> {!$Label.AMS_LABEL_ScheduleStartTime} </apex:facet>
+					<apex:outputField value="{!e.ActivityDateTime}" />
+				</apex:column>
+				<apex:column >
+					<apex:facet name="header"> {!$Label.AMS_LABEL_ScheduleEndTime} </apex:facet>
+					<apex:outputField value="{!e.EndDateTime}" />
+				</apex:column>
+				<apex:column >
+					<apex:facet name="header">{!$Label.AMS_LABEL_ScheduleDuration} </apex:facet>
+					<apex:outputField value="{!e.DurationInMinutes}" />
+				</apex:column>
+			</apex:pageBlockTable>
+		<apex:outputPanel rendered="{!IF(eventList.size == 0, true, false)}" ><br/>{!$Label.AMS_LABEL_ScheduleNoInvitees}<br/><br/></apex:outputPanel>
+		</apex:outputPanel>
+	</apex:pageBlock>
+
+	<apex:pageBlock title="{!$Label.AMS_LABEL_ScheduleOtherInvitees}"  id="OtherInvetees" rendered="{!(NOT(Completed))}" >
+		<apex:pageBlockTable value="{!listSelectedUserContact}" var="uc"  rendered="{!IF(listSelectedUserContact.size != 0, true, false)}">
+			<apex:column >
+				<apex:facet name="header"></apex:facet>
+				<apex:commandLink immediate="true" value="{!$Label.AMS_LABEL_Remove}" action="{!RemoveInvitee}">
+					<apex:param name="RemoveInviteeId" value="{!uc.RecordId}" assignTo="{!RemoveInviteeId}" />
+					<apex:actionSupport event="onclick"  rerender="ischedule"></apex:actionSupport>
+				</apex:commandLink>
+			</apex:column>
+			<apex:column >
+				<apex:facet name="header"> {!$Label.AMS_LABEL_Name} </apex:facet>
+				<apex:outputText value="{!uc.RecordName}" />
+			</apex:column>
+			<apex:column >
+				<apex:facet name="header"> {!$Label.AMS_LABEL_Type} </apex:facet>
+				<apex:outputText value="{!uc.UserContactType}" />
+			</apex:column>
+			<apex:column >
+				<apex:facet name="header"> {!$Label.AMS_LABEL_Owner} </apex:facet>
+				<apex:outputText value="{!uc.RecordOwner}" />
+			</apex:column>
+		</apex:pageBlockTable>
+		<apex:outputPanel rendered="{!IF(listSelectedUserContact.size == 0, true, false)}" ><br/>{!$Label.AMS_LABEL_ScheduleNoInviteesOther}<br/><br/></apex:outputPanel>
+	</apex:pageBlock>
+
+	<apex:outputPanel rendered="{!ShowAddInvitee}">
+		<table width="100%" cellspaing="2" cellpadding="2" >
+			<tr>
+				<td align="center" valign="bottom">
+					<apex:commandButton value="{!$Label.AMS_BTN_Done}" title="{!$Label.AMS_BTN_Done}" action="{!DoneInvitees}" />&nbsp;&nbsp;&nbsp;&nbsp;
+					<apex:commandButton value="{!$Label.AMS_BTN_Cancel}" title="{!$Label.AMS_BTN_Cancel}" action="{!CancelInvitees}" />
+				</td>
+			</tr>
+		</table>
+	</apex:outputPanel>
+	<apex:pageBlock rendered="{!Completed}">
+		<apex:pageBlockSection id="pbsCompleted" columns="1">
+			<apex:pageMessage summary="{!$Label.AMS_LABEL_ScheduleSave}" severity="confirm" strength="2" />
+		</apex:pageBlockSection>
+		<apex:pageBlockButtons rendered="{!Completed}" id="pbbsMainButtons" style="text-align: right;" location="bottom">
+			<apex:commandButton value="{!$Label.AMS_BTN_Close}" title="{!$Label.AMS_BTN_Close}" onclick="closeWin(false);return(false);"/>
+		</apex:pageBlockButtons>
+	</apex:pageBlock>
+
+	<div style="display:none;">
+		<apex:inputField id="myStartDate" required="false" value="{!eventCC.RecurrenceStartDateTime}" />
+		<apex:inputField id="myEndDate" required="false" value="{!eventCC.ActivityDateTime}" />
+	</div>
+</apex:form>
+
+</body>
+<script type="text/javascript">
+	jQuery.noConflict();
+	jQuery(document).ready(function() {
+		gfxInit();
+	});
+	function gfxInit() {
+		a1=new Image; a1.src="{!URLFOR($Resource.UIRes, 'res/img/spinner.gif')}";
+	}
+</script>
+<script type="text/javascript">
+	function getdate(){
+		var startDateTime = document.getElementById('StartDateTime');
+		return startDateTime.value;
+	}
+
+	function cancelWindow(){
+		parent.closeScheduleWindow('cancel');
+	}
+
+	function validateSave(){
+		var returnType = true;
+		var ObjStartDate = document.getElementById('{!$Component.myStartDate}');
+		var ObjEndDate = document.getElementById('{!$Component.myEndDate}');
+		var ObjStartDateOnly = document.getElementById('{!$Component.StartDateTime}');
+		var ObjStartTimeOnly = document.getElementById('{!$Component.StartDateTime_time}');
+		var ObjEndDateOnly = document.getElementById('{!$Component.EndDateTime}');
+		var ObjEndTimeOnly = document.getElementById('{!$Component.EndDateTime_time}');
+
+		if (jQuery('[id$=StartDateTime]').val() == '') {
+			alert('{!$Label.AMS_ERROR_ScheduleStartDate}');
+		return false;
+		}
+		if (jQuery('[id$=StartDateTime_time]').val() == '') {
+			alert('{!$Label.AMS_ERROR_ScheduleStartTime}');
+		return false;
+		}
+		if (jQuery('[id$=EndDateTime]').val() == '') {
+			alert('{!$Label.AMS_ERROR_ScheduleEndDate}');
+		return false;
+		}
+		if (jQuery('[id$=EndDateTime_time]').val() == '') {
+			alert('{!$Label.AMS_ERROR_ScheduleEndTime}');
+		return false;
+		}
+		jQuery('[id$=myStartDate]').val(jQuery('[id$=StartDateTime]').val() + ' ' + jQuery('[id$=StartDateTime_time]').val());
+		jQuery('[id$=myEndDate]').val(jQuery('[id$=EndDateTime]').val() + ' ' + jQuery('[id$=EndDateTime_time]').val());
+		return true;
+	}
+</script>
+</apex:page>

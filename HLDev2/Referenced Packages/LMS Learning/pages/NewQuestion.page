@@ -1,0 +1,167 @@
+<apex:page showheader="false" sidebar="false" standardController="lmscons__Question__c" extensions="lmscons.QuizNewQuestion">
+<style>
+	.hideBtn {display:none}
+	textarea {
+        max-width:420px;
+    }
+</style>
+<apex:includeScript value="{!URLFOR($Resource.lmscons__lmslightbox, 'js/jquery.js')}"/>
+
+	<apex:pageMessages id="PageMessages"/>
+
+	<apex:actionStatus startText=""  id="busyStatus"
+		onStart="document.body.style.cursor = 'wait';return true;"
+		onStop="document.body.style.cursor = 'default';return true;" >
+	</apex:actionStatus>
+
+<apex:outputPanel id="allform">
+
+	<apex:pageBlock rendered="{!NOT(isNew)}">
+		<apex:detail subject="{!Qid}" relatedList="false"/>
+
+		<apex:relatedList list="Answers__r" subject="{!Qid}"/>
+
+	</apex:pageBlock>
+	<apex:form >
+	<apex:pageBlock mode="edit" rendered="{!isNew}">
+		<apex:pageBlockButtons >
+				<!-- <apex:commandButton action="{!Save}" value="Save" status="busyStatus" rerender="PageMessages" oncomplete="parent.RefreshPage();"/> -->
+				<apex:commandButton styleClass="saveQuestion" onclick="disableButtons()" action="{!Save}" value="Save" status="busyStatus" rerender="PageMessages"  oncomplete="if({!noerrors}) goToChild('{!Qid}');enableButtons()"/>
+				<apex:commandButton styleClass="saveAndNewQuestion" onclick="disableButtons()" action="{!saveNew}" value="Save & New" rerender="PageMessages" oncomplete="enableButtons()"/>
+				<!-- <apex:commandButton action="{!Save}" value="Save" status="busyStatus" rerender="PageMessages, allform" oncomplete="removeButtons()"/> -->
+				<apex:commandButton action="{!cancel}" value="Cancel" onclick="parent.ClosePage(); return false;"/>
+		</apex:pageBlockButtons>
+		<apex:pageBlockSection columns="1" title="Information">
+			<!-- <apex:pageBlockSectionItem >
+				<apex:outputLabel for="tpc_name" value="{!$ObjectType.Question__c.fields.Name.label}"/>
+				<apex:outputPanel >
+					<apex:inputField value="{!Question__c.Name}" required="true" id="tpc_name"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>-->
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="tpc_name" value="{!$ObjectType.lmscons__Question__c.fields.lmscons__Question__c.label}"/>
+				<apex:outputPanel >
+					<apex:inputField value="{!lmscons__Question__c.lmscons__Question__c}" required="true" id="tpc_name"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+			<!-- <apex:pageBlockSectionItem >
+				<apex:outputLabel for="Cat" value="{!$ObjectType.Question__c.fields.Category__c.label}"/>
+				<apex:outputPanel >
+					<apex:inputField value="{!Question__c.Category__c}" id="Cat"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem> -->
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="Type" value="{!$ObjectType.lmscons__Question__c.fields.lmscons__Type__c.label}"/>
+				<apex:outputPanel >
+					<apex:inputField value="{!lmscons__Question__c.lmscons__Type__c}" id="Type" onChange="showTF(this)"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem dataStyleClass="LocationData" labelStyleClass="LocationLabel"  dataStyle="display:none" labelStyle="display:none">
+				<apex:outputLabel value="Correct Answer" for="AnswerCorrect"/>
+				<apex:inputText value="{!trueAnswer}"/>
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem dataStyleClass="LocationData" labelStyleClass="LocationLabel"  dataStyle="display:none" labelStyle="display:none">
+				<apex:outputLabel value="Incorret Answer" for="AnswerIncorrect"/>
+				<apex:inputText value="{!falseAnswer}"/>
+			</apex:pageBlockSectionItem>
+
+			<apex:pageBlockSectionItem dataStyleClass="TextTypeForFreeText" labelStyleClass="TextTypeForFreeTextLabel"  dataStyle="display:none" labelStyle="display:none">
+				<apex:outputLabel value="Type Text" for="TypeText"/>
+				<apex:outputPanel >
+					<apex:inputField value="{!lmscons__Question__c.lmscons__Text_Type__c}" id="TypeText"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+
+			<!-- <apex:pageBlockSectionItem id="tfAnswer">
+				<apex:outputLabel for="Type" value="Answer "/>
+				<apex:outputPanel >
+										<apex:selectList value="{!tfAnswer}" size="1">
+												<apex:selectOptions value="{!TrueFalse}"/>
+										</apex:selectList>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem> -->
+
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="Diff" value="{!$ObjectType.lmscons__Question__c.fields.lmscons__Difficulty__c.label}"/>
+				<apex:outputPanel >
+					<apex:inputField value="{!lmscons__Question__c.lmscons__Difficulty__c}" id="Diff"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="Random" value="{!$ObjectType.lmscons__Question__c.fields.lmscons__Randomization__c.label}"/>
+				<apex:outputPanel >
+					<apex:inputField value="{!lmscons__Question__c.lmscons__Randomization__c}" id="Random"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem >
+				<apex:outputLabel for="Order" value="{!$ObjectType.lmscons__Quiz_Question__c.fields.lmscons__Order__c.label}"/>
+				<apex:outputPanel styleClass="orderInputParent">
+					<apex:inputField onchange="validateOrder()" value="{!qQuestion.lmscons__Order__c}" id="Order"/>
+				</apex:outputPanel>
+			</apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+
+		<script>
+			jQuery.noConflict();
+
+			function disableButtons () {
+				jQuery('.saveQuestion').each(function() {
+					jQuery(this).attr('class', 'btnDisabled saveQuestion').attr('disabled', 'disabled');
+				});
+				jQuery('.saveAndNewQuestion').each(function() {
+					jQuery(this).attr('class', 'btnDisabled saveAndNewQuestion').attr('disabled', 'disabled');
+				});
+			}
+
+			function enableButtons() {
+				jQuery('.saveQuestion').each(function() {
+					jQuery(this).attr('class', 'btn saveQuestion').removeAttr('disabled');
+				});
+				jQuery('.saveAndNewQuestion').each(function() {
+					jQuery(this).attr('class', 'btn saveAndNewQuestion').removeAttr('disabled');
+				});
+			}
+
+			function removeButtons() {
+				jQuery('[name=del]').attr('class', 'hideBtn');
+				jQuery('[name=edit]').attr('class', 'hideBtn');
+				jQuery('[name=clone]').attr('class', 'hideBtn');
+			}
+
+			function goToChild(strId) {
+				if (jQuery('[id$=Type]').prop("selectedIndex") != 2) {
+					parent.GotoQuestion(strId);
+				} else {
+					parent.RefreshPage();
+				}
+			}
+
+			function showTF(o){
+
+					if (o.value == "True/False") {
+							jQuery("[class*=LocationLabel]").show();
+							jQuery("[class*=LocationData]").show();
+					} else {
+							jQuery("[class*=LocationLabel]").hide();
+							jQuery("[class*=LocationData]").hide();
+					}
+					if (o.value == "Free Text") {
+							jQuery("[class*=TextTypeForFreeText]").show();
+							jQuery("[class*=TextTypeForFreeTextLabel]").show();
+					} else {
+							jQuery("[class*=TextTypeForFreeText]").hide();
+							jQuery("[class*=TextTypeForFreeTextLabel]").hide();
+					}
+			}
+
+		</script>
+	</apex:pageBlock>
+	</apex:form>
+
+</apex:outputPanel>
+
+
+
+</apex:page>

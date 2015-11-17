@@ -1,0 +1,641 @@
+<apex:page docType="html-5.0" showHeader="false" controller="IV4SF.ProfileHomeController" action="{!initPage}">
+
+<link rel="stylesheet" href="{!URLFOR($Resource.Assets, '/chatterCore.css')}"/>
+
+<style>
+.hvWidget {
+    width: 320px;
+    height: 240px;
+    background-color: #909090;
+    color: #fff;
+    font-size: 22px;
+    font-weight: bold;
+    text-align: center;
+}
+
+#shareDialog {
+    position: absolute;
+    top: -9999em;
+    left: -9999em;
+    background-color: #fff;
+    border-radius: 5px;
+    -moz-border-radius: 5px;
+    -webkit-border-radius: 5px;
+    width: 300px;
+    z-index: 99999;
+}
+
+.greyButton {
+    -webkit-box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    -moz-box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    font-weight: bold;
+    background: #eeeeee;
+}
+
+.blueButton {
+        -webkit-box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        -moz-box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        font-weight: bold;
+        color: #fff;
+        background: #1b91ca;
+        background: -webkit-gradient(linear,left bottom,left top,color-stop(0,#0182bb),color-stop(1,#109ddb));
+        background: -ms-linear-gradient(bottom,#0182bb,#109ddb);
+        background: -moz-linear-gradient(center bottom,#0182bb 0%,#109ddb 100%);
+    }
+
+.clearFix:after {
+    visibility: hidden;
+    display: block;
+    font-size: 0;
+    content: " ";
+    clear: both;
+    height: 0;
+}
+* html .clearFix             { zoom: 1; } /* IE6 */
+*:first-child+html .clearFix { zoom: 1; } /* IE7 */
+</style>
+
+<apex:form id="form">
+
+<apex:outputPanel id="userBanner" layout="block" style="position: relative; margin-top: 10px; margin-bottom: 10px; max-width: 722px; height: 384px; background-image: url({!URLFOR($Resource.IV4SF__Assets, '/header-small.png')})" rendered="{!isCurrentUser && NOT(userBannerHidden)}">
+    <div style="width: 353px; height: 198px; position: absolute; left: 24px; top: 94px;">
+        <iframe src="//player.vimeo.com/video/78021695" width="353" height="198" frameborder="0" webkitallowfullscreen="true" mozallowfullscreen="true" allowfullscreen="true"></iframe>
+    </div>
+    <div id="userBannerHider" style="width: 20px; height: 20px; position: absolute; right: 8px; top: 8px; cursor: pointer;"></div>
+</apex:outputPanel>
+
+<apex:outputPanel rendered="{!apiError}">
+    <h1 style="color: red;">Error communicating with HireVue server.</h1>
+</apex:outputPanel>
+
+<apex:outputPanel rendered="{!NOT(apiError)}">
+	<script id="hv-recorder-script" type="text/javascript" src="{!apiHost}/integrations/widgets/recorder.js"></script>
+
+	<apex:outputPanel layout="none" rendered="{!isCurrentUser || posts > 0}">
+		<div style="margin-top: 10px; margin-bottom: 20px; font-size: 20px; font-weight: bold; color: #333;">Posts</div>
+	</apex:outputPanel>
+
+	<apex:outputPanel layout="block" style="margin-bottom: 25px;" rendered="{!isCurrentUser}">
+		<a id="recordPostButton" href="#"><img src="{!URLFOR($Resource.Assets, '/record_post.png')}" border="0" width="176" height="40"/></a>
+		
+		<div id="postPanel" style="background-color: #eee; border-radius: 10px; margin-right: 10px; display: none;">
+	        <div style="padding-top: 10px; padding-left: 10px;">
+	            <img src="{!URLFOR($Resource.Assets, '/btn_new-question.png')}" width="146" height="31"/>
+	        </div>
+	
+            <div id="postErrorPanel" class="message" style="display: none;">
+	            <table>
+	                <tr>
+	                    <td style='padding: 0 15px 0 5px;'><apex:image value="{!URLFOR($Resource.IV4SF__Assets, '/error24.png')}"/></td>
+	                    <td style='padding: 0 15px 0 5px;'><font color="red"><h4>Error</h4></font></td>
+	                </tr>
+	                <tr>
+	                    <td style='padding: 0 15px 0 5px;'>&nbsp;</td>
+	                    <td style='padding: 0 15px 0 5px;'><span id="postErrors"></span></td>
+	                </tr>
+	            </table>
+            </div><br/>
+	
+	        <div style="padding: 10px;">
+	            <div style="font-size: 16px; color: #999;">Post Title:</div>
+	            <input id="questionText" type="text" style="width: 100%; font-size:16px; border-radius: 3px; border: 1px solid #999;"/>
+	        </div>
+	        
+	        <div style="padding-left: 10px; padding-right: 10px; padding-bottom: 10px;">
+	        	<div style="font-size: 16px; color: #999;">Post Category:</div>
+	            <input id="categoryText" type="text" style="width: 65%; font-size:16px; border-radius: 3px; border: 1px solid #999;"/>
+	        </div>
+	
+	        <div style="text-align: right; padding-bottom: 10px; padding-right: 10px;">
+	            <button class="greyButton" style="width: 75px; height: 31px; font-size: 16px;" onclick="cancelPost(); return false;">Cancel</button>
+	            <button class="blueButton" style="width: 77px; height: 31px; font-size: 16px;" onclick="startPost(); return false;">Start</button>
+	        </div>
+	    </div>
+	</apex:outputPanel>
+
+	<apex:repeat value="{!questions}" var="question" rendered="{!posts > 0}">
+	    <apex:outputPanel rendered="{!question.responseId != null && question.status == 'Post'}">
+	        <div style="font-size: 13px; font-style: italic; color: #999; padding-bottom: 5px;">{!question.category}</div>
+	        <div style="font-size: 15px; font-weight: bold; color: #333; padding-bottom: 10px;">{!question.text}</div>
+	
+	        <div class="clearFix">
+	            <apex:outputPanel styleClass="" style="float: left; margin-right: 10px;">
+	                <div id="hv-recorder-{!question.responseId}" class="hvWidget" responseId="{!question.responseId}" thumbnailUrl="{!question.thumbnailUrl}"><div style="height: 240px; line-height: 240px;"><img src="{!URLFOR($Resource.Assets, '/processing_spinner.gif')}" style="vertical-align: middle; width: 24px; height: 24px; margin-right: 5px; margin-bottom: 5px;"/> Processing</div></div><br/>
+	            </apex:outputPanel>
+	
+	            <apex:outputPanel layout="block" style="float: left; width: 280px;" rendered="{!isCurrentUser}">
+	                <span id="{!JSENCODE(question.responseId)}">
+	                    <img src="{!URLFOR($Resource.Assets, '/btn_delete-video.png')}" width="141" height="29" class="deleteVideoButton" style="padding-bottom: 7px; cursor: pointer;"/>
+	                    <apex:image value="{!URLFOR($Resource.IV4SF__Assets, '/btn_post-to-chatter.png')}" width="141" height="29" styleClass="postToChatterButton" style="cursor: pointer;" rendered="{!ISNULL(question.feedItem)}"/>
+	                </span>
+	            </apex:outputPanel>
+	        </div>
+	        
+			<apex:outputPanel layout="none" rendered="{!question.feedItem != null}">
+		        <div id="{!question.feedItem.Id}" class="feedcontainer cxfeedcontainer zen actionsOnHoverEnabled">
+		            <div class="cxfeeditem feeditem">
+		                <span>
+		                    <a href="/{!profileUser.Id}"><span class="chatter-avatar feeditemusericon chatter-avatarRegular"><img src="{!profileUser.SmallPhotoUrl}" alt="{!profileUser.Name}" width="45" height="45" class="chatter-photo"/><img src="/s.gif" class="chatter-avatarStyle"/></span></a>
+		                </span>
+		                <div class="feeditemcontent cxfeeditemcontent">
+		                    <div class="feeditembodyandfooter">
+		                        <div class="feeditembody">
+		                            <div class="preamblecontainer displayblock">
+		                                <span class="feeditempreamble">
+		                                    <a href="/{!profileUser.Id}" target="_top" class="actorentitylink">{!profileUser.Name}</a>
+		                                </span>
+		                            </div>
+		                            <span class="feeditemtext cxfeeditemtext">{!question.feedItem.Body}</span>
+		                            <div class="feeditemaux cxfeeditemaux">
+		                                <div class="linkPostLinkContainer">
+		                                    <span class="linkPostLinkTitle">
+		                                        <a href="{!question.feedItem.LinkUrl}" class="linkPostLink" target="_blank"><img src="/s.gif" alt="{!HTMLENCODE(question.feedItem.Title)}" title="{!HTMLENCODE(question.feedItem.Title)}"/><span title="{!question.feedItem.LinkUrl}">{!question.feedItem.Title}</span></a>
+		                                        <div class="feeditemlinkpost">{!question.feedItem.LinkUrl}</div>
+		                                    </span>
+		                                </div>
+		                            </div>
+		                            <div class="topics"></div>
+		                        </div>
+		                        <div class="feeditemfooter">
+		                            <span class="cxallfeedactions">
+		                                <a href="javascript:void(0);" title="Comment on this post" class="feeditemactionlink cxaddcommentaction">Comment</a>
+		                                <span class="cxfeeditemcommentdot feeditemseparatingdot"> · </span>
+		                                <a href="javascript:void(0);" title="Like this post" id="{!question.feedItemLikeId}" style="{!IF(question.feedItemLikeId == null, '', 'display: none;')}" class="feeditemactionlink cxlikeitemaction">Like</a>
+		                                <a href="javascript:void(0);" title="Stop liking this post" style="{!IF(question.feedItemLikeId == null, 'display: none;', '')}" class="feeditemactionlink cxunlikeitemaction">Unlike</a>
+		                                <span class="cxfeeditemlikedot feeditemseparatingdot"> · </span>
+		                                <a href="javascript:void(0);" title="Share Post" class="feeditemactionlink cxshareitemaction">Share</a>
+		                                <span class=" feeditemseparatingdot"> · </span>
+		                            </span>
+		                            <a href="/{!question.feedItem.Id}" target="_top" title="Click for single-item view of this post." class="feeditemtimestamp"><apex:outputText value="{0,date,MMMM d, yyyy 'at' h:mm a}"><apex:param value="{!question.feedItem.CreatedDate}"/></apex:outputText></a>
+		                        </div>
+		                    </div>
+		                    <div class="feeditemextras cxchattertextareacontainer chattertextareacontainer">
+		                        <div class="cxfeedcommentarrow feedcommentarrow"></div>
+		                        <div class="cxcomments feeditemcomments">
+		                            <div class="cxlikecontainer" style="{!IF(question.feedItemLikeId == null, 'display: none;', '')}">
+		                                <div class="cxfeeditemlike feeditemlike" style="display: block">
+		                                    <span class="like-icon">&nbsp;</span><span>You like this.</span>
+		                                </div>
+		                            </div>
+		
+		                            <apex:repeat value="{!question.feedComments}" var="feedComment">
+		                                <div class="feeditemcomment cxfeedcomment" style="display: block;">
+		                                    <a href="/{!feedComment.createdById}" target="_top" class="feeditemcommentphoto"><span class="chatter-avatarMedium chatter-avatar" title="{!HTMLENCODE(feedComment.createdByName)}"><img src="{!feedComment.createdBySmallPhotoUrl}" alt="{!HTMLENCODE(feedComment.createdByName)}" width="30" height="30" class="chatter-photo" title="{!HTMLENCODE(feedComment.createdByName)}"/><img src="/s.gif" class="chatter-avatarStyle"/></span></a>
+		                                    <div class="feeditemcommentbody">
+		                                        <div class="feedcommentuser">
+		                                            <a href="/{!feedComment.createdById}" target="_top" class="actorentitylink">{!feedComment.createdByName}</a>
+		                                        </div>
+		                                        <span class="feedcommenttext">{!feedComment.body}</span>
+		                                        <div class="feedcommentfooter">
+		                                            <!--span class="feedcommentactions">
+		                                                <span>
+		                                                    <span class="cxallfeedactions">
+		                                                        <a href="javascript:%20void%280%29%3B" class="commentactionlink cxlikecommentaction" style="display:none" title="Like this post">Like</a>
+		                                                        <a href="javascript:%20void%280%29%3B" class="commentactionlink cxunlikecommentaction" title="Stop liking this post">Unlike</a>
+		                                                    </span>
+		                                                </span>
+		                                                <span class="cxcommentlikecontainer">
+		                                                    <span>
+		                                                        <span class="cxcommentlike commentlike " style="display:inline">
+		                                                            <span class="feeditemseparatingdot cxcommentlikedot"> · </span>
+		                                                            <span class="small-like-icon"></span>
+		                                                            <span class="liketext" title="You like this."><a href="javascript:void(0);" class="dialog_LikersDialog0D7i0000000aLpn">1 person</a></span>
+		                                                        </span>
+		                                                    </span>
+		                                                </span>
+		                                                <span class="feeditemseparatingdot cxcommentlikedot"> · </span>
+		                                                <a href="javascript:void(0);" title="Delete this comment">Delete</a>
+		                                                <span class="feeditemseparatingdot deleteDot"> · </span>
+		                                            </span-->
+		                                            <span class="feeditemtimestamp">{!feedComment.createdDate}</span>
+		                                        </div>
+		                                    </div>
+		                                </div>
+		                            </apex:repeat>
+		                        </div>
+		                        <div class="cxnewcomment feedArrow">
+		                            <div class="feeditemcomment feeditemcommenttext">
+		                                <div class="feeditemcommentphotocontainer">
+		                                    <a href="/{!$User.Id}" target="_top" class="feeditemcommentphoto"><img src="https://c.na15.content.force.com/profilephoto/005/T" title="{!$User.FirstName} {!$User.LastName}" alt="{!$User.FirstName}"/></a>
+		                                </div>
+		                                <div class="feeditemcommentnew zen">
+		                                    <div class="newcommenttextwrapper">
+		                                        <textarea class="foobar cxnewcommenttext chatterMentionsEnabled chatterHashtagsEnabled chatterTopicsEnabled cxiswired" tabindex="0" role="textbox" title="Write a comment..." style="min-height: 32px;"></textarea>
+		                                    </div>
+		                                    <div class="cxvalidationmessage cxchattermessagecontainer chattermessagecontainer" style="display:none"></div>
+		                                    <input class="zen-btn cxnewcommentaction newcommentbutton cxchattersubmit" type="button" value="Comment" title="Comment"/>
+		                                    <div class="cxcontentcommentinfo"></div>
+		                                    <div class="feedclearfloat"></div>
+		                                </div>
+		                            </div>
+		                        </div>
+		                        <div style="display: none;" class="feeditemcommentplaceholder cxcommentplaceholder">
+		                            <input type="text" readonly="true" value="Write a comment..." class="cxcommentplaceholderaction"/>
+		                        </div>
+		                    </div>
+		                </div>
+		            </div>
+		        </div>
+			</apex:outputPanel>
+	    </apex:outputPanel>
+	</apex:repeat>
+
+	<div style="margin-top: 10px; margin-bottom: 20px; font-size: 20px; font-weight: bold; color: #333;">Questions</div>
+
+	<apex:repeat value="{!questions}" var="question">
+	    <apex:outputPanel rendered="{!question.responseId != null && question.status != 'Post'}">
+	        <div style="font-size: 13px; font-style: italic; color: #999; padding-bottom: 5px;">{!question.category}</div>
+	        <div style="font-size: 15px; font-weight: bold; color: #333; padding-bottom: 10px;">{!question.text}</div>
+	
+	        <div class="clearFix">
+	            <apex:outputPanel styleClass="" style="float: left; margin-right: 10px;">
+	                <div id="hv-recorder-{!question.responseId}" class="hvWidget" responseId="{!question.responseId}" thumbnailUrl="{!question.thumbnailUrl}"><div style="height: 240px; line-height: 240px;"><img src="{!URLFOR($Resource.Assets, '/processing_spinner.gif')}" style="vertical-align: middle; width: 24px; height: 24px; margin-right: 5px; margin-bottom: 5px;"/> Processing</div></div><br/>
+	            </apex:outputPanel>
+	
+	            <apex:outputPanel layout="block" style="float: left; width: 280px;" rendered="{!isCurrentUser}">
+	                <span id="{!JSENCODE(question.responseId)}">
+	                    <a href="{!$Page.ProfileRespond}?questionId={!question.Id}&responseId={!question.responseId}"><img src="{!URLFOR($Resource.Assets, '/btn_redo-video.png')}" border="0" width="141" height="29" style="padding-bottom: 7px;"/></a><br/>
+	                    <img src="{!URLFOR($Resource.Assets, '/btn_delete-video.png')}" width="141" height="29" class="deleteVideoButton" style="padding-bottom: 7px; cursor: pointer;"/>
+	                    <apex:image value="{!URLFOR($Resource.IV4SF__Assets, '/btn_post-to-chatter.png')}" width="141" height="29" styleClass="postToChatterButton" style="cursor: pointer;" rendered="{!ISNULL(question.feedItem)}"/>
+	                </span>
+	            </apex:outputPanel>
+	        </div>
+	        
+			<apex:outputPanel layout="none" rendered="{!question.feedItem != null}">
+		        <div id="{!question.feedItem.Id}" class="feedcontainer cxfeedcontainer zen actionsOnHoverEnabled">
+		            <div class="cxfeeditem feeditem">
+		                <span>
+		                    <a href="/{!profileUser.Id}"><span class="chatter-avatar feeditemusericon chatter-avatarRegular"><img src="{!profileUser.SmallPhotoUrl}" alt="{!profileUser.Name}" width="45" height="45" class="chatter-photo"/><img src="/s.gif" class="chatter-avatarStyle"/></span></a>
+		                </span>
+		                <div class="feeditemcontent cxfeeditemcontent">
+		                    <div class="feeditembodyandfooter">
+		                        <div class="feeditembody">
+		                            <div class="preamblecontainer displayblock">
+		                                <span class="feeditempreamble">
+		                                    <a href="/{!profileUser.Id}" target="_top" class="actorentitylink">{!profileUser.Name}</a>
+		                                </span>
+		                            </div>
+		                            <span class="feeditemtext cxfeeditemtext">{!question.feedItem.Body}</span>
+		                            <div class="feeditemaux cxfeeditemaux">
+		                                <div class="linkPostLinkContainer">
+		                                    <span class="linkPostLinkTitle">
+		                                        <a href="{!question.feedItem.LinkUrl}" class="linkPostLink" target="_blank"><img src="/s.gif" alt="{!HTMLENCODE(question.feedItem.Title)}" title="{!HTMLENCODE(question.feedItem.Title)}"/><span title="{!question.feedItem.LinkUrl}">{!question.feedItem.Title}</span></a>
+		                                        <div class="feeditemlinkpost">{!question.feedItem.LinkUrl}</div>
+		                                    </span>
+		                                </div>
+		                            </div>
+		                            <div class="topics"></div>
+		                        </div>
+		                        <div class="feeditemfooter">
+		                            <span class="cxallfeedactions">
+		                                <a href="javascript:void(0);" title="Comment on this post" class="feeditemactionlink cxaddcommentaction">Comment</a>
+		                                <span class="cxfeeditemcommentdot feeditemseparatingdot"> · </span>
+		                                <a href="javascript:void(0);" title="Like this post" id="{!question.feedItemLikeId}" style="{!IF(question.feedItemLikeId == null, '', 'display: none;')}" class="feeditemactionlink cxlikeitemaction">Like</a>
+		                                <a href="javascript:void(0);" title="Stop liking this post" style="{!IF(question.feedItemLikeId == null, 'display: none;', '')}" class="feeditemactionlink cxunlikeitemaction">Unlike</a>
+		                                <span class="cxfeeditemlikedot feeditemseparatingdot"> · </span>
+		                                <a href="javascript:void(0);" title="Share Post" class="feeditemactionlink cxshareitemaction">Share</a>
+		                                <span class=" feeditemseparatingdot"> · </span>
+		                            </span>
+		                            <a href="/{!question.feedItem.Id}" target="_top" title="Click for single-item view of this post." class="feeditemtimestamp"><apex:outputText value="{0,date,MMMM d, yyyy 'at' h:mm a}"><apex:param value="{!question.feedItem.CreatedDate}"/></apex:outputText></a>
+		                        </div>
+		                    </div>
+		                    <div class="feeditemextras cxchattertextareacontainer chattertextareacontainer">
+		                        <div class="cxfeedcommentarrow feedcommentarrow"></div>
+		                        <div class="cxcomments feeditemcomments">
+		                            <div class="cxlikecontainer" style="{!IF(question.feedItemLikeId == null, 'display: none;', '')}">
+		                                <div class="cxfeeditemlike feeditemlike" style="display: block">
+		                                    <span class="like-icon">&nbsp;</span><span>You like this.</span>
+		                                </div>
+		                            </div>
+		
+		                            <apex:repeat value="{!question.feedComments}" var="feedComment">
+		                                <div class="feeditemcomment cxfeedcomment" style="display: block;">
+		                                    <a href="/{!feedComment.createdById}" target="_top" class="feeditemcommentphoto"><span class="chatter-avatarMedium chatter-avatar" title="{!HTMLENCODE(feedComment.createdByName)}"><img src="{!feedComment.createdBySmallPhotoUrl}" alt="{!HTMLENCODE(feedComment.createdByName)}" width="30" height="30" class="chatter-photo" title="{!HTMLENCODE(feedComment.createdByName)}"/><img src="/s.gif" class="chatter-avatarStyle"/></span></a>
+		                                    <div class="feeditemcommentbody">
+		                                        <div class="feedcommentuser">
+		                                            <a href="/{!feedComment.createdById}" target="_top" class="actorentitylink">{!feedComment.createdByName}</a>
+		                                        </div>
+		                                        <span class="feedcommenttext">{!feedComment.body}</span>
+		                                        <div class="feedcommentfooter">
+		                                            <!--span class="feedcommentactions">
+		                                                <span>
+		                                                    <span class="cxallfeedactions">
+		                                                        <a href="javascript:%20void%280%29%3B" class="commentactionlink cxlikecommentaction" style="display:none" title="Like this post">Like</a>
+		                                                        <a href="javascript:%20void%280%29%3B" class="commentactionlink cxunlikecommentaction" title="Stop liking this post">Unlike</a>
+		                                                    </span>
+		                                                </span>
+		                                                <span class="cxcommentlikecontainer">
+		                                                    <span>
+		                                                        <span class="cxcommentlike commentlike " style="display:inline">
+		                                                            <span class="feeditemseparatingdot cxcommentlikedot"> · </span>
+		                                                            <span class="small-like-icon"></span>
+		                                                            <span class="liketext" title="You like this."><a href="javascript:void(0);" class="dialog_LikersDialog0D7i0000000aLpn">1 person</a></span>
+		                                                        </span>
+		                                                    </span>
+		                                                </span>
+		                                                <span class="feeditemseparatingdot cxcommentlikedot"> · </span>
+		                                                <a href="javascript:void(0);" title="Delete this comment">Delete</a>
+		                                                <span class="feeditemseparatingdot deleteDot"> · </span>
+		                                            </span-->
+		                                            <span class="feeditemtimestamp">{!feedComment.createdDate}</span>
+		                                        </div>
+		                                    </div>
+		                                </div>
+		                            </apex:repeat>
+		                        </div>
+		                        <div class="cxnewcomment feedArrow">
+		                            <div class="feeditemcomment feeditemcommenttext">
+		                                <div class="feeditemcommentphotocontainer">
+		                                    <a href="/{!$User.Id}" target="_top" class="feeditemcommentphoto"><img src="https://c.na15.content.force.com/profilephoto/005/T" title="{!$User.FirstName} {!$User.LastName}" alt="{!$User.FirstName}"/></a>
+		                                </div>
+		                                <div class="feeditemcommentnew zen">
+		                                    <div class="newcommenttextwrapper">
+		                                        <textarea class="foobar cxnewcommenttext chatterMentionsEnabled chatterHashtagsEnabled chatterTopicsEnabled cxiswired" tabindex="0" role="textbox" title="Write a comment..." style="min-height: 32px;"></textarea>
+		                                    </div>
+		                                    <div class="cxvalidationmessage cxchattermessagecontainer chattermessagecontainer" style="display:none"></div>
+		                                    <input class="zen-btn cxnewcommentaction newcommentbutton cxchattersubmit" type="button" value="Comment" title="Comment"/>
+		                                    <div class="cxcontentcommentinfo"></div>
+		                                    <div class="feedclearfloat"></div>
+		                                </div>
+		                            </div>
+		                        </div>
+		                        <div style="display: none;" class="feeditemcommentplaceholder cxcommentplaceholder">
+		                            <input type="text" readonly="true" value="Write a comment..." class="cxcommentplaceholderaction"/>
+		                        </div>
+		                    </div>
+		                </div>
+		            </div>
+		        </div>
+			</apex:outputPanel>
+	    </apex:outputPanel>
+	
+	    <apex:outputPanel rendered="{!isCurrentUser && question.responseId == null}">
+	        <div style="font-size: 13px; font-style: italic; color: #999; padding-bottom: 5px;">{!question.category}</div>
+	        <div style="font-size: 15px; font-weight: bold; color: #333; padding-bottom: 10px;">{!question.text}</div>
+	
+	        <div style="margin-bottom: 25px;">
+	            <a href="{!$Page.ProfileRespond}?questionId={!question.Id}"><img src="{!URLFOR($Resource.Assets, '/btn_record-response.png')}" border="0" width="176" height="40"/></a>
+	        </div>
+	    </apex:outputPanel>
+	</apex:repeat>
+
+	<div id="dialogModalOverlay" style="width:100%; height:100%; position: fixed; margin: 0; padding: 0; z-index: 99999; top: 0; left: 0; right: 0; bottom: 0; background-color: #666; opacity: 0.5; display: none;">
+	</div>
+
+	<div id="shareDialog">
+	    <div style="border-bottom: 1px solid #efefef; font-size: 18px; font-weight: bold; padding: 10px;">Share Post</div>
+	    <div style="padding: 10px;">
+	        Success! You've shared this post to <a href="/_ui/core/userprofile/UserProfilePage?u={!$User.Id}&tab=sfdc.ProfilePlatformFeed" target="_top">your profile</a>.
+	    </div>
+	    <div style="background-color: #eee; padding: 10px; text-align: center; border-bottom-right-radius: 5px; border-bottom-left-radius: 5px;">
+	        <button id="doneButton" class="blueButton" style="width: 75px; height: 31px;" onclick="return false;">Done</button>
+	    </div>
+	</div>
+
+	<apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js"/>
+	<script>
+	    var profileUserId = '{!JSENCODE(profileUserId)}';
+	
+	    $(function() {
+	
+	        $(document).on('click', '#userBannerHider', function(e) {
+	            Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.ProfileHomeController.hideUserBanner}', profileUserId, function(result, event) {
+	                if (event.status) {
+	                    $('div[id$="userBanner"]').hide();
+	                } else {
+	                    alert('Error hiding banner.');
+	                }
+	            });
+	        });
+	
+			$(document).on('click', '#recordPostButton', function(e) {
+				$(this).hide();
+				$('#postPanel').show();
+				
+				return false;
+			});
+	
+	        $(document).on('click', '.deleteVideoButton', function(e) {
+	            // Prevent double clicks causing multiple attempts to delete the same video.
+	            if (jQuery(this).hasClass('deleting')) {
+	                return;
+	            }
+	
+	            $(this).addClass('deleting');
+	
+	            var responseId = jQuery(this).closest('span').attr('id');
+	
+	            Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.ProfileHomeController.deleteVideo}', responseId, function(result, event) {
+	                if (event.status) {
+	                    if (event.result == true) {
+	                        // Reload the current page.
+	                        location.href = location.href;
+	                    } else {
+	                        alert('Error deleting video.');
+	                        jQuery(this).removeClass('deleting');
+	                    }
+	                } else {
+	                    alert('Error deleting video.');
+	                    jQuery(this).removeClass('deleting');
+	                }
+	            });
+	        });
+	
+	        jQuery(document).on('click', '.postToChatterButton', function(e) {
+	            var responseId = jQuery(this).closest('span').attr('id');
+	
+	            Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.ProfileHomeController.postToChatter}', responseId, function(result, event) {
+	                if (event.status) {
+	                    // Reload the current page.
+	                    location.href = location.href;
+	                } else {
+	                    alert('Error posting to chatter.');
+	                }
+	            });
+	        });
+	
+	        jQuery(document).on('click', '.cxnewcommentaction', function(e) {
+	            var feedContainer = jQuery(this).closest('.feedcontainer');
+	            var feedItemId = feedContainer.attr('id');
+	            var comment = feedContainer.find('.cxnewcommenttext').val();
+	
+	            Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.ProfileHomeController.feedItemComment}', feedItemId, comment, function(result, event) {
+	                if (event.status) {
+	                    var comment = event.result;
+	
+	                    var html = '';
+	                    html += '<div class="feeditemcomment cxfeedcomment" style="display: block;">';
+	                    html +=     '<a href="/' + comment.createdById + '" target="_top" class="feeditemcommentphoto"><span class="chatter-avatarMedium chatter-avatar" title="' + comment.createdByName + '"><img src="' + comment.createdBySmallPhotoUrl + '" alt="' + comment.createdByName + '" width="30" height="30" class="chatter-photo" title="' + comment.createdByName + '"/><img src="/s.gif" class="chatter-avatarStyle"/></span></a>';
+	                    html +=     '<div class="feeditemcommentbody">';
+	                    html +=         '<div class="feedcommentuser">';
+	                    html +=             '<a href="/' + comment.createdById + '" target="_top" class="actorentitylink">' + comment.createdByName + '</a>';
+	                    html +=         '</div>';
+	                    html +=         '<span class="feedcommenttext">' + comment.body + '</span>';
+	                    html +=         '<div class="feedcommentfooter">';
+	                    html +=             '<span class="feeditemtimestamp">' + comment.createdDate + '</span>';
+	                    html +=         '</div>';
+	                    html +=     '</div>';
+	                    html += '</div>';
+	
+	                    feedContainer.find('.feeditemcomments').append(html);
+	
+	                    feedContainer.find('.cxnewcommenttext').val('');
+	                } else {
+	                    alert('Error adding comment.');
+	                }
+	            });
+	        });
+	
+	        jQuery(document).on('click', '.cxlikeitemaction', function(e) {
+	            var feedContainer = jQuery(this).closest('.feedcontainer');
+	            var feedItemId = feedContainer.attr('id');
+	
+	            Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.ProfileHomeController.feedItemLike}', feedItemId, function(result, event) {
+	                if (event.status) {
+	                    feedContainer.find('.cxlikeitemaction').attr('id', event.result);
+	
+	                    feedContainer.find('.cxlikeitemaction').toggle();
+	                    feedContainer.find('.cxunlikeitemaction').toggle();
+	                    feedContainer.find('.cxlikecontainer').toggle();
+	                } else {
+	                    alert('Error liking post.');
+	                }
+	            });
+	        });
+	
+	        jQuery(document).on('click', '.cxunlikeitemaction', function(e) {
+	            var feedContainer = jQuery(this).closest('.feedcontainer');
+	            var likeId = feedContainer.find('.cxlikeitemaction').attr('id');
+	
+	            Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.ProfileHomeController.feedItemUnlike}', likeId, function(result, event) {
+	                if (event.status) {
+	                    feedContainer.find('.cxlikeitemaction').removeAttr('id');
+	
+	                    feedContainer.find('.cxlikeitemaction').toggle();
+	                    feedContainer.find('.cxunlikeitemaction').toggle();
+	                    feedContainer.find('.cxlikecontainer').toggle();
+	                } else {
+	                    alert('Error unliking post.');
+	                }
+	            });
+	        });
+	
+	        jQuery(document).on('click', '.cxshareitemaction', function(e) {
+	            var feedContainer = jQuery(this).closest('.feedcontainer');
+	            var feedItemId = feedContainer.attr('id');
+	
+	            Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.ProfileHomeController.feedItemShare}', feedItemId, function(result, event) {
+	                if (event.status) {
+	                    jQuery('#dialogModalOverlay').show();
+	
+	                    var top = (jQuery(window).height() - jQuery('#shareDialog').outerHeight()) / 2 + jQuery(window).scrollTop();
+	                    var left = (jQuery(window).width() - 300) / 2 + jQuery(window).scrollLeft();
+	                    jQuery('#shareDialog').css({top: (top > 0 ? top : 0) + 'px', left: (left > 0 ? left : 0) + 'px'});
+	                } else {
+	                    alert('Error sharing post.');
+	                }
+	            });
+	        });
+	
+	        jQuery('#doneButton').click(function() {
+	            jQuery('#dialogModalOverlay').hide();
+	            jQuery('#shareDialog').css({top: '-999em', left: '-999em'});
+	        });
+	
+	        jQuery('.hvWidget').each(function() {
+	            var responseId = jQuery(this).attr('responseId');
+	            var thumbnailurl = jQuery(this).attr('thumbnailurl');
+	
+	            checkForThumbnail(responseId, thumbnailurl);
+	        });
+	
+	    });
+
+		function cancelPost() {
+			$('#postPanel').hide();
+			$('#recordPostButton').show();
+		}
+		
+		function startPost() {
+			var categoryText = $.trim($('#categoryText').val());
+			var questionText = $.trim($('#questionText').val());
+
+			$('#postErrorPanel').hide();
+
+			var errors = [];
+
+			if (questionText == '') {
+				errors.push('Post Title is required.');
+			}
+
+			if (categoryText == '') {
+				errors.push('Post Category is required.');
+			}
+			
+			if (errors.length > 0) {
+				$('#postErrors').html(errors.join('<br/>'));
+				$('#postErrorPanel').show();
+				return;
+			}
+
+			Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.ProfileHomeController.createPostQuestion}', categoryText, questionText, function(result, event) {
+				if (event.status) {
+					if (result == null) {
+						$('#postErrors').html('A post with that title already exists. Please enter a new title.');
+						$('#postErrorPanel').show();
+					} else {
+						location.href = '{!$Page.ProfileRespond}?questionId=' + result;
+					}
+				} else {
+					alert('Error starting post.');
+				}
+			});
+		}
+	
+	    function checkForThumbnail(responseId, thumbnailurl) {
+	        var img = new Image();
+	
+	        // When the thumbnail loads successfully, initialize the widget.
+	        img.onload = function() {
+	            Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.ProfileHomeController.getSessionKey}', function(result, event) {
+	                if (event.status) {
+	                    HvWidgets.Recorder.init({
+	                        sessionId: result,
+	                        targetId: 'hv-recorder-' + responseId,
+	                        name: '{!LEFT(JSENCODE(profileUserId), 15)}' + responseId,
+	                        readOnly: true,
+	                        width: '320px',
+	                        height: '246px'
+	                    });
+	                } else {
+	                    alert('Error getting HireVue session.');
+	                }
+	            });
+	        };
+	
+	        // When the thumbnail cannot load, pause and try again.
+	        img.onerror = function() {
+	            setTimeout(
+	                function () {
+	                    checkForThumbnail(responseId, thumbnailurl);
+	                },
+	                2000 // 2 seconds
+	            );
+	        };
+	
+	        // Start loading.
+	        img.src = thumbnailurl;
+	    }
+	</script>
+</apex:outputPanel>
+
+<br/><br/>
+<div style="text-align: center;">
+    <a href="https://hirevue.com/?source=salesforce" target="_blank"><img src="{!URLFOR($Resource.Assets, '/logo.png')}" width="130" height="51" border="0"/></a>
+</div>
+
+</apex:form>
+
+</apex:page>

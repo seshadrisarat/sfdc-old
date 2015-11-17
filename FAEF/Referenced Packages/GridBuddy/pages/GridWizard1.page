@@ -1,0 +1,577 @@
+<apex:page controller="GBLite.GridWizardController" title="{!lang.GW1Title}" action="{!init}" sidebar="false" tabStyle="Grid_Wizard__tab">
+	<div class="gbwPage gb{!lang.langCode}">
+		<c:EmptyComponent rendered="{!errors.showErrorMessages}">
+			<div class="msgBox warningMsg gbwMsg">
+				<apex:repeat value="{!errors.errorMessagesFromMap}" var="error">
+					<apex:outputText value="{!error}" escape="false" /><br/>
+				</apex:repeat>
+				<apex:repeat value="{!errors.apexWarningMessages}" var="error">
+					<apex:outputText value="{!error.summary}" escape="false" /><br/>
+				</apex:repeat>
+				<div class="messageTime">{!currentDateTime}</div>
+			</div>
+		</c:EmptyComponent>
+		
+		<c:EmptyComponent rendered="{!errors.showInfoMessages}">
+			<div class="msgBox infoMsg gbwMsg">
+				<apex:repeat value="{!errors.apexInfoMessages}" var="infoMsg">
+					<apex:outputText value="{!infoMsg.summary}" escape="true"/><br/>
+				</apex:repeat>
+				
+				<div class="messageTime">{!currentDateTime}</div>
+			</div>
+		</c:EmptyComponent>
+		
+		<div class="msgBox boxShadow loaderStatus" id="gridStatus">
+			<div class="msgBody">
+				<img src="{!URLFOR($Resource.gb_resources, 'images/orange_loader.gif')}" height="35" width="35" border="0"/>
+				<span class="msgText"></span>
+			</div>
+		</div>
+		
+		<apex:form styleClass="gbwForm" rendered="{!pageIsValid}">
+		<c:EmptyComponent id="landingPage" rendered="{!isLandingPage}">
+			<apex:pageblock title="{!lang.GWLbl}">
+				<div class="landing-wrapper">
+					<div class="grid-header">{!lang.ManageGridsLbl}</div>
+					<!-- this will only appear if the user cannot create new grids, and must select an existing grid -->
+					<c:EmptyComponent rendered="{!(userCanCreateNewOrEditThisGrid==false)}">
+						<table cellpadding="0" cellspacing="0" border="0" id="gridConfigOptions">
+							<tr>
+								<td>{!lang.LandingGWInstr}&nbsp;</td>
+								<td>
+									<apex:actionRegion >
+										<apex:selectList value="{!loadGridName}"  multiselect="false" size="1" styleClass="gridList" >
+											<apex:selectOptions value="{!existingGridNames}"/>
+											<apex:actionSupport event="onchange" action="{!loadSelectedGrid}" />
+										</apex:selectList>
+									</apex:actionRegion>
+								</td>
+							</tr>
+						</table>
+					</c:EmptyComponent>
+					<!-- this will only appear if the user can create new or edit the current grid -->
+					<c:EmptyComponent rendered="{!userCanCreateNewOrEditThisGrid}">
+						<table cellpadding="0" cellspacing="0" border="0" id="gridConfigOptions">
+							<tr class="instr">
+								<td>{!lang.LandingGWInstr}&nbsp;</td>
+								<td>
+									<apex:actionRegion >
+										<apex:selectList value="{!loadGridName}"  multiselect="false" size="1" styleClass="gridList">
+											<apex:selectOptions value="{!existingGridNames}"/>
+											<apex:actionSupport event="onchange" action="{!loadSelectedGrid}" />
+										</apex:selectList>
+									</apex:actionRegion>
+								</td>
+							</tr>
+						</table>
+					</c:EmptyComponent>
+					<apex:outputPanel id="saveNonAdminChkStatusPanel">
+						<div class="folder-header">{!lang.manageGridWizardPermissions}</div>
+						<div class="instr"><apex:outputText value="{!lang.nonAdminOverrideInstr}" escape="false"></apex:outputText></div>
+						<div class="nonAdminSection">
+							<apex:inputCheckbox id="nonAdminCheck" value="{!nonAdminUserCanConfigure}" onclick="saveNonAdminChk()"/>&nbsp;
+							<apex:outputLabel for="nonAdminCheck" value="{!lang.nonAdminOverrideCheck}"/>
+						</div>
+						<apex:actionFunction action="{!saveNonAdminConfigOption}" name="saveNonAdminChk" oncomplete="hideProcessingMsg()"/>
+					</apex:outputPanel>
+					<c:EmptyComponent rendered="{!actionsEnabled}">
+						<div class="folder-header">{!lang.ManageActionsLbl}</div>
+						<div class="instr"><apex:outputText value="{!lang.goToManageActionsPageLbl}" escape="false"><apex:param value="{!manageActionsUrl}"/></apex:outputText></div>
+					</c:EmptyComponent>
+					<c:EmptyComponent rendered="{!isFolderingEnabled}">
+						<div class="folder-header">{!lang.ManageFoldersLbl}</div>
+						<div class="instr"><apex:outputText value="{!lang.GoToMFPageLbl}" escape="false"><apex:param value="{!MFPageUrl}"/></apex:outputText></div>
+					</c:EmptyComponent>
+					<c:EmptyComponent rendered="{!userHasCalloutPerms && gridsExist}">
+						<div class="folder-header">{!lang.manageGridMeta}</div>
+						<c:EmptyComponent rendered="{!!metaServiceDisabled}">
+							<apex:outputPanel layout="block" rendered="{! !ISNULL(metadataStatusMessage)}">
+								<apex:outputText styleClass="gbHelpText" value="{!metadataStatusMessage}" escape="false"/>
+							</apex:outputPanel>
+							<div class="instr"><apex:outputText value="{!lang.ReplaceAllMeta}" escape="false" />
+								<apex:commandLink styleClass="gbUrl retAllMeta" action="{!saveInProgressTrackingRecord}" 
+									oncomplete="retrieveMeta()" value="{!lang.refreshAllGridMeta}" />
+							</div>
+							<br/>
+						</c:EmptyComponent>
+						
+						<div class="instr">
+							<apex:outputText value="If you don't want GridBuddy to retrieve meta data for your grids you can disable the meta data service and enable it later: " rendered="{!!metaServiceDisabled}"/>
+							<apex:commandLink styleClass="gbUrl {!IF(metaServiceDisabled, 'metaEnable','metaDisable')}" action="{!enableDisableMetaService}" value="{!metaServiceToggleLinkText}"/>
+						</div>
+					</c:EmptyComponent>
+				</div>
+				<apex:actionFunction name="retrieveMeta" action="{!retrieveMeta}"></apex:actionFunction>
+			</apex:pageblock>
+			</c:EmptyComponent>
+			<c:EmptyComponent rendered="{!NOT(isLandingPage)}">
+				<div class="gbwSteps">
+					<span>{!lang.CreateGridLabel}</span>
+					<span class="gbwOtherStep">&nbsp;&gt;&nbsp;&nbsp;{!lang.SelectFieldsLabel}</span>
+					<span class="gbwOtherStep">&nbsp;&gt;&nbsp;&nbsp;{!lang.DefineFiltersLabel}</span>
+				</div>
+			
+				<apex:pageblock title="{!page1Name}">
+					
+					<apex:pageBlockButtons rendered="{!userCanCreateNewOrEditThisGrid}">
+						<!-- do not change buttons to be on separate lines - this is done to avoid extra space between the buttons -->
+						<apex:commandButton action="{!saveAndRefreshPage1}" value="{!lang.SaveBtnLbl}" /><input 
+							type="button" class="btnDisabled none" value="{!lang.SaveBtnLbl}" disabled="disabled" />
+						<apex:commandButton action="{!saveAndNextPage1}" value="{!lang.NextBtnLabel}" rendered="{!NOT(isClone)}"/><c:EmptyComponent rendered="{!NOT(isClone)}"><input 
+							type="button" class="btnDisabled none" value="{!lang.NextBtnLabel}" disabled="disabled" /></c:EmptyComponent>
+						<apex:commandButton action="{!resetForm}" value="{!lang.RefreshBtnLbl}" rendered="{!NOT(isClone)}" immediate="true"/><c:EmptyComponent rendered="{!NOT(isClone)}"><input 
+							type="button" class="btnDisabled none" value="{!lang.RefreshBtnLbl}" disabled="disabled" /></c:EmptyComponent>
+						<apex:commandButton action="{!resetForm}" value="{!lang.CancelBtnLbl}" rendered="{!isClone}" immediate="true"/><c:EmptyComponent rendered="{!isClone}"><input 
+							type="button" class="btnDisabled none" value="{!lang.CancelBtnLbl}" disabled="disabled" /></c:EmptyComponent>
+						<apex:commandButton action="{!deleteGrid}" value="{!lang.DeleteBtnLbl}" rendered="{!isValidGrid && NOT(isClone)}" 
+							immediate="true" styleClass="deleteButton" /><c:EmptyComponent rendered="{!isValidGrid && NOT(isClone)}"><input type="button" class="btnDisabled none" value="{!lang.DeleteBtnLbl}" disabled="disabled" /></c:EmptyComponent>
+						<apex:commandButton action="{!cloneGrid}" value="{!lang.CloneBtnLabel}" rendered="{!isValidGrid && NOT(isClone) && userCanCreateNewGrids && gridHasValidObjects}" 
+							immediate="true" styleClass="cloneButton" /><c:EmptyComponent rendered="{!isValidGrid && NOT(isClone) && userCanCreateNewGrids && gridHasValidObjects}"><input type="button" class="btnDisabled none" value="{!lang.CloneBtnLabel}" disabled="disabled" /></c:EmptyComponent>
+						<apex:commandButton action="{!goToManageFoldersPage}" value="{!lang.ManageFoldersLbl}" rendered="{!isFolderingEnabled}"
+							immediate="true" styleClass="goToMfButton" /><c:EmptyComponent rendered="{!isFolderingEnabled}"><input type="button" class="btnDisabled none" value="{!lang.ManageFoldersLbl}" disabled="disabled" /></c:EmptyComponent>	
+						<c:EmptyComponent rendered="{!hasSelectedFields && NOT(isClone) && gridHasValidObjects}">
+							<a href="{!launchGridURL}" class="launchGridLink" target="_blank" title="{!lang.LaunchGridTitle}">{!lang.LaunchGridLabel}</a>
+						</c:EmptyComponent>
+					</apex:pageBlockButtons>
+					
+					<c:EmptyComponent rendered="{!NOT(isClone)}">		
+						<div class="instr">
+							<c:EmptyComponent rendered="{!showUpgradeMessage}">
+								<div class="upgradeMsg">
+									<span class="checkmark">&nbsp;</span>
+									Upgrade to <span class="upgradeApp">GridBuddy Unlimited</span> to use the powerful Mass Update, Delete All, User-Defined Filtering and Foldering features, and to create unlimited grids. 
+									<a href="/apex/UpgradeGridBuddy" target="_blank">Learn more &raquo;</a>
+								</div><br/>
+							</c:EmptyComponent>
+							<c:EmptyComponent rendered="{!userCanCreateNewGrids}">
+								{!lang.CreateGridInstr}
+							</c:EmptyComponent>
+							<c:EmptyComponent rendered="{!(userCanCreateNewGrids==false)}">
+								{!lang.SelectGridInstr}
+							</c:EmptyComponent>
+						</div>
+					</c:EmptyComponent>
+					
+					<!-- this will only appear on the clone page -->
+					<c:EmptyComponent rendered="{!isClone}">		
+						<div class="instr">
+							{!lang.CloneGridInstr}
+						</div>
+					</c:EmptyComponent>
+					
+					<!-- this will only appear if the user cannot create new grids, and must select an existing grid -->
+					<c:EmptyComponent rendered="{!(userCanCreateNewOrEditThisGrid==false)}">
+						<table cellpadding="0" cellspacing="0" border="0" class="gridConfigOptions">
+							<tr>
+								<td class="alignRight">{!lang.GridLabel}</td>
+								<td>
+									<apex:actionRegion >
+										<apex:selectList value="{!loadGridName}"  multiselect="false" size="1" styleClass="gridList" >
+											<apex:selectOptions value="{!existingGridNames}"/>
+											<apex:actionSupport event="onchange" action="{!loadSelectedGrid}" />
+										</apex:selectList>
+									</apex:actionRegion>
+								</td>
+							</tr>
+						</table>
+					</c:EmptyComponent>
+				
+					<!-- this will only appear if the user can create new or editing the current grid -->
+					<c:EmptyComponent rendered="{!userCanCreateNewOrEditThisGrid}">
+						<table cellpadding="0" cellspacing="0" border="0" class="gridConfigOptions">
+							<!-- hide the grid selector on the clone page -->
+							<c:EmptyComponent rendered="{!NOT(isClone)}">
+								<tr>
+									<td class="alignRight">
+										{!lang.GridLabel}<span class="star">*</span>
+									</td>
+									<td colspan="2">
+										<apex:actionRegion >
+											<apex:selectList value="{!loadGridName}"  multiselect="false" size="1" styleClass="gridList">
+												<apex:selectOptions value="{!existingGridNames}"/>
+												<apex:actionSupport event="onchange" action="{!loadSelectedGrid}" />
+											</apex:selectList>
+										</apex:actionRegion>
+									</td>
+								</tr>
+								<tr class="{!IF(isValidGrid, '', 'none')}">
+									<td class="alignRight" valign="top">
+										<c:EmptyComponent rendered="{!isValidGrid}">{!lang.URLLabel}&nbsp;</c:EmptyComponent>
+									</td>
+									<td colspan="2">
+										<c:EmptyComponent rendered="{!isValidGrid}">
+											<input type="text" readonly="true" class="readonlyText" onfocus="this.select()" value="{!launchGridURLForDisplay}"/>
+											<div class="integrationInstr">
+												<div>{!lang.UseURLLabel}</div>
+												<div style="padding-top:7px"><b>{!lang.CreateTabLabel}</b><br/><apex:outputText value="{!lang.TabFlow}" escape="false"/></div>
+												<div style="padding-top:7px"><b>{!lang.CreateLinkLabel}</b></div>
+												<ul>
+													<li><b>{!lang.HomeLabel}</b>&nbsp;&nbsp;<apex:outputText value="{!lang.HomeFlow}" escape="false"/></li>
+													<li><b>{!lang.StandardObjLabel}</b>&nbsp;&nbsp;<apex:outputText value="{!lang.StandardObjFlow}" escape="false"/></li>
+													<li><b>{!lang.CustomObjLabel}</b>&nbsp;&nbsp;<apex:outputText value="{!lang.CustomObjFlow}" escape="false"/></li>
+												</ul>
+												<br/>
+												<apex:outputText value="{!lang.SeeUserGuide}" escape="false"/>
+											</div>
+										</c:EmptyComponent>
+									</td>					
+								</tr>
+							</c:EmptyComponent>
+							<tr>
+								<td class="alignRight">
+									{!lang.NameLabel}<span class="star">*</span>
+								</td>
+								<td colspan="2">
+									<apex:inputText value="{!wrapper.gridConfig.Name}" required="false" maxlength="35"/> <span class="note">{!lang.MaxCharLabel}</span>
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.ParentLabel}<span class="star">*</span>
+								</td>
+								<td colspan="2">
+									<apex:selectList required="true" id="parentObject"
+										value="{!wrapper.gridConfig.fieldValues['Parent_Object_Name']}" multiselect="false" size="1" styleClass="parentObjectSelect">
+										<apex:selectOptions value="{!objectSelectOptions}" />
+									</apex:selectList>
+									
+									<input id="oldParentObject" type="hidden" value="{!wrapper.gridConfig.fieldValues['Parent_Object_Name']}"/>
+									<input id="oldField1" type="hidden" value="{!wrapper.gridConfig.fieldValues['Field_1']}"/>
+								</td>
+							</tr>
+							<c:EmptyComponent rendered="{!isValidGrid && NOT(isClone)}">  
+								<tr class="systemField">
+								    <td class="alignRight">{!lang.createdByLabel}</td>
+								    <td colspan="2">
+								       <apex:outputText value="{!createdByName}, {!wrapper.gridConfig.gridBuddySettings.CreatedDate}" />
+								    </td>
+								</tr>
+								<tr class="systemField">
+		                            <td class="alignRight">{!lang.lastModifiedByLabel}</td>
+		                            <td colspan="2">
+		                               <apex:outputText value="{!modifiedByName}, {!wrapper.gridConfig.gridBuddySettings.LastModifiedDate}" />
+		                            </td>
+                        		</tr>
+							</c:EmptyComponent>
+							<tr>
+								<td class="header" colspan="3">
+									<h3>{!lang.dataManagementOptions}</h3>
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.EnableCreatesLabel}&nbsp;
+								</td>
+								<td>
+									<apex:inputCheckbox styleClass="isCreateableChkBx chk" value="{!wrapper.gridConfig.fieldValues['Is_Createable']}"/>
+								</td>
+								<td class="gbHelpText">
+									{!lang.EnableCreatesHelpTxt}
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.EditableLbl}&nbsp;
+								</td>
+								<td>
+									<apex:inputCheckbox styleClass="isEditableChkBx chk" value="{!wrapper.gridConfig.fieldValues['Is_Editable']}"/>
+								</td>
+								<td class="gbHelpText">
+									{!lang.EditableHelpTxt}
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.RollBackLbl}&nbsp;
+								</td>
+								<td>
+									<apex:inputCheckbox styleClass="isRollbackSavedChkBx chk" value="{!wrapper.gridConfig.fieldValues['Rollback_Saves']}"/>
+								</td>
+								<td class="gbHelpText">
+									{!lang.RollBackHelpTxt}
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.EnableDeletesLbl}&nbsp;
+								</td>
+								<td>
+									<apex:inputCheckbox styleClass="isDeletableChkBx chk" value="{!wrapper.gridConfig.fieldValues['Enable_Deletes']}"/>
+								</td>
+								<td class="gbHelpText">
+									{!lang.EnableDeletesHelpTxt}
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.EnableDeleteAllLbl}&nbsp;
+								</td>
+								<td>
+									<apex:inputCheckbox styleClass="isDeleteAllChkBx chk" value="{!wrapper.gridConfig.fieldValues['Enable_Delete_All']}" rendered="{!deleteAllEnabled}"/>
+									<c:EmptyComponent rendered="{!deleteAllEnabled==false}">
+										<input type="checkbox" disabled="disabled" />
+									</c:EmptyComponent>
+								</td>
+								<td class="gbHelpText">
+									<span class="premiumOnly {!IF(deleteAllEnabled, 'none', '')}">Unlimited Only&nbsp;&nbsp;</span>{!lang.EnableDeleteAllHelpTxt}
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.RollBackDeleteLbl}&nbsp;
+								</td>
+								<td>
+									<apex:inputCheckbox styleClass="isRollbackDeleteChkBx chk" value="{!wrapper.gridConfig.fieldValues['Rollback_Deletes']}"/>
+								</td>
+								<td class="gbHelpText">
+									{!lang.RollBackDeleteHelpTxt}
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.enableMassUpdatesLbl}&nbsp;
+								</td>
+								<td>
+									<apex:inputCheckbox styleClass="massUpdatesChkBx chk" value="{!wrapper.gridConfig.fieldValues['Enable_Mass_Updates']}" rendered="{!massUpdatesEnabled}"/>
+									<c:EmptyComponent rendered="{!massUpdatesEnabled==false}">
+										<input type="checkbox" disabled="disabled" />
+									</c:EmptyComponent>
+								</td>
+								<td class="gbHelpText">
+									<span class="premiumOnly {!IF(massUpdatesEnabled, 'none', '')}">Unlimited Only&nbsp;&nbsp;</span>{!lang.enableMassUpdatesHelpTxt}
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.enableUserDefFilterLbl}&nbsp;
+								</td>
+								<td>
+									<apex:inputCheckbox styleClass="UDFChkBx chk" value="{!wrapper.gridConfig.fieldValues['Enable_User_Defined_Filtering']}" rendered="{!UDFEnabled}"/>
+									<c:EmptyComponent rendered="{!UDFEnabled==false}">
+										<input type="checkbox" disabled="disabled" />
+									</c:EmptyComponent>
+								</td>
+								<td class="gbHelpText">
+									<span class="premiumOnly {!IF(UDFEnabled, 'none', '')}">Unlimited Only&nbsp;&nbsp;</span>{!lang.enableUserDefFilterHelpTxt}
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.enableUserDefColsLbl}&nbsp;
+								</td>
+								<td>
+									<apex:inputCheckbox styleClass="UDCChkBx chk" value="{!wrapper.gridConfig.fieldValues['Enable_User_Defined_Cols']}" rendered="{!UDCEnabled}"/>
+									<c:EmptyComponent rendered="{!UDCEnabled==false}">
+										<input type="checkbox" disabled="disabled" />
+									</c:EmptyComponent>
+									 
+								</td>
+								<td class="gbHelpText">
+									<span class="premiumOnly {!IF(UDCEnabled, 'none', '')}">Unlimited Only&nbsp;&nbsp;</span>{!lang.EnableUserDefColsHelpTxt}
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									Enable export&nbsp;
+								</td>
+								<td>
+									<apex:inputCheckbox styleClass="exportChkBx chk" value="{!wrapper.gridConfig.fieldValues['Enable_Export']}"/>
+								</td>
+								<td class="gbHelpText">
+									Specify whether a user can export parent records on this Grid.
+								</td>
+							</tr>
+							<tr>
+								<td class="header" colspan="3">
+									<h3>{!lang.displayOptions}</h3>
+								</td>
+							</tr>
+							<tr>
+								<td class="instr" colspan="3">
+									<apex:outputText value="{!lang.displayOptionsInstr}" escape="false"/>
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.ShowHeaderLbl}&nbsp;
+								</td>
+								<td>
+									<apex:inputCheckbox styleClass="showHeaderChkBx chk" value="{!wrapper.gridConfig.fieldValues['Show_Header']}" />
+								</td>
+								<td class="gbHelpText">
+									{!lang.ShowHeaderHelpTxt}
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.ShowSideBarLbl}&nbsp;
+								</td>
+								<td>
+									<apex:inputCheckbox styleClass="showSidebarChkBx chk" value="{!wrapper.gridConfig.fieldValues['Show_Sidebar']}" />
+								</td>
+								<td class="gbHelpText">
+									{!lang.ShowSideBarHelpTxt}
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.displayAsReadOnly}
+								</td>
+								<td>
+									<apex:inputCheckbox styleClass="readOnlyChkBx" value="{!wrapper.gridConfig.isReadOnly}" />
+								</td>
+								<td class="gbHelpText">
+									{!lang.displayAsReadOnlyInstr}
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.repeatParentHeader}
+								</td>
+								<td>
+									<apex:inputCheckbox value="{!wrapper.gridConfig.fieldValues['Repeat_Parent_Header']}" />
+								</td>
+								<td class="gbHelpText">
+									{!lang.repeatParentHeaderInstr} 
+								</td>
+							</tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.expandAllRecords}
+								</td>
+								<td>
+									<apex:inputCheckbox styleClass="expandAllChkBx" value="{!wrapper.gridConfig.fieldValues['Is_All_Expanded']}"/>
+								</td>
+								<td class="gbHelpText">
+									{!lang.expandAllRecordsInstr}
+								</td>
+							</tr>
+							<tr>
+                                <td class="alignRight">
+                                    {!lang.compactView}
+                                </td>
+                                <td>
+                                    <apex:inputCheckbox styleClass="compactViewChkBx" value="{!wrapper.gridConfig.fieldValues['Compact_View']}"/>
+                                </td>
+                                <td class="gbHelpText">
+                                    {!lang.compactViewInstr}
+                                </td>
+                            </tr>
+							<tr>
+								<td class="alignRight">
+									{!lang.recordsPerPage}
+								</td>
+								<td colSpan="2">
+									<apex:selectList disabled="{!NOT(hasSelectedFields)}" styleClass="recordsPerPageSelect"  
+										size="1" multiselect="false" value="{!wrapper.gridConfig.fieldValues['Page_Size']}">
+										<apex:selectOptions value="{!recordsPerPage}"/>
+									</apex:selectList>
+									&nbsp;&nbsp;<span class="gbHelpText">{!lang.recordsPerPageInstr}</span>
+								</td>
+							</tr>
+							<c:EmptyComponent rendered="{!isFolderingEnabled}">
+								<tr>
+									<td class="header" colspan="3">
+										<h3>{!lang.GWFolderingHeader}</h3>
+									</td>
+								</tr>
+								<tr>
+									<td class="instr" colspan="3">
+									<apex:outputText value="{!lang.GoToAllGridsPageLbl}" escape="false"/><br/>
+									<c:EmptyComponent rendered="{!NOT(isClone)}">
+										<apex:outputText value="{!lang.GoToMFPageLbl}" escape="false"><apex:param value="{!MFPageUrl}"/></apex:outputText>
+									</c:EmptyComponent>
+									</td>
+								</tr>
+								<tr>
+									<td class="alignRight"  valign="top">
+										{!lang.AddToFolderLabel}
+									</td>
+									<td colspan="2">
+										<table>
+											<tr>
+												<td class="folderBox"  id="folders" valign="top">
+													<div class="folder-title gradientHeader">
+														<input  id="selectAllFol" type="checkbox"/><span>{!lang.FoldersLbl}</span>
+													</div>
+													<div class="content-wrap"  id="{!loadGridName}">
+														<apex:repeat value="{!fController.FolderObjectList}" var="folder">
+															<div class="folder"><input id="{!folder.folderId}" type="checkbox"/><span>{!folder.folderName}</span></div>
+														</apex:repeat>
+													</div>
+												</td>
+												<td colspan="2" class="folderBox" valign="top">
+													<div class="gridProfile-title gradientHeader">{!lang.AssignedProfsGridsLbl}</div>
+													<div id="defaultMessage">{!lang.ClickFolderGWLbl}</div>
+													<table id="gridsAndProfiles" cellspacing="5">
+														<tr>
+															<td class="content" valign="top">
+																<div class="profileHeader">
+																	<strong>{!lang.ProfilesLbl}</strong>
+																</div>
+																<div class="content-wrap">
+																	<div id="noprofile">{!lang.NoProfLbl}</div>
+																	<ul class="profileList-ro">																	
+																	</ul>
+																</div>
+															</td>
+															<td class="content" valign="top">
+																<div class="gridHeader">
+																		<strong>{!lang.GridsLbl}</strong>
+																</div>
+																<div class="content-wrap">
+																	<div id="nogrid">{!lang.NoGridsLbl}</div>
+																	<ul class="gridList-ro">
+																	</ul>
+																</div>
+															</td>
+														</tr>
+													</table>
+												</td>
+											</tr>
+										</table>
+									</td>
+								</tr>
+							</c:EmptyComponent>	
+						</table>		
+					</c:EmptyComponent>	
+					<apex:inputHidden id="folderData" value="{!fController.gridFolderData}"/>
+					<script type="text/javascript">
+						var folderDataField=document.getElementById('{!$Component.folderData}');
+					</script>
+				</apex:pageblock>
+			</c:EmptyComponent>	
+		</apex:form>
+		
+		<c:LangJSComponent lang="{!lang}"/>
+		<!--  do not use includeScript for the jquery include, as this will add the javascript to the <head> tag and slow down the page load -->
+		<apex:repeat value="{!JSFileNames}" var="fName">
+	    	<script type="text/javascript" src="{!URLFOR($Resource.GBLite__gb_resources, fName)}"></script>
+	    </apex:repeat>
+	    <apex:repeat value="{!CSSFileNames}" var="fName">
+	    	<apex:stylesheet value="{!URLFOR($Resource.GBLite__gb_resources, fName)}"/>
+	    </apex:repeat>
+	    
+	    <script type="text/javascript">
+	    	var readOnlyObjects = new Array(),
+	    		noDeleteObjects = new Array(),
+	    		noCreateObjects = new Array(),
+	    		folderData = new Array();
+	    	<apex:repeat value="{!readOnlyObjects}" var="roObject">
+	    	readOnlyObjects.push('{!roObject}');
+	    	</apex:repeat>
+	    	<apex:repeat value="{!noDeleteObjects}" var="noDelObject">
+	    	noDeleteObjects.push('{!noDelObject}');
+	    	</apex:repeat>
+	    	<apex:repeat value="{!noCreateObjects}" var="noCreateObject">
+	    	noCreateObjects.push('{!noCreateObject}');
+	    	</apex:repeat>
+	    	<apex:repeat value="{!fController.FolderObjectList}" var="folder">
+			    folderData.push({fId:"{!folder.folderId}",fName:"{!folder.folderName}", pIds:"{!folder.value}", grids:"{!folder.grids}"});
+			</apex:repeat>
+	    </script>
+	    
+	    <div class="gbCopyright">{!lang.CopyrightTxt}</div>
+	</div>
+</apex:page>

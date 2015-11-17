@@ -1,0 +1,380 @@
+<apex:component controller="DSE.DS_QueueMonitorControllerClass" allowDML="true">
+<apex:includeScript value="{!URLFOR($Resource.DSE__DS_Hierarchy_Resources, 'jquery.js')}" />
+<!-- Required to block div during loading  -->
+<apex:includeScript value="{!URLFOR($Resource.DSE__DS_Hierarchy_Resources, 'jquery.blockUI.js')}" />
+<apex:actionStatus id="showStatus" onstart="blockDiv('#wrapper');" onstop="unblockDiv('#wrapper');"/>
+<apex:actionStatus id="showStatusOther" onstart="blockDiv('#jobSummaryWrapper');" onstop="unblockDiv('#jobSummaryWrapper');"/>
+<script type="text/javascript">
+	function blockDiv(divId) {
+		$(divId).block({ 
+			message: '<br/><apex:image value="/img/loading.gif"/> {!$Label.dse__DS_Message_LoadingResults}', 
+            css: { height: '50px', width: '20%' },
+            overlayCSS: { opacity: .2 }
+         });
+     } 
+     function unblockDiv(divId) {
+         $(divId).unblock();
+     }
+</script>
+<apex:stylesheet value=" {! URLFOR($Resource.Style, 'Styles.css')} "/>
+<style type="text/css">
+    .custPopup
+    {
+        position: absolute; 
+        background-color: transparent;
+        z-index: 9500;
+        left: 35%;
+        padding:0px;
+        width: 400px;
+        font-family: Arial, Helvetica, sans-serif;        
+        top:25%;
+    }
+     
+    .popupBackground
+    {
+        background-color:black;
+        opacity: 0.80;
+        filter: alpha(opacity = 80);
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        z-index: 9499;
+    }
+ </style>
+
+
+<apex:sectionHeader title="{!$Label.dse__DS_Batch_Monitor_Page_Title}"/>
+
+<apex:form >
+
+<apex:outputPanel id="popup">
+<apex:outputPanel styleClass="popupBackground" layout="block" rendered="{!displayPopUp}"/>
+<apex:outputPanel styleClass="custPopup" layout="block" rendered="{!displayPopUp}">
+<div style="background-image: url(/img/alohaSkin/overlay_crns.png);
+background-repeat-x: no-repeat;
+background-repeat-y: no-repeat;
+background-attachment: initial;
+background-position-x: 100%;
+background-position-y: 0%;
+background-origin: initial;
+background-clip: initial;
+background-color: initial;
+font-size: 12pt; font-weight: bold;
+position:relative;
+padding-left: 0;
+padding-right: 6px;
+">
+<div
+style="background-image: url(/img/alohaSkin/overlayTopLft.png);
+background-repeat-x: no-repeat;
+background-repeat-y: no-repeat;
+background-attachment: initial;
+background-position-x: 0%;
+background-position-y: 0%;
+background-origin: initial;
+background-clip: initial;
+background-color: initial;
+padding-top: 8px;
+padding-right: 6px;
+padding-bottom: 8px;
+padding-left: 12px;
+position:relative">
+Cloud MDM Information
+</div>
+</div>
+
+<div style="
+position:relative; text-align:center; background-color: white; padding-top:5%; padding-bottom:5%; font-size: 10pt;"
+>
+{!popupText}
+</div>
+<div style="
+background-image: url(/img/alohaSkin/overlay_crns_ext.png);
+background-repeat-x: no-repeat;
+background-repeat-y: no-repeat;
+background-attachment: initial;
+background-position-x: 100%;
+background-position-y: 100%;
+background-origin: initial;
+background-clip: initial;
+background-color: transparent;
+display:block;
+"
+>
+<div style="
+background-image: url(/img/alohaSkin/overlayBtmLft.png);
+background-repeat-x: no-repeat;
+background-repeat-y: no-repeat;
+background-attachment: initial;
+background-position-x: 0%;
+background-position-y: 100%;
+background-origin: initial;
+background-clip: initial;
+background-color: transparent;
+padding-top: 8px;
+padding-right: 0px;
+padding-bottom: 12px;
+padding-left: 0px;
+text-align:center;
+">
+<apex:commandButton value="OK" action="{!closePopup}" rerender="popup"/>
+</div>
+</div>
+</apex:outputPanel>
+</apex:outputPanel>
+
+
+<!--  
+<apex:outputPanel id="configuration">
+
+<apex:pageBlock title="General Settings">
+<apex:outputLabel value="Run Jobs automatically" for="runMode"  /><apex:inputCheckbox id="runMode" value="{!runAutomatic}" />
+<apex:commandButton value="Apply" action="{!setRunningMode}" reRender="jobManager" />
+</apex:pageBlock>
+
+</apex:outputPanel> 
+-->
+<apex:outputPanel >
+<div id="wrapper" style="overflow:hidden">
+<apex:outputPanel id="jobManager" style="position:relative; float:left; width:29%">
+
+	<apex:pageBlock id="jobBlock" title="{!$Label.dse__DS_Batch_Monitor_Block_Title_Jobs}">
+
+		<table style="width:100%">
+		
+			<tr>
+				<td colspan="2">
+					<apex:selectList value="{!jobName}" multiselect="false" size="1">
+						<apex:selectOptions value="{!jobOptions}" />
+						<apex:actionSupport reRender="jobBlock, otherJobsDisplay" event="onchange" action="{!changeJob}" status="showStatus"/>
+					</apex:selectList>
+					<apex:actionStatus id="selectStatus">
+   						<apex:facet name="start">
+     						<img src="{!$Resource.loading}" border="1" width="15" height="15"/>
+   						</apex:facet>
+					</apex:actionStatus>
+ 					<!-- <apex:commandButton value="Select" action="{!changeJob}" reRender="jobBlock, completedJobs"/> -->
+				</td>
+			</tr>
+			
+			<tr>
+				<td align="left"><apex:commandButton value="{!$Label.dse__DS_Batch_Monitor_Button_Run_Now}" action="{!runJob}" rerender="jobSummary, popup"  status="showStatus" rendered="{!allowRun}"/>
+					<apex:actionStatus id="jobStatus">
+   						<apex:facet name="start">
+     						<img src="{!$Resource.loading}" border="1" width="15" height="15"/>
+   						</apex:facet>
+					</apex:actionStatus>
+				</td>
+				<td valign="bottom" align="left"><apex:outputLabel value="{!$Label.dse__DS_Batch_Monitor_Header_Processes}" rendered="{!showRunConcurrent}"/> <apex:selectList value="{!concurrentBatches}" multiselect="false" size="1" rendered="{!showRunConcurrent}"><apex:selectOptions value="{!concurrentBatchOptions}" /></apex:selectList></td>
+			</tr>
+			
+			<tr>
+				<td>
+					<apex:outputLabel value="{!$Label.dse__DS_Batch_Monitor_Run_Automatic}" rendered="{!allowAutomate}"/><apex:inputCheckbox value="{!runAutomatic}" rendered="{!allowAutomate}"><apex:actionSupport action="{!setRunningMode}" event="onchange" status="detailStatus"/></apex:inputCheckbox>
+				</td>
+			</tr>
+			
+		</table>
+<!--
+<tr>
+<td colspan="2" align="Center" style="border: 1px solid"><h2>{!ScheduleInfo}</h2></td>
+</tr>
+-->
+		<apex:outputPanel id="scheduler" rendered="{!allowSchedule}">
+		
+			<table style="width:100%">
+			
+				<tr>
+					<td align="left">
+						<apex:commandButton value="{!$Label.dse__DS_Batch_Monitor_Button_Schedule}" action="{!scheduleJob}" rerender="jobSchedule" status="showStatus"/>
+					</td>
+
+					<td valign="bottom" align="center">
+						<apex:selectList value="{!jobSchedule}" multiselect="false" size="1">
+							<apex:selectOptions value="{!ScheduleOptions}"/>
+						</apex:selectList>
+					</td>
+					
+					<td align="left">
+						<apex:commandButton value="{!$Label.dse__DS_Batch_Monitor_Button_Remove}" action="{!unscheduleJob}" rerender="jobSchedule" status="showStatus" />
+					</td>
+				</tr>
+
+			</table>
+			
+		</apex:outputPanel>
+
+	</apex:pageBlock>
+
+
+	<apex:pageBlock id="jobSchedule" title="{!$Label.dse__DS_Batch_Monitor_Block_Title_Schedules}">
+		<apex:pageBlockButtons location="top">
+			<apex:outputPanel style="float:right">
+				<apex:actionStatus stopText="" id="updateScheduleTable" style="align:center;">
+					<apex:facet name="start">
+						<center><img src="{!$Resource.loading}" border="0"/></center>
+					</apex:facet>
+				</apex:actionStatus>						
+			</apex:outputPanel>
+		</apex:pageBlockButtons>
+		<apex:pageBlockTable value="{!scheduleSummaryList}" var="s">
+			<apex:column value="{!s.jobName}" headerValue="{!$Label.dse__DS_Batch_Monitor_Header_Job_Name}"/>
+			<apex:column value="{!s.jobSchedule}" headerValue="{!$Label.dse__DS_Batch_Monitor_Header_Schedule}"/>
+		</apex:pageBlockTable> 
+	</apex:pageBlock>  
+
+	<apex:pageBlock id="SetupWizard" title="{!$Label.dse__DS_Batch_Monitor_Setup_Block_Title}">
+		<apex:commandButton value="{!$Label.dse__DS_Batch_Monitor_Run_Setup}" action="{!gotoSetupWizard}"/>
+	</apex:pageBlock> 
+
+</apex:outputPanel>
+
+
+<apex:outputPanel id="jobSummary" style="position:relative; float:right; width:70%">
+<div id="jobSummaryWrapper">
+	<apex:actionPoller reRender="runningJobWrapper,OtherJobsBlock" interval="5" enabled="{!refreshAutomatic}" status="updateStatusRunning" />
+	
+	<apex:pageBlock id="allQueueJobs" title="Batch Queue" >
+	<apex:pageBlock id="runningJobWrapper">
+		<apex:pageBlockButtons location="top">
+			<apex:commandButton style="float:right" value="Synchronize Queue" action="{!doNudgeQueue}" reRender="jobSummary" status="showStatusOther" disabled="{!(NOT(showSynchronize))}" />		
+			<apex:commandButton style="float:right" value="Refresh" action="{!doRefresh}" reRender="jobSummary" status="showStatusOther" rendered="{!NOT(refreshAutomatic)}"/>
+			<apex:commandButton style="float:right" value="Enable Automatic Refresh" action="{!enableAutoRefresh}" reRender="jobSummary" status="showStatusOther" rendered="{!NOT(refreshAutomatic)}"/>
+			<apex:commandButton style="float:right" value="Disable Automatic Refresh" action="{!disableAutoRefresh}" reRender="jobSummary" status="showStatusOther" rendered="{!refreshAutomatic}"/>
+			&nbsp;&nbsp;&nbsp;&nbsp;
+			<apex:outputPanel style="float:right">
+				<apex:actionStatus stopText="" id="updateStatusRunning" style="align:center;">
+					<apex:facet name="start">
+						<center><img src="{!$Resource.loading}" border="0"/></center>
+					</apex:facet>
+				</apex:actionStatus>						
+			</apex:outputPanel>
+		</apex:pageBlockButtons>
+	
+
+		<apex:pageBlock id="runningJobs" title="{!$Label.dse__DS_Batch_Monitor_Block_Title_Running_Jobs}" >
+			<apex:OutputPanel layout="block" style="overflow:auto;width:100%;height:100%" >
+				<apex:pageBlockTable value="{!RunningJobsection.recordSet}" var="job" style="text-align:left" id="RunningJobsTable">
+					<apex:column headerValue="Number">
+						<apex:outputLink value="/{!job.b.Id}" target="_blank">{!job.b.DSE__DS_Queue_Sequence_Number__c}</apex:outputLink>
+					</apex:column>
+					<apex:column value="{!job.b.Name}" headerValue="Batch Name" />
+					<apex:column value="{!job.b.DSE__DS_Loop_Counter__c}" headerValue="Loop" />
+					<apex:column value="{!job.b.DSE__DS_Run_Number__c}" headerValue="Run" />
+					<apex:column value="{!job.jobSizeDesc}" headerValue="Job Size" />
+					<apex:column value="{!job.b.DSE__DS_Processed_Records_Count__c}" headerValue="Processed" />
+					<apex:column value="{!job.b.DSE__DS_Status__c}" headerValue="Queue Status" />
+					<apex:column value="{!job.phase}" headerValue="Phase Detail" />
+					<apex:column value="{!job.b.SystemModstamp}" headerValue="Last Updated" />
+					<apex:column value="{!job.a.Id}" style="color:#044;" headerValue="Batch Apex Id" />
+					<apex:column value="{!job.apexjobdetails}" style="color:#044;" headerValue="Batch Apex Status" />
+					<apex:column headerValue="Created By">
+						<apex:outputLink value="/{!job.b.CreatedbyId}" target="_blank">{!job.b.CreatedBy.Name}</apex:outputLink>
+					</apex:column>
+					<apex:column headerValue="Actions">
+						<apex:commandLink style="float:right;margin-right:10px" value="Abort" action="{!abortJob}" reRender="jobSummary" status="showStatusOther" rendered="{!OR(job.a.Status == 'Queued',job.a.Status == 'Preparing',job.a.Status == 'Processing')}">
+							<apex:param id="jobToAbort" value="{!job.b.Id}" name="jobToAbort"/>
+						</apex:commandLink>
+						&nbsp;&nbsp;
+						<apex:commandLink style="float:right;margin-right:10px" value="Mark Completed" action="{!markCompleted}" reRender="jobSummary" status="showStatusOther" rendered="{!job.showMarkCompleted}">
+							<apex:param id="jobToMarkCompleted" value="{!job.b.Id}" name="jobToMarkCompleted"/>
+						</apex:commandLink>
+					</apex:column> 
+					<apex:facet name="footer" > 
+						<apex:outputPanel >
+							<apex:outputText style="float:left" value="{!additionalDetails}" />
+							<apex:outputText style="float:right;color:#f00;margin-right:10px" value="{!lastError}" />
+						</apex:outputPanel>
+					</apex:facet> 
+				</apex:pageBlockTable>
+				</apex:OutputPanel>
+		</apex:pageBlock>
+		</apex:pageBlock>
+
+		<!--  Display of Queued / Failed / Completed Jobs -->
+		<apex:pageBlock id="otherJobsDisplay" title="{!filteredJobName}" > 
+			<apex:selectList value="{!statusCategory}" multiselect="false" size="1" style="float:left;">
+				<apex:selectOptions value="{!statusCategoryOptions}" />
+				<apex:actionSupport reRender="jobSummary" event="onchange" action="{!changeStatusCategory}" status="showStatusOther"/>
+			</apex:selectList>
+			<br /><br />
+			<apex:pageBlock id="OtherJobsBlock">
+			<apex:OutputPanel layout="block" style="overflow:auto;width:100%;height:100%" >
+				<apex:pageBlockTable value="{!OtherJobsection.recordSet}" var="job" style="text-align:left" id="OtherJobsTable">
+					<apex:column headerValue="Number">
+						<apex:outputLink value="/{!job.b.Id}" target="_blank">{!job.b.DSE__DS_Queue_Sequence_Number__c}</apex:outputLink>
+					</apex:column>				
+					<apex:column value="{!job.b.Name}" headerValue="Batch Name" />
+					<apex:column value="{!job.b.DSE__DS_Loop_Counter__c}" headerValue="Loops" />
+					<apex:column value="{!job.b.DSE__DS_Run_Number__c}" headerValue="Run" />
+					<apex:column value="{!job.b.DSE__DS_Processed_Records_Count__c}" headerValue="Processed" />					
+					<apex:column value="{!job.b.DSE__DS_Status__c}" headerValue="{!$Label.dse__DS_Batch_Monitor_Header_Status}" />
+					<apex:column value="{!job.b.DSE__DS_Job_Phase__c}" headerValue="Phase" />
+					<apex:column value="{!job.b.SystemModstamp}" headerValue="Last Updated" />
+					<apex:column headerValue="Created By">
+						<apex:outputLink value="/{!job.b.CreatedbyId}" target="_blank">{!job.b.CreatedBy.Name}</apex:outputLink>
+					</apex:column>
+					<apex:column headerValue="Depends On" >
+						<apex:outputLink value="/{!job.b.DSE__DS_Depends_On__c}" target="_blank">{!job.b.DS_Depends_On__r.DSE__DS_Queue_Sequence_Number__c}</apex:outputLink>
+						&nbsp;&nbsp;
+						<apex:commandLink value="Release" action="{!releaseJob}" reRender="jobSummary" status="updateStatusOther" rendered="{!AND(job.b.DSE__DS_Depends_On__c != null, job.b.DS_Depends_On__r.DSE__DS_Status__c == 'Aborted')}" >
+							<apex:param id="jobToRelease" value="{!job.b.Id}" name="jobToRelease"/>
+						</apex:commandLink>
+					</apex:column>
+					<apex:column headerValue="Actions">
+					
+					
+						<apex:commandLink value="Delete" rendered="{!AND(job.b.DSE__DS_Job_Class_Name__c != 'DS_AsynchronousHMBatch',job.b.DSE__DS_Job_Class_Name__c != 'DS_AsynchronousCloneBatch')}" action="{!deleteJob}" reRender="jobSummary" status="showStatusOther">
+							<apex:param id="jobToDelete" value="{!job.b.Id}" name="jobToDelete"/>
+						</apex:commandLink>
+						<apex:outputPanel rendered="{!AND(job.b.DSE__DS_Job_Class_Name__c != 'DS_AsynchronousHMBatch',job.b.DSE__DS_Job_Class_Name__c != 'DS_AsynchronousCloneBatch')}">
+							&nbsp;&nbsp;
+						</apex:outputPanel>
+						
+						
+						<apex:commandLink value="Resubmit" rendered="{!AND(OR(job.b.DSE__DS_Status__c == 'Failed',job.b.DSE__DS_Status__c == 'Aborted'),OR(job.b.DSE__DS_Job_Class_Name__c == 'DS_AsynchronousCloneBatch',job.b.DSE__DS_Job_Class_Name__c == 'DS_AsynchronousHMBatch'))}" action="{!reSubmit}" reRender="jobSummary" status="showStatusOther" >
+							<apex:param id="jobToReSubmit" value="{!job.b.Id}" name="jobToReSubmit"/>
+						</apex:commandLink>						
+					</apex:column> 
+					<apex:facet name="footer" > 
+						<apex:outputPanel id="OtherbtnPanel">
+							<apex:outputPanel style="float:left">
+								<apex:actionStatus stopText="" id="updateStatusOther" style="align:center;">
+									<apex:facet name="start">
+										<center><img src="{!$Resource.loading}" border="0"/></center>
+									</apex:facet>
+								</apex:actionStatus>						
+							</apex:outputPanel>
+							<apex:outputPanel style="float:right">
+								<apex:outputPanel >
+									 <b>{!OtherJobsection.pageNumberDescription}&nbsp;&nbsp;</b> 
+								</apex:outputPanel>
+								<apex:commandbutton action="{!OtherJobsection.moveFirst}" value=" First " disabled="{!NOT(OtherJobsection.previousAvailable)}" reRender="OtherbtnPanel,OtherJobsTable" status="showStatusOther" > 
+									<apex:param name="currentTab" value="Other" assignTo="{!currentTab}"/>
+								</apex:commandbutton>
+								<apex:commandbutton action="{!OtherJobsection.movePrevious}" value=" Previous " disabled="{!NOT(OtherJobsection.previousAvailable)}" reRender="OtherbtnPanel,OtherJobsTable"  status="showStatusOther" >
+									<apex:param name="currentTab" value="Other" assignTo="{!currentTab}"/>
+								</apex:commandbutton>
+								<apex:commandbutton action="{!OtherJobsection.moveNext}" value=" Next " disabled="{!NOT(OtherJobsection.nextAvailable)}" reRender="OtherbtnPanel,OtherJobsTable"  status="showStatusOther">
+									<apex:param name="currentTab" value="Other" assignTo="{!currentTab}"/>
+								</apex:commandbutton>
+								
+							</apex:outputPanel>
+						</apex:outputPanel>
+					</apex:facet> 
+				</apex:pageBlockTable>
+				</apex:OutputPanel>
+			</apex:pageBlock>
+
+
+		</apex:pageBlock>
+	</apex:pageBlock>
+</div>
+</apex:outputPanel>
+</div>
+</apex:outputPanel>
+
+</apex:form>
+</apex:component>

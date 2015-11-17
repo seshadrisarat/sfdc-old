@@ -1,0 +1,212 @@
+<apex:component controller="SL_ManageNRIVFFilesController" allowDML="true" >
+    <apex:attribute name="recordId" description="this is an id of sObject record" type="String" required="true" assignTo="{!sObjectRecordId}"/>
+    <head>
+        <style>
+            .memo-lines-table
+        {
+            position:relative;
+        }
+        .actionStatusDiv
+        {
+           margin-top:2px;
+           text-align:center;
+           font-weight:bold;
+           font-size:1.0em;
+           background: none repeat scroll 0% 0% #F2F3F3;
+        }
+		
+		.tooltip{
+		    display: inline;
+		    position: relative;
+		}
+		
+		.tooltip:hover:after{
+		    background: #c09854;
+  		    background: rgba(0,0,0,.8);  
+		    border-radius: 5px;
+		    bottom: 26px;
+ 		    color: #fff; 
+		    content: attr(title);
+		    left: 20%;
+		    padding: 5px 15px;
+		    position: absolute;
+		    z-index: 98;
+		    width: 220px;
+		}
+		
+		.tooltip:hover:before{
+	    border: solid;
+	    border-color: #333 transparent;
+	    border-width: 6px 6px 0 6px;
+	    bottom: 20px;
+	    content: "";
+	    left: 50%;
+	    position: absolute;
+	    z-index: 99;
+	}
+        </style>
+    </head>
+    
+    <script type="text/javascript">
+        window.onload=function()
+        {
+            fetchRecordsAF();
+        }
+        
+        /* check box functionality */
+        var numberOfRec = 0;
+        var checkedRec = 0;
+        var isHeader = '';
+        function callunSelect(obj)
+        {
+            if(obj.checked)
+                checkedRec = checkedRec + 1;
+            else
+                checkedRec = checkedRec - 1;
+            
+            if(checkedRec == numberOfRec)
+            {
+                var hdrChk = true;
+                callCheckAllAF(hdrChk);
+            }
+            else if(numberOfRec > checkedRec && isHeader == 'true')
+                unSelectHeader();
+        }
+        /* end check box functionality */
+        
+        /* This is used to confirm before deletion of attached file */
+        function confirmDelete(actionId) 
+        {
+           var doDelete = confirm('Are you sure? ');
+           //alert('-------'+doDelete);
+           if(doDelete)
+              callOnDelete(actionId);   
+            else
+                return false;
+           
+        }
+        
+    </script>   
+    <apex:form >
+        <!-- Start - Action functions -->   
+        <apex:actionfunction name="fetchRecordsAF" action="{!fetchNRIDocAttachments}" rerender="DocumentListing,helptext" status="loading"/>
+        <apex:actionfunction name="callCheckAllAF" action="{!checkAllRecords}" rerender="DocumentListing">
+            <apex:param name="hdrChk" value="true" assignTo="{!isHeadCheck}"/>
+        </apex:actionfunction>
+        <apex:actionfunction name="unSelectHeader" action="{!unSelectCheckRecords}" rerender="DocumentListing"/>
+        <!-- For single record -->
+        <apex:actionfunction name="callOnDelete"  action="{!deleteNRIDocument}"  rerender="DocumentListing" status="loading">
+            <apex:param name="deleterecord" value="" assignTo="{!selectActionId}"/>
+            <apex:param name="RemoveOne" value="One" assignTo="{!strRemoveSelectedOrOne}" />
+        </apex:actionfunction>
+        <!-- End - Action functions --> 
+        <!-- Start - PageBlock -->
+        <apex:pageblock id="pageBlockId" >
+            <!-- Start - PageBlock buttons -->
+            <apex:pageBlockButtons location="top">
+                <apex:commandButton action="{!addNewNRIDocument}" value="Add New" rerender="DocumentListing" status="loading" />
+                <apex:commandButton action="{!saveAllRecords}" value="Save All"  rerender="DocumentListing,ErrorMessage" status="loading">
+                    <apex:param name="SaveAll" value="All" assignTo="{!strSaveAllOrOne}" />
+                </apex:commandButton>
+                <apex:commandButton action="{!deleteNRIDocument}" value="Remove Selected" rerender="DocumentListing" status="loading" >
+                    <apex:param name="RemoveSelected" value="Selected" assignTo="{!strRemoveSelectedOrOne}" />
+                </apex:commandButton>
+            </apex:pageBlockButtons>
+            <!-- End - PageBlock buttons -->    
+            <apex:outputpanel id="DocumentListing">
+                <apex:pageMessages id="ErrorMessage" />
+                
+                <!-- Start - PageBlockTable --> 
+                <apex:pageblocktable value="{!lstAttachmentsWrapper}" var="doc" id="pbDocListing" style="width:100%;" rendered="{!lstAttachmentsWrapper.size != 0}">
+                    <apex:column id="colCheckBox" width="1%"> 
+                        <apex:facet name="header">
+                            <apex:inputCheckbox value="{!isHeadCheck}" > 
+                                <apex:actionSupport event="onclick" action="{!checkAllRecords}" rerender="DocumentListing" />
+                            </apex:inputCheckbox> 
+                        </apex:facet> 
+                        <apex:inputCheckbox value="{!doc.isCheckedRecord}" onclick="callunSelect(this);" disabled=""/>
+                        <script>
+                            numberOfRec = numberOfRec + 1;
+                            isHeader = '{!isHeadCheck}';
+                        </script>
+                    </apex:column> 
+                    <apex:column headervalue="Action" width="9%" >
+                        <!-- Start - OutputPanel Save Or Cancel --> 
+                        <apex:outputpanel rendered="{!doc.isSaveOrCancelRecord}">  
+                            <apex:commandLink value="Save" action="{!savesDocuments}" style="color:#015BA7;" rerender="ErrorMessage, DocumentListing" status="loading">
+                                <apex:param name="isSave" value="true" assignTo="{!doc.isSave}" />
+                            </apex:commandLink> 
+                            |&nbsp;
+                            <apex:commandlink value="Cancel" action="{!canceDocuments}" style="color:#015BA7;" rerender="DocumentListing" status="loading">  
+                                <apex:param name="Cancel" value="false" assignTo="{!doc.isSaveOrCancelRecord}" />
+                                <apex:Param name="isCancel" value="true" assignTo="{!doc.isCancel}" />
+                            </apex:commandLink>
+                        </apex:outputpanel>
+                        <!-- End - OutputPanel Save Or Cancel -->
+                        <!-- Start - OutputPanel View Or Remove --> 
+                        <apex:outputpanel rendered="{!doc.isViewOrRemoveRecord}"> 
+                            <a href="/servlet/servlet.FileDownload?file={!doc.objAttachment.Id}" download="{!doc.objAttachment.name}" style="color:#015BA7;cursor: pointer;text-decoration: underline;">View</a>
+                            &nbsp;|&nbsp;
+                            <apex:commandLink value="Delete" style="color:#015BA7;cursor: pointer;" status="loading" onclick="confirmDelete('{!doc.objAttachment.Id}'); return false" rerender="dummy"> 
+                            </apex:commandLink> 
+                        </apex:outputpanel>
+                        <!-- End - OutputPanel View Or Remove -->
+                    </apex:column>
+                    <apex:column headervalue="Document Library" width="12%">
+                        <div class="requiredInput">
+						<div class="requiredBlock"></div>	
+                        <apex:selectList styleclass="std" size="1" value="{!doc.strDocumentLocation}" rendered="{!doc.isSaveOrCancelRecord}" >
+                             <apex:selectOptions value="{!DocumentLocation}"/>
+                        </apex:selectList>
+                        </div>
+                         <apex:outputtext value="{!doc.strDocumentLocation}" rendered="{!doc.isViewOrRemoveRecord}" />                              
+                    </apex:column>  
+                    <!-- Documnet# column -->
+                    <apex:column id="refNumber" headervalue="Document #" width="12%">
+                        <apex:outputtext value="{!doc.strRefNumber}" rendered="{!doc.isViewOrRemoveRecord}" />
+						<div class="requiredInput">
+						<div class="requiredBlock"></div>				
+                        <apex:inputtext value="{!doc.strRefNumber}" rendered="{!doc.isSaveOrCancelRecord}" /></div>
+                    </apex:column>
+                    <!-- Document Type column -->
+                    <apex:column id="Type" headervalue="Document Type" width="12%">
+                        <apex:selectList id="DocType" styleclass="std" size="1" value="{!doc.strDocumentType}" rendered="{!doc.isSaveOrCancelRecord}">
+                             <apex:selectOptions value="{!DocumentType}"/>
+                        </apex:selectList>  
+                        <apex:outputtext value="{!doc.strDocumentType}" rendered="{!doc.isViewOrRemoveRecord}" />
+                    </apex:column>
+                    <!-- File Name column -->
+                    <apex:column id="colItem" headervalue="File Name" width="12%">
+                        <apex:outputfield value="{!doc.objAttachment.Name}" rendered="{!doc.isViewOrRemoveRecord}" />
+                        	<span title="Document Name does not pull from FileSite directly. You should manually key a name that is short and meaningful." class="tooltip">
+                        		<apex:inputField value="{!doc.objAttachment.Name}" rendered="{!doc.isSaveOrCancelRecord}" id="helptext"/>
+                        	</span>
+                    </apex:column>
+                </apex:pageblocktable>
+                <!-- End - PageBlockTable -->
+            </apex:outputpanel>
+        </apex:pageblock>
+        <!-- End - PageBlock -->
+        <!-- Start - Action Status  -->
+        <apex:actionstatus id="loading" startText="Requesting...">
+            <apex:facet name="start">
+                <div id="salesforceSource_blurybackground" style="position:absolute;z-index:15; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: #f2f3f3; opacity:0.7;filter:alpha(opacity=60)"></div>
+                <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 80%; display: ''; ">
+                    <div style="width: 144px;vertical-align: middle;" class="waitingHolder">
+                        <table align="center" valign="top" style="width: 100%; height: 30%">
+                            <tr align="center" valign="top" style="width: 100%; height: 30%">
+                                <td valign="top"><img src="/img/loading.gif"/>
+                                	<span class="waitingDescription"><b>Loading...</b></span>
+                                	</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                <div id="ManageMembersViewport_loading" class="waitingSearchDiv" style="width: 100%; height: 100%; display: ''; "/>
+                <script>document.getElementById('ManageMembersViewport_loading').height = window.innerHeight * (3/4);</script>
+        </apex:facet>
+        <apex:facet name="stop"></apex:facet>
+        </apex:actionstatus>
+        <!-- End - Action Status -->
+    </apex:form>
+</apex:component>

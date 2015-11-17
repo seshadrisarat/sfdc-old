@@ -1,0 +1,153 @@
+<apex:page id="printAddressPage" standardController="Contact" extensions="PrintAddressExtension">
+    <apex:includeScript value="{!$Resource.DymoFramework}"/>
+    
+    <div style="padding-bottom:6px">
+        <apex:outputLink value="{!URLFOR($Action.Contact.View, $CurrentPage.parameters.id)}">
+            Back to {!paObject.Contact.FirstName} {!paObject.Contact.LastName} detail page
+        </apex:outputLink>
+    </div>
+    
+    <apex:form >
+        <apex:inputhidden id="PreviewImageSrc" value="{!paObject.imageSrc}"/>
+  
+        <apex:pageBlock id="EditorBlock" title="{!paObject.contactFullName}">
+            <div>
+                <apex:inputTextarea id="AddressEditor" value="{!paObject.formattedAddress}" rows="4" cols="52"/>
+            </div>
+            <div>
+                <apex:inputCheckbox id="BarcodeCheckbox" selected="{!paObject.printBarcode}"
+                    style="vertical-align:middle"/> Print Intelligent Mail Barcode
+            </div>
+        
+            <hr/>
+        
+            <apex:commandButton id="ButtonUpdate" value="Update" rerender="PreviewPanel"          
+                onclick="updatePreview('{!paObject.addressLabelXml}')"/>
+
+            <apex:commandButton value="Print Label"
+                title="Prints label on selected DYMO LabelWriter printer"
+                onclick="printAddress('{!paObject.addressLabelXml}');"/>
+
+        </apex:pageBlock>
+
+        <apex:pageBlock id="PrintersBlock" title="Select Printer">
+            <apex:selectList id="Printers" size="1" />
+        </apex:pageBlock>
+
+        <script>
+            var PrintersCtrl = document.getElementById("{!$Component.PrintersBlock.Printers}");
+            var AddressEditor = document.getElementById("{!$Component.EditorBlock.AddressEditor}");
+            var BarcodeCheckbox = document.getElementById("{!$Component.EditorBlock.BarcodeCheckbox}");
+            var PreviewImageSrc = document.getElementById("{!$Component.PreviewImageSrc}");
+            var ButtonUpdate = document.getElementById("{!$Component.EditorBlock.ButtonUpdate}");
+        </script>
+   
+    </apex:form>
+    
+    <apex:outputPanel id="PreviewPanel">
+        <div>
+            <apex:image id="previewImage" url="{!paObject.imageSrc}"/>
+        </div>
+    
+            <!--
+            Name: {!paObject.Contact.FirstName} {!paObject.Contact.LastName}<br/>
+            Address: {!paObject.formattedAddress}<br/>
+            Print barcode: {!paObject.printBarcode}<br/>
+            -->
+ 
+    </apex:outputPanel>    
+ 
+    <script type="text/javascript">
+    
+        function enumPrinters()
+        {
+            var plist = new Array();
+            var printers = dymo.label.framework.getPrinters();
+            if (printers.length == 0)
+            {
+                alert("No DYMO printers are installed. Install DYMO printers.");
+            }
+            else
+            {
+                for (var i = 0; i < printers.length; i++)
+                {
+                    if (printers[i].printerType == "LabelWriterPrinter")
+                        plist[i] = printers[i].name;
+                }
+            }
+            return plist;
+        }
+        
+        function updatePreview(template)
+        {
+            try
+            {
+                var address = AddressEditor.value;
+                var label = dymo.label.framework.openLabelXml(template);
+
+                label.setAddressText(0, address);
+                
+                // barcode - show it or not
+                if (!BarcodeCheckbox.checked)
+                    label.setAddressBarcodePosition(0, dymo.label.framework.AddressBarcodePosition.Suppress);
+                
+                var pngData = label.render();
+                PreviewImageSrc.value = "data:image/png;base64," + pngData;
+            }
+            catch(e)
+            {
+                alert(e.message);
+            }
+        }
+        
+        function printAddress(template)
+        {
+            try
+            {
+                var address = AddressEditor.value;
+                var printer = PrintersCtrl.value;
+                
+                //
+                //alert("printing: " + address + "\r\non:" + template + "\r\nPrinter: " + printer);
+                //
+
+                var label = dymo.label.framework.openLabelXml(template);
+                 
+                label.setAddressText(0, address);
+                
+                // barcode - print it or not
+                if (!BarcodeCheckbox.checked)
+                    label.setAddressBarcodePosition(0, dymo.label.framework.AddressBarcodePosition.Suppress);        
+
+                label.print(printer);
+            }
+            catch(e)
+            {
+                alert(e.message);
+            }
+        }
+     
+        window.onload = new function()
+        {
+            var plist = enumPrinters();
+            
+            if (plist.length > 0)
+            {
+                // populate combo-box control with a list of printers
+
+                for (var i = 0; i < plist.length; i++)
+                {
+                    var option = document.createElement("OPTION");
+                    option.text = plist[i];
+                    option.value = plist[i];
+                    PrintersCtrl.options.add(option);
+                }
+            }
+            
+            ButtonUpdate.click();
+            
+        }
+
+    </script>
+    
+</apex:page>

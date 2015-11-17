@@ -1,0 +1,315 @@
+<apex:page controller="echosign_dev1.GroupMappingController" 
+    title="EchoSign User Group Mapping" 
+    action="{!init}"
+    sidebar="false" 
+    showHeader="false">
+    
+    <style type="text/css">
+    
+        #previewPanel .bd {
+            overflow:auto;
+        }
+    </style>
+    
+    <script>
+        function buildSecurityPopup() {
+            var secbox = sfdcPage.getDialogById("EchoSignSecurityPopup");
+                            
+            if( secbox == null ) {
+               secbox = new parent.SimpleDialog("EchoSignSecurityPopup", true); 
+               secbox.cancel=function() { secbox.hide(); };
+               parent.secbox = secbox; 
+               sfdcPage.dialogs[parent.secbox.id] = parent.secbox;
+               secbox.displayX=false;                   
+               secbox.createDialog();        
+               secbox.setWidth("435px");                       
+            }
+            
+            var frameUrl = '{!$Page.echosign_dev1__ApiKeyInput}?reloadPage=true';
+            var srcFrame = '<iframe height="480px" width="400px" frameborder="no" id="popup" style="border:0;" src="'+frameUrl+'"></iframe>';
+            secbox.setContentInnerHTML(srcFrame);
+            secbox.show();
+        }
+        
+        function showSpinner() {
+            document.getElementById('{!$Component.previewForm.syncPreview.loadingSection.loadingSpinnerSection}').style.display = 'block';
+        }
+        
+        function hideSpinner() {
+            document.getElementById('{!$Component.previewForm.syncPreview.loadingSection.loadingSpinnerSection}').style.display = 'none';
+        }
+    </script>
+    
+        <apex:form id="previewForm">
+            <apex:actionFunction name="resetState" action="{!resetState}" rerender="previewForm,ProcessTemplateId" />
+            
+            <apex:pageBlock id="syncPreview">
+                <apex:outputpanel id="titlePanel">
+                    <apex:outputpanel rendered="{! isSyncCompletedState }"><b>User Updated Result</b></apex:outputpanel>
+                    <apex:outputpanel rendered="{! AND( isPreviewShown, NOT(isPreviewLoading) ) }"><b>Preview of User Update</b></apex:outputpanel>
+                    <apex:outputpanel rendered="{! isSyncLoading }"><b>Synchronizing User</b></apex:outputpanel>
+                </apex:outputpanel>
+                <br/>
+                <apex:pageblockbuttons location="bottom">
+                    <apex:outputPanel id="dialogButtons">
+                        <apex:commandButton value="Sync Users" 
+                            rerender="syncActionPollerPanel,loadingSection,previewSection,resultsSection,dialogButtons,titlePanel" 
+                            action="{!sync}" 
+                            oncomplete="showSpinner();"
+                            rendered="{! AND( NOT(isSyncCompletedState), NOT(isSyncLoading), isSyncState, previewStatuses.size <> 0 ) }" />
+                        
+                        <apex:commandButton value="Cancel" 
+                            immediate="true" 
+                            onclick="self.close();"  
+                            oncomplete="resetState();"
+                            rendered="{! AND( NOT(isSyncCompletedState), NOT(isSyncLoading), isSyncState ) }"
+                            rerender="topButtons,bottomButtons" />
+                            
+                        <apex:commandButton value="Close" 
+                            immediate="true" 
+                            onclick="self.close();" 
+                            oncomplete="resetState();"
+                            rendered="{! isPreviewState }"
+                            rerender="topButtons,bottomButtons" />
+                            
+                        <apex:commandButton value="Finish" 
+                            immediate="true" 
+                            oncomplete="self.close();" 
+                            rendered="{! isSyncCompletedState }"
+                            rerender="topButtons,bottomButtons" />                 
+                    </apex:outputPanel>
+                </apex:pageblockbuttons>
+                <apex:outputpanel id="syncActionPollerPanel">
+                    <apex:outputpanel rendered="{!isSyncLoading}">
+                        <apex:actionPoller oncomplete="if( !'{!isSyncLoading}' ) { hideSpinner(); }" action="{!checkSyncStatus}" rerender="syncActionPollerPanel,loadingSection,previewSection,resultsSection,titlePanel,dialogButtons" interval="5" id="syncActionPoller" />
+                    </apex:outputpanel>
+                </apex:outputpanel>
+                <apex:pageBlockSection id="loadingSection">
+                    <apex:outputpanel id="loadingSpinnerSection" style="display: none;">
+                    <!-- <apex:outputpanel rendered="{! OR( isSyncLoading, isPreviewLoading ) }"> -->
+                        <div class="waitingSearchDiv" style="width: 100%; height: 100%; display: ; opacity:.5;"></div>
+                        <img src="{!$Resource.LoadingSpinner}" style="width: 20px; height: 20px; padding-left: 400px; padding-top: 150px;" />
+                        <!-- <apex:outputText value="Group sync results status: {!job.Status}" id="syncStatus"/> -->
+                    </apex:outputpanel>
+                </apex:pageBlockSection>
+                <apex:pageBlockSection id="resultsSection" collapsible="false" columns="1">
+                    <apex:outputpanel rendered="{! AND( NOT(isSyncCompletedSuccess), isSyncCompletedState ) }">
+                        <apex:outputText style="font-weight:bold; color:red;" value="ERROR: The entire synchronization was not processed due to the following errors: {! syncErrorMessage }" />
+                    </apex:outputpanel>
+                    <apex:outputpanel rendered="{! AND( isSyncCompletedSuccess, isSyncCompletedState ) }">
+                        <apex:pageBlockTable id="resultsTable" value="{!syncResults}" var="result">
+                            <apex:column >
+                                <apex:facet name="header">
+                                    <apex:outputPanel >Status</apex:outputPanel>
+                                </apex:facet>
+                                <apex:image value="{!$Resource.echosign_dev1__FailureIcon}" rendered="{! NOT(result.isSuccess) }"/>
+                                <apex:image value="{!$Resource.echosign_dev1__SuccessIcon}" rendered="{! result.isSuccess }"/>
+                            </apex:column>
+                            <apex:column value="{!result.userFullName}">
+                                <apex:facet name="header">
+                                    <apex:outputPanel >
+                                        <apex:commandLink value="User Name" action="{!doResultsSort}" rerender="resultsTable">
+                                            <apex:param name="sortField" value="UserFullName" assignTo="{!resultsSortField}"/>
+                                        </apex:commandLink>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortDescArrow}" title="Sort Descending" rendered="{! resultsPreviousSortField = resultsSortField && isResultsSortedByUserFullName }">
+                                            <apex:actionSupport event="onclick" action="{!doResultsSort}" rerender="resultsTable">
+                                                <apex:param name="resultsSortField" value="UserFullName" assignTo="{!resultsSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortAscArrow}" title="Sort Ascending" rendered="{! resultsPreviousSortField <> resultsSortField && isResultsSortedByUserFullName }">
+                                            <apex:actionSupport event="onclick" action="{!doResultsSort}" rerender="resultsTable">
+                                                <apex:param name="resultsSortField" value="UserFullName" assignTo="{!resultsSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                    </apex:outputPanel>
+                                </apex:facet>
+                            </apex:column>
+                            <apex:column value="{!result.email}">
+                                <apex:facet name="header">
+                                    <apex:outputPanel >
+                                        <apex:commandLink value="Email" action="{!doResultsSort}" rerender="resultsTable">
+                                            <apex:param name="sortField" value="Email" assignTo="{!resultsSortField}"/>
+                                        </apex:commandLink>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortDescArrow}" title="Sort Descending" rendered="{! resultsPreviousSortField = resultsSortField && isResultsSortedByEmail }">
+                                            <apex:actionSupport event="onclick" action="{!doResultsSort}" rerender="resultsTable">
+                                                <apex:param name="resultsSortField" value="Email" assignTo="{!resultsSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortAscArrow}" title="Sort Ascending" rendered="{! resultsPreviousSortField <> resultsSortField && isResultsSortedByEmail }">
+                                            <apex:actionSupport event="onclick" action="{!doResultsSort}" rerender="resultsTable">
+                                                <apex:param name="resultsSortField" value="Email" assignTo="{!resultsSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                    </apex:outputPanel>
+                                </apex:facet>
+                            </apex:column>
+                            <apex:column value="{!result.profileName}">
+                                <apex:facet name="header">
+                                    <apex:outputPanel >
+                                        <apex:commandLink value="Salesforce Profile" action="{!doResultsSort}" rerender="resultsTable">
+                                            <apex:param name="sortField" value="ProfileName" assignTo="{!resultsSortField}"/>
+                                        </apex:commandLink>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortDescArrow}" title="Sort Descending" rendered="{! resultsPreviousSortField = resultsSortField && isResultsSortedByProfileName }">
+                                            <apex:actionSupport event="onclick" action="{!doResultsSort}" rerender="previewTable">
+                                                <apex:param name="previewSortField" value="ProfileName" assignTo="{!previewSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortAscArrow}" title="Sort Ascending" rendered="{! resultsPreviousSortField <> resultsSortField && isResultsSortedByProfileName }">
+                                            <apex:actionSupport event="onclick" action="{!doResultsSort}" rerender="resultsTable">
+                                                <apex:param name="resultsSortField" value="ProfileName" assignTo="{!resultsSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                    </apex:outputPanel>
+                                </apex:facet>
+                            </apex:column>
+                            <apex:column value="{!result.priorGroupName}">
+                                <apex:facet name="header">
+                                    <apex:outputPanel >
+                                        <apex:commandLink value="Prior EchoSign Group" action="{!doResultsSort}" rerender="resultsTable">
+                                            <apex:param name="sortField" value="PriorGroupName" assignTo="{!resultsSortField}"/>
+                                        </apex:commandLink>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortDescArrow}" title="Sort Descending" rendered="{! resultsPreviousSortField = resultsSortField && isResultsSortedByPriorGroupName }">
+                                            <apex:actionSupport event="onclick" action="{!doResultsSort}" rerender="resultsTable">
+                                                <apex:param name="resultsSortField" value="PriorGroupName" assignTo="{!resultsSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortAscArrow}" title="Sort Ascending" rendered="{! resultsPreviousSortField <> resultsSortField && isResultsSortedByPriorGroupName }">
+                                            <apex:actionSupport event="onclick" action="{!doResultsSort}" rerender="resultsTable">
+                                                <apex:param name="resultsSortField" value="PriorGroupName" assignTo="{!resultsSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                    </apex:outputPanel>
+                                </apex:facet>
+                            </apex:column>
+                            <apex:column value="{!result.currentGroupName}">
+                                <apex:facet name="header">
+                                    <apex:outputPanel >
+                                        <apex:commandLink value="Current EchoSign Group" action="{!doResultsSort}" rerender="resultsTable">
+                                            <apex:param name="sortField" value="CurrentGroupName" assignTo="{!resultsSortField}"/>
+                                        </apex:commandLink>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortDescArrow}" title="Sort Descending" rendered="{! resultsPreviousSortField = resultsSortField && isResultsSortedByCurrentGroupName }">
+                                            <apex:actionSupport event="onclick" action="{!doResultsSort}" rerender="resultsTable">
+                                                <apex:param name="resultsSortField" value="CurrentGroupName" assignTo="{!resultsSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortAscArrow}" title="Sort Ascending" rendered="{! resultsPreviousSortField <> resultsSortField && isResultsSortedByCurrentGroupName }">
+                                            <apex:actionSupport event="onclick" action="{!doResultsSort}" rerender="resultsTable">
+                                                <apex:param name="resultsSortField" value="CurrentGroupName" assignTo="{!resultsSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                    </apex:outputPanel>
+                                </apex:facet>
+                            </apex:column>
+                            <apex:column value="{!result.errorMessage}">
+                                <apex:facet name="header">
+                                    <apex:outputPanel >Error Message</apex:outputPanel>
+                                </apex:facet>
+                            </apex:column>
+                        </apex:pageBlockTable>
+                    </apex:outputpanel>
+                </apex:pageBlockSection>
+                <apex:pageBlockSection id="previewSection" collapsible="false" columns="1">
+                    <apex:outputpanel rendered="{! AND( isPreviewShown, NOT(isPreviewLoading) ) }">
+                        <apex:pageBlockTable id="previewTable" value="{!previewStatuses}" var="previewStatus">
+                            <apex:column value="{!previewStatus.userFullName}">
+                                <apex:facet name="header">
+                                    <apex:outputPanel >
+                                        <apex:commandLink value="User Name" action="{!doPreviewSort}" rerender="previewTable">
+                                            <apex:param name="sortField" value="UserFullName" assignTo="{!previewSortField}"/>
+                                        </apex:commandLink>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortDescArrow}" title="Sort Descending" rendered="{! previewPreviousSortField = previewSortField && isPreviewSortedByUserFullName }">
+                                            <apex:actionSupport event="onclick" action="{!doPreviewSort}" rerender="previewTable">
+                                                <apex:param name="previewSortField" value="UserFullName" assignTo="{!previewSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortAscArrow}" title="Sort Ascending" rendered="{! previewPreviousSortField <> previewSortField && isPreviewSortedByUserFullName }">
+                                            <apex:actionSupport event="onclick" action="{!doPreviewSort}" rerender="previewTable">
+                                                <apex:param name="previewSortField" value="UserFullName" assignTo="{!previewSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                    </apex:outputPanel>
+                                </apex:facet>
+                            </apex:column>
+                            <apex:column value="{!previewStatus.email}">
+                                <apex:facet name="header">
+                                    <apex:outputPanel >
+                                        <apex:commandLink value="Email" action="{!doPreviewSort}" rerender="previewTable">
+                                            <apex:param name="sortField" value="Email" assignTo="{!previewSortField}"/>
+                                        </apex:commandLink>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortDescArrow}" title="Sort Descending" rendered="{! previewPreviousSortField = previewSortField && isPreviewSortedByEmail }">
+                                            <apex:actionSupport event="onclick" action="{!doPreviewSort}" rerender="previewTable">
+                                                <apex:param name="previewSortField" value="Email" assignTo="{!previewSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortAscArrow}" title="Sort Ascending" rendered="{! previewPreviousSortField <> previewSortField && isPreviewSortedByEmail }">
+                                            <apex:actionSupport event="onclick" action="{!doPreviewSort}" rerender="previewTable">
+                                                <apex:param name="previewSortField" value="Email" assignTo="{!previewSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                    </apex:outputPanel>
+                                </apex:facet>
+                            </apex:column>
+                            <apex:column value="{!previewStatus.profileName}">
+                                <apex:facet name="header">
+                                    <apex:outputPanel >
+                                        <apex:commandLink value="Salesforce Profile" action="{!doPreviewSort}" rerender="previewTable">
+                                            <apex:param name="sortField" value="ProfileName" assignTo="{!previewSortField}"/>
+                                        </apex:commandLink>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortDescArrow}" title="Sort Descending" rendered="{! previewPreviousSortField = previewSortField && isPreviewSortedByProfileName }">
+                                            <apex:actionSupport event="onclick" action="{!doPreviewSort}" rerender="previewTable">
+                                                <apex:param name="previewSortField" value="ProfileName" assignTo="{!previewSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortAscArrow}" title="Sort Ascending" rendered="{! previewPreviousSortField <> previewSortField && isPreviewSortedByProfileName }">
+                                            <apex:actionSupport event="onclick" action="{!doPreviewSort}" rerender="previewTable">
+                                                <apex:param name="previewSortField" value="ProfileName" assignTo="{!previewSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                    </apex:outputPanel>
+                                </apex:facet>
+                            </apex:column>
+                            <apex:column value="{!previewStatus.actualGroup.name}">
+                                <apex:facet name="header">
+                                    <apex:outputPanel >
+                                        <apex:commandLink value="Current EchoSign Group" action="{!doPreviewSort}" rerender="previewTable">
+                                            <apex:param name="sortField" value="ActualGroupName" assignTo="{!previewSortField}"/>
+                                        </apex:commandLink>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortDescArrow}" title="Sort Descending" rendered="{! previewPreviousSortField = previewSortField && isPreviewSortedByActualGroupName }">
+                                            <apex:actionSupport event="onclick" action="{!doPreviewSort}" rerender="previewTable">
+                                                <apex:param name="previewSortField" value="ActualGroupName" assignTo="{!previewSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortAscArrow}" title="Sort Ascending" rendered="{! previewPreviousSortField <> previewSortField && isPreviewSortedByActualGroupName }">
+                                            <apex:actionSupport event="onclick" action="{!doPreviewSort}" rerender="previewTable">
+                                                <apex:param name="previewSortField" value="ActualGroupName" assignTo="{!previewSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                    </apex:outputPanel>
+                                </apex:facet>
+                            </apex:column>
+                            <apex:column value="{!previewStatus.expectedGroup.name}">
+                                <apex:facet name="header">
+                                    <apex:outputPanel >
+                                        <apex:commandLink value="New EchoSign Group" action="{!doPreviewSort}" rerender="previewTable">
+                                            <apex:param name="sortField" value="ExpectedGroupName" assignTo="{!previewSortField}"/>
+                                        </apex:commandLink>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortDescArrow}" title="Sort Descending" rendered="{! previewPreviousSortField = previewSortField && isPreviewSortedByExpectedGroupName }">
+                                            <apex:actionSupport event="onclick" action="{!doPreviewSort}" rerender="previewTable">
+                                                <apex:param name="previewSortField" value="ExpectedGroupName" assignTo="{!previewSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                        <apex:image value="{!$Resource.echosign_dev1__SortAscArrow}" title="Sort Ascending" rendered="{! previewPreviousSortField <> previewSortField && isPreviewSortedByExpectedGroupName }">
+                                            <apex:actionSupport event="onclick" action="{!doPreviewSort}" rerender="previewTable">
+                                                <apex:param name="previewSortField" value="ExpectedGroupName" assignTo="{!previewSortField}"/>
+                                            </apex:actionSupport>
+                                        </apex:image>
+                                    </apex:outputPanel>
+                                </apex:facet>
+                            </apex:column>
+                        </apex:pageBlockTable>
+                    </apex:outputpanel>
+                </apex:pageBlockSection>
+            </apex:pageBlock>
+        </apex:form>
+
+</apex:page>

@@ -1,0 +1,178 @@
+<apex:page standardController="lmscons__Curriculum__c" extensions="lmscons.Curriculum" title="{!$ObjectType.lmscons__Curriculum__c.Label}: {!lmscons__Curriculum__c.Name}">
+	<apex:includeScript value="{!URLFOR($Resource.lmscons__LMSSource, 'js/jquery-1.6.4.js')}"/>
+
+	<apex:sectionHeader title="{!$ObjectType.lmscons__Curriculum__c.Label}" subtitle="{!lmscons__Curriculum__c.Name}" />
+
+	<!-- Enhanced Action Status BEGIN -->
+	<apex:actionStatus id="loadStatus">
+		<apex:facet name="start">
+			<c:EnhancedActionStatus BackColor="#efefef" borderColor="#336699" borderSize="1" height="50px" width="120px" imageUrl="/img/loading.gif" message="{!$Label.Consumer_Global_Loading}..." messageStyle="color:darkred;font-size:11pt;font-weight:bold;" />
+		</apex:facet>
+	</apex:actionStatus>
+	<!-- Enhanced Action Status END -->
+
+	<apex:outputPanel id="pageMessages">
+		<apex:pageMessages />
+	</apex:outputPanel>
+
+	<apex:form >
+		<apex:actionPoller action="{!statusUpdating}" rerender="pageMessages" interval="5" id="batchStatus" Enabled="{!isStop}"/>
+
+		<apex:actionFunction name="UpdateDataAssignments" action="{!UpdateDataAssignments}" rerender="pageMessages, tlr, batchStatus, panelForStatus" status="loadStatus" oncomplete="updatedDataAssignments()">
+			<apex:param name="LearningId" assignTo="{!LearningId}" value="{!lmscons__Curriculum__c.id}" />
+		</apex:actionFunction>
+
+		<apex:actionFunction name="addToMyTraining" action="{!addToMyTrainingFromPage}" rerender="pageMessages, tlr"  status="loadStatus" />
+
+		<apex:actionFunction name="saveEditedSequence" action="{!saveEditedSequence}" status="loadStatus" rerender="none" oncomplete="redirme()">
+			<apex:param name="SequencedArray" assignTo="{!SequencedArray}" value="" />
+			<apex:param name="CurriculumId" assignTo="{!CurriculumId}" value="{!lmscons__Curriculum__c.id}" />
+		</apex:actionFunction>
+	</apex:form>
+	<apex:detail title="false" />
+
+	<apex:outputPanel id="panelForStatus">
+		<input type="hidden" id="bstatus" name="BatchStatus" value="{!STATUS}"/>
+	</apex:outputPanel>
+
+<script>
+	jQuery.noConflict();
+
+	function updatedDataAssignments() {
+		var status = jQuery('#bstatus').val();
+		if(status == 'false'){
+			jQuery('input[name*=update_data_assignments]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+		}
+	}
+
+	jQuery(document).ready(function(){
+		initItemSequence();
+		if({!isUpdateDataAssignemts}!=true){
+			jQuery('input[name*=update_data_assignments]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+		}
+		if({!isConsumerUser}!=1) {
+			jQuery('input[name*=update_data_assignments]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+			jQuery('input[name*=assign_curriculum]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+			jQuery('input[name*=add_to_my_training]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+			jQuery('input[value*=Prerequisites]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+			jQuery("[title$='{!$ObjectType.Catalog_Curriculum__c.label}']").attr('class', 'btnDisabled').attr('disabled', 'disabled');
+		}
+		if({!isAdminUser}!=1){
+		jQuery('input[value*=Prerequisite]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+		};
+
+		jQuery("[title$='{!$ObjectType.Catalog_Curriculum__c.Label}']").val('Add to Catalog');
+		jQuery("H3:contains('{!$ObjectType.Catalog_Curriculum__c.LabelPlural}')").text('Associated Catalogs');
+		if (!{!hasItems}) {
+			jQuery("[title$='{!$ObjectType.Catalog_Curriculum__c.Label}']").prop("disabled", "true").addClass("btnDisabled");
+		}
+	});
+	// --- Edit Sequence -----------------------------------------------------
+	var seqdepth = 0;
+	var titledepth = 0;
+	var sequenceEnforced = false;
+	var cancelArray = [];
+	var resultArray = [];
+
+	function initItemSequence() {
+		var rlistHasTitle = false;
+		var rlistHasSequence = false;
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parents('.bPageBlock').find('.headerRow').children().each(function(index){
+			if(jQuery(this).text()=='Sequence') {
+				seqdepth = index;
+				rlistHasSequence = true;
+			}
+			if(jQuery(this).text()=='Title') {
+				rlistHasTitle = true;
+				titledepth = index;
+			}
+		});
+		if (rlistHasSequence == true && rlistHasTitle == true) {
+			sequenceEnforced = true;
+		}
+		else {
+			sequenceEnforced = false;
+		}
+		if (sequenceEnforced == false){
+			jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').attr('class', 'btnDisabled').attr('disabled', 'disabled');
+		}
+	}
+
+	function enableEdit() {
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parents('.bPageBlock').find('.dataRow').each(function(index){
+			jQuery(this).children().each(function(index1){
+				if (index1 == seqdepth) {
+					var sact = jQuery(this).text();
+					cancelArray[index] = sact;
+					jQuery(this).contents().replaceWith('<input type="text" style="text-align: right">');
+					jQuery(this).contents().val(sact);
+				}
+			});
+		});
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parents('.bPageBlock').find('.pShowMore').css('visibility', 'hidden');
+		var buttonSave = '<input type="button" value="{!$Label.Save}" id="saveButton" class="btn" onclick="saveSeq()" />';
+		var buttonCancel = '<input type="button" value="{!$Label.Cancel}" id="cancelButton" class="btn" onclick="cancelSeq()" />';
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parent().append(buttonSave + buttonCancel);
+		// Button 'Edit sequence' from hover window can not be pressed more than 1 times
+		var iframe = jQuery('#RLPanelFrame');
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]', iframe.contents()).attr('disabled','disabled');
+		// ********************************
+		jQuery('input[value$="New Curriculum Item"]').css('visibility', 'hidden');
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').css('visibility', 'hidden');
+
+	}
+
+	function saveSeq() {
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parents('.bPageBlock').find('.dataRow').each(function(index){
+			var loId;
+			var loSeq;
+			jQuery(this).children().each(function(index1){
+				if (index1 == titledepth) {
+					loId = jQuery(this).children().attr('href');
+					loId = loId.slice(-15);
+				}
+				if (index1 == seqdepth) {
+					loSeq = jQuery(this).contents().val();
+					loSeq = loSeq.replace(/[\xA0]/,'');
+					jQuery(this).contents().remove();
+					jQuery(this).append(loSeq);
+				}
+			});
+			resultArray[index] = loId + '::' + loSeq;
+		});
+
+		saveEditedSequence(getSequencedArray());
+		jQuery('#cancelButton').remove();
+		jQuery('#saveButton').remove();
+		jQuery('input[value$="New Curriculum Item"]').css('visibility','visible');
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').css('visibility','visible');
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parents('.bPageBlock').find('.pShowMore').css('visibility', 'visible');
+	}
+
+	function getSequencedArray() {
+		var serialized = resultArray.join(";;");
+		return serialized;
+	}
+
+	function cancelSeq() {
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parents('.bPageBlock').find('.dataRow').each(function(index){
+			jQuery(this).children().each(function(index1){
+				if (index1 == seqdepth) {
+					jQuery(this).contents().remove();
+					jQuery(this).append(cancelArray[index]);
+				}
+			});
+		});
+		jQuery('#cancelButton').remove();
+		jQuery('#saveButton').remove();
+		jQuery('input[value$="New Curriculum Item"]').css('visibility','visible');
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').css('visibility','visible');
+		jQuery('input[value$="Edit sequence"], input[value$="Edit Sequence"]').parents('.bPageBlock').find('.pShowMore').css('visibility', 'visible');
+	}
+
+	function redirme(){
+		window.location = window.location.href;
+	}
+</script>
+
+</apex:page>
